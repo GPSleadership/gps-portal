@@ -454,7 +454,7 @@ async function loadClient() {
       return;
     }
 
-    if (!client.is_active) {
+    if (client.is_active === false) {
       showError('Engagement complete.', `Your 90-day engagement has been completed. Contact Alex at alex@gpsleadership.org to discuss what's next.`);
       return;
     }
