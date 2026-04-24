@@ -315,6 +315,22 @@
     }
     .new-client-result h4 { color: #2e7d32; font-family: 'Montserrat', sans-serif; font-size: 14px; margin-bottom: 8px; }
 
+
+    /* CONFIRM MODAL */
+    .confirm-modal-body { font-size: 14px; color: var(--gray-600); line-height: 1.6; margin-bottom: 20px; }
+    .btn-danger  { padding: 10px 22px; border: none; border-radius: 6px; cursor: pointer; font-family: 'Montserrat', sans-serif; font-size: 12px; font-weight: 700; background: var(--red); color: var(--white); }
+    .btn-warning { padding: 10px 22px; border: none; border-radius: 6px; cursor: pointer; font-family: 'Montserrat', sans-serif; font-size: 12px; font-weight: 700; background: #e65100; color: var(--white); }
+    .btn-export  { padding: 8px 16px; background: var(--navy-dark); color: var(--white); border: none; border-radius: 6px; cursor: pointer; font-family: 'Montserrat', sans-serif; font-size: 12px; font-weight: 700; }
+    .btn-export:hover { background: #001f33; }
+    .action-btns { margin-top: 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .btn-action-sm { font-size: 12px; background: none; border-radius: 4px; padding: 5px 12px; cursor: pointer; font-family: 'Open Sans', sans-serif; font-weight: 600; }
+    .btn-archive { color: #e65100; border: 1px solid #e65100; }
+    .btn-archive:hover { background: #fff3e0; }
+    .btn-unarchive { color: var(--teal); border: 1px solid var(--teal); }
+    .btn-unarchive:hover { background: var(--light-teal); }
+    .btn-delete  { color: var(--red); border: 1px solid var(--red); }
+    .btn-delete:hover { background: #fff0f3; }
+    .client-card.archived { opacity: 0.5; border-left-color: var(--gray-300) !important; }
     .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; height: 4px; background: linear-gradient(to right, var(--teal), var(--navy)); }
 
     .spinner { width: 36px; height: 36px; border: 4px solid var(--gray-300); border-top-color: var(--teal); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 60px auto; }
@@ -362,7 +378,9 @@
           <div class="filter-tab active" onclick="setFilter('active', this)">Active</div>
           <div class="filter-tab" onclick="setFilter('all', this)">All</div>
           <div class="filter-tab" onclick="setFilter('complete', this)">Complete</div>
+          <div class="filter-tab" onclick="setFilter('archived', this)">Archived</div>
         </div>
+<button class="btn-export" onclick="exportData()">⬇ Export Data</button>
         <button class="btn-add" onclick="openAddModal()">+ Add Client</button>
       </div>
     </div>
@@ -398,6 +416,19 @@
   </div>
 </div>
 
+
+<!-- CONFIRM MODAL (archive / delete) -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal" id="confirmModalInner" style="border-top-color:var(--red);">
+    <h2 id="confirmTitle"></h2>
+    <p class="confirm-modal-body" id="confirmMessage"></p>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeConfirmModal()">Cancel</button>
+      <button id="confirmActionBtn"></button>
+    </div>
+  </div>
+</div>
+
 <div class="bottom-bar"></div>
 
 <script>
@@ -407,7 +438,7 @@
 const SUPABASE_URL  = 'https://pbnkefuqpoztcxfagiod.supabase.co';
 const SUPABASE_ANON = 'sb_publishable_nu9GXGeoqDXcxVocodQ4UA_ke7Yrzyw';
 const COACH_PASSWORD = 'GPS2026';          // EA: change this after first login
-const PORTAL_BASE_URL = 'https://gps-portal.vercel.app/client.html'; // e.g. https://portal.gpsleadership.org/client.html
+const PORTAL_BASE_URL = 'https://gps-portal.vercel.app/client.html';
 
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON);
@@ -448,8 +479,9 @@ async function loadDashboard() {
 }
 
 function renderStats() {
-  const active   = allClients.filter(c => c.is_active).length;
-  const complete = allClients.filter(c => !c.is_active && c.plan_submitted_at).length;
+  const active   = allClients.filter(c => c.is_active && !c.is_archived).length;
+  const complete = allClients.filter(c => !c.is_active && !c.is_archived && c.plan_submitted_at).length;
+  const archived = allClients.filter(c => c.is_archived).length;
   const total    = allCheckins.length;
 
   document.getElementById('headerStats').style.display = 'flex';
@@ -457,6 +489,7 @@ function renderStats() {
     <div class="stat-pill"><div class="stat-num">${active}</div><div class="stat-lbl">Active</div></div>
     <div class="stat-pill"><div class="stat-num">${complete}</div><div class="stat-lbl">Complete</div></div>
     <div class="stat-pill"><div class="stat-num">${total}</div><div class="stat-lbl">Check-Ins</div></div>
+    <div class="stat-pill"><div class="stat-num">${archived}</div><div class="stat-lbl">Archived</div></div>
   `;
 }
 
@@ -472,9 +505,10 @@ function setFilter(f, el) {
 
 function renderClients() {
   const filtered = allClients.filter(c => {
-    if (currentFilter === 'active')   return c.is_active;
-    if (currentFilter === 'complete') return !c.is_active;
-    return true;
+    if (currentFilter === 'active')   return c.is_active && !c.is_archived;
+    if (currentFilter === 'complete') return !c.is_active && !c.is_archived && c.plan_submitted_at;
+    if (currentFilter === 'archived') return c.is_archived;
+    return !c.is_archived; // 'all' excludes archived
   });
 
   if (filtered.length === 0) {
@@ -631,11 +665,16 @@ function renderClientCard(client, checkins) {
           <p style="font-size:11px;color:var(--gray-600);margin-top:6px;">Send this link to ${client.name ? client.name.split(' ')[0] : 'the client'}. They should bookmark it — it's their permanent portal access.</p>
         </div>
 
-        <!-- Toggle active -->
-        <div style="margin-top:8px;">
-          <button onclick="toggleActive('${client.id}', ${client.is_active})" style="font-size:12px;color:var(--gray-600);background:none;border:1px solid var(--gray-300);border-radius:4px;padding:5px 12px;cursor:pointer;">
+        <!-- Actions -->
+        <div class="action-btns">
+          <button class="btn-action-sm" style="color:var(--gray-600);border:1px solid var(--gray-300);" onclick="toggleActive('${client.id}', ${client.is_active})">
             ${client.is_active ? 'Mark as Complete' : 'Reactivate'}
           </button>
+          ${!client.is_archived
+            ? `<button class="btn-action-sm btn-archive" onclick="event.stopPropagation();archiveClient('${client.id}','${(client.name||'').replace(/'/g,"\\\'")}')">Archive</button>`
+            : `<button class="btn-action-sm btn-unarchive" onclick="event.stopPropagation();unarchiveClient('${client.id}','${(client.name||'').replace(/'/g,"\\\'")}')">Unarchive</button>`
+          }
+          <button class="btn-action-sm btn-delete" onclick="event.stopPropagation();hardDeleteClient('${client.id}','${(client.name||'').replace(/'/g,"\\\'")}')">Delete Permanently</button>
         </div>
       </div>
     </div>
@@ -722,6 +761,102 @@ async function addClient() {
   document.getElementById('saveClientBtn').style.display = 'none';
   allClients.unshift(data);
   renderStats();
+}
+
+// ─────────────────────────────────────────────
+// CONFIRM MODAL HELPERS
+// ─────────────────────────────────────────────
+function showConfirmModal(title, message, btnText, btnClass, onConfirm) {
+  document.getElementById('confirmTitle').textContent = title;
+  document.getElementById('confirmMessage').textContent = message;
+  const btn = document.getElementById('confirmActionBtn');
+  btn.textContent = btnText;
+  btn.className = btnClass;
+  btn.onclick = async () => {
+    btn.disabled = true;
+    btn.textContent = 'Working…';
+    await onConfirm();
+    closeConfirmModal();
+  };
+  document.getElementById('confirmModal').classList.add('open');
+}
+function closeConfirmModal() {
+  document.getElementById('confirmModal').classList.remove('open');
+  document.getElementById('confirmActionBtn').disabled = false;
+}
+document.getElementById('confirmModal').addEventListener('click', function(e) {
+  if (e.target === this) closeConfirmModal();
+});
+
+// ─────────────────────────────────────────────
+// ARCHIVE / UNARCHIVE
+// ─────────────────────────────────────────────
+function archiveClient(clientId, clientName) {
+  showConfirmModal(
+    'Archive this profile?',
+    `"${clientName}" will be removed from the active dashboard but kept in the database. You can view or restore them using the Archived filter.`,
+    'Archive Profile', 'btn-warning',
+    async () => {
+      await db.from('clients').update({ is_archived: true }).eq('id', clientId);
+      allClients = allClients.map(c => c.id === clientId ? {...c, is_archived: true} : c);
+      renderStats();
+      renderClients();
+    }
+  );
+}
+
+function unarchiveClient(clientId, clientName) {
+  showConfirmModal(
+    'Restore this profile?',
+    `"${clientName}" will be moved back to the active dashboard.`,
+    'Restore Profile', 'btn-save',
+    async () => {
+      await db.from('clients').update({ is_archived: false }).eq('id', clientId);
+      allClients = allClients.map(c => c.id === clientId ? {...c, is_archived: false} : c);
+      renderStats();
+      renderClients();
+    }
+  );
+}
+
+// ─────────────────────────────────────────────
+// HARD DELETE
+// ─────────────────────────────────────────────
+function hardDeleteClient(clientId, clientName) {
+  showConfirmModal(
+    '⚠️ Permanently delete?',
+    `This will PERMANENTLY delete "${clientName}" and ALL their check-in history. Use this ONLY for test or dummy profiles. This cannot be undone.`,
+    'Delete Permanently', 'btn-danger',
+    async () => {
+      await db.from('checkins').delete().eq('client_id', clientId);
+      await db.from('clients').delete().eq('id', clientId);
+      allClients  = allClients.filter(c => c.id !== clientId);
+      allCheckins = allCheckins.filter(c => c.client_id !== clientId);
+      renderStats();
+      renderClients();
+    }
+  );
+}
+
+// ─────────────────────────────────────────────
+// EXPORT DATA (downloads JSON to your computer)
+// ─────────────────────────────────────────────
+function exportData() {
+  const payload = {
+    exported_at: new Date().toISOString(),
+    export_version: '1.0',
+    clients: allClients,
+    checkins: allCheckins
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'gps-portal-backup-' + new Date().toISOString().split('T')[0] + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // Close modal on overlay click
