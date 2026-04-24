@@ -695,7 +695,7 @@ async function addClient() {
 
   const { data, error } = await db
     .from('clients')
-    .insert({ name, email: email || null, organization: org || null })
+    .insert({ name, email: email || null, organization: org || null, is_active: true })
     .select()
     .single();
 
