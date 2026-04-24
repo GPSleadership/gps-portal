@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GPS — Coach Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --navy:       #004369;
+      --red:        #DB1F48;
+      --teal:       #01949A;
+      --sand:       #E5DDC8;
+      --navy-dark:  #002D47;
+      --light-teal: #E8F7F7;
+      --light-sand: #F7F4EE;
+      --white:      #ffffff;
+      --gray-100:   #f5f5f5;
+      --gray-200:   #e8e8e8;
+      --gray-300:   #d0d0d0;
+      --gray-600:   #666666;
+      --text:       #1a1a1a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Open Sans', sans-serif; background: var(--gray-100); color: var(--text); min-height: 100vh; }
+
+    .top-bar { height: 6px; background: linear-gradient(to right, var(--navy), var(--teal), var(--red)); }
+
+    .header {
+      background: var(--navy);
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header-left { display: flex; align-items: center; gap: 14px; }
+    .header-logo-text { font-family: 'Montserrat', sans-serif; font-size: 22px; font-weight: 800; color: var(--sand); letter-spacing: 1px; }
+    .header-title-block { }
+    .header-title { color: rgba(255,255,255,0.75); font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; }
+    .header-sub   { color: var(--white); font-family: 'Montserrat', sans-serif; font-size: 15px; font-weight: 700; }
+
+    .header-stats { display: flex; gap: 20px; }
+    .stat-pill {
+      background: rgba(255,255,255,0.12);
+      border-radius: 6px;
+      padding: 6px 16px;
+      text-align: center;
+    }
+    .stat-pill .stat-num { color: var(--sand); font-family: 'Montserrat', sans-serif; font-size: 20px; font-weight: 800; }
+    .stat-pill .stat-lbl { color: rgba(255,255,255,0.7); font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* LOGIN SCREEN */
+    .login-screen {
+      max-width: 400px;
+      margin: 80px auto;
+      background: var(--white);
+      border-radius: 10px;
+      padding: 40px;
+      text-align: center;
+      border-top: 4px solid var(--navy);
+    }
+    .login-screen h2 { font-family: 'Montserrat', sans-serif; color: var(--navy); margin-bottom: 8px; }
+    .login-screen p  { color: var(--gray-600); font-size: 14px; margin-bottom: 24px; }
+    .login-screen input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 2px solid var(--gray-300);
+      border-radius: 6px;
+      font-size: 16px;
+      margin-bottom: 14px;
+      font-family: 'Open Sans', sans-serif;
+    }
+    .login-screen input:focus { outline: none; border-color: var(--teal); }
+    .login-error { color: var(--red); font-size: 13px; margin-bottom: 10px; min-height: 18px; }
+
+    /* MAIN */
+    .container { max-width: 1100px; margin: 28px auto; padding: 0 20px 60px; }
+
+    /* TOOLBAR */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .toolbar-title { font-family: 'Montserrat', sans-serif; font-size: 18px; font-weight: 800; color: var(--navy); }
+    .toolbar-right { display: flex; gap: 10px; align-items: center; }
+
+    .filter-tabs { display: flex; gap: 6px; }
+    .filter-tab {
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 2px solid var(--gray-300);
+      font-size: 12px;
+      font-weight: 700;
+      font-family: 'Montserrat', sans-serif;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: var(--white);
+    }
+    .filter-tab.active { border-color: var(--navy); background: var(--navy); color: var(--white); }
+
+    .btn-add {
+      background: var(--teal);
+      color: var(--white);
+      border: none;
+      border-radius: 6px;
+      padding: 8px 18px;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .btn-add:hover { background: #017a7f; }
+
+    /* CLIENT CARDS */
+    .client-card {
+      background: var(--white);
+      border-radius: 8px;
+      margin-bottom: 14px;
+      border-left: 5px solid var(--teal);
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    .client-card.pillar-trust       { border-left-color: #1565c0; }
+    .client-card.pillar-proactivity { border-left-color: #2e7d32; }
+    .client-card.pillar-productivity{ border-left-color: #e65100; }
+    .client-card.inactive { opacity: 0.55; }
+
+    .client-header {
+      display: flex;
+      align-items: center;
+      padding: 16px 20px;
+      cursor: pointer;
+      gap: 16px;
+      user-select: none;
+    }
+    .client-header:hover { background: var(--gray-100); }
+
+    .client-avatar {
+      width: 42px; height: 42px;
+      border-radius: 50%;
+      background: var(--navy);
+      color: var(--white);
+      font-family: 'Montserrat', sans-serif;
+      font-size: 16px;
+      font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .client-name-block { flex: 1; min-width: 0; }
+    .client-name { font-family: 'Montserrat', sans-serif; font-size: 15px; font-weight: 700; color: var(--navy); }
+    .client-org  { font-size: 12px; color: var(--gray-600); margin-top: 1px; }
+
+    .client-meta { display: flex; gap: 20px; align-items: center; flex-shrink: 0; flex-wrap: wrap; }
+
+    .meta-item { text-align: center; }
+    .meta-item .val { font-family: 'Montserrat', sans-serif; font-size: 18px; font-weight: 800; color: var(--navy); }
+    .meta-item .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--gray-600); }
+
+    .week-badge {
+      background: var(--navy);
+      color: var(--sand);
+      border-radius: 6px;
+      padding: 4px 12px;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .pillar-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+    }
+    .pillar-trust       { background: #e3edf9; color: #1565c0; }
+    .pillar-proactivity { background: #e8f5e9; color: #2e7d32; }
+    .pillar-productivity{ background: #fff3e0; color: #e65100; }
+
+    .completion-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .dot-yes  { background: #2e7d32; }
+    .dot-part { background: #e65100; }
+    .dot-no   { background: var(--red); }
+    .dot-none { background: var(--gray-300); }
+
+    .expand-arrow { font-size: 16px; color: var(--gray-600); flex-shrink: 0; transition: transform 0.2s; }
+    .expanded .expand-arrow { transform: rotate(180deg); }
+
+    /* DETAIL PANEL */
+    .client-detail {
+      display: none;
+      border-top: 1px solid var(--gray-200);
+      padding: 20px 24px;
+    }
+    .client-detail.open { display: block; }
+
+    .detail-section { margin-bottom: 20px; }
+    .detail-section h4 {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--teal);
+      margin-bottom: 10px;
+      border-bottom: 1px solid var(--gray-200);
+      padding-bottom: 6px;
+    }
+
+    .plan-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 10px;
+    }
+    .plan-field { background: var(--light-sand); border-radius: 6px; padding: 10px 12px; }
+    .plan-field label { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--gray-600); margin-bottom: 3px; }
+    .plan-field .val  { font-size: 13px; font-weight: 600; color: var(--navy); }
+
+    .metric-bar-wrap { background: var(--light-teal); border-radius: 6px; padding: 12px 16px; margin-bottom: 12px; }
+    .metric-bar-track { background: var(--gray-300); height: 10px; border-radius: 5px; overflow: hidden; margin: 6px 0; }
+    .metric-bar-fill  { height: 100%; background: linear-gradient(to right, var(--teal), var(--navy)); border-radius: 5px; }
+    .metric-nums { display: flex; justify-content: space-between; font-size: 11px; color: var(--gray-600); }
+
+    .history-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .history-table th { background: var(--navy); color: var(--white); padding: 7px 10px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; font-family: 'Montserrat', sans-serif; font-weight: 700; }
+    .history-table td { padding: 8px 10px; border-bottom: 1px solid var(--gray-200); vertical-align: top; font-size: 12px; }
+    .history-table tr:last-child td { border-bottom: none; }
+    .history-table tr:nth-child(even) td { background: var(--light-sand); }
+    .c-yes  { color: #2e7d32; font-weight: 700; }
+    .c-part { color: #e65100; font-weight: 700; }
+    .c-no   { color: var(--red); font-weight: 700; }
+
+    .client-url-box {
+      background: var(--gray-100);
+      border: 1px solid var(--gray-300);
+      border-radius: 6px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 6px;
+    }
+    .client-url-box code { flex: 1; font-size: 12px; color: var(--navy); word-break: break-all; }
+    .copy-btn {
+      background: var(--teal);
+      color: var(--white);
+      border: none;
+      border-radius: 4px;
+      padding: 5px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .copy-btn:hover { background: #017a7f; }
+
+    /* ADD CLIENT MODAL */
+    .modal-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--white);
+      border-radius: 10px;
+      padding: 32px;
+      max-width: 480px;
+      width: 100%;
+      margin: 20px;
+      border-top: 4px solid var(--navy);
+    }
+    .modal h2 { font-family: 'Montserrat', sans-serif; color: var(--navy); font-size: 18px; margin-bottom: 20px; }
+    .modal .form-group { margin-bottom: 14px; }
+    .modal .form-group label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--navy); margin-bottom: 5px; }
+    .modal .form-group input, .modal .form-group select {
+      width: 100%;
+      padding: 9px 12px;
+      border: 2px solid var(--gray-300);
+      border-radius: 6px;
+      font-family: 'Open Sans', sans-serif;
+      font-size: 14px;
+    }
+    .modal .form-group input:focus, .modal .form-group select:focus { outline: none; border-color: var(--teal); }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+    .btn-cancel { padding: 10px 20px; border: 2px solid var(--gray-300); background: var(--white); border-radius: 6px; cursor: pointer; font-family: 'Montserrat', sans-serif; font-size: 12px; font-weight: 700; }
+    .btn-save   { padding: 10px 22px; background: var(--navy); color: var(--white); border: none; border-radius: 6px; cursor: pointer; font-family: 'Montserrat', sans-serif; font-size: 12px; font-weight: 700; }
+    .modal-error { color: var(--red); font-size: 12px; margin-top: 8px; min-height: 16px; }
+
+    /* NEW CLIENT CONFIRM */
+    .new-client-result {
+      background: #e8f5e9;
+      border: 2px solid #2e7d32;
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-top: 12px;
+    }
+    .new-client-result h4 { color: #2e7d32; font-family: 'Montserrat', sans-serif; font-size: 14px; margin-bottom: 8px; }
+
+    .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; height: 4px; background: linear-gradient(to right, var(--teal), var(--navy)); }
+
+    .spinner { width: 36px; height: 36px; border: 4px solid var(--gray-300); border-top-color: var(--teal); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 60px auto; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 640px) {
+      .client-meta { display: none; }
+      .header-stats { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="top-bar"></div>
+<header class="header">
+  <div class="header-left">
+    <div class="header-logo-text">GPS</div>
+    <div class="header-title-block">
+      <div class="header-title">Leadership Solutions</div>
+      <div class="header-sub">Coach Dashboard</div>
+    </div>
+  </div>
+  <div class="header-stats" id="headerStats" style="display:none;"></div>
+</header>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-screen">
+    <div style="font-size:36px;margin-bottom:12px;">🔐</div>
+    <h2>Coach Access</h2>
+    <p>Enter your dashboard password to continue.</p>
+    <input type="password" id="passwordInput" placeholder="Password" onkeydown="if(event.key==='Enter') checkPassword()" autofocus />
+    <div class="login-error" id="loginError"></div>
+    <button class="btn-add" style="width:100%;padding:12px;" onclick="checkPassword()">Enter Dashboard</button>
+  </div>
+</div>
+
+<!-- MAIN DASHBOARD -->
+<div id="dashboardScreen" style="display:none;">
+  <div class="container">
+    <div class="toolbar">
+      <div class="toolbar-title">Active Clients</div>
+      <div class="toolbar-right">
+        <div class="filter-tabs">
+          <div class="filter-tab active" onclick="setFilter('active', this)">Active</div>
+          <div class="filter-tab" onclick="setFilter('all', this)">All</div>
+          <div class="filter-tab" onclick="setFilter('complete', this)">Complete</div>
+        </div>
+        <button class="btn-add" onclick="openAddModal()">+ Add Client</button>
+      </div>
+    </div>
+
+    <div id="clientList">
+      <div class="spinner"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD CLIENT MODAL -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <h2>Add New Client</h2>
+    <div class="form-group">
+      <label>Full Name *</label>
+      <input type="text" id="newName" placeholder="e.g. David Hernandez" />
+    </div>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="newEmail" placeholder="e.g. david@company.com" />
+    </div>
+    <div class="form-group">
+      <label>Organization</label>
+      <input type="text" id="newOrg" placeholder="e.g. Hernandez Logistics" />
+    </div>
+    <div class="modal-error" id="modalError"></div>
+    <div id="newClientResult"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeAddModal()">Cancel</button>
+      <button class="btn-save" onclick="addClient()" id="saveClientBtn">Create Client</button>
+    </div>
+  </div>
+</div>
+
+<div class="bottom-bar"></div>
+
+<script>
+// ─────────────────────────────────────────────
+// CONFIGURATION — same as client.html
+// ─────────────────────────────────────────────
+const SUPABASE_URL  = 'https://pbnkefuqpoztcxfagiod.supabase.co';
+const SUPABASE_ANON = 'sb_publishable_nu9GXGeoqDXcxVocodQ4UA_ke7Yrzyw';
+const COACH_PASSWORD = 'GPS2026';          // EA: change this after first login
+const PORTAL_BASE_URL = 'https://YOUR_DOMAIN/client.html'; // e.g. https://portal.gpsleadership.org/client.html
+
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+let allClients = [];
+let allCheckins = [];
+let currentFilter = 'active';
+
+// ─────────────────────────────────────────────
+// AUTH
+// ─────────────────────────────────────────────
+function checkPassword() {
+  const val = document.getElementById('passwordInput').value;
+  if (val === COACH_PASSWORD) {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('dashboardScreen').style.display = 'block';
+    loadDashboard();
+  } else {
+    document.getElementById('loginError').textContent = 'Incorrect password.';
+    document.getElementById('passwordInput').value = '';
+  }
+}
+
+// ─────────────────────────────────────────────
+// LOAD DATA
+// ─────────────────────────────────────────────
+async function loadDashboard() {
+  const [clientsRes, checkinsRes] = await Promise.all([
+    db.from('clients').select('*').order('created_at', { ascending: false }),
+    db.from('checkins').select('*').order('submitted_at', { ascending: false })
+  ]);
+
+  allClients  = clientsRes.data  || [];
+  allCheckins = checkinsRes.data || [];
+
+  renderStats();
+  renderClients();
+}
+
+function renderStats() {
+  const active   = allClients.filter(c => c.is_active).length;
+  const complete = allClients.filter(c => !c.is_active && c.plan_submitted_at).length;
+  const total    = allCheckins.length;
+
+  document.getElementById('headerStats').style.display = 'flex';
+  document.getElementById('headerStats').innerHTML = `
+    <div class="stat-pill"><div class="stat-num">${active}</div><div class="stat-lbl">Active</div></div>
+    <div class="stat-pill"><div class="stat-num">${complete}</div><div class="stat-lbl">Complete</div></div>
+    <div class="stat-pill"><div class="stat-num">${total}</div><div class="stat-lbl">Check-Ins</div></div>
+  `;
+}
+
+// ─────────────────────────────────────────────
+// FILTER & RENDER
+// ─────────────────────────────────────────────
+function setFilter(f, el) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderClients();
+}
+
+function renderClients() {
+  const filtered = allClients.filter(c => {
+    if (currentFilter === 'active')   return c.is_active;
+    if (currentFilter === 'complete') return !c.is_active;
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    document.getElementById('clientList').innerHTML = `
+      <div style="text-align:center;padding:60px 20px;color:var(--gray-600);font-size:14px;">
+        ${currentFilter === 'active' ? 'No active clients. Add your first one above.' : 'No clients in this view.'}
+      </div>`;
+    return;
+  }
+
+  document.getElementById('clientList').innerHTML = filtered.map(client => {
+    const clientCheckins = allCheckins.filter(c => c.client_id === client.id).sort((a,b) => a.week_number - b.week_number);
+    return renderClientCard(client, clientCheckins);
+  }).join('');
+}
+
+function renderClientCard(client, checkins) {
+  const today     = new Date();
+  const startDate = client.plan_start_date ? new Date(client.plan_start_date) : null;
+  const daysDiff  = startDate ? Math.floor((today - startDate) / (1000 * 60 * 60 * 24)) : 0;
+  const currentWeek = client.plan_submitted_at ? Math.min(Math.max(Math.ceil((daysDiff + 1) / 7), 1), 13) : null;
+
+  const baseline  = parseFloat(client.metric_baseline) || 0;
+  const target    = parseFloat(client.metric_target) || 0;
+  const current   = parseFloat(client.metric_current) || baseline;
+  const range     = target - baseline;
+  const progress  = range !== 0 ? Math.min(Math.max(((current - baseline) / range) * 100, 0), 100) : 0;
+
+  const pillarKey  = (client.tp3_pillar || '').toLowerCase();
+  const pillarClass= pillarKey ? 'pillar-' + pillarKey : '';
+
+  const completionRate = checkins.length > 0
+    ? Math.round((checkins.filter(c => c.completion_status === 'Yes').length / checkins.filter(c => c.completion_status).length || 0) * 100) + '%'
+    : '—';
+
+  const lastCheckin = checkins[checkins.length - 1];
+  const lastDate = lastCheckin?.submitted_at
+    ? new Date(lastCheckin.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : '—';
+
+  const dotClass = !lastCheckin ? 'dot-none'
+    : lastCheckin.completion_status === 'Yes' ? 'dot-yes'
+    : lastCheckin.completion_status === 'Partially' ? 'dot-part'
+    : lastCheckin.completion_status === 'No' ? 'dot-no' : 'dot-none';
+
+  const initials = (client.name || '?').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+
+  const portalURL = `${PORTAL_BASE_URL}?token=${client.token}`;
+
+  // Build dots for weeks 1-13
+  const dotRow = Array.from({length: 13}, (_, i) => {
+    const w = i + 1;
+    const ci = checkins.find(c => c.week_number === w);
+    if (!ci) return `<span title="Week ${w}: not submitted" style="width:10px;height:10px;border-radius:50%;background:var(--gray-300);display:inline-block;margin:0 1px;"></span>`;
+    const dc = ci.completion_status === 'Yes' ? '#2e7d32' : ci.completion_status === 'Partially' ? '#e65100' : ci.completion_status === 'No' ? '#DB1F48' : '#aaa';
+    return `<span title="Week ${w}: ${ci.completion_status || 'submitted'}" style="width:10px;height:10px;border-radius:50%;background:${dc};display:inline-block;margin:0 1px;"></span>`;
+  }).join('');
+
+  const planRows = client.plan_submitted_at ? `
+    <div class="plan-summary-grid">
+      <div class="plan-field" style="grid-column:1/-1;"><label>90-Day Goal</label><div class="val">${client.goal_statement || '—'}</div></div>
+      <div class="plan-field"><label>START Behavior</label><div class="val">${client.start_behavior || '—'}</div></div>
+      <div class="plan-field"><label>Metric</label><div class="val">${client.metric_name || '—'}</div></div>
+      <div class="plan-field"><label>Start Date</label><div class="val">${client.plan_start_date || '—'}</div></div>
+      <div class="plan-field"><label>30-Day Reward</label><div class="val">${client.reward_30_day || '—'}</div></div>
+      <div class="plan-field"><label>90-Day Reward</label><div class="val">${client.reward_90_day || '—'}</div></div>
+    </div>` : `<p style="color:var(--gray-600);font-size:13px;font-style:italic;">Client has not yet submitted their plan (Form B).</p>`;
+
+  const historyRows = checkins.length > 0 ? `
+    <table class="history-table">
+      <thead><tr><th>Week</th><th>Date</th><th>Metric</th><th>Follow-Through</th><th>Action</th><th>Notes</th></tr></thead>
+      <tbody>
+        ${[...checkins].reverse().map(c => {
+          const cc = c.completion_status === 'Yes' ? 'c-yes' : c.completion_status === 'Partially' ? 'c-part' : c.completion_status === 'No' ? 'c-no' : '';
+          const d  = c.submitted_at ? new Date(c.submitted_at).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—';
+          return `<tr>
+            <td style="font-weight:700;color:var(--navy);">Wk ${c.week_number}</td>
+            <td>${d}</td>
+            <td style="font-weight:700;">${c.metric_value ?? '—'}</td>
+            <td class="${cc}">${c.completion_status || '—'}</td>
+            <td>${c.planned_action ? c.planned_action.substring(0,80) + (c.planned_action.length>80?'…':'') : '—'}</td>
+            <td style="color:var(--gray-600);">${c.notes ? c.notes.substring(0,80) + (c.notes.length>80?'…':'') : ''}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>` : `<p style="color:var(--gray-600);font-size:13px;font-style:italic;">No check-ins submitted yet.</p>`;
+
+  return `
+    <div class="client-card ${pillarClass} ${!client.is_active ? 'inactive' : ''}" id="card-${client.id}">
+      <div class="client-header" onclick="toggleDetail('${client.id}')">
+        <div class="client-avatar">${initials}</div>
+        <div class="client-name-block">
+          <div class="client-name">${client.name || 'Unnamed'}</div>
+          <div class="client-org">${client.organization || ''} ${client.tp3_pillar ? '&nbsp;·&nbsp;<span class="pillar-badge pillar-'+pillarKey+'">'+client.tp3_pillar+'</span>' : ''}</div>
+        </div>
+        <div class="client-meta">
+          ${currentWeek ? `<div class="meta-item"><div class="week-badge">Wk ${currentWeek}</div></div>` : '<div class="meta-item"><div style="font-size:11px;color:var(--gray-600);">No plan yet</div></div>'}
+          <div class="meta-item">
+            <div class="val" style="font-size:13px;font-weight:700;color:var(--navy);">${current} <span style="font-size:11px;color:var(--gray-600);">/ ${target}</span></div>
+            <div class="lbl">${client.metric_name ? client.metric_name.substring(0,16) : 'Metric'}</div>
+          </div>
+          <div class="meta-item"><div class="val">${completionRate}</div><div class="lbl">Follow-Through</div></div>
+          <div class="meta-item">
+            <div style="display:flex;align-items:center;gap:5px;">
+              <span class="completion-dot ${dotClass}"></span>
+              <span style="font-size:12px;color:var(--gray-600);">${lastDate}</span>
+            </div>
+            <div class="lbl">Last Check-In</div>
+          </div>
+        </div>
+        <div class="expand-arrow">▼</div>
+      </div>
+
+      <div class="client-detail" id="detail-${client.id}">
+        <!-- Week dots -->
+        <div class="detail-section">
+          <h4>13-Week Submission Track</h4>
+          <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
+            ${dotRow}
+            <span style="font-size:11px;color:var(--gray-600);margin-left:8px;">${checkins.length}/13 submitted</span>
+          </div>
+        </div>
+
+        ${client.plan_submitted_at ? `
+        <!-- Metric progress -->
+        <div class="detail-section">
+          <h4>Metric Progress</h4>
+          <div class="metric-bar-wrap">
+            <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:4px;">${client.metric_name || 'Metric'}</div>
+            <div class="metric-bar-track"><div class="metric-bar-fill" style="width:${progress}%"></div></div>
+            <div class="metric-nums"><span>Baseline: ${baseline}</span><span style="font-weight:700;color:var(--navy);">Current: ${current} &nbsp;(${Math.round(progress)}%)</span><span>Target: ${target}</span></div>
+          </div>
+        </div>` : ''}
+
+        <!-- Plan summary -->
+        <div class="detail-section">
+          <h4>Plan Summary</h4>
+          ${planRows}
+        </div>
+
+        <!-- Check-in history -->
+        <div class="detail-section">
+          <h4>Check-In History</h4>
+          <div style="overflow-x:auto;">${historyRows}</div>
+        </div>
+
+        <!-- Client portal URL -->
+        <div class="detail-section">
+          <h4>Client Portal Link</h4>
+          <div class="client-url-box">
+            <code>${portalURL}</code>
+            <button class="copy-btn" onclick="copyURL('${portalURL}', this)">Copy</button>
+          </div>
+          <p style="font-size:11px;color:var(--gray-600);margin-top:6px;">Send this link to ${client.name ? client.name.split(' ')[0] : 'the client'}. They should bookmark it — it's their permanent portal access.</p>
+        </div>
+
+        <!-- Toggle active -->
+        <div style="margin-top:8px;">
+          <button onclick="toggleActive('${client.id}', ${client.is_active})" style="font-size:12px;color:var(--gray-600);background:none;border:1px solid var(--gray-300);border-radius:4px;padding:5px 12px;cursor:pointer;">
+            ${client.is_active ? 'Mark as Complete' : 'Reactivate'}
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ─────────────────────────────────────────────
+// INTERACTIONS
+// ─────────────────────────────────────────────
+function toggleDetail(clientId) {
+  const detail = document.getElementById('detail-' + clientId);
+  const header = detail.previousElementSibling;
+  detail.classList.toggle('open');
+  header.classList.toggle('expanded');
+}
+
+function copyURL(url, btn) {
+  navigator.clipboard.writeText(url).then(() => {
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 2000);
+  });
+}
+
+async function toggleActive(clientId, currentlyActive) {
+  await db.from('clients').update({ is_active: !currentlyActive }).eq('id', clientId);
+  await loadDashboard();
+}
+
+// ─────────────────────────────────────────────
+// ADD CLIENT
+// ─────────────────────────────────────────────
+function openAddModal() {
+  document.getElementById('addModal').classList.add('open');
+  document.getElementById('newName').focus();
+  document.getElementById('newClientResult').innerHTML = '';
+  document.getElementById('modalError').textContent = '';
+  document.getElementById('saveClientBtn').style.display = 'inline-block';
+  document.getElementById('newName').value = '';
+  document.getElementById('newEmail').value = '';
+  document.getElementById('newOrg').value = '';
+}
+
+function closeAddModal() {
+  document.getElementById('addModal').classList.remove('open');
+}
+
+async function addClient() {
+  const name = document.getElementById('newName').value.trim();
+  const email = document.getElementById('newEmail').value.trim();
+  const org   = document.getElementById('newOrg').value.trim();
+  const errEl = document.getElementById('modalError');
+
+  if (!name) { errEl.textContent = 'Name is required.'; return; }
+
+  document.getElementById('saveClientBtn').textContent = 'Creating…';
+  document.getElementById('saveClientBtn').disabled = true;
+
+  const { data, error } = await db
+    .from('clients')
+    .insert({ name, email: email || null, organization: org || null })
+    .select()
+    .single();
+
+  if (error || !data) {
+    errEl.textContent = 'Error creating client. Try again.';
+    document.getElementById('saveClientBtn').textContent = 'Create Client';
+    document.getElementById('saveClientBtn').disabled = false;
+    return;
+  }
+
+  const portalURL = `${PORTAL_BASE_URL}?token=${data.token}`;
+
+  document.getElementById('newClientResult').innerHTML = `
+    <div class="new-client-result">
+      <h4>✅ ${name} created successfully.</h4>
+      <p style="font-size:13px;margin-bottom:8px;">Their portal link (send this to them):</p>
+      <div class="client-url-box">
+        <code>${portalURL}</code>
+        <button class="copy-btn" onclick="copyURL('${portalURL}', this)">Copy</button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('saveClientBtn').style.display = 'none';
+  allClients.unshift(data);
+  renderStats();
+}
+
+// Close modal on overlay click
+document.getElementById('addModal').addEventListener('click', function(e) {
+  if (e.target === this) closeAddModal();
+});
+</script>
+</body>
+</html>

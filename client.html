@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GPS Leadership — Your 90-Day Plan</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --navy:       #004369;
+      --red:        #DB1F48;
+      --teal:       #01949A;
+      --sand:       #E5DDC8;
+      --navy-dark:  #002D47;
+      --light-teal: #E8F7F7;
+      --light-sand: #F7F4EE;
+      --white:      #ffffff;
+      --gray-100:   #f5f5f5;
+      --gray-300:   #d0d0d0;
+      --gray-600:   #666666;
+      --text:       #1a1a1a;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Open Sans', sans-serif;
+      background: var(--gray-100);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── TOP BAR ── */
+    .top-bar {
+      height: 6px;
+      background: linear-gradient(to right, var(--navy), var(--teal), var(--red));
+    }
+
+    /* ── HEADER ── */
+    .header {
+      background: var(--navy);
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .header-logo img {
+      height: 42px;
+    }
+    .header-title {
+      color: var(--white);
+      font-family: 'Montserrat', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      opacity: 0.85;
+    }
+    .header-client-name {
+      color: var(--sand);
+      font-family: 'Montserrat', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    /* ── MAIN CONTAINER ── */
+    .container {
+      max-width: 760px;
+      margin: 32px auto;
+      padding: 0 20px 60px;
+    }
+
+    /* ── LOADING / ERROR ── */
+    .state-screen {
+      background: var(--white);
+      border-radius: 8px;
+      padding: 60px 40px;
+      text-align: center;
+      margin-top: 40px;
+    }
+    .state-screen h2 {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 22px;
+      color: var(--navy);
+      margin-bottom: 12px;
+    }
+    .state-screen p { color: var(--gray-600); font-size: 15px; line-height: 1.6; }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 4px solid var(--gray-300);
+      border-top-color: var(--teal);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 24px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── SECTION CARDS ── */
+    .card {
+      background: var(--white);
+      border-radius: 8px;
+      padding: 28px 32px;
+      margin-bottom: 20px;
+      border-top: 4px solid var(--teal);
+    }
+    .card.red-top { border-top-color: var(--red); }
+    .card.navy-top { border-top-color: var(--navy); }
+    .card.sand-top { border-top-color: var(--sand); border-top-width: 4px; }
+
+    .card-title {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--navy);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .card-subtitle {
+      font-size: 13px;
+      color: var(--gray-600);
+      margin-bottom: 20px;
+    }
+
+    /* ── PLAN SUMMARY GRID ── */
+    .plan-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .plan-item {
+      background: var(--light-sand);
+      border-radius: 6px;
+      padding: 12px 14px;
+    }
+    .plan-item.full-width { grid-column: 1 / -1; }
+    .plan-item label {
+      display: block;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--teal);
+      margin-bottom: 4px;
+    }
+    .plan-item .value {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--navy);
+      line-height: 1.4;
+    }
+
+    /* ── PILLAR BADGE ── */
+    .pillar-badge {
+      display: inline-block;
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .pillar-trust       { background: #e8f4fd; color: #1565c0; }
+    .pillar-proactivity { background: #e8f5e9; color: #2e7d32; }
+    .pillar-productivity{ background: #fff3e0; color: #e65100; }
+
+    /* ── METRIC BAR ── */
+    .metric-section {
+      background: var(--light-teal);
+      border-radius: 6px;
+      padding: 14px 18px;
+      margin-top: 12px;
+    }
+    .metric-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--teal); margin-bottom: 8px; }
+    .metric-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+    .metric-bar-track {
+      flex: 1;
+      height: 10px;
+      background: var(--gray-300);
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    .metric-bar-fill {
+      height: 100%;
+      background: linear-gradient(to right, var(--teal), var(--navy));
+      border-radius: 5px;
+      transition: width 0.6s ease;
+    }
+    .metric-numbers { display: flex; justify-content: space-between; font-size: 12px; color: var(--gray-600); }
+    .metric-current { font-size: 22px; font-weight: 800; color: var(--navy); font-family: 'Montserrat', sans-serif; }
+
+    /* ── WEEK INDICATOR ── */
+    .week-strip {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--navy);
+      border-radius: 6px;
+      padding: 12px 18px;
+      margin-bottom: 20px;
+    }
+    .week-number {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--sand);
+      line-height: 1;
+    }
+    .week-label { color: rgba(255,255,255,0.7); font-size: 13px; }
+    .week-label strong { color: var(--white); display: block; font-size: 14px; }
+
+    /* ── FORMS ── */
+    .form-group { margin-bottom: 18px; }
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--navy);
+      margin-bottom: 6px;
+    }
+    .form-group .hint {
+      font-size: 12px;
+      color: var(--gray-600);
+      margin-bottom: 6px;
+      font-weight: 400;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+    .form-group input[type="text"],
+    .form-group input[type="number"],
+    .form-group input[type="date"],
+    .form-group textarea,
+    .form-group select {
+      width: 100%;
+      padding: 10px 14px;
+      border: 2px solid var(--gray-300);
+      border-radius: 6px;
+      font-family: 'Open Sans', sans-serif;
+      font-size: 14px;
+      color: var(--text);
+      background: var(--white);
+      transition: border-color 0.2s;
+    }
+    .form-group input:focus,
+    .form-group textarea:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: var(--teal);
+    }
+    .form-group textarea { min-height: 80px; resize: vertical; }
+
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    /* radio group */
+    .radio-group { display: flex; gap: 10px; flex-wrap: wrap; }
+    .radio-group label {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--gray-100);
+      border: 2px solid var(--gray-300);
+      border-radius: 6px;
+      padding: 8px 14px;
+      cursor: pointer;
+      text-transform: none;
+      letter-spacing: 0;
+      font-size: 14px;
+      font-weight: 600;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .radio-group input[type="radio"] { display: none; }
+    .radio-group input[type="radio"]:checked + span {
+      /* handled via label */
+    }
+    .radio-group label.selected {
+      border-color: var(--teal);
+      background: var(--light-teal);
+      color: var(--navy);
+    }
+
+    /* pillar radio */
+    .pillar-radio-group { display: flex; gap: 10px; flex-wrap: wrap; }
+    .pillar-option {
+      flex: 1; min-width: 140px;
+      border: 2px solid var(--gray-300);
+      border-radius: 8px;
+      padding: 14px 12px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .pillar-option:hover { border-color: var(--teal); }
+    .pillar-option.selected { border-color: var(--navy); background: var(--light-teal); }
+    .pillar-option .pillar-icon { font-size: 24px; margin-bottom: 6px; }
+    .pillar-option .pillar-name { font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: 700; color: var(--navy); }
+    .pillar-option .pillar-desc { font-size: 11px; color: var(--gray-600); margin-top: 4px; }
+
+    /* ── BUTTONS ── */
+    .btn-primary {
+      background: var(--red);
+      color: var(--white);
+      border: none;
+      border-radius: 6px;
+      padding: 14px 32px;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .btn-primary:hover { background: #b5183c; }
+    .btn-primary:active { transform: scale(0.98); }
+    .btn-primary:disabled { background: var(--gray-300); cursor: not-allowed; }
+
+    /* ── HISTORY TABLE ── */
+    .history-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .history-table th {
+      background: var(--navy);
+      color: var(--white);
+      padding: 8px 12px;
+      text-align: left;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .history-table td { padding: 9px 12px; border-bottom: 1px solid var(--gray-300); vertical-align: top; }
+    .history-table tr:last-child td { border-bottom: none; }
+    .history-table tr:nth-child(even) td { background: var(--light-sand); }
+    .completion-yes   { color: #2e7d32; font-weight: 700; }
+    .completion-part  { color: #e65100; font-weight: 700; }
+    .completion-no    { color: var(--red); font-weight: 700; }
+
+    /* ── SUCCESS BANNER ── */
+    .success-banner {
+      background: #e8f5e9;
+      border: 2px solid #2e7d32;
+      border-radius: 8px;
+      padding: 18px 24px;
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+    .success-banner .icon { font-size: 24px; }
+    .success-banner h3 { font-family: 'Montserrat', sans-serif; color: #2e7d32; font-size: 15px; margin-bottom: 4px; }
+    .success-banner p { color: #1b5e20; font-size: 13px; }
+
+    /* ── FOOTER ── */
+    .footer {
+      margin-top: 48px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--gray-600);
+      padding-top: 20px;
+      border-top: 1px solid var(--gray-300);
+    }
+
+    /* ── BOTTOM BAR ── */
+    .bottom-bar {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      height: 4px;
+      background: linear-gradient(to right, var(--teal), var(--navy));
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 600px) {
+      .plan-grid, .form-row { grid-template-columns: 1fr; }
+      .header { padding: 14px 16px; }
+      .container { padding: 0 12px 60px; }
+      .card { padding: 20px 18px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="top-bar"></div>
+
+<header class="header">
+  <div class="header-logo">
+    <!-- GPS Logo: replace src with your base64-encoded logo -->
+    <div style="font-family:'Montserrat',sans-serif;font-size:20px;font-weight:800;color:#E5DDC8;letter-spacing:1px;">GPS</div>
+    <div>
+      <div class="header-title">LEADERSHIP SOLUTIONS</div>
+      <div class="header-client-name" id="headerClientName">90-Day Leadership Plan</div>
+    </div>
+  </div>
+  <div id="headerWeekBadge" style="display:none;">
+    <div style="background:rgba(255,255,255,0.15);border-radius:6px;padding:6px 14px;text-align:center;">
+      <div style="color:rgba(255,255,255,0.7);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Week</div>
+      <div id="headerWeekNum" style="color:#E5DDC8;font-family:'Montserrat',sans-serif;font-size:20px;font-weight:800;line-height:1.1;"></div>
+    </div>
+  </div>
+</header>
+
+<main class="container" id="mainContent">
+  <!-- Loading state -->
+  <div class="state-screen" id="loadingScreen">
+    <div class="spinner"></div>
+    <h2>Loading your plan…</h2>
+    <p>Just a moment.</p>
+  </div>
+</main>
+
+<div class="bottom-bar"></div>
+
+<script>
+// ─────────────────────────────────────────────
+// CONFIGURATION — EA: fill these in after Supabase setup
+// ─────────────────────────────────────────────
+const SUPABASE_URL  = 'https://pbnkefuqpoztcxfagiod.supabase.co';
+const SUPABASE_ANON = 'sb_publishable_nu9GXGeoqDXcxVocodQ4UA_ke7Yrzyw';
+const NOTIFY_URL    = '/api/notify';              // Vercel serverless function
+
+// ─────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+const token = new URLSearchParams(window.location.search).get('token');
+
+window.addEventListener('DOMContentLoaded', () => {
+  if (!token) {
+    showError('No access link found.', 'Please use the unique link sent to you by your GPS coach. If you\'ve lost it, email alex@gpsleadership.org to request a new one.');
+    return;
+  }
+  loadClient();
+});
+
+// ─────────────────────────────────────────────
+// LOAD CLIENT
+// ─────────────────────────────────────────────
+async function loadClient() {
+  try {
+    const { data: client, error } = await db
+      .from('clients')
+      .select('*')
+      .eq('token', token)
+      .single();
+
+    if (error || !client) {
+      showError('Link not recognized.', 'This access link isn\'t valid. Please contact your GPS coach at alex@gpsleadership.org to get a new link.');
+      return;
+    }
+
+    if (!client.is_active) {
+      showError('Engagement complete.', `Your 90-day engagement has been completed. Contact Alex at alex@gpsleadership.org to discuss what's next.`);
+      return;
+    }
+
+    document.getElementById('headerClientName').textContent = client.name || '90-Day Leadership Plan';
+
+    if (!client.plan_submitted_at) {
+      renderFormB(client);
+    } else {
+      const { data: checkins } = await db
+        .from('checkins')
+        .select('*')
+        .eq('client_id', client.id)
+        .order('week_number', { ascending: true });
+
+      renderPortal(client, checkins || []);
+    }
+  } catch (e) {
+    showError('Something went wrong.', 'Please refresh the page. If the problem continues, contact alex@gpsleadership.org.');
+  }
+}
+
+// ─────────────────────────────────────────────
+// FORM B — PLAN SETUP (one-time)
+// ─────────────────────────────────────────────
+function renderFormB(client) {
+  const today = new Date().toISOString().split('T')[0];
+
+  document.getElementById('mainContent').innerHTML = `
+    <div class="card navy-top" style="margin-top:24px;">
+      <div class="card-title">Welcome, ${client.name ? client.name.split(' ')[0] : 'there'}</div>
+      <div class="card-subtitle">Let's lock in your 90-Day Leadership Plan. This takes about 10 minutes and only needs to be done once. Pull out your notes from your debrief conversation.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Step 1 — Your Focus Pillar</div>
+      <div class="card-subtitle">Which pillar did you and Alex agree to focus on?</div>
+      <div class="pillar-radio-group" id="pillarGroup">
+        <div class="pillar-option" onclick="selectPillar('Trust')" id="pillar-Trust">
+          <div class="pillar-icon">🤝</div>
+          <div class="pillar-name">Trust</div>
+          <div class="pillar-desc">How your team experiences your reliability, transparency, and follow-through</div>
+        </div>
+        <div class="pillar-option" onclick="selectPillar('Proactivity')" id="pillar-Proactivity">
+          <div class="pillar-icon">⚡</div>
+          <div class="pillar-name">Proactivity</div>
+          <div class="pillar-desc">How you anticipate, initiate, and move without waiting to be told</div>
+        </div>
+        <div class="pillar-option" onclick="selectPillar('Productivity')" id="pillar-Productivity">
+          <div class="pillar-icon">🎯</div>
+          <div class="pillar-name">Productivity</div>
+          <div class="pillar-desc">How effectively you focus your team's time and energy on what moves the needle</div>
+        </div>
+      </div>
+      <input type="hidden" id="tp3Pillar" value="" />
+    </div>
+
+    <div class="card">
+      <div class="card-title">Step 2 — Your Goal</div>
+
+      <div class="form-group">
+        <label>Goal Description <span style="color:var(--red)">*</span></label>
+        <div class="hint">In plain language — what specific leadership behavior are you changing or building?</div>
+        <textarea id="goalDescription" placeholder="e.g. Stop making every decision myself. Build a weekly rhythm where my ops managers bring solutions, not just problems."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>90-Day Goal Statement <span style="color:var(--red)">*</span></label>
+        <div class="hint">The outcome you want to be able to say at the end of 90 days. First person, specific.</div>
+        <textarea id="goalStatement" placeholder="e.g. By the end of 90 days, my ops managers are running their own P&L reviews without needing me in the room."></textarea>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Step 3 — Your Metric</div>
+      <div class="card-subtitle">How will you know this is working? Choose one number you can track weekly.</div>
+
+      <div class="form-group">
+        <label>Metric Name <span style="color:var(--red)">*</span></label>
+        <div class="hint">What are you measuring?</div>
+        <input type="text" id="metricName" placeholder="e.g. # decisions made without Alex's input per week" />
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Baseline (where you are now) <span style="color:var(--red)">*</span></label>
+          <input type="number" id="metricBaseline" placeholder="e.g. 2" step="any" />
+        </div>
+        <div class="form-group">
+          <label>90-Day Target <span style="color:var(--red)">*</span></label>
+          <input type="number" id="metricTarget" placeholder="e.g. 8" step="any" />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Plan Start Date</label>
+        <input type="date" id="planStartDate" value="${today}" />
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Step 4 — Your First Move</div>
+
+      <div class="form-group">
+        <label>START Behavior <span style="color:var(--red)">*</span></label>
+        <div class="hint">The single behavior you're committing to start doing. Be specific about what it looks like in action.</div>
+        <textarea id="startBehavior" placeholder="e.g. Run a 20-minute Monday ops stand-up where each manager reports their top priority and any blockers — without me solving the blockers for them."></textarea>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Step 5 — Your Rewards</div>
+      <div class="card-subtitle">Optional but powerful. What's at stake for you personally?</div>
+
+      <div class="form-group">
+        <label>30-Day Reward</label>
+        <div class="hint">Something meaningful you'll give yourself if you're on track at 30 days.</div>
+        <input type="text" id="reward30" placeholder="e.g. A full weekend off — phone down Friday night through Sunday" />
+      </div>
+
+      <div class="form-group">
+        <label>90-Day Reward</label>
+        <div class="hint">Something bigger that represents what this change means to you.</div>
+        <input type="text" id="reward90" placeholder="e.g. Book the trip we've been putting off for two years" />
+      </div>
+    </div>
+
+    <div id="formBError" style="display:none;color:var(--red);font-size:13px;font-weight:600;margin-bottom:12px;padding:10px 14px;background:#fff0f3;border-radius:6px;border:1px solid var(--red);"></div>
+
+    <button class="btn-primary" onclick="submitFormB('${client.id}', '${client.name}')" id="submitBBtn">
+      Lock In My Plan →
+    </button>
+    <p style="font-size:12px;color:var(--gray-600);margin-top:10px;">Once submitted, your plan is locked. Contact Alex if anything needs to change.</p>
+  `;
+}
+
+function selectPillar(pillar) {
+  document.querySelectorAll('.pillar-option').forEach(el => el.classList.remove('selected'));
+  document.getElementById('pillar-' + pillar).classList.add('selected');
+  document.getElementById('tp3Pillar').value = pillar;
+}
+
+async function submitFormB(clientId, clientName) {
+  const btn = document.getElementById('submitBBtn');
+  const errEl = document.getElementById('formBError');
+  errEl.style.display = 'none';
+
+  const pillar        = document.getElementById('tp3Pillar').value;
+  const goalDesc      = document.getElementById('goalDescription').value.trim();
+  const goalStatement = document.getElementById('goalStatement').value.trim();
+  const metricName    = document.getElementById('metricName').value.trim();
+  const baseline      = parseFloat(document.getElementById('metricBaseline').value);
+  const target        = parseFloat(document.getElementById('metricTarget').value);
+  const startDate     = document.getElementById('planStartDate').value;
+  const startBehavior = document.getElementById('startBehavior').value.trim();
+  const reward30      = document.getElementById('reward30').value.trim();
+  const reward90      = document.getElementById('reward90').value.trim();
+
+  const missing = [];
+  if (!pillar)        missing.push('Focus Pillar');
+  if (!goalDesc)      missing.push('Goal Description');
+  if (!goalStatement) missing.push('90-Day Goal Statement');
+  if (!metricName)    missing.push('Metric Name');
+  if (isNaN(baseline)) missing.push('Baseline Value');
+  if (isNaN(target))  missing.push('90-Day Target');
+  if (!startBehavior) missing.push('START Behavior');
+
+  if (missing.length > 0) {
+    errEl.textContent = 'Please complete: ' + missing.join(', ');
+    errEl.style.display = 'block';
+    errEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  const updates = {
+    tp3_pillar:       pillar,
+    goal_description: goalDesc,
+    goal_statement:   goalStatement,
+    metric_name:      metricName,
+    metric_baseline:  baseline,
+    metric_target:    target,
+    metric_current:   baseline,
+    plan_start_date:  startDate,
+    start_behavior:   startBehavior,
+    reward_30_day:    reward30 || null,
+    reward_90_day:    reward90 || null,
+    plan_submitted_at: new Date().toISOString(),
+  };
+
+  const { error } = await db.from('clients').update(updates).eq('id', clientId);
+
+  if (error) {
+    errEl.textContent = 'Error saving. Please try again or contact alex@gpsleadership.org.';
+    errEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Lock In My Plan →';
+    return;
+  }
+
+  // Notify Alex
+  try {
+    await fetch(NOTIFY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'plan_submitted',
+        clientName: clientName,
+        pillar, goalDesc, goalStatement, metricName, baseline, target, startDate, startBehavior, reward30, reward90
+      })
+    });
+  } catch (_) { /* notification failed silently — not blocking */ }
+
+  // Reload to show portal
+  window.location.reload();
+}
+
+// ─────────────────────────────────────────────
+// PORTAL — RETURNING CLIENT VIEW
+// ─────────────────────────────────────────────
+function renderPortal(client, checkins) {
+  const startDate  = new Date(client.plan_start_date);
+  const today      = new Date();
+  const daysDiff   = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
+  const currentWeek = Math.min(Math.max(Math.ceil((daysDiff + 1) / 7), 1), 13);
+
+  document.getElementById('headerWeekBadge').style.display = 'block';
+  document.getElementById('headerWeekNum').textContent = currentWeek;
+
+  // Calculate metric progress
+  const baseline = parseFloat(client.metric_baseline) || 0;
+  const target   = parseFloat(client.metric_target) || 0;
+  const current  = parseFloat(client.metric_current) || baseline;
+  const range    = target - baseline;
+  const progress = range !== 0 ? Math.min(Math.max(((current - baseline) / range) * 100, 0), 100) : 0;
+
+  // Pillar class
+  const pillarClass = 'pillar-' + (client.tp3_pillar || 'trust').toLowerCase();
+  const pillarLabel = client.tp3_pillar || '—';
+
+  // Last check-in
+  const lastCheckin = checkins.length > 0 ? checkins[checkins.length - 1] : null;
+  const alreadyCheckedInThisWeek = lastCheckin && lastCheckin.week_number === currentWeek;
+
+  document.getElementById('mainContent').innerHTML = `
+    ${alreadyCheckedInThisWeek ? `
+      <div class="success-banner" style="margin-top:24px;">
+        <div class="icon">✅</div>
+        <div>
+          <h3>Week ${currentWeek} check-in complete.</h3>
+          <p>You're done until next week. See you then.</p>
+        </div>
+      </div>` : ''}
+
+    <!-- PLAN SUMMARY -->
+    <div class="card" style="margin-top:${alreadyCheckedInThisWeek ? '0' : '24px'};">
+      <div class="card-title">My Plan</div>
+      <div class="card-subtitle">Your 90-day anchor — come back to this when you need to remember why you're doing this.</div>
+
+      <div style="margin-bottom:14px;">
+        <span class="pillar-badge ${pillarClass}">${pillarLabel}</span>
+      </div>
+
+      <div class="plan-grid">
+        <div class="plan-item full-width">
+          <label>90-Day Goal</label>
+          <div class="value">${client.goal_statement || '—'}</div>
+        </div>
+        <div class="plan-item full-width">
+          <label>START Behavior</label>
+          <div class="value">${client.start_behavior || '—'}</div>
+        </div>
+        ${client.reward_30_day ? `<div class="plan-item"><label>30-Day Reward</label><div class="value">${client.reward_30_day}</div></div>` : ''}
+        ${client.reward_90_day ? `<div class="plan-item"><label>90-Day Reward</label><div class="value">${client.reward_90_day}</div></div>` : ''}
+      </div>
+
+      <div class="metric-section">
+        <div class="metric-label">${client.metric_name || 'Metric'}</div>
+        <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;">
+          <div class="metric-current">${current}</div>
+          <div style="font-size:13px;color:var(--gray-600);">current</div>
+        </div>
+        <div class="metric-bar-track">
+          <div class="metric-bar-fill" style="width:${progress}%"></div>
+        </div>
+        <div class="metric-numbers" style="margin-top:4px;">
+          <span>Baseline: ${baseline}</span>
+          <span>${Math.round(progress)}% of target</span>
+          <span>Target: ${target}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- WEEKLY CHECK-IN -->
+    ${!alreadyCheckedInThisWeek ? renderCheckinForm(client, checkins, currentWeek) : ''}
+
+    <!-- HISTORY -->
+    ${checkins.length > 0 ? renderHistory(checkins, client) : ''}
+  `;
+}
+
+function renderCheckinForm(client, checkins, currentWeek) {
+  const lastCheckin = checkins.length > 0 ? checkins[checkins.length - 1] : null;
+  const priorAction = lastCheckin ? lastCheckin.planned_action : null;
+
+  return `
+    <div class="card red-top" id="checkinCard">
+      <div class="card-title">Week ${currentWeek} Check-In</div>
+      <div class="card-subtitle">Under 3 minutes. Fill this out before or right after your coaching call.</div>
+
+      <div class="week-strip">
+        <div class="week-number">${currentWeek}</div>
+        <div class="week-label">
+          <strong>Week ${currentWeek} of 13</strong>
+          ${13 - currentWeek > 0 ? `${13 - currentWeek} weeks remaining` : 'Final week — strong finish.'}
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Did you attend your coaching call this week?</label>
+        <div class="radio-group" id="coachingGroup">
+          <label onclick="selectRadio('coachingGroup', this)"><input type="radio" name="coaching" value="true" /><span>Yes</span></label>
+          <label onclick="selectRadio('coachingGroup', this)"><input type="radio" name="coaching" value="false" /><span>No / Not this week</span></label>
+        </div>
+      </div>
+
+      ${priorAction ? `
+      <div class="form-group">
+        <label>Last Week's Commitment</label>
+        <div style="background:var(--light-sand);border-radius:6px;padding:10px 14px;font-size:13px;color:var(--navy);font-style:italic;">"${priorAction}"</div>
+      </div>
+      <div class="form-group">
+        <label>Did you follow through?</label>
+        <div class="radio-group" id="completionGroup">
+          <label onclick="selectRadio('completionGroup', this)"><input type="radio" name="completion" value="Yes" /><span>Yes</span></label>
+          <label onclick="selectRadio('completionGroup', this)"><input type="radio" name="completion" value="Partially" /><span>Partially</span></label>
+          <label onclick="selectRadio('completionGroup', this)"><input type="radio" name="completion" value="No" /><span>No</span></label>
+        </div>
+      </div>` : ''}
+
+      <div class="form-group">
+        <label>Current Metric Value <span style="color:var(--red)">*</span></label>
+        <div class="hint">What's your ${client.metric_name || 'metric'} at right now?</div>
+        <input type="number" id="currentMetric" placeholder="Enter current value" step="any" />
+      </div>
+
+      <div class="form-group">
+        <label>This Week's Commitment</label>
+        <div class="hint">What specific action will you take before next check-in?</div>
+        <textarea id="plannedAction" placeholder="Be specific. What exactly will you do, and when?"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>Reflection</label>
+        <div class="hint">What's working? What's getting in the way? Anything you want Alex to know before your call?</div>
+        <textarea id="reflectionNotes" placeholder="Optional — but the more honest, the better your coaching call will be."></textarea>
+      </div>
+
+      <div id="formAError" style="display:none;color:var(--red);font-size:13px;font-weight:600;margin-bottom:12px;padding:10px 14px;background:#fff0f3;border-radius:6px;border:1px solid var(--red);"></div>
+
+      <button class="btn-primary" onclick="submitFormA('${client.id}', '${client.name}', ${currentWeek}, ${!priorAction})" id="submitABtn">
+        Submit Check-In →
+      </button>
+    </div>
+  `;
+}
+
+function selectRadio(groupId, labelEl) {
+  document.querySelectorAll(`#${groupId} label`).forEach(l => l.classList.remove('selected'));
+  labelEl.classList.add('selected');
+}
+
+async function submitFormA(clientId, clientName, weekNumber, noCompletion) {
+  const btn    = document.getElementById('submitABtn');
+  const errEl  = document.getElementById('formAError');
+  errEl.style.display = 'none';
+
+  const metricVal = parseFloat(document.getElementById('currentMetric').value);
+  const action    = document.getElementById('plannedAction').value.trim();
+  const notes     = document.getElementById('reflectionNotes').value.trim();
+
+  const coachingLabel   = document.querySelector('#coachingGroup label.selected');
+  const completionLabel = document.querySelector('#completionGroup label.selected');
+
+  const attendedCoaching  = coachingLabel   ? coachingLabel.querySelector('input').value === 'true' : null;
+  const completionStatus  = completionLabel ? completionLabel.querySelector('input').value : null;
+
+  if (isNaN(metricVal)) {
+    errEl.textContent = 'Please enter your current metric value.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Submitting…';
+
+  const checkinData = {
+    client_id:         clientId,
+    week_number:       weekNumber,
+    attended_coaching: attendedCoaching,
+    planned_action:    action || null,
+    completion_status: noCompletion ? null : completionStatus,
+    metric_value:      metricVal,
+    notes:             notes || null,
+    submitted_at:      new Date().toISOString(),
+  };
+
+  const { error: checkinError } = await db.from('checkins').insert(checkinData);
+
+  if (checkinError) {
+    errEl.textContent = 'Error saving. Please try again.';
+    errEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Submit Check-In →';
+    return;
+  }
+
+  // Update current metric on client record
+  await db.from('clients').update({ metric_current: metricVal }).eq('id', clientId);
+
+  // Notify Alex
+  try {
+    await fetch(NOTIFY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'checkin_submitted',
+        clientName,
+        weekNumber,
+        attendedCoaching,
+        completionStatus,
+        metricValue: metricVal,
+        plannedAction: action,
+        notes,
+        token
+      })
+    });
+  } catch (_) { /* silent */ }
+
+  window.location.reload();
+}
+
+function renderHistory(checkins, client) {
+  const rows = [...checkins].reverse().map(c => {
+    const completionClass = c.completion_status === 'Yes' ? 'completion-yes'
+      : c.completion_status === 'Partially' ? 'completion-part'
+      : c.completion_status === 'No' ? 'completion-no' : '';
+
+    const date = c.submitted_at ? new Date(c.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
+
+    return `<tr>
+      <td style="font-weight:700;color:var(--navy);">Wk ${c.week_number}</td>
+      <td>${date}</td>
+      <td style="font-weight:700;">${c.metric_value ?? '—'}</td>
+      <td class="${completionClass}">${c.completion_status || '—'}</td>
+      <td style="color:var(--gray-600);font-size:12px;">${c.planned_action ? c.planned_action.substring(0, 60) + (c.planned_action.length > 60 ? '…' : '') : '—'}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="card sand-top">
+      <div class="card-title">My Progress</div>
+      <div class="card-subtitle">${checkins.length} check-in${checkins.length !== 1 ? 's' : ''} completed</div>
+      <div style="overflow-x:auto;">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Week</th>
+              <th>Date</th>
+              <th>${client.metric_name ? client.metric_name.substring(0, 18) : 'Metric'}</th>
+              <th>Follow-Through</th>
+              <th>This Week's Action</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+// ─────────────────────────────────────────────
+// UTILITY
+// ─────────────────────────────────────────────
+function showError(title, message) {
+  document.getElementById('mainContent').innerHTML = `
+    <div class="state-screen">
+      <div style="font-size:40px;margin-bottom:16px;">🔒</div>
+      <h2>${title}</h2>
+      <p>${message}</p>
+    </div>
+  `;
+}
+</script>
+</body>
+</html>
