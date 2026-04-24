@@ -749,7 +749,7 @@ function renderPortal(client, checkins) {
 
     <!-- PLAN SUMMARY -->
     <div class="card" style="margin-top:${alreadyCheckedInThisWeek ? '0' : '24px'};">
-      <div class="card-title">My Plan</div>
+      <div class="card-title">${(client.name || '').split(' ')[0] ? (client.name.split(' ')[0] + "\'s Plan") : 'My Plan'}</div>
       <div class="card-subtitle">Your 90-day anchor — come back to this when you need to remember why you're doing this.</div>
 
       <div style="margin-bottom:14px;">
