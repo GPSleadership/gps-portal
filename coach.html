@@ -380,7 +380,17 @@
           <div class="filter-tab" onclick="setFilter('complete', this)">Complete</div>
           <div class="filter-tab" onclick="setFilter('archived', this)">Archived</div>
         </div>
-<button class="btn-export" onclick="exportData()">⬇ Export Data</button>
+<div style="position:relative;display:inline-block;" id="exportDropdownWrap">
+          <button class="btn-export" onclick="toggleExportMenu()">⬇ Export ▾</button>
+          <div id="exportMenu" style="display:none;position:absolute;right:0;top:36px;background:white;border:1px solid var(--gray-300);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.12);z-index:50;min-width:210px;">
+            <div onclick="exportData();toggleExportMenu()" style="padding:10px 16px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--gray-200);" onmouseover="this.style.background='var(--gray-100)'" onmouseout="this.style.background=''">
+              📄 Full Backup (JSON)
+            </div>
+            <div onclick="exportGHL();toggleExportMenu()" style="padding:10px 16px;font-size:13px;cursor:pointer;" onmouseover="this.style.background='var(--gray-100)'" onmouseout="this.style.background=''">
+              📊 Export for GoHighLevel (CSV)
+            </div>
+          </div>
+        </div>
         <button class="btn-add" onclick="openAddModal()">+ Add Client</button>
       </div>
     </div>
@@ -859,6 +869,103 @@ function exportData() {
   URL.revokeObjectURL(url);
 }
 
+
+// ─────────────────────────────────────────────
+// EXPORT DROPDOWN TOGGLE
+// ─────────────────────────────────────────────
+function toggleExportMenu() {
+  const menu = document.getElementById('exportMenu');
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+document.addEventListener('click', function(e) {
+  const wrap = document.getElementById('exportDropdownWrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('exportMenu').style.display = 'none';
+  }
+});
+
+// ─────────────────────────────────────────────
+// EXPORT FOR GOHIGHLEVEL (CSV)
+// ─────────────────────────────────────────────
+function exportGHL() {
+  const year = new Date().getFullYear();
+
+  // Build one row per non-archived client who has a real email
+  const rows = allClients
+    .filter(c => !c.is_archived)
+    .map(c => {
+      const clientCheckins = allCheckins.filter(ci => ci.client_id === c.id);
+      const submitted      = clientCheckins.length;
+      const yesCount       = clientCheckins.filter(ci => ci.completion_status === 'Yes').length;
+      const followThrough  = submitted > 0 ? Math.round((yesCount / submitted) * 100) + '%' : '';
+
+      // GHL Tags — matches exactly what to create in GHL Tags settings
+      const tags = [
+        'GPS 90-Day Client',
+        `GPS-${year}`,
+        c.tp3_pillar ? `GPS-${c.tp3_pillar}` : null,
+        c.is_active ? 'GPS-Active' : 'GPS-Complete',
+      ].filter(Boolean).join(', ');
+
+      const nameParts  = (c.name || '').trim().split(/\s+/);
+      const firstName  = nameParts[0] || '';
+      const lastName   = nameParts.slice(1).join(' ') || '';
+
+      // Status
+      const status = !c.plan_submitted_at ? 'Enrolled – Plan Pending'
+        : c.is_active ? 'Active'
+        : 'Complete';
+
+      return {
+        'First Name':              firstName,
+        'Last Name':               lastName,
+        'Email':                   c.email || '',
+        'Company Name':            c.organization || '',
+        'Tags':                    tags,
+        // ── GPS Custom Fields (create these in GHL → Settings → Custom Fields) ──
+        'GPS TP3 Pillar':          c.tp3_pillar || '',
+        'GPS Engagement Status':   status,
+        'GPS Coaching Year':       String(year),
+        'GPS Plan Start Date':     c.plan_start_date || '',
+        'GPS 90-Day Goal':         c.goal_statement || '',
+        'GPS 30-Day Goal':         c.goal_30_day || '',
+        'GPS Start Behavior':      c.start_behavior || '',
+        'GPS Metric Name':         c.metric_name || '',
+        'GPS Metric Baseline':     c.metric_baseline != null ? String(c.metric_baseline) : '',
+        'GPS Metric Target':       c.metric_target  != null ? String(c.metric_target)  : '',
+        'GPS Metric Current':      c.metric_current != null ? String(c.metric_current) : '',
+        'GPS Weeks Completed':     String(submitted),
+        'GPS Follow-Through Rate': followThrough,
+      };
+    });
+
+  if (rows.length === 0) {
+    alert('No active clients to export.');
+    return;
+  }
+
+  // Build CSV string
+  const headers = Object.keys(rows[0]);
+  const csvLines = [
+    headers.join(','),
+    ...rows.map(row =>
+      headers.map(h => {
+        const val = String(row[h] || '').replace(/"/g, '""');
+        return val.includes(',') || val.includes('"') || val.includes('\n') ? `"${val}"` : val;
+      }).join(',')
+    )
+  ];
+
+  const blob = new Blob([csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'gps-clients-ghl-' + new Date().toISOString().split('T')[0] + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 // Close modal on overlay click
 document.getElementById('addModal').addEventListener('click', function(e) {
   if (e.target === this) closeAddModal();
