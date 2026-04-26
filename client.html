@@ -85,6 +85,55 @@
       .gps-header-logo { height: 32px; }
     }
 
+
+    /* ── RESOURCES ── */
+    .toolkit-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 20px;
+      background: var(--navy);
+      color: var(--white);
+      border-radius: 6px;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      text-decoration: none;
+      letter-spacing: 0.2px;
+      transition: background 0.15s;
+      margin-bottom: 4px;
+    }
+    .toolkit-btn:hover { background: var(--navy-dark); }
+    .toolkit-btn-sub {
+      display: block;
+      font-size: 11px;
+      color: var(--gray-600);
+      margin-top: 4px;
+      margin-bottom: 20px;
+      font-family: 'Open Sans', sans-serif;
+    }
+    .resource-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 4px;
+    }
+    .resource-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      background: var(--light-sand);
+      border-radius: 6px;
+      text-decoration: none;
+      color: var(--navy);
+      font-size: 14px;
+      font-weight: 600;
+      transition: background 0.15s;
+    }
+    .resource-item:hover { background: var(--sand); }
+    .resource-item-icon { font-size: 18px; flex-shrink: 0; }
+    .resource-item-desc { font-size: 12px; color: var(--gray-600); font-weight: 400; margin-top: 1px; }
     /* ── WELCOME BANNER ── */
     .welcome-banner {
       background: var(--navy-dark);
@@ -455,6 +504,7 @@ const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON);
 
 const token = new URLSearchParams(window.location.search).get('token');
+let currentClient = null; // set when portal loads — used by submitFormA
 
 window.addEventListener('DOMContentLoaded', () => {
   if (!token) {
@@ -714,6 +764,7 @@ async function submitFormB(clientId, clientName) {
 // PORTAL — RETURNING CLIENT VIEW
 // ─────────────────────────────────────────────
 function renderPortal(client, checkins) {
+  currentClient = client; // store for use in submitFormA
   const startDate  = new Date(client.plan_start_date);
   const today      = new Date();
   const daysDiff   = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
@@ -795,6 +846,9 @@ function renderPortal(client, checkins) {
 
     <!-- HISTORY -->
     ${checkins.length > 0 ? renderHistory(checkins, client) : ''}
+
+    <!-- RESOURCES -->
+    ${renderResources()}
   `;
 }
 
@@ -936,6 +990,27 @@ async function submitFormA(clientId, clientName, weekNumber, noCompletion) {
     });
   } catch (_) { /* silent */ }
 
+  // Week 9 — send encouragement + renewal prompt email directly to client
+  if (weekNumber === 9 && currentClient && currentClient.email) {
+    try {
+      await fetch(NOTIFY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type:          'week9_client',
+          clientEmail:   currentClient.email,
+          clientName:    currentClient.name,
+          metricName:    currentClient.metric_name,
+          baseline:      currentClient.metric_baseline,
+          currentValue:  metricVal,
+          target:        currentClient.metric_target,
+          goalStatement: currentClient.goal_statement,
+          startBehavior: currentClient.start_behavior,
+        })
+      });
+    } catch (_) { /* silent — don't block reload if this fails */ }
+  }
+
   window.location.reload();
 }
 
@@ -1012,6 +1087,56 @@ function renderHistory(checkins, client) {
   `;
 }
 
+
+// ─────────────────────────────────────────────
+// RESOURCES SECTION
+// ─────────────────────────────────────────────
+function renderResources() {
+  return `
+    <div class="card" style="margin-top:24px;">
+      <div class="card-title">Resources</div>
+      <div class="card-subtitle">Tools and templates from your GPS engagement.</div>
+
+      <!-- EXECUTIVE TOOLKIT — primary action -->
+      <a
+        href="https://drive.google.com/drive/folders/14yT6gZ3RvOyRP3qg7wg97x8Sj1EcmVcS?usp=drive_link"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="toolkit-btn"
+        title="GPS Executive Leadership Diagnostic Implementation Toolkit"
+      >
+        📁 Open Your Executive Leadership Toolkit
+      </a>
+      <span class="toolkit-btn-sub">GPS Executive Leadership Diagnostic Implementation Toolkit — opens in Google Drive</span>
+
+      <!-- INDIVIDUAL TOOLS -->
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--gray-200);">Individual Tools</div>
+      <div class="resource-list">
+        <a href="https://drive.google.com/drive/folders/1H9I3lS7XENDBmH2x3PUVbCRa7wnhuhgs?usp=drive_link" target="_blank" rel="noopener noreferrer" class="resource-item">
+          <span class="resource-item-icon">⚙️</span>
+          <div>
+            <div>01 – Execution Toolkit</div>
+            <div class="resource-item-desc">Meeting cadences, delegation, and the operating habits that drive results</div>
+          </div>
+        </a>
+        <a href="https://drive.google.com/drive/folders/11bcYqfXr54vZ8JxyAc8w67OSRvDFfnjK?usp=drive_link" target="_blank" rel="noopener noreferrer" class="resource-item">
+          <span class="resource-item-icon">🤝</span>
+          <div>
+            <div>02 – Relationship &amp; Influence Toolkit</div>
+            <div class="resource-item-desc">1:1 structure, communication frameworks, and team trust tools</div>
+          </div>
+        </a>
+        <a href="https://drive.google.com/drive/folders/1Nre0pNe-leUQlN1UBXM3MblyW-8_Z2gF?usp=drive_link" target="_blank" rel="noopener noreferrer" class="resource-item">
+          <span class="resource-item-icon">🚀</span>
+          <div>
+            <div>03 – Next Step Offer</div>
+            <div class="resource-item-desc">Options for continuing your leadership development beyond this engagement</div>
+          </div>
+        </a>
+      </div>
+    </div>
+  `;
+}
 // ─────────────────────────────────────────────
 // UTILITY
 // ─────────────────────────────────────────────
