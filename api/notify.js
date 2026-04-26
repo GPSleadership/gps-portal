@@ -130,7 +130,7 @@ export default async function handler(req, res) {
             <div style="font-size:13px;color:#1a1a1a;">Week 9 — ${clientName} is in the home stretch. Start the renewal conversation on your next call.</div>
           </div>` : ''}
 
-          <p style="font-size:12px;color:#666;margin-top:16px;">View full history in your <a href="https://YOUR_DOMAIN/coach.html" style="color:#004369;">coach dashboard</a>.</p>
+          <p style="font-size:12px;color:#666;margin-top:16px;">View full history in your <a href="https://portal.gpsleadership.org/coach.html" style="color:#004369;">coach dashboard</a>.</p>
         </div>
       </div>
     `;
