@@ -1097,6 +1097,21 @@ function renderResources() {
       <div class="card-title">Resources</div>
       <div class="card-subtitle">Tools and templates from your GPS engagement.</div>
 
+      <!-- DIAGNOSTIC REPORT — only shown if URL is set on client record -->
+      \${client.diagnostic_report_url ? \`
+      <a
+        href="\${client.diagnostic_report_url}"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="toolkit-btn"
+        style="background:var(--teal);margin-bottom:4px;"
+        title="Your Executive Leadership Diagnostic Report"
+      >
+        📊 View Your Executive Leadership Diagnostic Report
+      </a>
+      <span class="toolkit-btn-sub" style="margin-bottom:16px;">Your personal 14-Day Executive Leadership Diagnostic — opens in a new tab</span>
+      \` : ''}
+
       <!-- EXECUTIVE TOOLKIT — primary action -->
       <a
         href="https://drive.google.com/drive/folders/14yT6gZ3RvOyRP3qg7wg97x8Sj1EcmVcS?usp=drive_link"
