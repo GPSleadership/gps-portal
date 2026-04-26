@@ -466,7 +466,7 @@
     <div class="modal-error" id="modalError"></div>
     <div id="newClientResult"></div>
     <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeAddModal()">Cancel</button>
+      <button class="btn-cancel" id="cancelAddBtn" onclick="closeAddModal()">Cancel</button>
       <button class="btn-save" onclick="addClient()" id="saveClientBtn">Create Client</button>
     </div>
   </div>
@@ -945,9 +945,11 @@ async function addClient() {
 
   if (!name)  { errEl.textContent = 'Name is required.'; return; }
   if (!email) { errEl.textContent = 'Email is required — needed for client notifications.'; return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { errEl.textContent = 'Please enter a valid email address.'; return; }
 
-  document.getElementById('saveClientBtn').textContent = 'Creating…';
-  document.getElementById('saveClientBtn').disabled = true;
+  const saveBtn = document.getElementById('saveClientBtn');
+  saveBtn.textContent = 'Creating…';
+  saveBtn.disabled = true;
 
   const { data, error } = await db
     .from('clients')
@@ -957,8 +959,8 @@ async function addClient() {
 
   if (error || !data) {
     errEl.textContent = 'Error creating client. Try again.';
-    document.getElementById('saveClientBtn').textContent = 'Create Client';
-    document.getElementById('saveClientBtn').disabled = false;
+    saveBtn.textContent = 'Create Client';
+    saveBtn.disabled = false;
     return;
   }
 
@@ -975,8 +977,10 @@ async function addClient() {
     </div>
   `;
 
-  document.getElementById('saveClientBtn').style.display = 'none';
+  saveBtn.style.display = 'none';
+  document.getElementById('cancelAddBtn').textContent = 'Done';
   allClients.unshift(data);
+  renderClients();
   renderStats();
 }
 
