@@ -848,7 +848,7 @@ function renderPortal(client, checkins) {
     ${checkins.length > 0 ? renderHistory(checkins, client) : ''}
 
     <!-- RESOURCES -->
-    ${renderResources()}
+    ${renderResources(client)}
   `;
 }
 
@@ -1091,16 +1091,11 @@ function renderHistory(checkins, client) {
 // ─────────────────────────────────────────────
 // RESOURCES SECTION
 // ─────────────────────────────────────────────
-function renderResources() {
-  return `
-    <div class="card" style="margin-top:24px;">
-      <div class="card-title">Resources</div>
-      <div class="card-subtitle">Tools and templates from your GPS engagement.</div>
-
-      <!-- DIAGNOSTIC REPORT — only shown if URL is set on client record -->
-      \${client.diagnostic_report_url ? \`
-      <a
-        href="\${client.diagnostic_report_url}"
+function renderResources(client) {
+  // Build diagnostic button separately so conditional logic works cleanly
+  const diagBtn = client.diagnostic_report_url
+    ? `<a
+        href="${client.diagnostic_report_url}"
         target="_blank"
         rel="noopener noreferrer"
         class="toolkit-btn"
@@ -1109,23 +1104,18 @@ function renderResources() {
       >
         📊 View Your Executive Leadership Diagnostic Report
       </a>
-      <span class="toolkit-btn-sub" style="margin-bottom:16px;">Your personal 14-Day Executive Leadership Diagnostic — opens in a new tab</span>
-      \` : ''}
+      <span class="toolkit-btn-sub" style="margin-bottom:20px;">Your personal 14-Day Executive Leadership Diagnostic — opens in a new tab</span>`
+    : '';
 
-      <!-- EXECUTIVE TOOLKIT — primary action -->
-      <a
-        href="https://drive.google.com/drive/folders/14yT6gZ3RvOyRP3qg7wg97x8Sj1EcmVcS?usp=drive_link"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="toolkit-btn"
-        title="GPS Executive Leadership Diagnostic Implementation Toolkit"
-      >
-        📁 Open Your Executive Leadership Toolkit
-      </a>
-      <span class="toolkit-btn-sub">GPS Executive Leadership Diagnostic Implementation Toolkit — opens in Google Drive</span>
+  return `
+    <div class="card" style="margin-top:24px;">
+      <div class="card-title">Executive Leadership Toolkit</div>
+      <div class="card-subtitle">Tools and resources from your GPS engagement.</div>
+
+      <!-- DIAGNOSTIC REPORT — only renders if URL is saved on this client -->
+      ${diagBtn}
 
       <!-- INDIVIDUAL TOOLS -->
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--gray-200);">Individual Tools</div>
       <div class="resource-list">
         <a href="https://drive.google.com/drive/folders/1H9I3lS7XENDBmH2x3PUVbCRa7wnhuhgs?usp=drive_link" target="_blank" rel="noopener noreferrer" class="resource-item">
           <span class="resource-item-icon">⚙️</span>
@@ -1152,6 +1142,7 @@ function renderResources() {
     </div>
   `;
 }
+
 // ─────────────────────────────────────────────
 // UTILITY
 // ─────────────────────────────────────────────
