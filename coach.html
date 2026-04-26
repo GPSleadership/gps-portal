@@ -410,12 +410,20 @@
       <input type="text" id="newName" placeholder="e.g. David Hernandez" />
     </div>
     <div class="form-group">
-      <label>Email</label>
+      <label>Email *</label>
       <input type="email" id="newEmail" placeholder="e.g. david@company.com" />
+    </div>
+    <div class="form-group">
+      <label>Title</label>
+      <input type="text" id="newTitle" placeholder="e.g. VP of Operations" />
     </div>
     <div class="form-group">
       <label>Organization</label>
       <input type="text" id="newOrg" placeholder="e.g. Hernandez Logistics" />
+    </div>
+    <div class="form-group">
+      <label>Diagnostic Report Link <span style="font-weight:400;text-transform:none;opacity:0.6;">(optional — paste Google Drive URL)</span></label>
+      <input type="url" id="newDiagnosticUrl" placeholder="https://drive.google.com/..." />
     </div>
     <div class="modal-error" id="modalError"></div>
     <div id="newClientResult"></div>
@@ -675,6 +683,27 @@ function renderClientCard(client, checkins) {
           <p style="font-size:11px;color:var(--gray-600);margin-top:6px;">Send this link to ${client.name ? client.name.split(' ')[0] : 'the client'}. They should bookmark it — it's their permanent portal access.</p>
         </div>
 
+        <div class="detail-section">
+          <h4>Diagnostic Report Link</h4>
+          <p style="font-size:12px;color:var(--gray-600);margin-bottom:8px;">Paste the client's Google Drive report URL here. It will appear as a button on their portal.</p>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input
+              type="url"
+              id="diagUrl-${client.id}"
+              value="${client.diagnostic_report_url || ''}"
+              placeholder="https://drive.google.com/..."
+              style="flex:1;padding:8px 12px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;"
+              onfocus="this.style.borderColor='var(--teal)'"
+              onblur="this.style.borderColor='var(--gray-300)'"
+            />
+            <button class="copy-btn" style="background:var(--navy);white-space:nowrap;" onclick="saveDiagnosticUrl('${client.id}', this)">Save Link</button>
+          </div>
+          ${client.diagnostic_report_url
+            ? `<p style="font-size:11px;color:#2e7d32;margin-top:6px;">✓ Report link saved — visible to client on their portal.</p>`
+            : `<p style="font-size:11px;color:var(--gray-600);margin-top:6px;">No report link saved yet.</p>`
+          }
+        </div>
+
         <!-- Actions -->
         <div class="action-btns">
           <button class="btn-action-sm" style="color:var(--gray-600);border:1px solid var(--gray-300);" onclick="toggleActive('${client.id}', ${client.is_active})">
@@ -724,7 +753,9 @@ function openAddModal() {
   document.getElementById('saveClientBtn').style.display = 'inline-block';
   document.getElementById('newName').value = '';
   document.getElementById('newEmail').value = '';
+  document.getElementById('newTitle').value = '';
   document.getElementById('newOrg').value = '';
+  document.getElementById('newDiagnosticUrl').value = '';
 }
 
 function closeAddModal() {
@@ -732,19 +763,22 @@ function closeAddModal() {
 }
 
 async function addClient() {
-  const name = document.getElementById('newName').value.trim();
-  const email = document.getElementById('newEmail').value.trim();
-  const org   = document.getElementById('newOrg').value.trim();
+  const name            = document.getElementById('newName').value.trim();
+  const email           = document.getElementById('newEmail').value.trim();
+  const title           = document.getElementById('newTitle').value.trim();
+  const org             = document.getElementById('newOrg').value.trim();
+  const diagnosticUrl   = document.getElementById('newDiagnosticUrl').value.trim();
   const errEl = document.getElementById('modalError');
 
-  if (!name) { errEl.textContent = 'Name is required.'; return; }
+  if (!name)  { errEl.textContent = 'Name is required.'; return; }
+  if (!email) { errEl.textContent = 'Email is required — needed for client notifications.'; return; }
 
   document.getElementById('saveClientBtn').textContent = 'Creating…';
   document.getElementById('saveClientBtn').disabled = true;
 
   const { data, error } = await db
     .from('clients')
-    .insert({ name, email: email || null, organization: org || null, is_active: true })
+    .insert({ name, email: email || null, title: title || null, organization: org || null, diagnostic_report_url: diagnosticUrl || null, is_active: true })
     .select()
     .single();
 
@@ -773,6 +807,26 @@ async function addClient() {
   renderStats();
 }
 
+
+async function saveDiagnosticUrl(clientId, btn) {
+  const input = document.getElementById('diagUrl-' + clientId);
+  const url   = input.value.trim();
+  btn.textContent = 'Saving…';
+  btn.disabled = true;
+  const { error } = await db.from('clients')
+    .update({ diagnostic_report_url: url || null })
+    .eq('id', clientId);
+  if (error) {
+    btn.textContent = 'Error';
+    btn.style.background = 'var(--red)';
+    setTimeout(() => { btn.textContent = 'Save Link'; btn.style.background = ''; btn.disabled = false; }, 2000);
+  } else {
+    allClients = allClients.map(c => c.id === clientId ? {...c, diagnostic_report_url: url || null} : c);
+    btn.textContent = 'Saved ✓';
+    btn.style.background = '#2e7d32';
+    setTimeout(() => { btn.textContent = 'Save Link'; btn.style.background = 'var(--navy)'; btn.disabled = false; }, 2000);
+  }
+}
 // ─────────────────────────────────────────────
 // CONFIRM MODAL HELPERS
 // ─────────────────────────────────────────────
