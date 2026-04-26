@@ -3,9 +3,9 @@
 // Fires when a client submits a plan (Form B) or check-in (Form A)
 // Sends a formatted summary to Alex via Resend
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY;  // set in Vercel environment variables
+const RESEND_API_KEY = process.env.RESEND_API_KEY;                                          // Vercel env var: RESEND_API_KEY
+const RESEND_FROM    = process.env.RESEND_FROM_EMAIL || 'noreply@portal.gpsleadership.org'; // Vercel env var: RESEND_FROM_EMAIL
 const COACH_EMAIL    = 'alex@gpsleadership.org';
-const FROM_EMAIL     = 'noreply@gpsleadership.org'; // must be verified in Resend
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -136,6 +136,131 @@ export default async function handler(req, res) {
     `;
   }
 
+  // ─── PASSWORD CHANGE VERIFICATION ─────────────────────────────────────────
+  else if (body.type === 'password_change_request') {
+    const { code } = body;
+
+    subject = `GPS Portal — Your verification code: ${code}`;
+
+    html = `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
+        <div style="background:#004369;padding:20px 28px;border-radius:8px 8px 0 0;">
+          <div style="color:#E5DDC8;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">GPS Leadership Solutions</div>
+          <div style="color:#ffffff;font-size:20px;font-weight:700;">Coach Dashboard — Password Change</div>
+        </div>
+        <div style="background:#ffffff;padding:28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
+          <p>A password change was requested for your GPS Coach Dashboard.</p>
+          <p style="margin-top:20px;">Your verification code is:</p>
+          <div style="margin:24px 0;text-align:center;">
+            <span style="font-family:'Arial Black',Arial,sans-serif;font-size:42px;font-weight:900;letter-spacing:10px;color:#004369;">${code}</span>
+          </div>
+          <p style="font-size:13px;color:#666;">This code expires in 15 minutes. If you did not request a password change, ignore this email.</p>
+        </div>
+      </div>
+    `;
+
+    // Send to Alex (coach only)
+    try {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from:    `GPS Leadership <${RESEND_FROM}>`,
+          to:      [COACH_EMAIL],
+          subject,
+          html,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) return res.status(500).json({ error: 'Verification email failed', detail: result });
+      return res.status(200).json({ success: true });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ─── WEEK 9 CLIENT EMAIL ───────────────────────────────────────────────────
+  else if (body.type === 'week9_client') {
+    const { clientEmail, clientName, metricName, baseline, currentValue, target, goalStatement, startBehavior } = body;
+
+    if (!clientEmail) {
+      return res.status(400).json({ error: 'No client email on file — week 9 email not sent.' });
+    }
+
+    const firstName = (clientName || '').split(' ')[0] || 'there';
+
+    subject = `Week 9 – You're in the home stretch, ${firstName}`;
+
+    html = `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
+        <div style="background:#004369;padding:20px 28px;border-radius:8px 8px 0 0;">
+          <div style="color:#E5DDC8;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">GPS Leadership Solutions</div>
+          <div style="color:#ffffff;font-size:20px;font-weight:700;">Week 9 — You're in the home stretch</div>
+        </div>
+        <div style="background:#ffffff;padding:28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
+
+          <p>Hi ${firstName},</p>
+
+          <p>You're about nine weeks into this 90-day sprint.</p>
+
+          <p>When you started, <strong>${metricName || 'your metric'}</strong> was at <strong>${baseline ?? '—'}</strong>. Today it's at <strong>${currentValue ?? '—'}</strong>, working toward <strong>${target ?? '—'}</strong> and your goal of <em>"${goalStatement || '—'}"</em></p>
+
+          <p>That shift didn't happen by accident. It came from you actually doing <strong>${startBehavior || 'the work'}</strong> instead of just talking about it.</p>
+
+          <p>The next three weeks matter more than most people think. This is where a lot of leaders ease up. Don't. The habits you run now are the ones that will stick 90 days from today.</p>
+
+          <p>It's also the right time to look past this finish line:</p>
+
+          <ul style="padding-left:20px;margin:16px 0;">
+            <li style="margin-bottom:10px;">What do you want your leadership to look like in the next 90 days?</li>
+            <li style="margin-bottom:10px;">Where do you still feel pressure, friction, or risk?</li>
+            <li style="margin-bottom:10px;">What support would make it easier to keep this going instead of sliding back?</li>
+          </ul>
+
+          <p>On our next call, I'll bring a recommendation for your next 90-day focus and what ongoing coaching could look like if you want to keep working together. Come ready with your answers to the three questions above.</p>
+
+          <p style="margin-top:32px;">– Alex Tremble<br /><span style="color:#666;font-size:13px;">GPS Leadership Solutions</span></p>
+
+          <div style="margin-top:32px;padding-top:20px;border-top:1px solid #eee;font-size:11px;color:#999;">
+            You're receiving this because you're enrolled in a GPS Leadership 90-Day Engagement.
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Send to CLIENT (not Alex)
+    try {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from:    `Alex Tremble – GPS Leadership <${RESEND_FROM}>`,
+          to:      [clientEmail],
+          subject,
+          html,
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        console.error('Week 9 email error:', result);
+        return res.status(500).json({ error: 'Week 9 email failed', detail: result });
+      }
+
+      return res.status(200).json({ success: true, sent_to: clientEmail });
+    } catch (err) {
+      console.error('Week 9 email exception:', err);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+
   else {
     return res.status(400).json({ error: 'Unknown notification type' });
   }
@@ -149,7 +274,7 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: `GPS Leadership <${FROM_EMAIL}>`,
+        from: `GPS Leadership <${RESEND_FROM}>`,
         to:   [COACH_EMAIL],
         subject,
         html,
