@@ -978,6 +978,7 @@ async function addClient() {
   `;
 
   saveBtn.style.display = 'none';
+  errEl.textContent = '';
   document.getElementById('cancelAddBtn').textContent = 'Done';
   allClients.unshift(data);
   renderClients();
