@@ -354,8 +354,9 @@
     </div>
   </div>
   <div class="header-stats" id="headerStats" style="display:none;"></div>
-  <div id="headerChangePwBtn" style="display:none;">
+  <div id="headerChangePwBtn" style="display:none;display:flex;gap:8px;align-items:center;">
     <button onclick="openChangePwModal()" style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);color:#E5DDC8;font-size:12px;font-weight:600;padding:6px 14px;border-radius:6px;cursor:pointer;letter-spacing:0.3px;">Change Password</button>
+    <button onclick="clearSession();location.reload();" style="background:rgba(219,31,72,0.25);border:1px solid rgba(219,31,72,0.5);color:#ffaaaa;font-size:12px;font-weight:600;padding:6px 14px;border-radius:6px;cursor:pointer;letter-spacing:0.3px;">Log Out</button>
   </div>
 </header>
 
@@ -504,6 +505,31 @@ let currentFilter = 'active';
 // ─────────────────────────────────────────────
 // AUTH
 // ─────────────────────────────────────────────
+const SESSION_KEY    = 'gps_coach_authed';
+const SESSION_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours in ms
+
+function saveSession() {
+  localStorage.setItem(SESSION_KEY, Date.now().toString());
+}
+function clearSession() {
+  localStorage.removeItem(SESSION_KEY);
+}
+function hasValidSession() {
+  const ts = localStorage.getItem(SESSION_KEY);
+  if (!ts) return false;
+  return (Date.now() - parseInt(ts)) < SESSION_EXPIRY;
+}
+function unlockDashboard() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('dashboardScreen').style.display = 'block';
+  loadDashboard();
+}
+
+// Auto-login if session is still valid
+if (hasValidSession()) {
+  unlockDashboard();
+}
+
 async function checkPassword() {
   const val = document.getElementById('passwordInput').value.trim();
   if (!val) return;
@@ -513,9 +539,8 @@ async function checkPassword() {
   const stored = (data && data.value) ? data.value : 'GPS2026'; // fallback
 
   if (val === stored) {
-    document.getElementById('loginScreen').style.display = 'none';
-    document.getElementById('dashboardScreen').style.display = 'block';
-    loadDashboard();
+    saveSession();
+    unlockDashboard();
   } else {
     document.getElementById('loginError').textContent = 'Incorrect password.';
     document.getElementById('passwordInput').value = '';
@@ -619,6 +644,7 @@ async function verifyAndChangePassword() {
     msg.style.color = '#2e7d32';
     msg.textContent = '✓ Password changed successfully.';
     _pendingCode = null;
+    clearSession(); // force re-login with new password next visit
     setTimeout(closeChangePwModal, 2000);
   }
 }
