@@ -920,7 +920,10 @@ function openAddModal() {
   document.getElementById('newName').focus();
   document.getElementById('newClientResult').innerHTML = '';
   document.getElementById('modalError').textContent = '';
-  document.getElementById('saveClientBtn').style.display = 'inline-block';
+  const btn = document.getElementById('saveClientBtn');
+  btn.textContent = 'Create Client';
+  btn.disabled = false;
+  btn.style.display = 'inline-block';
   document.getElementById('newName').value = '';
   document.getElementById('newEmail').value = '';
   document.getElementById('newTitle').value = '';
