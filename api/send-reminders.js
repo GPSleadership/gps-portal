@@ -82,6 +82,22 @@ export default async function handler(req, res) {
 
     const subject = `Week ${currentWeek} check-in — a quick reminder, ${firstName}`;
 
+    // Google Calendar recurring Monday event link
+    const gcalTitle   = encodeURIComponent('GPS Leadership — Weekly Check-In');
+    const gcalDetails = encodeURIComponent(`Complete your weekly GPS Leadership check-in at ${portalLink}`);
+    const gcalDate    = (() => {
+      const d = new Date(today);
+      const day = d.getUTCDay();
+      const daysUntil = day === 1 ? 0 : (8 - day) % 7;
+      d.setUTCDate(d.getUTCDate() + daysUntil);
+      d.setUTCHours(14, 0, 0, 0);
+      const end = new Date(d.getTime() + 15 * 60 * 1000);
+      const fmt = (dt) => dt.toISOString().replace(/[-:.]/g,'').slice(0,15) + 'Z';
+      return `${fmt(d)}%2F${fmt(end)}`;
+    })();
+    const gcalLink = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${gcalTitle}&details=${gcalDetails}&recur=RRULE%3AFREQ%3DWEEKLY%3BBYDAY%3DMO&dates=${gcalDate}`;
+    const icsLink  = `https://portal.gpsleadership.org/api/reminder-calendar`;
+
     const html = `
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
         <div style="background:#004369;padding:20px 28px;border-radius:8px 8px 0 0;">
@@ -103,6 +119,12 @@ export default async function handler(req, res) {
                style="background:#004369;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;display:inline-block;letter-spacing:0.3px;">
               Complete My Week ${currentWeek} Check-In →
             </a>
+          </div>
+
+          <div style="margin-top:4px;padding:16px 20px;background:#f7f4ee;border-radius:8px;text-align:center;">
+            <p style="font-size:12px;color:#666;margin:0 0 8px 0;">Want a recurring Monday reminder on your calendar?</p>
+            <a href="${gcalLink}" style="color:#004369;font-size:13px;font-weight:700;text-decoration:none;margin-right:20px;">📅 Add to Google Calendar</a>
+            <a href="${icsLink}" style="color:#004369;font-size:13px;font-weight:700;text-decoration:none;">🗓 Add to Apple / Outlook</a>
           </div>
 
           <p style="margin-top:32px;">– Alex Tremble<br /><span style="color:#666;font-size:13px;">GPS Leadership Solutions</span></p>
