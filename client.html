@@ -574,6 +574,20 @@ function renderFormB(client) {
       }</div>
     </div>
 
+    ${!isEdit ? `
+    <div class="card">
+      <div class="card-title">Before We Start — Your Time Zone</div>
+      <div class="card-subtitle">So your weekly Monday reminder arrives at the right time.</div>
+      <div class="form-group" style="margin-bottom:0;">
+        <select id="clientTimezone" style="width:100%;padding:12px 14px;border:2px solid var(--gray-300);border-radius:8px;font-size:15px;font-family:'Open Sans',sans-serif;background:#fff;">
+          <option value="America/New_York">Eastern Time (ET)</option>
+          <option value="America/Chicago">Central Time (CT)</option>
+          <option value="America/Denver">Mountain Time (MT)</option>
+          <option value="America/Los_Angeles">Pacific Time (PT)</option>
+        </select>
+      </div>
+    </div>` : ''}
+
     <div class="card">
       <div class="card-title">Step 1 — Your Focus Pillar</div>
       <div class="card-subtitle">Which pillar did you and Alex agree to focus on?</div>
@@ -745,6 +759,9 @@ async function submitFormB(clientId, clientName) {
     reward_90_day:    reward90 || null,
     plan_submitted_at: new Date().toISOString(),
   };
+
+  const tzEl = document.getElementById('clientTimezone');
+  if (tzEl) updates.timezone = tzEl.value;
 
   const { error } = await db.from('clients').update({ ...updates, allow_plan_edit: false }).eq('id', clientId);
 
