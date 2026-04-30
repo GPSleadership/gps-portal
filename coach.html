@@ -424,8 +424,11 @@
             <div onclick="exportData();toggleExportMenu()" style="padding:10px 16px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--gray-200);" onmouseover="this.style.background='var(--gray-100)'" onmouseout="this.style.background=''">
               📄 Full Backup (JSON)
             </div>
-            <div onclick="exportGHL();toggleExportMenu()" style="padding:10px 16px;font-size:13px;cursor:pointer;" onmouseover="this.style.background='var(--gray-100)'" onmouseout="this.style.background=''">
+            <div onclick="exportGHL();toggleExportMenu()" style="padding:10px 16px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--gray-200);" onmouseover="this.style.background='var(--gray-100)'" onmouseout="this.style.background=''">
               📊 Export for GoHighLevel (CSV)
+            </div>
+            <div onclick="sendTestReminders();toggleExportMenu()" style="padding:10px 16px;font-size:13px;cursor:pointer;" onmouseover="this.style.background='var(--gray-100)'" onmouseout="this.style.background=''">
+              🧪 Send Test Reminders Now
             </div>
           </div>
         </div>
@@ -458,15 +461,6 @@
     <div class="form-group">
       <label>Organization</label>
       <input type="text" id="newOrg" placeholder="e.g. Hernandez Logistics" />
-    </div>
-    <div class="form-group">
-      <label>Time Zone</label>
-      <select id="newTimezone" style="width:100%;padding:10px 12px;border:1.5px solid var(--gray-300);border-radius:8px;font-size:14px;font-family:'Open Sans',sans-serif;background:#fff;">
-        <option value="America/New_York">Eastern Time (ET)</option>
-        <option value="America/Chicago">Central Time (CT)</option>
-        <option value="America/Denver">Mountain Time (MT)</option>
-        <option value="America/Los_Angeles">Pacific Time (PT)</option>
-      </select>
     </div>
     <div class="form-group">
       <label>Diagnostic Report Link <span style="font-weight:400;text-transform:none;opacity:0.6;">(optional — paste Google Drive URL)</span></label>
@@ -864,9 +858,9 @@ function renderClientCard(client, checkins) {
 
         <div class="detail-section">
           <h4>Plan Edit Access</h4>
-          <p style="font-size:12px;color:var(--gray-600);margin-bottom:10px;">
+          <p id="planEditStatus-${client.id}" style="font-size:12px;color:var(--gray-600);margin-bottom:10px;">
             ${client.allow_plan_edit
-              ? '⚠️ <strong>Edit is unlocked.</strong> This client can currently update their plan. Lock it again once they\'ve resubmitted.'
+              ? '⚠️ Edit is unlocked. This client can currently update their plan. Lock it again once they\'ve resubmitted.'
               : 'Plan is locked. Unlock to let this client update their goals, metric, or rewards.'
             }
           </p>
@@ -954,7 +948,6 @@ function openAddModal() {
   document.getElementById('newEmail').value = '';
   document.getElementById('newTitle').value = '';
   document.getElementById('newOrg').value = '';
-  document.getElementById('newTimezone').value = 'America/New_York';
   document.getElementById('newDiagnosticUrl').value = '';
 }
 
@@ -967,7 +960,6 @@ async function addClient() {
   const email           = document.getElementById('newEmail').value.trim();
   const title           = document.getElementById('newTitle').value.trim();
   const org             = document.getElementById('newOrg').value.trim();
-  const timezone        = document.getElementById('newTimezone').value;
   const diagnosticUrl   = document.getElementById('newDiagnosticUrl').value.trim();
   const errEl = document.getElementById('modalError');
 
@@ -981,7 +973,7 @@ async function addClient() {
 
   const { data, error } = await db
     .from('clients')
-    .insert({ name, email: email || null, title: title || null, organization: org || null, timezone: timezone || 'America/New_York', diagnostic_report_url: diagnosticUrl || null, is_active: true })
+    .insert({ name, email: email || null, title: title || null, organization: org || null, diagnostic_report_url: diagnosticUrl || null, is_active: true })
     .select()
     .single();
 
@@ -1017,6 +1009,7 @@ async function addClient() {
 async function togglePlanEdit(clientId, currentState) {
   const newState = !currentState;
   const btn = document.getElementById('planEditBtn-' + clientId);
+  const statusEl = document.getElementById('planEditStatus-' + clientId);
   btn.textContent = 'Saving…';
   btn.disabled = true;
 
@@ -1028,10 +1021,23 @@ async function togglePlanEdit(clientId, currentState) {
     return;
   }
 
-  // Update local state and re-render detail panel
+  // Update local state
   allClients = allClients.map(c => c.id === clientId ? { ...c, allow_plan_edit: newState } : c);
-  const updated = allClients.find(c => c.id === clientId);
-  if (updated) renderClientDetail(updated);
+
+  // Update button + status text in place (no full re-render needed)
+  if (newState) {
+    btn.textContent = 'Lock Plan Editing';
+    btn.style.background = 'var(--red)';
+    btn.disabled = false;
+    btn.setAttribute('onclick', `togglePlanEdit('${clientId}', true)`);
+    if (statusEl) statusEl.textContent = '⚠️ Edit is unlocked. This client can currently update their plan. Lock it again once they\'ve resubmitted.';
+  } else {
+    btn.textContent = 'Unlock Plan Editing';
+    btn.style.background = 'var(--teal)';
+    btn.disabled = false;
+    btn.setAttribute('onclick', `togglePlanEdit('${clientId}', false)`);
+    if (statusEl) statusEl.textContent = 'Plan is locked. Unlock to let this client update their goals, metric, or rewards.';
+  }
 }
 
 async function saveDiagnosticUrl(clientId, btn) {
@@ -1167,6 +1173,21 @@ document.addEventListener('click', function(e) {
 // ─────────────────────────────────────────────
 // EXPORT FOR GOHIGHLEVEL (CSV)
 // ─────────────────────────────────────────────
+async function sendTestReminders() {
+  const secret = prompt('Enter your CRON_SECRET to trigger reminders now:');
+  if (!secret) return;
+  try {
+    const res = await fetch('/api/send-reminders', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${secret}`, 'Content-Type': 'application/json' }
+    });
+    const json = await res.json();
+    alert(json.message || JSON.stringify(json));
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+}
+
 function exportGHL() {
   const year = new Date().getFullYear();
 
