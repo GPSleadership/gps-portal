@@ -1174,15 +1174,22 @@ document.addEventListener('click', function(e) {
 // EXPORT FOR GOHIGHLEVEL (CSV)
 // ─────────────────────────────────────────────
 async function sendTestReminders() {
-  const secret = prompt('Enter your CRON_SECRET to trigger reminders now:');
-  if (!secret) return;
+  if (!confirm('This will send a sample reminder email to alex@gpsleadership.org so you can see exactly what your clients receive. Send it now?')) return;
   try {
-    const res = await fetch('/api/send-reminders', {
+    const res = await fetch('/api/notify', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${secret}`, 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'test_reminder',
+        toEmail: 'alex@gpsleadership.org'
+      })
     });
     const json = await res.json();
-    alert(json.message || JSON.stringify(json));
+    if (json.success) {
+      alert('Test reminder sent to alex@gpsleadership.org — check your inbox.');
+    } else {
+      alert('Error: ' + (json.error || 'Unknown error'));
+    }
   } catch (err) {
     alert('Error: ' + err.message);
   }
