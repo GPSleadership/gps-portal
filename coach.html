@@ -460,6 +460,15 @@
       <input type="text" id="newOrg" placeholder="e.g. Hernandez Logistics" />
     </div>
     <div class="form-group">
+      <label>Time Zone</label>
+      <select id="newTimezone" style="width:100%;padding:10px 12px;border:1.5px solid var(--gray-300);border-radius:8px;font-size:14px;font-family:'Open Sans',sans-serif;background:#fff;">
+        <option value="America/New_York">Eastern Time (ET)</option>
+        <option value="America/Chicago">Central Time (CT)</option>
+        <option value="America/Denver">Mountain Time (MT)</option>
+        <option value="America/Los_Angeles">Pacific Time (PT)</option>
+      </select>
+    </div>
+    <div class="form-group">
       <label>Diagnostic Report Link <span style="font-weight:400;text-transform:none;opacity:0.6;">(optional — paste Google Drive URL)</span></label>
       <input type="url" id="newDiagnosticUrl" placeholder="https://drive.google.com/..." />
     </div>
@@ -854,6 +863,23 @@ function renderClientCard(client, checkins) {
         </div>
 
         <div class="detail-section">
+          <h4>Plan Edit Access</h4>
+          <p style="font-size:12px;color:var(--gray-600);margin-bottom:10px;">
+            ${client.allow_plan_edit
+              ? '⚠️ <strong>Edit is unlocked.</strong> This client can currently update their plan. Lock it again once they\'ve resubmitted.'
+              : 'Plan is locked. Unlock to let this client update their goals, metric, or rewards.'
+            }
+          </p>
+          <button
+            onclick="togglePlanEdit('${client.id}', ${!!client.allow_plan_edit})"
+            id="planEditBtn-${client.id}"
+            style="padding:8px 18px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;border:none;
+              background:${client.allow_plan_edit ? 'var(--red)' : 'var(--teal)'};color:#fff;">
+            ${client.allow_plan_edit ? 'Lock Plan Editing' : 'Unlock Plan Editing'}
+          </button>
+        </div>
+
+        <div class="detail-section">
           <h4>Diagnostic Report Link</h4>
           <p style="font-size:12px;color:var(--gray-600);margin-bottom:8px;">Paste the client's Google Drive report URL here. It will appear as a button on their portal.</p>
           <div style="display:flex;gap:8px;align-items:center;">
@@ -928,6 +954,7 @@ function openAddModal() {
   document.getElementById('newEmail').value = '';
   document.getElementById('newTitle').value = '';
   document.getElementById('newOrg').value = '';
+  document.getElementById('newTimezone').value = 'America/New_York';
   document.getElementById('newDiagnosticUrl').value = '';
 }
 
@@ -940,6 +967,7 @@ async function addClient() {
   const email           = document.getElementById('newEmail').value.trim();
   const title           = document.getElementById('newTitle').value.trim();
   const org             = document.getElementById('newOrg').value.trim();
+  const timezone        = document.getElementById('newTimezone').value;
   const diagnosticUrl   = document.getElementById('newDiagnosticUrl').value.trim();
   const errEl = document.getElementById('modalError');
 
@@ -953,7 +981,7 @@ async function addClient() {
 
   const { data, error } = await db
     .from('clients')
-    .insert({ name, email: email || null, title: title || null, organization: org || null, diagnostic_report_url: diagnosticUrl || null, is_active: true })
+    .insert({ name, email: email || null, title: title || null, organization: org || null, timezone: timezone || 'America/New_York', diagnostic_report_url: diagnosticUrl || null, is_active: true })
     .select()
     .single();
 
@@ -985,6 +1013,26 @@ async function addClient() {
   renderStats();
 }
 
+
+async function togglePlanEdit(clientId, currentState) {
+  const newState = !currentState;
+  const btn = document.getElementById('planEditBtn-' + clientId);
+  btn.textContent = 'Saving…';
+  btn.disabled = true;
+
+  const { error } = await db.from('clients').update({ allow_plan_edit: newState }).eq('id', clientId);
+
+  if (error) {
+    btn.textContent = 'Error — try again';
+    btn.disabled = false;
+    return;
+  }
+
+  // Update local state and re-render detail panel
+  allClients = allClients.map(c => c.id === clientId ? { ...c, allow_plan_edit: newState } : c);
+  const updated = allClients.find(c => c.id === clientId);
+  if (updated) renderClientDetail(updated);
+}
 
 async function saveDiagnosticUrl(clientId, btn) {
   const input = document.getElementById('diagUrl-' + clientId);
