@@ -261,6 +261,73 @@ export default async function handler(req, res) {
   }
 
 
+  // ─── TEST REMINDER (preview for Alex) ────────────────────────────────────
+  else if (body.type === 'test_reminder') {
+    const sampleWeek    = 3;
+    const sampleFirst   = 'David';
+    const sampleLink    = 'https://portal.gpsleadership.org/client.html?token=SAMPLE';
+
+    const gcalTitle   = encodeURIComponent('GPS Leadership — Weekly Check-In');
+    const gcalDetails = encodeURIComponent(`Complete your weekly GPS Leadership check-in at ${sampleLink}`);
+    const now = new Date();
+    const gcalDate = (() => {
+      const d = new Date(now);
+      const day = d.getUTCDay();
+      const daysUntil = day === 1 ? 0 : (8 - day) % 7;
+      d.setUTCDate(d.getUTCDate() + daysUntil);
+      d.setUTCHours(14, 0, 0, 0);
+      const end = new Date(d.getTime() + 15 * 60 * 1000);
+      const fmt = (dt) => dt.toISOString().replace(/[-:.]/g,'').slice(0,15) + 'Z';
+      return `${fmt(d)}%2F${fmt(end)}`;
+    })();
+    const gcalLink = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${gcalTitle}&details=${gcalDetails}&recur=RRULE%3AFREQ%3DWEEKLY%3BBYDAY%3DMO&dates=${gcalDate}`;
+    const icsLink  = `https://portal.gpsleadership.org/api/reminder-calendar`;
+
+    subject = `[TEST PREVIEW] Week ${sampleWeek} check-in — a quick reminder, ${sampleFirst}`;
+
+    html = `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
+        <div style="background:#6b6b6b;padding:10px 28px;border-radius:8px 8px 0 0;">
+          <div style="color:#ffffff;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">⚙️ TEST PREVIEW — This is what your clients receive each Monday</div>
+        </div>
+        <div style="background:#004369;padding:20px 28px;">
+          <div style="color:#E5DDC8;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">GPS Leadership Solutions</div>
+          <div style="color:#ffffff;font-size:20px;font-weight:700;">Week ${sampleWeek} Check-In Reminder</div>
+        </div>
+        <div style="background:#ffffff;padding:28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
+
+          <p>Hi ${sampleFirst},</p>
+
+          <p>Just a quick heads-up — your Week ${sampleWeek} check-in is ready for you.</p>
+
+          <p>It takes less than two minutes. Log your metric, note what you did this week, and set your action for next week. That's it.</p>
+
+          <p>The leaders who move fastest are the ones who stay honest with themselves weekly — not just on coaching calls.</p>
+
+          <div style="margin:28px 0;text-align:center;">
+            <a href="${sampleLink}"
+               style="background:#004369;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;display:inline-block;letter-spacing:0.3px;">
+              Complete My Week ${sampleWeek} Check-In →
+            </a>
+          </div>
+
+          <div style="margin-top:4px;padding:16px 20px;background:#f7f4ee;border-radius:8px;text-align:center;">
+            <p style="font-size:12px;color:#666;margin:0 0 8px 0;">Want a recurring Monday reminder on your calendar?</p>
+            <a href="${gcalLink}" style="color:#004369;font-size:13px;font-weight:700;text-decoration:none;margin-right:20px;">📅 Add to Google Calendar</a>
+            <a href="${icsLink}" style="color:#004369;font-size:13px;font-weight:700;text-decoration:none;">🗓 Add to Apple / Outlook</a>
+          </div>
+
+          <p style="margin-top:32px;">– Alex Tremble<br /><span style="color:#666;font-size:13px;">GPS Leadership Solutions</span></p>
+
+          <div style="margin-top:32px;padding-top:20px;border-top:1px solid #eee;font-size:11px;color:#999;">
+            You're receiving this because you're enrolled in a GPS Leadership 90-Day Engagement.<br/>
+            Questions? Reply to this email or reach out to alex@gpsleadership.org.
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   else {
     return res.status(400).json({ error: 'Unknown notification type' });
   }
