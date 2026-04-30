@@ -538,7 +538,7 @@ async function loadClient() {
     const firstName = (client.name || '').split(' ')[0] || 'there';
     document.getElementById('gpsHeaderUser').textContent = ' · Welcome, ' + firstName;
 
-    if (!client.plan_submitted_at) {
+    if (!client.plan_submitted_at || client.allow_plan_edit) {
       renderFormB(client);
     } else {
       const { data: checkins } = await db
@@ -558,12 +558,20 @@ async function loadClient() {
 // FORM B — PLAN SETUP (one-time)
 // ─────────────────────────────────────────────
 function renderFormB(client) {
-  const today = new Date().toISOString().split('T')[0];
+  const today    = new Date().toISOString().split('T')[0];
+  const isEdit   = !!client.plan_submitted_at && client.allow_plan_edit;
+  const firstName = client.name ? client.name.split(' ')[0] : 'there';
+
+  // Helper to safely escape values for HTML attributes/textarea content
+  const esc = v => (v || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
   document.getElementById('mainContent').innerHTML = `
     <div class="card navy-top" style="margin-top:24px;">
-      <div class="card-title">Welcome, ${client.name ? client.name.split(' ')[0] : 'there'}</div>
-      <div class="card-subtitle">Let's lock in your 90-Day Leadership Plan. This takes about 10 minutes and only needs to be done once. Pull out your notes from your debrief conversation.</div>
+      <div class="card-title">${isEdit ? `Update Your Plan, ${firstName}` : `Welcome, ${firstName}`}</div>
+      <div class="card-subtitle">${isEdit
+        ? 'Your coach has unlocked your plan for editing. Update any fields below and resubmit when ready.'
+        : "Let's lock in your 90-Day Leadership Plan. This takes about 10 minutes and only needs to be done once. Pull out your notes from your debrief conversation."
+      }</div>
     </div>
 
     <div class="card">
@@ -586,7 +594,7 @@ function renderFormB(client) {
           <div class="pillar-desc">How effectively you focus your team's time and energy on what moves the needle</div>
         </div>
       </div>
-      <input type="hidden" id="tp3Pillar" value="" />
+      <input type="hidden" id="tp3Pillar" value="${esc(client.tp3_pillar)}" />
     </div>
 
     <div class="card">
@@ -595,19 +603,19 @@ function renderFormB(client) {
       <div class="form-group">
         <label>Goal Description <span style="color:var(--red)">*</span></label>
         <div class="hint">In plain language — what specific leadership behavior are you changing or building?</div>
-        <textarea id="goalDescription" placeholder="e.g. Stop making every decision myself. Build a weekly rhythm where my ops managers bring solutions, not just problems."></textarea>
+        <textarea id="goalDescription" placeholder="e.g. Stop making every decision myself. Build a weekly rhythm where my ops managers bring solutions, not just problems.">${esc(client.goal_description)}</textarea>
       </div>
 
       <div class="form-group">
         <label>30-Day Goal <span style="color:var(--red)">*</span></label>
         <div class="hint">What specific progress will you be able to point to at 30 days? This is your first real checkpoint.</div>
-        <textarea id="goal30Day" placeholder="e.g. By day 30, I will have run the Monday stand-up 4 times without jumping in to solve problems for my managers."></textarea>
+        <textarea id="goal30Day" placeholder="e.g. By day 30, I will have run the Monday stand-up 4 times without jumping in to solve problems for my managers.">${esc(client.goal_30_day)}</textarea>
       </div>
 
       <div class="form-group">
         <label>90-Day Goal Statement <span style="color:var(--red)">*</span></label>
         <div class="hint">The outcome you want to be able to say at the end of 90 days. First person, specific.</div>
-        <textarea id="goalStatement" placeholder="e.g. By the end of 90 days, my ops managers are running their own P&L reviews without needing me in the room."></textarea>
+        <textarea id="goalStatement" placeholder="e.g. By the end of 90 days, my ops managers are running their own P&L reviews without needing me in the room.">${esc(client.goal_statement)}</textarea>
       </div>
     </div>
 
@@ -618,23 +626,23 @@ function renderFormB(client) {
       <div class="form-group">
         <label>Metric Name <span style="color:var(--red)">*</span></label>
         <div class="hint">What are you measuring?</div>
-        <input type="text" id="metricName" placeholder="e.g. # decisions made without Alex's input per week" />
+        <input type="text" id="metricName" placeholder="e.g. # decisions made without Alex's input per week" value="${esc(client.metric_name)}" />
       </div>
 
       <div class="form-row">
         <div class="form-group">
           <label>Baseline (where you are now) <span style="color:var(--red)">*</span></label>
-          <input type="number" id="metricBaseline" placeholder="e.g. 2" step="any" />
+          <input type="number" id="metricBaseline" placeholder="e.g. 2" step="any" value="${client.metric_baseline ?? ''}" />
         </div>
         <div class="form-group">
           <label>90-Day Target <span style="color:var(--red)">*</span></label>
-          <input type="number" id="metricTarget" placeholder="e.g. 8" step="any" />
+          <input type="number" id="metricTarget" placeholder="e.g. 8" step="any" value="${client.metric_target ?? ''}" />
         </div>
       </div>
 
       <div class="form-group">
         <label>Plan Start Date</label>
-        <input type="date" id="planStartDate" value="${today}" />
+        <input type="date" id="planStartDate" value="${client.plan_start_date || today}" />
       </div>
     </div>
 
@@ -644,7 +652,7 @@ function renderFormB(client) {
       <div class="form-group">
         <label>START Behavior <span style="color:var(--red)">*</span></label>
         <div class="hint">The single behavior you're committing to start doing. Be specific about what it looks like in action.</div>
-        <textarea id="startBehavior" placeholder="e.g. Run a 20-minute Monday ops stand-up where each manager reports their top priority and any blockers — without me solving the blockers for them."></textarea>
+        <textarea id="startBehavior" placeholder="e.g. Run a 20-minute Monday ops stand-up where each manager reports their top priority and any blockers — without me solving the blockers for them.">${esc(client.start_behavior)}</textarea>
       </div>
     </div>
 
@@ -655,23 +663,28 @@ function renderFormB(client) {
       <div class="form-group">
         <label>30-Day Reward</label>
         <div class="hint">Something meaningful you'll give yourself if you're on track at 30 days.</div>
-        <input type="text" id="reward30" placeholder="e.g. A full weekend off — phone down Friday night through Sunday" />
+        <input type="text" id="reward30" placeholder="e.g. A full weekend off — phone down Friday night through Sunday" value="${esc(client.reward_30_day)}" />
       </div>
 
       <div class="form-group">
         <label>90-Day Reward</label>
         <div class="hint">Something bigger that represents what this change means to you.</div>
-        <input type="text" id="reward90" placeholder="e.g. Book the trip we've been putting off for two years" />
+        <input type="text" id="reward90" placeholder="e.g. Book the trip we've been putting off for two years" value="${esc(client.reward_90_day)}" />
       </div>
     </div>
 
     <div id="formBError" style="display:none;color:var(--red);font-size:13px;font-weight:600;margin-bottom:12px;padding:10px 14px;background:#fff0f3;border-radius:6px;border:1px solid var(--red);"></div>
 
     <button class="btn-primary" onclick="submitFormB('${client.id}', '${client.name}')" id="submitBBtn">
-      Lock In My Plan →
+      ${isEdit ? 'Save Updates →' : 'Lock In My Plan →'}
     </button>
-    <p style="font-size:12px;color:var(--gray-600);margin-top:10px;">Once submitted, your plan is locked. Contact Alex if anything needs to change.</p>
+    <p style="font-size:12px;color:var(--gray-600);margin-top:10px;">${isEdit ? 'Your updates will be saved and your plan will be re-locked.' : 'Once submitted, your plan is locked. Contact Alex if anything needs to change.'}</p>
   `;
+
+  // Pre-select pillar if editing
+  if (isEdit && client.tp3_pillar) {
+    setTimeout(() => selectPillar(client.tp3_pillar), 0);
+  }
 }
 
 function selectPillar(pillar) {
@@ -733,7 +746,7 @@ async function submitFormB(clientId, clientName) {
     plan_submitted_at: new Date().toISOString(),
   };
 
-  const { error } = await db.from('clients').update(updates).eq('id', clientId);
+  const { error } = await db.from('clients').update({ ...updates, allow_plan_edit: false }).eq('id', clientId);
 
   if (error) {
     errEl.textContent = 'Error saving. Please try again or contact alex@gpsleadership.org.';
