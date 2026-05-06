@@ -466,6 +466,55 @@
       <label>Diagnostic Report Link <span style="font-weight:400;text-transform:none;opacity:0.6;">(optional — paste Google Drive URL)</span></label>
       <input type="url" id="newDiagnosticUrl" placeholder="https://drive.google.com/..." />
     </div>
+
+    <div style="margin:18px 0 10px;padding-top:16px;border-top:1px solid var(--gray-200);">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--gray-600);margin-bottom:12px;">Business Context <span style="font-weight:400;opacity:0.7;">(optional — used for coaching insights)</span></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group" style="margin:0;">
+        <label>Industry</label>
+        <select id="newIndustry">
+          <option value="">— Select —</option>
+          <option value="Trucking">Trucking</option>
+          <option value="Parts & Service">Parts &amp; Service</option>
+          <option value="Logistics">Logistics</option>
+          <option value="Industrial Services">Industrial Services</option>
+          <option value="Government">Government</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label>Revenue Band</label>
+        <select id="newRevenueBand">
+          <option value="">— Select —</option>
+          <option value="<$10M">&lt;$10M</option>
+          <option value="$10–25M">$10–25M</option>
+          <option value="$25–50M">$25–50M</option>
+          <option value="$50–100M">$50–100M</option>
+          <option value="$100M+">$100M+</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label>No. of Locations</label>
+        <select id="newNumLocations">
+          <option value="">— Select —</option>
+          <option value="1">1</option>
+          <option value="2–4">2–4</option>
+          <option value="5–10">5–10</option>
+          <option value="10+">10+</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label>Direct Reports</label>
+        <input type="number" id="newDirectReports" placeholder="e.g. 6" min="0" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Regions Owned</label>
+      <input type="text" id="newRegions" placeholder="e.g. TX/OK, Southwest, National" />
+    </div>
+
     <div class="modal-error" id="modalError"></div>
     <div id="newClientResult"></div>
     <div class="modal-actions">
@@ -949,6 +998,11 @@ function openAddModal() {
   document.getElementById('newTitle').value = '';
   document.getElementById('newOrg').value = '';
   document.getElementById('newDiagnosticUrl').value = '';
+  document.getElementById('newIndustry').value = '';
+  document.getElementById('newRevenueBand').value = '';
+  document.getElementById('newNumLocations').value = '';
+  document.getElementById('newDirectReports').value = '';
+  document.getElementById('newRegions').value = '';
 }
 
 function closeAddModal() {
@@ -961,6 +1015,11 @@ async function addClient() {
   const title           = document.getElementById('newTitle').value.trim();
   const org             = document.getElementById('newOrg').value.trim();
   const diagnosticUrl   = document.getElementById('newDiagnosticUrl').value.trim();
+  const industry        = document.getElementById('newIndustry').value || null;
+  const revenueBand     = document.getElementById('newRevenueBand').value || null;
+  const numLocations    = document.getElementById('newNumLocations').value || null;
+  const directReports   = document.getElementById('newDirectReports').value ? parseInt(document.getElementById('newDirectReports').value) : null;
+  const regions         = document.getElementById('newRegions').value.trim() || null;
   const errEl = document.getElementById('modalError');
 
   if (!name)  { errEl.textContent = 'Name is required.'; return; }
@@ -973,7 +1032,7 @@ async function addClient() {
 
   const { data, error } = await db
     .from('clients')
-    .insert({ name, email: email || null, title: title || null, organization: org || null, diagnostic_report_url: diagnosticUrl || null, is_active: true })
+    .insert({ name, email: email || null, title: title || null, organization: org || null, diagnostic_report_url: diagnosticUrl || null, is_active: true, industry, revenue_band: revenueBand, num_locations: numLocations, direct_reports_count: directReports, regions_owned: regions })
     .select()
     .single();
 
