@@ -28,7 +28,7 @@ export default async function handler(req, res) {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 1200,
         system,
         messages
@@ -85,10 +85,14 @@ async function logUsage(token, questionLength) {
       client_id:       clientId,
       asked_at:        now,
       question_length: questionLength || null,
+      // metadata JSONB reserved for future: thumbs_up/down, topic_category, etc.
     })
   });
 
   // 3. Increment total_questions and set last_used_at using Postgres RPC
+  // We use a direct PATCH + custom header to do an atomic increment safely.
+  // Supabase supports this via the "x-supabase-api-version" header approach,
+  // but the simplest safe method here is a raw SQL call via RPC.
   await fetch(`${SUPABASE_URL}/rest/v1/rpc/increment_ask_alex`, {
     method: 'POST',
     headers: {
