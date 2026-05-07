@@ -796,23 +796,41 @@ async function submitFormB(clientId, clientName) {
   const goalDesc      = document.getElementById('goalDescription').value.trim();
   const goal30Day     = document.getElementById('goal30Day').value.trim();
   const goalStatement = document.getElementById('goalStatement').value.trim();
-  const metricName    = document.getElementById('metricName').value.trim();
-  const baseline      = parseFloat(document.getElementById('metricBaseline').value);
-  const target        = parseFloat(document.getElementById('metricTarget').value);
   const startDate     = document.getElementById('planStartDate').value;
-  const startBehavior = document.getElementById('startBehavior').value.trim();
   const reward30      = document.getElementById('reward30').value.trim();
   const reward90      = document.getElementById('reward90').value.trim();
 
+  // Behaviors
+  const behavior1 = document.getElementById('behavior1').value.trim();
+  const behavior2El = document.getElementById('behavior2');
+  const behavior2 = behavior2El ? behavior2El.value.trim() : '';
+
+  // Metrics
+  const metric1Name     = document.getElementById('metric1Name').value.trim();
+  const metric1Baseline = parseFloat(document.getElementById('metric1Baseline').value);
+  const metric1Target   = parseFloat(document.getElementById('metric1Target').value);
+
+  const m2Block = document.getElementById('metric2Block');
+  const metric2Visible  = m2Block && m2Block.style.display !== 'none';
+  const metric2Name     = metric2Visible ? document.getElementById('metric2Name').value.trim() : '';
+  const metric2Baseline = metric2Visible ? parseFloat(document.getElementById('metric2Baseline').value) : null;
+  const metric2Target   = metric2Visible ? parseFloat(document.getElementById('metric2Target').value) : null;
+
+  const m3Block = document.getElementById('metric3Block');
+  const metric3Visible  = m3Block && m3Block.style.display !== 'none';
+  const metric3Name     = metric3Visible ? document.getElementById('metric3Name').value.trim() : '';
+  const metric3Baseline = metric3Visible ? parseFloat(document.getElementById('metric3Baseline').value) : null;
+  const metric3Target   = metric3Visible ? parseFloat(document.getElementById('metric3Target').value) : null;
+
   const missing = [];
-  if (!pillar)        missing.push('Focus Pillar');
-  if (!goalDesc)      missing.push('Goal Description');
-  if (!goal30Day)     missing.push('30-Day Goal');
-  if (!goalStatement) missing.push('90-Day Goal Statement');
-  if (!metricName)    missing.push('Metric Name');
-  if (isNaN(baseline)) missing.push('Baseline Value');
-  if (isNaN(target))  missing.push('90-Day Target');
-  if (!startBehavior) missing.push('START Behavior');
+  if (!pillar)          missing.push('Focus Pillar');
+  if (!goalDesc)        missing.push('Goal Description');
+  if (!goal30Day)       missing.push('30-Day Goal');
+  if (!goalStatement)   missing.push('90-Day Goal Statement');
+  if (!metric1Name)     missing.push('Metric 1 Name');
+  if (isNaN(metric1Baseline)) missing.push('Metric 1 Baseline');
+  if (isNaN(metric1Target))   missing.push('Metric 1 Target');
+  if (!behavior1)       missing.push('Behavior 1');
 
   if (missing.length > 0) {
     errEl.textContent = 'Please complete: ' + missing.join(', ');
@@ -825,19 +843,36 @@ async function submitFormB(clientId, clientName) {
   btn.textContent = 'Saving…';
 
   const updates = {
-    tp3_pillar:       pillar,
-    goal_description: goalDesc,
-    goal_30_day:      goal30Day,
-    goal_statement:   goalStatement,
-    metric_name:      metricName,
-    metric_baseline:  baseline,
-    metric_target:    target,
-    metric_current:   baseline,
-    plan_start_date:  startDate,
-    start_behavior:   startBehavior,
-    reward_30_day:    reward30 || null,
-    reward_90_day:    reward90 || null,
+    tp3_pillar:        pillar,
+    goal_description:  goalDesc,
+    goal_30_day:       goal30Day,
+    goal_statement:    goalStatement,
+    plan_start_date:   startDate,
+    reward_30_day:     reward30 || null,
+    reward_90_day:     reward90 || null,
     plan_submitted_at: new Date().toISOString(),
+
+    // Behaviors
+    behavior_1:        behavior1,
+    behavior_2:        behavior2 || null,
+    start_behavior:    behavior1, // keep old field in sync for backwards compat
+
+    // Metrics
+    metric_1_name:     metric1Name,
+    metric_1_baseline: metric1Baseline,
+    metric_1_target:   metric1Target,
+    metric_current:    metric1Baseline,
+    metric_2_name:     metric2Name || null,
+    metric_2_baseline: !isNaN(metric2Baseline) ? metric2Baseline : null,
+    metric_2_target:   !isNaN(metric2Target)   ? metric2Target   : null,
+    metric_3_name:     metric3Name || null,
+    metric_3_baseline: !isNaN(metric3Baseline) ? metric3Baseline : null,
+    metric_3_target:   !isNaN(metric3Target)   ? metric3Target   : null,
+
+    // Keep old fields in sync for backwards compat
+    metric_name:       metric1Name,
+    metric_baseline:   metric1Baseline,
+    metric_target:     metric1Target,
   };
 
   const tzEl = document.getElementById('clientTimezone');
@@ -859,9 +894,15 @@ async function submitFormB(clientId, clientName) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        type: 'plan_submitted',
-        clientName: clientName,
-        pillar, goalDesc, goalStatement, metricName, baseline, target, startDate, startBehavior, reward30, reward90
+        type:         'plan_submitted',
+        clientName:   clientName,
+        pillar,       goalDesc,     goalStatement,
+        metricName:   metric1Name,
+        baseline:     metric1Baseline,
+        target:       metric1Target,
+        startDate,
+        startBehavior: behavior1,
+        reward30,     reward90
       })
     });
   } catch (_) { /* notification failed silently — not blocking */ }
@@ -1001,11 +1042,24 @@ function renderCheckinForm(client, checkins, currentWeek) {
         </div>
       </div>` : ''}
 
+      <!-- METRIC INPUTS (1 required, 2-3 if defined) -->
       <div class="form-group">
-        <label>Current Metric Value <span style="color:var(--red)">*</span></label>
-        <div class="hint">What's your ${client.metric_name || 'metric'} at right now?</div>
+        <label>${client.metric_1_name || client.metric_name || 'Metric 1'} <span style="color:var(--red)">*</span></label>
+        <div class="hint">Current value this week</div>
         <input type="number" id="currentMetric" placeholder="Enter current value" step="any" />
       </div>
+      ${(client.metric_2_name) ? `
+      <div class="form-group">
+        <label>${client.metric_2_name}</label>
+        <div class="hint">Current value this week</div>
+        <input type="number" id="currentMetric2" placeholder="Enter current value" step="any" />
+      </div>` : ''}
+      ${(client.metric_3_name) ? `
+      <div class="form-group">
+        <label>${client.metric_3_name}</label>
+        <div class="hint">Current value this week</div>
+        <input type="number" id="currentMetric3" placeholder="Enter current value" step="any" />
+      </div>` : ''}
 
       <div class="form-group">
         <label>This Week's Commitment</label>
@@ -1038,9 +1092,13 @@ async function submitFormA(clientId, clientName, weekNumber, noCompletion) {
   const errEl  = document.getElementById('formAError');
   errEl.style.display = 'none';
 
-  const metricVal = parseFloat(document.getElementById('currentMetric').value);
-  const action    = document.getElementById('plannedAction').value.trim();
-  const notes     = document.getElementById('reflectionNotes').value.trim();
+  const metricVal  = parseFloat(document.getElementById('currentMetric').value);
+  const metric2El  = document.getElementById('currentMetric2');
+  const metric3El  = document.getElementById('currentMetric3');
+  const metric2Val = metric2El ? parseFloat(metric2El.value) : null;
+  const metric3Val = metric3El ? parseFloat(metric3El.value) : null;
+  const action     = document.getElementById('plannedAction').value.trim();
+  const notes      = document.getElementById('reflectionNotes').value.trim();
 
   const coachingLabel   = document.querySelector('#coachingGroup label.selected');
   const completionLabel = document.querySelector('#completionGroup label.selected');
@@ -1064,6 +1122,8 @@ async function submitFormA(clientId, clientName, weekNumber, noCompletion) {
     planned_action:    action || null,
     completion_status: noCompletion ? null : completionStatus,
     metric_value:      metricVal,
+    metric_2_value:    !isNaN(metric2Val) ? metric2Val : null,
+    metric_3_value:    !isNaN(metric3Val) ? metric3Val : null,
     notes:             notes || null,
     submitted_at:      new Date().toISOString(),
   };
