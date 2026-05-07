@@ -1271,8 +1271,7 @@ async function confirmImport() {
 
     closeImportModal();
     alert(`✅ ${result.imported} client${result.imported !== 1 ? 's' : ''} imported successfully${result.skipped ? ` (${result.skipped} skipped due to missing data)` : ''}.`);
-    await loadAllClients();
-    renderClientList();
+    await loadDashboard();
   } catch (err) {
     errEl.textContent = 'Error: ' + err.message;
     btn.textContent = 'Import Clients';
