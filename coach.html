@@ -958,7 +958,7 @@ function renderClientCard(client, checkins) {
         <!-- Ask Alex Usage -->
         <div class="detail-section" id="aa-section-${client.id}">
           <h4>Ask Alex Usage</h4>
-          ${client.in_coaching_program !== false ? `
+          ${client.ask_alex_enabled ? `
           <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:10px;" id="aa-stats-${client.id}">
             <div style="background:var(--light-sand);border-radius:6px;padding:10px 12px;text-align:center;">
               <div style="font-size:20px;font-weight:800;color:var(--navy);font-family:'Montserrat',sans-serif;">${client.ask_alex_total_questions || 0}</div>
@@ -978,23 +978,76 @@ function renderClientCard(client, checkins) {
             </div>
           </div>
           <p style="font-size:11px;color:var(--gray-600);">7 &amp; 30-day counts load when you expand this client.</p>
-          ` : `<p style="font-size:13px;color:var(--gray-600);font-style:italic;">Client is not in the coaching program — Ask Alex is disabled.</p>`}
+          ` : `<p style="font-size:13px;color:var(--gray-600);font-style:italic;">Ask Alex is not enabled for this client.</p>`}
         </div>
 
+        <!-- Access Controls -->
         <div class="detail-section">
-          <h4>Coaching Program Access</h4>
-          <p id="coachingStatus-${client.id}" style="font-size:12px;color:var(--gray-600);margin-bottom:10px;">
-            ${client.in_coaching_program !== false
-              ? 'Active — this client can access the portal and, when connected, the AI coaching assistant.'
-              : '⛔ Inactive — this client cannot access the AI coaching assistant.'}
-          </p>
-          <button
-            onclick="toggleCoachingProgram('${client.id}', ${client.in_coaching_program !== false})"
-            id="coachingBtn-${client.id}"
-            style="padding:8px 18px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;border:none;
-              background:${client.in_coaching_program !== false ? 'var(--red)' : 'var(--teal)'};color:#fff;">
-            ${client.in_coaching_program !== false ? 'Remove from Coaching Program' : 'Add to Coaching Program'}
-          </button>
+          <h4>Access Controls</h4>
+
+          <!-- Portal Lock -->
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--gray-200);">
+            <div>
+              <div style="font-size:13px;font-weight:700;color:var(--navy);">Portal locked</div>
+              <div id="portalLockStatus-${client.id}" style="font-size:12px;color:var(--gray-600);margin-top:2px;">
+                ${client.portal_locked
+                  ? '🔒 Locked — client sees a locked screen and cannot access the portal.'
+                  : '✓ Unlocked — client can access the portal normally.'}
+              </div>
+            </div>
+            <button
+              id="portalLockBtn-${client.id}"
+              onclick="togglePortalLock('${client.id}', ${!!client.portal_locked})"
+              style="padding:7px 16px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;border:none;white-space:nowrap;
+                background:${client.portal_locked ? 'var(--teal)' : 'var(--red)'};color:#fff;">
+              ${client.portal_locked ? 'Unlock Portal' : 'Lock Portal'}
+            </button>
+          </div>
+
+          <!-- Ask Alex Toggle -->
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--gray-200);">
+            <div>
+              <div style="font-size:13px;font-weight:700;color:var(--navy);">Ask Alex enabled</div>
+              <div id="askAlexStatus-${client.id}" style="font-size:12px;color:var(--gray-600);margin-top:2px;">
+                ${client.ask_alex_enabled
+                  ? '✓ Enabled — client sees the Ask Alex tab in their portal.'
+                  : '⛔ Disabled — Ask Alex tab is hidden for this client.'}
+              </div>
+            </div>
+            <button
+              id="askAlexBtn-${client.id}"
+              onclick="toggleAskAlex('${client.id}', ${!!client.ask_alex_enabled})"
+              style="padding:7px 16px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;border:none;white-space:nowrap;
+                background:${client.ask_alex_enabled ? 'var(--red)' : 'var(--teal)'};color:#fff;">
+              ${client.ask_alex_enabled ? 'Disable Ask Alex' : 'Enable Ask Alex'}
+            </button>
+          </div>
+
+          <!-- Coaching Program Dates -->
+          <div style="padding:12px 0;">
+            <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:8px;">Coaching Program Dates <span style="font-weight:400;font-size:11px;color:var(--gray-600);">(informational only)</span></div>
+            <div style="display:flex;gap:16px;flex-wrap:wrap;">
+              <div>
+                <label style="font-size:11px;text-transform:uppercase;letter-spacing:0.4px;color:var(--gray-600);display:block;margin-bottom:4px;">Start Date</label>
+                <input type="date" id="cpStart-${client.id}"
+                  value="${client.coaching_program_start_date || ''}"
+                  onchange="saveCoachingDates('${client.id}')"
+                  style="padding:6px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;"
+                  onfocus="this.style.borderColor='var(--teal)'"
+                  onblur="this.style.borderColor='var(--gray-300)'" />
+              </div>
+              <div>
+                <label style="font-size:11px;text-transform:uppercase;letter-spacing:0.4px;color:var(--gray-600);display:block;margin-bottom:4px;">End Date</label>
+                <input type="date" id="cpEnd-${client.id}"
+                  value="${client.coaching_program_end_date || ''}"
+                  onchange="saveCoachingDates('${client.id}')"
+                  style="padding:6px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;"
+                  onfocus="this.style.borderColor='var(--teal)'"
+                  onblur="this.style.borderColor='var(--gray-300)'" />
+              </div>
+            </div>
+            <p id="cpDatesMsg-${client.id}" style="font-size:11px;color:var(--gray-600);margin-top:6px;">Dates auto-save on change.</p>
+          </div>
         </div>
 
         <div class="detail-section">
@@ -1197,14 +1250,14 @@ async function togglePlanEdit(clientId, currentState) {
   }
 }
 
-async function toggleCoachingProgram(clientId, currentState) {
+async function togglePortalLock(clientId, currentState) {
   const newState = !currentState;
-  const btn = document.getElementById('coachingBtn-' + clientId);
-  const statusEl = document.getElementById('coachingStatus-' + clientId);
+  const btn = document.getElementById('portalLockBtn-' + clientId);
+  const statusEl = document.getElementById('portalLockStatus-' + clientId);
   btn.textContent = 'Saving…';
   btn.disabled = true;
 
-  const { error } = await db.from('clients').update({ in_coaching_program: newState }).eq('id', clientId);
+  const { error } = await db.from('clients').update({ portal_locked: newState }).eq('id', clientId);
 
   if (error) {
     btn.textContent = 'Error — try again';
@@ -1212,20 +1265,76 @@ async function toggleCoachingProgram(clientId, currentState) {
     return;
   }
 
-  allClients = allClients.map(c => c.id === clientId ? { ...c, in_coaching_program: newState } : c);
+  allClients = allClients.map(c => c.id === clientId ? { ...c, portal_locked: newState } : c);
 
   if (newState) {
-    btn.textContent = 'Remove from Coaching Program';
-    btn.style.background = 'var(--red)';
-    btn.setAttribute('onclick', `toggleCoachingProgram('${clientId}', true)`);
-    if (statusEl) statusEl.textContent = 'Active — this client can access the portal and, when connected, the AI coaching assistant.';
-  } else {
-    btn.textContent = 'Add to Coaching Program';
+    btn.textContent = 'Unlock Portal';
     btn.style.background = 'var(--teal)';
-    btn.setAttribute('onclick', `toggleCoachingProgram('${clientId}', false)`);
-    if (statusEl) statusEl.textContent = '⛔ Inactive — this client cannot access the AI coaching assistant.';
+    btn.setAttribute('onclick', `togglePortalLock('${clientId}', true)`);
+    if (statusEl) statusEl.textContent = '🔒 Locked — client sees a locked screen and cannot access the portal.';
+  } else {
+    btn.textContent = 'Lock Portal';
+    btn.style.background = 'var(--red)';
+    btn.setAttribute('onclick', `togglePortalLock('${clientId}', false)`);
+    if (statusEl) statusEl.textContent = '✓ Unlocked — client can access the portal normally.';
   }
   btn.disabled = false;
+}
+
+async function toggleAskAlex(clientId, currentState) {
+  const newState = !currentState;
+  const btn = document.getElementById('askAlexBtn-' + clientId);
+  const statusEl = document.getElementById('askAlexStatus-' + clientId);
+  btn.textContent = 'Saving…';
+  btn.disabled = true;
+
+  const { error } = await db.from('clients').update({ ask_alex_enabled: newState }).eq('id', clientId);
+
+  if (error) {
+    btn.textContent = 'Error — try again';
+    btn.disabled = false;
+    return;
+  }
+
+  allClients = allClients.map(c => c.id === clientId ? { ...c, ask_alex_enabled: newState } : c);
+
+  if (newState) {
+    btn.textContent = 'Disable Ask Alex';
+    btn.style.background = 'var(--red)';
+    btn.setAttribute('onclick', `toggleAskAlex('${clientId}', true)`);
+    if (statusEl) statusEl.textContent = '✓ Enabled — client sees the Ask Alex tab in their portal.';
+  } else {
+    btn.textContent = 'Enable Ask Alex';
+    btn.style.background = 'var(--teal)';
+    btn.setAttribute('onclick', `toggleAskAlex('${clientId}', false)`);
+    if (statusEl) statusEl.textContent = '⛔ Disabled — Ask Alex tab is hidden for this client.';
+  }
+  btn.disabled = false;
+}
+
+async function saveCoachingDates(clientId) {
+  const startEl = document.getElementById('cpStart-' + clientId);
+  const endEl   = document.getElementById('cpEnd-'   + clientId);
+  const msgEl   = document.getElementById('cpDatesMsg-' + clientId);
+
+  const payload = {
+    coaching_program_start_date: startEl.value || null,
+    coaching_program_end_date:   endEl.value   || null,
+  };
+
+  msgEl.textContent = 'Saving…';
+  const { error } = await db.from('clients').update(payload).eq('id', clientId);
+
+  if (error) {
+    msgEl.textContent = 'Error saving dates — try again.';
+    msgEl.style.color = 'var(--red)';
+    return;
+  }
+
+  allClients = allClients.map(c => c.id === clientId ? { ...c, ...payload } : c);
+  msgEl.textContent = '✓ Dates saved.';
+  msgEl.style.color = '#2e7d32';
+  setTimeout(() => { msgEl.textContent = 'Dates auto-save on change.'; msgEl.style.color = 'var(--gray-600)'; }, 2500);
 }
 
 // ─────────────────────────────────────────────
