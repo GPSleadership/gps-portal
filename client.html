@@ -1169,6 +1169,12 @@ async function loadClient() {
       return;
     }
 
+    // Portal lock — manual override by coach; blocks entire portal
+    if (client.portal_locked === true) {
+      showError('Portal temporarily locked.', 'Your GPS Leadership portal is temporarily locked. Please contact Alex or his team at alex@gpsleadership.org if you believe this is an error or if your engagement is being renewed.');
+      return;
+    }
+
     const firstName = (client.name || '').split(' ')[0] || 'there';
     document.getElementById('gpsHeaderUser').textContent = ' · Welcome, ' + firstName;
 
@@ -1210,8 +1216,8 @@ async function loadClient() {
       portalContext.reward_30_day        = client.reward_30_day || '';
       portalContext.reward_90_day        = client.reward_90_day || '';
 
-      // Show tab nav only if plan submitted and client is in coaching program
-      if (client.in_coaching_program !== false) {
+      // Show Ask Alex tab only if explicitly enabled for this client
+      if (client.ask_alex_enabled === true) {
         document.getElementById('portalTabNav').style.display = 'flex';
         qaInitUI(); // initialize Q&A input listeners
       }
