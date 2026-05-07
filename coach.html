@@ -881,6 +881,10 @@ function renderClientCard(client, checkins) {
           </div>
           <div class="meta-item"><div class="val">${completionRate}</div><div class="lbl">Follow-Through</div></div>
           <div class="meta-item">
+            <div class="val" style="font-size:13px;font-weight:700;color:var(--navy);">${client.ask_alex_total_questions || 0}</div>
+            <div class="lbl">Ask Alex Q's</div>
+          </div>
+          <div class="meta-item">
             <div style="display:flex;align-items:center;gap:5px;">
               <span class="completion-dot ${dotClass}"></span>
               <span style="font-size:12px;color:var(--gray-600);">${lastDate}</span>
@@ -951,6 +955,32 @@ function renderClientCard(client, checkins) {
           </button>
         </div>
 
+        <!-- Ask Alex Usage -->
+        <div class="detail-section" id="aa-section-${client.id}">
+          <h4>Ask Alex Usage</h4>
+          ${client.in_coaching_program !== false ? `
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:10px;" id="aa-stats-${client.id}">
+            <div style="background:var(--light-sand);border-radius:6px;padding:10px 12px;text-align:center;">
+              <div style="font-size:20px;font-weight:800;color:var(--navy);font-family:'Montserrat',sans-serif;">${client.ask_alex_total_questions || 0}</div>
+              <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--gray-600);margin-top:2px;">Total</div>
+            </div>
+            <div style="background:var(--light-sand);border-radius:6px;padding:10px 12px;text-align:center;" id="aa-7d-${client.id}">
+              <div style="font-size:20px;font-weight:800;color:var(--navy);font-family:'Montserrat',sans-serif;">—</div>
+              <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--gray-600);margin-top:2px;">Last 7 days</div>
+            </div>
+            <div style="background:var(--light-sand);border-radius:6px;padding:10px 12px;text-align:center;" id="aa-30d-${client.id}">
+              <div style="font-size:20px;font-weight:800;color:var(--navy);font-family:'Montserrat',sans-serif;">—</div>
+              <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--gray-600);margin-top:2px;">Last 30 days</div>
+            </div>
+            <div style="background:var(--light-sand);border-radius:6px;padding:10px 12px;text-align:center;">
+              <div style="font-size:12px;font-weight:700;color:var(--navy);">${client.ask_alex_last_used_at ? new Date(client.ask_alex_last_used_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : 'Never'}</div>
+              <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--gray-600);margin-top:2px;">Last Used</div>
+            </div>
+          </div>
+          <p style="font-size:11px;color:var(--gray-600);">7 &amp; 30-day counts load when you expand this client.</p>
+          ` : `<p style="font-size:13px;color:var(--gray-600);font-style:italic;">Client is not in the coaching program — Ask Alex is disabled.</p>`}
+        </div>
+
         <div class="detail-section">
           <h4>Coaching Program Access</h4>
           <p id="coachingStatus-${client.id}" style="font-size:12px;color:var(--gray-600);margin-bottom:10px;">
@@ -1010,8 +1040,31 @@ function renderClientCard(client, checkins) {
 function toggleDetail(clientId) {
   const detail = document.getElementById('detail-' + clientId);
   const header = detail.previousElementSibling;
+  const wasOpen = detail.classList.contains('open');
   detail.classList.toggle('open');
   header.classList.toggle('expanded');
+  // Load 7/30-day Ask Alex stats on first expand
+  if (!wasOpen) loadAskAlexStats(clientId);
+}
+
+async function loadAskAlexStats(clientId) {
+  const el7  = document.getElementById('aa-7d-' + clientId);
+  const el30 = document.getElementById('aa-30d-' + clientId);
+  if (!el7 || !el30) return;
+
+  const now   = new Date();
+  const s7    = new Date(now - 7  * 24 * 60 * 60 * 1000).toISOString();
+  const s30   = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const [r7, r30] = await Promise.all([
+    db.from('ask_alex_usage').select('*', { count: 'exact', head: true })
+       .eq('client_id', clientId).gte('asked_at', s7),
+    db.from('ask_alex_usage').select('*', { count: 'exact', head: true })
+       .eq('client_id', clientId).gte('asked_at', s30),
+  ]);
+
+  el7.querySelector('div:first-child').textContent  = r7.count  ?? '—';
+  el30.querySelector('div:first-child').textContent = r30.count ?? '—';
 }
 
 function copyURL(url, btn) {
