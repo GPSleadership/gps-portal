@@ -845,6 +845,172 @@
       .qa-input-inner { padding: 0 16px; }
       .qa-card, .qa-crisis-card { padding: 18px 16px; }
     }
+
+    /* ── TERMS MODAL ── */
+    #termsOverlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.72);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    #termsOverlay.open { display: flex; }
+    .terms-modal {
+      background: #221E19;
+      border: 1px solid rgba(201,168,76,0.25);
+      border-radius: 12px;
+      width: 100%;
+      max-width: 640px;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .terms-modal-header {
+      padding: 22px 28px 16px;
+      border-bottom: 1px solid rgba(201,168,76,0.15);
+      flex-shrink: 0;
+    }
+    .terms-modal-header h2 {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 17px;
+      font-weight: 800;
+      color: #F0EBE0;
+      margin-bottom: 4px;
+    }
+    .terms-modal-header p {
+      font-size: 12px;
+      color: #9A9080;
+    }
+    .terms-summary {
+      padding: 16px 28px;
+      border-bottom: 1px solid rgba(201,168,76,0.1);
+      flex-shrink: 0;
+    }
+    .terms-summary-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: #C9A84C;
+      margin-bottom: 10px;
+    }
+    .terms-summary ul {
+      list-style: none;
+      padding: 0; margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .terms-summary ul li {
+      font-size: 13px;
+      color: #C8C0B4;
+      line-height: 1.5;
+      padding-left: 16px;
+      position: relative;
+    }
+    .terms-summary ul li::before {
+      content: '·';
+      position: absolute;
+      left: 4px;
+      color: #C9A84C;
+      font-weight: 700;
+    }
+    .terms-full-wrap {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 28px;
+      border-bottom: 1px solid rgba(201,168,76,0.1);
+    }
+    .terms-toggle-btn {
+      background: transparent;
+      border: 1px solid rgba(201,168,76,0.25);
+      border-radius: 6px;
+      padding: 7px 16px;
+      font-family: 'Open Sans', sans-serif;
+      font-size: 12px;
+      color: #C9A84C;
+      cursor: pointer;
+      margin-bottom: 14px;
+      transition: all 0.18s;
+    }
+    .terms-toggle-btn:hover { background: rgba(201,168,76,0.1); }
+    .terms-full-text {
+      display: none;
+      font-size: 12.5px;
+      color: #9A9080;
+      line-height: 1.7;
+      white-space: pre-wrap;
+    }
+    .terms-full-text.open { display: block; }
+    .terms-full-text h3 {
+      font-size: 13px;
+      font-weight: 700;
+      color: #C8C0B4;
+      margin: 16px 0 6px;
+    }
+    .terms-footer {
+      padding: 16px 28px 20px;
+      flex-shrink: 0;
+    }
+    .terms-checkbox-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .terms-checkbox-row input[type="checkbox"] {
+      width: 18px; height: 18px;
+      margin-top: 1px;
+      accent-color: #C9A84C;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+    .terms-checkbox-row label {
+      font-size: 13px;
+      color: #C8C0B4;
+      line-height: 1.5;
+      cursor: pointer;
+    }
+    .terms-agree-btn {
+      width: 100%;
+      background: #C9A84C;
+      color: #1A1612;
+      border: none;
+      border-radius: 8px;
+      padding: 13px 20px;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.18s;
+      margin-bottom: 10px;
+    }
+    .terms-agree-btn:hover:not(:disabled) { background: #E8C97A; }
+    .terms-agree-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .terms-cancel-link {
+      display: block;
+      text-align: center;
+      font-size: 12.5px;
+      color: #9A9080;
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      transition: color 0.15s;
+    }
+    .terms-cancel-link:hover { color: #C8C0B4; }
+    .terms-view-link {
+      font-size: 11px;
+      color: rgba(201,168,76,0.7);
+      text-decoration: none;
+      cursor: pointer;
+      margin-left: 8px;
+      letter-spacing: 0.2px;
+    }
+    .terms-view-link:hover { color: #C9A84C; }
   </style>
 </head>
 <body>
@@ -928,7 +1094,7 @@
           </button>
         </div>
       </div>
-      <div class="qa-input-hint">Enter to send &nbsp;·&nbsp; Shift+Enter for new line</div>
+      <div class="qa-input-hint">Enter to send &nbsp;·&nbsp; Shift+Enter for new line <a class="terms-view-link" onclick="openTermsModal(true)">View Terms</a></div>
     </div>
   </div>
 </div>
@@ -1826,6 +1992,10 @@ function showError(title, message) {
 // ─────────────────────────────────────────────
 // Q&A TOOL — TAB SWITCHING
 // ─────────────────────────────────────────────
+// Current terms version — bump to "v1.1" etc. when terms change.
+// Must match CURRENT_TERMS_VERSION in api/accept-terms.js.
+const CURRENT_TERMS_VERSION = 'v1.0';
+
 function showPortalTab(tab) {
   const mainContent = document.getElementById('mainContent');
   const qaPanel     = document.getElementById('qaPanel');
@@ -1837,12 +2007,82 @@ function showPortalTab(tab) {
     tabPlan.classList.add('active');
     tabAsk.classList.remove('active');
   } else {
-    mainContent.style.display = 'none';
-    qaPanel.classList.add('active');
-    tabAsk.classList.add('active');
-    tabPlan.classList.remove('active');
-    const qaQi = document.getElementById('qa-qi');
-    if (qaQi) setTimeout(() => qaQi.focus(), 100);
+    // Check terms consent before showing Q&A
+    const needsTerms = !currentClient ||
+      !currentClient.ai_terms_accepted ||
+      currentClient.ai_terms_version !== CURRENT_TERMS_VERSION;
+    if (needsTerms) {
+      openTermsModal(false);
+      return; // don't switch tabs yet — modal handles it
+    }
+    activateQATab();
+  }
+}
+
+function activateQATab() {
+  const mainContent = document.getElementById('mainContent');
+  const qaPanel     = document.getElementById('qaPanel');
+  const tabPlan     = document.getElementById('tabPlan');
+  const tabAsk      = document.getElementById('tabAsk');
+  mainContent.style.display = 'none';
+  qaPanel.classList.add('active');
+  tabAsk.classList.add('active');
+  tabPlan.classList.remove('active');
+  const qaQi = document.getElementById('qa-qi');
+  if (qaQi) setTimeout(() => qaQi.focus(), 100);
+}
+
+function openTermsModal(readOnly) {
+  const overlay   = document.getElementById('termsOverlay');
+  const footer    = document.getElementById('termsFooter');
+  const checkbox  = document.getElementById('termsCheckbox');
+  const agreeBtn  = document.getElementById('termsAgreeBtn');
+  overlay.classList.add('open');
+  if (readOnly) {
+    footer.style.display = 'none';
+  } else {
+    footer.style.display = 'block';
+    checkbox.checked = false;
+    agreeBtn.disabled = true;
+  }
+  // Reset full terms toggle
+  document.getElementById('termsFullText').classList.remove('open');
+  document.getElementById('termsToggleBtn').textContent = 'View Full Terms ▼';
+}
+
+function closeTermsModal() {
+  document.getElementById('termsOverlay').classList.remove('open');
+}
+
+function toggleFullTerms() {
+  const ft  = document.getElementById('termsFullText');
+  const btn = document.getElementById('termsToggleBtn');
+  ft.classList.toggle('open');
+  btn.textContent = ft.classList.contains('open') ? 'Hide Full Terms ▲' : 'View Full Terms ▼';
+}
+
+async function handleTermsAgree() {
+  const btn = document.getElementById('termsAgreeBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  try {
+    const res = await fetch('/api/accept-terms', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ token })
+    });
+    if (!res.ok) throw new Error('Save failed');
+    // Update local client object so terms modal won't reappear this session
+    if (currentClient) {
+      currentClient.ai_terms_accepted    = true;
+      currentClient.ai_terms_version     = CURRENT_TERMS_VERSION;
+      currentClient.ai_terms_accepted_at = new Date().toISOString();
+    }
+    closeTermsModal();
+    activateQATab();
+  } catch(e) {
+    btn.textContent = 'Error — try again';
+    btn.disabled = false;
   }
 }
 
@@ -2139,8 +2379,9 @@ async function qaSend() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        system: qaBuildSystemPrompt(portalContext),
-        messages: qaHistory
+        system:   qaBuildSystemPrompt(portalContext),
+        messages: qaHistory,
+        token:    token   // for server-side usage logging
       })
     });
     const data = await res.json();
@@ -2286,5 +2527,126 @@ function qaScrollBottom() {
 }
 
 </script>
+
+<!-- ── TERMS OF USE MODAL ── -->
+<div id="termsOverlay">
+  <div class="terms-modal" role="dialog" aria-modal="true" aria-labelledby="termsModalTitle">
+    <div class="terms-modal-header">
+      <h2 id="termsModalTitle">Ask Alex – Terms of Use &amp; Disclaimer</h2>
+      <p>GPS Leadership AI Coach &nbsp;·&nbsp; Version 1.0</p>
+    </div>
+
+    <div class="terms-summary">
+      <div class="terms-summary-title">Before using Ask Alex, you agree to the following:</div>
+      <ul>
+        <li>AI guidance only – not legal, HR, financial, medical, or professional advice.</li>
+        <li>AI may be wrong – responses may be inaccurate, incomplete, or misleading.</li>
+        <li>You are responsible for your decisions – do not rely on Ask Alex without independent judgment.</li>
+        <li>Not for high-stakes decisions – do not use Ask Alex for hiring, firing, legal, or disciplinary matters.</li>
+        <li>Not Alex Tremble – responses are AI-generated and not personal advice from Alex.</li>
+        <li>No duty of care – GPS Leadership Solutions does not monitor or validate outputs.</li>
+        <li>Data may be reviewed internally – for improvement and coaching preparation.</li>
+        <li>Do not enter sensitive data – including confidential, regulated, or protected information.</li>
+        <li>Usage limits apply – access may be restricted or revoked.</li>
+        <li>Service may change or end at any time.</li>
+      </ul>
+    </div>
+
+    <div class="terms-full-wrap">
+      <button class="terms-toggle-btn" id="termsToggleBtn" onclick="toggleFullTerms()">View Full Terms ▼</button>
+      <div class="terms-full-text" id="termsFullText">
+<strong style="color:#C8C0B4;font-size:14px;">Full Terms of Use &amp; Disclaimer</strong>
+
+<strong>1. Acceptance of Terms</strong>
+These Terms govern your use of Ask Alex – GPS Leadership AI Coach ("Ask Alex" or the "Service"). By clicking "I Agree and Continue," you agree to be legally bound by these Terms.
+
+If you do not agree, do not use the Service.
+
+<strong>2. Nature and Status of the Service</strong>
+Ask Alex is an AI-powered educational and informational tool designed to provide general leadership insights based on GPS Leadership Solutions' frameworks.
+
+Ask Alex is intended to supplement—not replace—human coaching, professional judgment, or expert advice. It is currently offered as a beta/experimental feature and may be modified, limited, or discontinued at any time.
+
+Ask Alex DOES NOT provide:
+- Legal, HR, or employment law advice
+- Financial, investment, or accounting advice
+- Medical or mental health advice
+- Compliance or regulatory determinations
+- Any licensed professional services
+
+No Relationship Created — Use of Ask Alex does not create any coaching, advisory, fiduciary, or employment relationship between you and GPS Leadership Solutions or Alex Tremble.
+
+<strong>3. AI-Generated Content and Limitations</strong>
+Ask Alex uses artificial intelligence to generate responses. You acknowledge that outputs may be incorrect, incomplete, outdated, biased, or inappropriate. Responses are generated automatically and are not reviewed or approved by a human in real time. You agree to independently evaluate all outputs and seek professional advice where appropriate.
+
+<strong>4. No Duty of Care</strong>
+GPS Leadership Solutions provides Ask Alex as a tool only. No duty of care is created through your use of the Service. GPS Leadership Solutions does not supervise your decisions, validate outputs, or accept responsibility for how outputs are interpreted or used.
+
+<strong>5. High-Stakes Use Restrictions</strong>
+You expressly agree that Ask Alex will not be used as a basis for decisions involving hiring, firing, layoffs, promotions, compensation, workplace investigations, disciplinary actions, harassment or discrimination claims, legal disputes, or major organizational restructuring. These matters require qualified human judgment, including HR professionals and legal counsel.
+
+<strong>6. No Guarantees</strong>
+ASK ALEX IS PROVIDED "AS IS" AND "AS AVAILABLE." GPS Leadership Solutions disclaims all warranties and makes no guarantees regarding business outcomes, promotions, employee performance, or organizational results.
+
+<strong>7. User Responsibility</strong>
+All decisions, actions, and outcomes resulting from your use of Ask Alex are solely your responsibility.
+
+<strong>8. Eligibility and Acceptable Use</strong>
+You must be at least 18 years old and authorized by your organization. You agree not to use the Service for illegal, abusive, or harmful purposes or to attempt to reverse-engineer the system.
+
+<strong>9. Data Use, Privacy, and Confidentiality</strong>
+GPS Leadership Solutions does NOT sell your questions or personal data to third parties. Conversations and usage data may be logged and reviewed internally. Third-party AI providers process your inputs on behalf of GPS Leadership Solutions. Do NOT input passwords, Social Security numbers, protected health information, or classified information.
+
+<strong>10. AI Bias and Compliance Risk</strong>
+AI systems may generate biased or inappropriate content. You agree not to use Ask Alex in a way that results in unlawful discrimination or to rely on outputs as the sole basis for compliance or employment law decisions.
+
+<strong>11. Intellectual Property</strong>
+All content, frameworks (e.g., TP3™), prompts, logic, and outputs are the property of GPS Leadership Solutions and/or its licensors. You are granted a limited, non-exclusive license for internal business use only. You may not resell outputs, create competing services, or use outputs to train other AI systems.
+
+<strong>12. Usage Limits</strong>
+GPS Leadership Solutions may limit, throttle, or suspend access at its discretion, especially where usage is excessive or suggests abuse.
+
+<strong>13. Service Availability and Modifications</strong>
+Ask Alex is a beta/experimental service. GPS Leadership Solutions may modify features, change models or providers, limit access, or discontinue the Service at any time, with or without notice.
+
+<strong>14. Suspension and Termination</strong>
+GPS Leadership Solutions may suspend or terminate your access for violations of these Terms, abuse, misuse, or security concerns. If your coaching engagement with GPS Leadership Solutions ends, your access to Ask Alex may also be terminated.
+
+<strong>15. Indemnification</strong>
+You agree to indemnify and hold harmless GPS Leadership Solutions, its owners, employees, and contractors from any claims arising out of your use or misuse of the Service.
+
+<strong>16. Limitation of Liability</strong>
+To the maximum extent permitted by law, GPS Leadership Solutions is NOT liable for any indirect, incidental, consequential, or punitive damages arising from your use of Ask Alex. [Attorney to confirm liability cap amount.]
+
+<strong>17. Force Majeure</strong>
+GPS Leadership Solutions is not liable for delays or failures due to causes beyond its reasonable control, including acts of God, infrastructure failures, or outages by third-party AI or hosting providers.
+
+<strong>18. Changes to Terms</strong>
+These Terms may be updated from time to time. Material changes may require you to re-accept the Terms. Your continued use of Ask Alex constitutes acceptance of updated Terms.
+
+<strong>19. Governing Law and Dispute Resolution</strong>
+These Terms are governed by the laws of [STATE]. [Attorney to confirm arbitration vs. litigation approach.]
+
+<strong>20. Miscellaneous</strong>
+These Terms constitute the entire agreement between you and GPS Leadership Solutions regarding Ask Alex. If any provision is held invalid, the remaining provisions remain in full force.
+
+<strong>User Acknowledgment</strong>
+By clicking "I Agree and Continue," you confirm that you have read and understood these Terms, you accept all risks associated with AI use, and you agree to be legally bound by these Terms. Consent is recorded electronically.
+      </div>
+    </div>
+
+    <div class="terms-footer" id="termsFooter">
+      <div class="terms-checkbox-row">
+        <input type="checkbox" id="termsCheckbox" onchange="document.getElementById('termsAgreeBtn').disabled = !this.checked;" />
+        <label for="termsCheckbox">I have read and agree to these Terms of Use.</label>
+      </div>
+      <button class="terms-agree-btn" id="termsAgreeBtn" disabled onclick="handleTermsAgree()">
+        I Agree and Continue →
+      </button>
+      <span class="terms-cancel-link" onclick="closeTermsModal()">Cancel</span>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
