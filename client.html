@@ -459,6 +459,392 @@
       .container { padding: 0 12px 60px; }
       .card { padding: 20px 18px; }
     }
+
+    /* ── Q&A PANEL ── */
+    #portalTabNav {
+      background: var(--navy);
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      padding: 0 32px;
+      display: flex;
+      gap: 0;
+    }
+    .ptab {
+      padding: 14px 20px;
+      color: rgba(255,255,255,0.6);
+      font-family: 'Montserrat', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: all 0.18s;
+      text-transform: uppercase;
+      background: none;
+      border-top: none;
+      border-left: none;
+      border-right: none;
+      border-bottom: 3px solid transparent;
+    }
+    .ptab:hover { color: rgba(255,255,255,0.9); }
+    .ptab.active { color: var(--sand); border-bottom-color: var(--teal); }
+    .ptab-ask.active { border-bottom-color: var(--red); }
+
+    #qaPanel {
+      display: none;
+      background: #1A1612;
+      min-height: calc(100vh - 140px);
+      flex-direction: column;
+    }
+    #qaPanel.active { display: flex; }
+
+    /* Q&A inner layout */
+    .qa-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      max-width: 760px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 32px 32px 120px;
+    }
+    .qa-intro { margin-bottom: 32px; }
+    .qa-intro h2 {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 26px;
+      font-weight: 800;
+      color: #F0EBE0;
+      margin-bottom: 8px;
+    }
+    .qa-intro h2 span { color: #C9A84C; }
+    .qa-intro p { font-size: 14px; color: #9A9080; line-height: 1.65; max-width: 520px; }
+    .qa-intro.hidden, .qa-boundary.hidden, .qa-chips.hidden, .qa-pl.hidden { display: none; }
+    .qa-boundary {
+      background: #2E2820;
+      border: 1px solid rgba(201,168,76,0.2);
+      border-radius: 8px;
+      padding: 11px 18px;
+      font-size: 12.5px;
+      color: #9A9080;
+      line-height: 1.55;
+      margin-bottom: 28px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .qa-boundary span { color: #C9A84C; font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+    .qa-limit-wall {
+      display: none;
+      background: #221E19;
+      border: 1px solid rgba(201,168,76,0.2);
+      border-radius: 12px;
+      padding: 36px 28px;
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .qa-limit-wall.visible { display: block; }
+    .qa-limit-wall h3 {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 20px;
+      color: #F0EBE0;
+      margin-bottom: 8px;
+    }
+    .qa-limit-wall p { font-size: 14px; color: #9A9080; line-height: 1.6; max-width: 380px; margin: 0 auto; }
+    .qa-limit-wall a { color: #C9A84C; text-decoration: none; }
+    .qa-pl {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #9A9080;
+      margin-bottom: 10px;
+    }
+    .qa-chips { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 28px; }
+    .qa-chip {
+      background: #2E2820;
+      border: 1px solid rgba(201,168,76,0.2);
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-size: 13px;
+      color: #9A9080;
+      cursor: pointer;
+      transition: all 0.18s;
+      line-height: 1.4;
+    }
+    .qa-chip:hover { border-color: #C9A84C; color: #F0EBE0; background: rgba(201,168,76,0.1); }
+    .qa-thread { display: flex; flex-direction: column; gap: 24px; margin-bottom: 24px; }
+    .qa-thread:empty { display: none; }
+    .qa-msg-user { display: flex; justify-content: flex-end; }
+    .qa-msg-user .qa-bubble {
+      background: #2E2820;
+      border: 1px solid rgba(201,168,76,0.2);
+      border-radius: 12px 12px 2px 12px;
+      padding: 14px 18px;
+      max-width: 82%;
+      font-size: 14.5px;
+      color: #F0EBE0;
+      line-height: 1.6;
+    }
+    .qa-msg-alex { display: flex; flex-direction: column; }
+    .qa-msg-header { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; }
+    .qa-av {
+      width: 30px; height: 30px;
+      background: #C9A84C;
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 12px; font-weight: 700;
+      color: #1A1612; flex-shrink: 0;
+    }
+    .qa-aname { font-size: 13px; font-weight: 600; color: #F0EBE0; }
+    .qa-atag { font-size: 11px; color: #9A9080; }
+    .qa-card {
+      background: #221E19;
+      border: 1px solid rgba(201,168,76,0.2);
+      border-radius: 2px 12px 12px 12px;
+      padding: 22px 24px;
+    }
+    .qa-card .qa-body {
+      font-size: 15px;
+      color: #F0EBE0;
+      line-height: 1.78;
+    }
+    .qa-card .qa-body strong { font-weight: 700; color: #C9A84C; }
+
+    /* Crisis card in QA */
+    .qa-crisis-card {
+      background: #221E19;
+      border: 2px solid rgba(139,38,53,0.5);
+      border-radius: 2px 12px 12px 12px;
+      padding: 24px;
+    }
+    .qa-crisis-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+    .qa-crisis-icon { font-size: 20px; }
+    .qa-crisis-title { font-size: 15px; font-weight: 600; color: #F0C0C0; }
+    .qa-crisis-body { font-size: 15px; color: #F0EBE0; line-height: 1.75; margin-bottom: 18px; }
+    .qa-crisis-resources { display: flex; flex-direction: column; gap: 10px; }
+    .qa-crisis-resource {
+      background: rgba(139,38,53,0.15);
+      border: 1px solid rgba(139,38,53,0.5);
+      border-radius: 8px; padding: 12px 16px;
+      display: flex; justify-content: space-between;
+      align-items: center; flex-wrap: wrap; gap: 8px;
+    }
+    .qa-crisis-resource-name { font-size: 13px; font-weight: 600; color: #F0C0C0; }
+    .qa-crisis-resource-detail { font-size: 13px; color: #9A9080; }
+    .qa-crisis-action {
+      font-size: 13px; font-weight: 600; color: #F0C0C0;
+      text-decoration: none;
+      background: rgba(139,38,53,0.3);
+      padding: 5px 14px; border-radius: 5px;
+      border: 1px solid rgba(139,38,53,0.5); white-space: nowrap;
+    }
+    .qa-crisis-footer {
+      margin-top: 16px; font-size: 12px; color: #9A9080;
+      line-height: 1.6; padding-top: 14px;
+      border-top: 1px solid rgba(139,38,53,0.4);
+    }
+
+    .qa-next-step {
+      margin-top: 16px; padding: 14px 18px;
+      background: #2E2820;
+      border: 1px solid rgba(201,168,76,0.2);
+      border-radius: 8px;
+    }
+    .qa-next-step-label {
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 1.5px; text-transform: uppercase;
+      color: #9A9080; margin-bottom: 6px;
+    }
+    .qa-next-step-body { font-size: 13.5px; color: #F0EBE0; line-height: 1.6; }
+    .qa-next-step-body strong { font-weight: 700; color: #C9A84C; }
+    .qa-escalation {
+      margin-top: 14px; padding: 14px 18px;
+      background: rgba(139,38,53,0.15);
+      border: 1px solid rgba(139,38,53,0.35);
+      border-radius: 8px; font-size: 13px;
+      line-height: 1.55; color: #9A9080;
+    }
+    .qa-escalation strong { color: #D47080; font-weight: 600; }
+    .qa-escalation a { color: #D47080; text-decoration: none; }
+    .qa-handoff {
+      margin-top: 14px; padding: 14px 18px;
+      background: rgba(201,168,76,0.1);
+      border: 1px solid rgba(201,168,76,0.25);
+      border-radius: 8px; font-size: 13px;
+      line-height: 1.55; color: #9A9080;
+    }
+    .qa-handoff strong { color: #C9A84C; font-weight: 600; }
+    .qa-handoff a { color: #C9A84C; text-decoration: none; font-weight: 500; }
+    .qa-tools-wrap { margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(201,168,76,0.15); }
+    .qa-tools-label {
+      font-size: 10px; font-weight: 500;
+      letter-spacing: 1.5px; text-transform: uppercase;
+      color: #9A9080; margin-bottom: 10px;
+    }
+    .qa-tool-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+    a.qa-tp, span.qa-tp {
+      background: rgba(201,168,76,0.12);
+      border: 1px solid rgba(201,168,76,0.3);
+      border-radius: 6px; padding: 6px 14px;
+      font-size: 12.5px; font-weight: 500;
+      color: #E8C97A;
+      display: inline-flex; align-items: center; gap: 6px;
+      transition: all 0.18s; text-decoration: none;
+    }
+    a.qa-tp:hover { background: rgba(201,168,76,0.22); border-color: #C9A84C; }
+    span.qa-tp { opacity: 0.5; cursor: default; }
+    .qa-fbrow {
+      display: flex; align-items: center; gap: 12px;
+      margin-top: 16px; padding-top: 14px;
+      border-top: 1px solid rgba(201,168,76,0.06);
+      flex-wrap: wrap;
+    }
+    .qa-fblabel { font-size: 12px; color: #9A9080; }
+    .qa-fbbtns { display: flex; gap: 7px; }
+    .qa-fbb {
+      background: #2E2820;
+      border: 1px solid rgba(201,168,76,0.2);
+      border-radius: 6px; padding: 6px 13px;
+      font-size: 14px; cursor: pointer;
+      transition: all 0.18s;
+      display: flex; align-items: center; gap: 5px;
+      color: #9A9080; font-family: 'Open Sans', sans-serif;
+    }
+    .qa-fbb:hover { border-color: #C9A84C; background: rgba(201,168,76,0.1); }
+    .qa-fbb.up { background: rgba(76,175,125,0.1); border-color: #4CAF7D; color: #4CAF7D; }
+    .qa-fbb.dn { background: rgba(139,38,53,0.15); border-color: rgba(139,38,53,0.5); color: #D47080; }
+    .qa-fbb .qa-fbl { font-size: 11.5px; font-weight: 500; }
+    .qa-fbthanks { font-size: 12px; color: #4CAF7D; display: none; }
+    .qa-fbthanks.v { display: inline; }
+    .qa-fbform {
+      display: none; margin-top: 12px;
+      background: #2E2820;
+      border: 1px solid rgba(139,38,53,0.3);
+      border-radius: 9px; padding: 14px 16px;
+    }
+    .qa-fbform.v { display: block; }
+    .qa-fbform label { display: block; font-size: 12px; font-weight: 500; color: #9A9080; margin-bottom: 7px; }
+    .qa-fbform textarea {
+      background: #1A1612;
+      border: 1px solid rgba(201,168,76,0.2);
+      border-radius: 6px; padding: 10px 12px;
+      font-size: 13px; color: #F0EBE0;
+      min-height: 65px; width: 100%; resize: none;
+      font-family: 'Open Sans', sans-serif; line-height: 1.5;
+    }
+    .qa-fbform textarea:focus { outline: none; border-color: #C9A84C; }
+    .qa-fbsub {
+      margin-top: 9px;
+      background: transparent;
+      border: 1px solid rgba(201,168,76,0.2);
+      border-radius: 6px; padding: 7px 18px;
+      font-family: 'Open Sans', sans-serif;
+      font-size: 12px; font-weight: 500;
+      color: #9A9080; cursor: pointer;
+      transition: all 0.18s;
+    }
+    .qa-fbsub:hover { border-color: #C9A84C; color: #F0EBE0; }
+    .qa-new-btn {
+      display: none;
+      background: transparent;
+      border: 1px solid rgba(201,168,76,0.2);
+      color: #9A9080; border-radius: 7px;
+      padding: 8px 18px;
+      font-family: 'Open Sans', sans-serif;
+      font-size: 12px; cursor: pointer;
+      transition: all 0.18s;
+      align-items: center; gap: 7px;
+      margin-bottom: 14px;
+    }
+    .qa-new-btn.v { display: inline-flex; }
+    .qa-new-btn:hover { border-color: #C9A84C; color: #F0EBE0; }
+    .qa-typing { display: none; padding: 8px 0; }
+    .qa-typing.v { display: flex; align-items: center; gap: 10px; }
+    .qa-ld { display: flex; gap: 5px; }
+    .qa-ld span {
+      width: 7px; height: 7px;
+      background: #C9A84C; border-radius: 50%;
+      animation: qa-pulse 1.2s ease-in-out infinite;
+    }
+    .qa-ld span:nth-child(2) { animation-delay: 0.2s; }
+    .qa-ld span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes qa-pulse { 0%,80%,100%{transform:scale(.6);opacity:.4;} 40%{transform:scale(1);opacity:1;} }
+    .qa-typing-label { font-size: 13px; color: #9A9080; }
+    .qa-ec {
+      background: rgba(139,38,53,0.15);
+      border: 1px solid rgba(139,38,53,0.4);
+      border-radius: 9px; padding: 14px 18px;
+      font-size: 13.5px; color: #D47080;
+      display: none; margin: 10px 0;
+    }
+    .qa-ec.v { display: block; }
+    .qa-input-area {
+      position: sticky;
+      bottom: 0;
+      background: #1A1612;
+      border-top: 1px solid rgba(201,168,76,0.15);
+      padding: 14px 0 18px;
+    }
+    .qa-input-inner {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 0 32px;
+    }
+    .qa-iw {
+      background: #221E19;
+      border: 1px solid rgba(201,168,76,0.2);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+    .qa-iw:focus-within { border-color: #C9A84C; }
+    .qa-irow { display: flex; align-items: flex-end; }
+    #qa-qi {
+      flex: 1;
+      background: transparent;
+      border: none; outline: none;
+      resize: none;
+      color: #F0EBE0;
+      font-family: 'Open Sans', sans-serif;
+      font-size: 15px; line-height: 1.55;
+      padding: 13px 18px;
+      min-height: 48px; max-height: 140px;
+      overflow-y: auto; display: block;
+    }
+    #qa-qi::placeholder { color: #9A9080; }
+    #qa-qi:disabled { opacity: 0.5; cursor: not-allowed; }
+    .qa-sbtn {
+      background: #C9A84C;
+      color: #1A1612;
+      border: none;
+      border-radius: 0 0 12px 0;
+      padding: 13px 22px;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 14px; font-weight: 700;
+      cursor: pointer;
+      transition: all 0.18s;
+      display: flex; align-items: center; gap: 7px;
+      align-self: stretch; flex-shrink: 0;
+    }
+    .qa-sbtn:hover:not(:disabled) { background: #E8C97A; }
+    .qa-sbtn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .qa-input-hint { font-size: 11px; color: #9A9080; margin-top: 6px; padding: 0 4px; }
+    .qa-limit-badge {
+      font-size: 12px; color: #9A9080;
+      margin-bottom: 8px;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .qa-limit-badge .qn { color: #C9A84C; font-weight: 600; }
+    .qa-limit-badge.low .qn { color: #E8A87A; }
+    .qa-limit-badge.critical .qn { color: #D47080; }
+    .qa-fadein { animation: qa-fadeUp 0.3s ease forwards; }
+    @keyframes qa-fadeUp { from{opacity:0;transform:translateY(10px);} to{opacity:1;transform:translateY(0);} }
+    @media (max-width: 768px) {
+      #portalTabNav { padding: 0 16px; }
+      .qa-main { padding: 24px 16px 120px; }
+      .qa-input-inner { padding: 0 16px; }
+      .qa-card, .qa-crisis-card { padding: 18px 16px; }
+    }
   </style>
 </head>
 <body>
@@ -478,6 +864,13 @@
 
 <div class="welcome-banner">Welcome to your 90-Day Leadership Impact Plan</div>
 
+
+<!-- ── PORTAL TAB NAV (hidden until plan submitted) ── -->
+<div id="portalTabNav" style="display:none;">
+  <button class="ptab active" id="tabPlan" onclick="showPortalTab('plan')">My Plan</button>
+  <button class="ptab ptab-ask" id="tabAsk" onclick="showPortalTab('ask')">Ask Alex</button>
+</div>
+
 <main class="container" id="mainContent">
   <!-- Loading state -->
   <div class="state-screen" id="loadingScreen">
@@ -486,6 +879,59 @@
     <p>Just a moment.</p>
   </div>
 </main>
+
+
+<!-- ── Q&A PANEL ── -->
+<div id="qaPanel">
+  <div class="qa-main">
+    <div class="qa-intro" id="qa-intro">
+      <h2>Ask a <span>leadership question.</span></h2>
+      <p>Quick answers grounded in GPS frameworks — built for CEOs running multi-location, operations-heavy businesses. For the deeper situational work, that's what coaching is for.</p>
+    </div>
+    <div class="qa-boundary" id="qa-boundary">
+      <span>💡</span>
+      <div>This tool answers framework and tool questions. For complex, situational work that needs someone in your corner over time, <strong style="color:#F0EBE0">that's coaching</strong>. <a href="mailto:alex@gpsleadership.org" style="color:#C9A84C;text-decoration:none;">Reach out to Alex directly →</a></div>
+    </div>
+    <div class="qa-limit-wall" id="qa-lwall">
+      <h3>You've reached today's limit.</h3>
+      <p>You've asked 20 questions today — that's a lot of good thinking. Your questions reset tomorrow. In the meantime, <a href="mailto:alex@gpsleadership.org">reach out to Alex directly</a>.</p>
+    </div>
+    <div class="qa-pl" id="qa-pl">Try one of these</div>
+    <div class="qa-chips" id="qa-chips">
+      <div class="qa-chip">My drivers and dispatchers don't trust each other. Where do I start?</div>
+      <div class="qa-chip">I have 6 service locations and every problem still lands on my desk. How do I fix that?</div>
+      <div class="qa-chip">My parts managers run each location like their own kingdom. How do I get consistency?</div>
+      <div class="qa-chip">I have a 3 on my team I've been tolerating for two years. What do I do?</div>
+      <div class="qa-chip">My weekly ops meetings produce no decisions. Which tool fixes that?</div>
+      <div class="qa-chip">How do I delegate without everything coming back to me broken?</div>
+    </div>
+    <button class="qa-new-btn" id="qa-newBtn">
+      <svg width="13" height="13" viewBox="0 0 15 15" fill="none"><path d="M1.5 7.5A6 6 0 1 0 7.5 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M1.5 3.5V7.5H5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Start a new conversation
+    </button>
+    <div class="qa-thread" id="qa-thread"></div>
+    <div class="qa-typing" id="qa-typing">
+      <div class="qa-ld"><span></span><span></span><span></span></div>
+      <span class="qa-typing-label">Thinking…</span>
+    </div>
+    <div class="qa-ec" id="qa-ec"></div>
+    <div style="height:40px;"></div>
+  </div>
+  <div class="qa-input-area">
+    <div class="qa-input-inner">
+      <div class="qa-limit-badge" id="qa-lb"><span class="qn" id="qa-ln">20</span> questions remaining today</div>
+      <div class="qa-iw">
+        <div class="qa-irow">
+          <textarea id="qa-qi" placeholder="Ask a leadership question or follow up…" maxlength="600" rows="1"></textarea>
+          <button class="qa-sbtn" id="qa-sb" disabled>
+            <svg width="14" height="14" viewBox="0 0 15 15" fill="none"><path d="M1 7.5H14M14 7.5L8.5 2M14 7.5L8.5 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="qa-input-hint">Enter to send &nbsp;·&nbsp; Shift+Enter for new line</div>
+    </div>
+  </div>
+</div>
 
 <div class="bottom-bar"></div>
 
@@ -496,6 +942,21 @@
 const SUPABASE_URL  = 'https://pbnkefuqpoztcxfagiod.supabase.co';
 const SUPABASE_ANON = 'sb_publishable_nu9GXGeoqDXcxVocodQ4UA_ke7Yrzyw';
 const NOTIFY_URL    = '/api/notify';              // Vercel serverless function
+
+// ─────────────────────────────────────────────
+// PORTAL CONTEXT — for Q&A tool personalization
+// ─────────────────────────────────────────────
+const portalContext = {
+  full_name: '', email: '', role_title: '', organization: '',
+  industry: '', revenue_band: '', num_locations: '', regions_owned: '',
+  direct_reports_count: '', focus_pillar: '', goal_description: '',
+  goal_30_day: '', goal_90_day_statement: '',
+  behavior_1: '', behavior_2: '',
+  metric_1_name: '', metric_1_baseline: '', metric_1_target: '',
+  metric_2_name: '', metric_2_baseline: '', metric_2_target: '',
+  metric_3_name: '', metric_3_baseline: '', metric_3_target: '',
+  plan_start_date: '', reward_30_day: '', reward_90_day: ''
+};
 
 // ─────────────────────────────────────────────
 // INIT
@@ -553,6 +1014,41 @@ async function loadClient() {
         .select('*')
         .eq('client_id', client.id)
         .order('week_number', { ascending: true });
+
+      // Wire portal context for Q&A tool
+      portalContext.full_name            = client.name || '';
+      portalContext.email                = client.email || '';
+      portalContext.role_title           = client.title || '';
+      portalContext.organization         = client.organization || '';
+      portalContext.industry             = client.industry || '';
+      portalContext.revenue_band         = client.revenue_band || '';
+      portalContext.num_locations        = client.num_locations || '';
+      portalContext.regions_owned        = client.regions_owned || '';
+      portalContext.direct_reports_count = client.direct_reports_count || '';
+      portalContext.focus_pillar         = client.tp3_pillar || '';
+      portalContext.goal_description     = client.goal_description || '';
+      portalContext.goal_30_day          = client.goal_30_day || '';
+      portalContext.goal_90_day_statement = client.goal_statement || '';
+      portalContext.behavior_1           = client.behavior_1 || client.start_behavior || '';
+      portalContext.behavior_2           = client.behavior_2 || '';
+      portalContext.metric_1_name        = client.metric_1_name || client.metric_name || '';
+      portalContext.metric_1_baseline    = client.metric_1_baseline ?? client.metric_baseline ?? '';
+      portalContext.metric_1_target      = client.metric_1_target ?? client.metric_target ?? '';
+      portalContext.metric_2_name        = client.metric_2_name || '';
+      portalContext.metric_2_baseline    = client.metric_2_baseline ?? '';
+      portalContext.metric_2_target      = client.metric_2_target ?? '';
+      portalContext.metric_3_name        = client.metric_3_name || '';
+      portalContext.metric_3_baseline    = client.metric_3_baseline ?? '';
+      portalContext.metric_3_target      = client.metric_3_target ?? '';
+      portalContext.plan_start_date      = client.plan_start_date || '';
+      portalContext.reward_30_day        = client.reward_30_day || '';
+      portalContext.reward_90_day        = client.reward_90_day || '';
+
+      // Show tab nav only if plan submitted and client is in coaching program
+      if (client.in_coaching_program !== false) {
+        document.getElementById('portalTabNav').style.display = 'flex';
+        qaInitUI(); // initialize Q&A input listeners
+      }
 
       renderPortal(client, checkins || []);
     }
@@ -1325,6 +1821,470 @@ function showError(title, message) {
     </div>
   `;
 }
+
+
+// ─────────────────────────────────────────────
+// Q&A TOOL — TAB SWITCHING
+// ─────────────────────────────────────────────
+function showPortalTab(tab) {
+  const mainContent = document.getElementById('mainContent');
+  const qaPanel     = document.getElementById('qaPanel');
+  const tabPlan     = document.getElementById('tabPlan');
+  const tabAsk      = document.getElementById('tabAsk');
+  if (tab === 'plan') {
+    mainContent.style.display = 'block';
+    qaPanel.classList.remove('active');
+    tabPlan.classList.add('active');
+    tabAsk.classList.remove('active');
+  } else {
+    mainContent.style.display = 'none';
+    qaPanel.classList.add('active');
+    tabAsk.classList.add('active');
+    tabPlan.classList.remove('active');
+    const qaQi = document.getElementById('qa-qi');
+    if (qaQi) setTimeout(() => qaQi.focus(), 100);
+  }
+}
+
+// ─────────────────────────────────────────────
+// Q&A TOOL — CRISIS DETECTION (HARDCODED — DO NOT MODIFY)
+// ─────────────────────────────────────────────
+const QA_CRISIS_PHRASES = [
+  'ending my life','end my life','kill myself','want to die','want to end it',
+  'suicidal','suicide',"don't want to live","don't want to be here anymore",
+  'thinking about ending','hurt myself','harm myself','self harm','self-harm',
+  'hurt someone','kill someone','hurt others','harm others',
+  'not worth living',"life isn't worth",'life is not worth',
+  "can't go on",'cannot go on','giving up on life','no reason to live'
+];
+function qaCrisisDetect(text) {
+  const lower = text.toLowerCase();
+  return QA_CRISIS_PHRASES.some(p => lower.includes(p));
+}
+function qaRenderCrisis(question) {
+  qaAppendUserMsg(question);
+  const div = document.createElement('div');
+  div.className = 'qa-msg-alex qa-fadein';
+  div.innerHTML = `
+    <div class="qa-msg-header">
+      <div class="qa-av">AT</div>
+      <div><div class="qa-aname">GPS Leadership</div><div class="qa-atag">Important message</div></div>
+    </div>
+    <div class="qa-crisis-card">
+      <div class="qa-crisis-header">
+        <span class="qa-crisis-icon">🤝</span>
+        <span class="qa-crisis-title">What you're sharing matters — and this needs real support right now.</span>
+      </div>
+      <div class="qa-crisis-body">
+        This tool isn't equipped to help with what you're going through, and you deserve actual support — not an automated response. Please reach out to one of these resources. Real people are available right now, around the clock.
+      </div>
+      <div class="qa-crisis-resources">
+        <div class="qa-crisis-resource">
+          <div><div class="qa-crisis-resource-name">988 Suicide &amp; Crisis Lifeline</div><div class="qa-crisis-resource-detail">Call or text 988 · Available 24/7, free and confidential</div></div>
+          <a class="qa-crisis-action" href="tel:988">Call 988</a>
+        </div>
+        <div class="qa-crisis-resource">
+          <div><div class="qa-crisis-resource-name">Crisis Text Line</div><div class="qa-crisis-resource-detail">Text HOME to 741741 · Available 24/7</div></div>
+          <a class="qa-crisis-action" href="sms:741741?body=HOME">Text Now</a>
+        </div>
+        <div class="qa-crisis-resource">
+          <div><div class="qa-crisis-resource-name">Emergency Services</div><div class="qa-crisis-resource-detail">If you or someone else is in immediate danger</div></div>
+          <a class="qa-crisis-action" href="tel:911">Call 911</a>
+        </div>
+      </div>
+      <div class="qa-crisis-footer">
+        <strong style="color:#F0C0C0">GPS Leadership is a leadership coaching tool and is not a mental health or crisis service.</strong> If you are experiencing a personal crisis, please contact one of the resources above or speak with a licensed mental health professional.
+      </div>
+    </div>`;
+  document.getElementById('qa-thread').appendChild(div);
+  qaScrollBottom();
+}
+
+// ─────────────────────────────────────────────
+// Q&A TOOL — TOOL LINKS
+// ─────────────────────────────────────────────
+const QA_TOOL_LINKS = {
+  "14-Day Executive Leadership Diagnostic": "",
+  "5 CEO Bottlenecks Scorecard": "https://drive.google.com/file/d/1Zg8Nwy0eYfe6CikpGXGIBja9zOWxMFFy/view?usp=drivesdk",
+  "GPS Executive Leadership Scorecard": "https://drive.google.com/file/d/14R4sCyBq_yl9vzgOmsgvQ_rI8CR4x2Av/view?usp=drivesdk",
+  "Executive Talent Snapshot (\"4 or Better\" Bar)": "https://drive.google.com/file/d/18ag5r5bkE0wq56j-iFmoAc9AvAPg-Dbd/view?usp=drivesdk",
+  "GPS Baseline Snapshot": "",
+  "GPS Workforce Capability & Training Assessment": "https://drive.google.com/file/d/1_L9jxMqLYiCnf8VrSlgVFHWWDQ8bYMt7/view?usp=drivesdk",
+  "Under-Pressure Communication Snapshot": "https://docs.google.com/document/d/1yVkUev5BgYn4879VA2ZfQGpyMjOa3DKZYVUiyn50jMg/edit?usp=drivesdk",
+  "Delegation Operating System (Delegation Audit + Brief)": "https://drive.google.com/file/d/1q89oxe_Affiv2iAmCdSijzrBcSqiiIP/view?usp=drivesdk",
+  "Team Meeting Operating Standard": "https://drive.google.com/file/d/1Glgw8bk1hJJaW_aL-l8g2zLDZSdzZm7S/view?usp=drivesdk",
+  "GPS 1-on-1 Alignment Guide": "https://drive.google.com/file/d/1-g41L7lgQ1vlkVfgqZ9MXhbY8WcZ5Fwl/view?usp=drivesdk",
+  "Executive Alignment Quickstart": "https://drive.google.com/file/d/1tNXFsDhtXPx-dEhXXzPD3rlHi5HoDaDC/view?usp=drivesdk",
+  "Time Alignment Blueprint\u2122": "https://drive.google.com/file/d/1C477nB4mB8SBLmKzBYdddQmuMmMh_Cqx/view?usp=drivesdk",
+  "Where I'm Spending Too Much Time (Time Leak Audit)": "https://drive.google.com/file/d/18AZI-xvFFLIwG7pjDCO_SEEZbxFPSTN5/view?usp=drivesdk",
+  "Decision-Ready Communication Blueprint": "https://drive.google.com/file/d/1w2btHbZBqihAqUQzxrodzx1yt_O_Qle7/view?usp=drivesdk",
+  "Decision-Ready Communication Quick Checklist": "https://drive.google.com/file/d/1BBKPQyDK7ZtpRjCYQ8jCg_NmtDy26EBj/view?usp=drivesdk",
+  "GPS Program Management Readiness & Alignment Checklist": "https://drive.google.com/file/d/1ZkbS29IZeXvM9eTv0hef49Fmpbv7sVzb/view?usp=drivesdk",
+  "GPS CLEAR Feedback Model": "https://drive.google.com/file/d/1twbHaL93IgtNM9fvhKh9fUlj61lDTtC1/view?usp=drivesdk",
+  "Brave Conversation Blueprint": "https://docs.google.com/document/d/1vb9G3gGbnXNMv4uGZavfl3j8e7e3cv_csl9-DC_op34/edit?usp=drivesdk",
+  "Trust Accelerator\u2122 Conversation": "https://drive.google.com/file/d/1WyZlDZR0CWv4N_Vs1UuSgZuu_WAk0kKn/view?usp=drivesdk",
+  "Under-Pressure Communication Playbook": "https://docs.google.com/document/d/17YUeqGFd4rkiWHo2HGojf_smWLNW8dAUjjKw3-NZZyg/edit?usp=drivesdk",
+  "Executive Speaking Playbook": "https://drive.google.com/file/d/1VUT3LDGUXASZRUI-ipMYcgHWkWu3rwE2/view?usp=drivesdk",
+  "Extended Speaking Guide (Boardroom Buy-In)": "https://drive.google.com/file/d/1Vb3Qd4iOi8LRJsljNnUdFy0gUDmmQQWe/view?usp=drivesdk",
+  "GPS Speak with Impact Workbook": "https://drive.google.com/file/d/1EmGDdrOjvPdTb-K7ZWsARmUSzD0rVKp1/view?usp=drivesdk",
+  "Own the Outcome\u2122 Personal Accountability Reset": "https://drive.google.com/file/d/1ahvRp_XfKHWi1k-IZJDkVKV8L_zQmeMu/view?usp=drivesdk",
+  "Own the Outcome\u2122 Mentor Exercise": "https://drive.google.com/file/d/1qptm8kaki8ncVgcsHzGaeImEMhKE3uts/view?usp=drivesdk",
+  "Executive Performance Conversation Prep Guide": "https://drive.google.com/file/d/1YlKqXIFcSe06bRtVRGFen7n7vkoA45_0/view?usp=drivesdk",
+  "Executive 360 Connection Conversation Guide\u2122": "https://drive.google.com/file/d/1LK4ntbSdWQ_3iCdL_hn1svQOdCeCC-P1/view?usp=drivesdk",
+  "Executive Relationship Matrix": "https://drive.google.com/file/d/1vh5vGtS0S6G8skQ4D9jCId6uCcTcNCuX/view?usp=drivesdk",
+  "Executive Influence Alignment Map": "https://drive.google.com/file/d/1brxQ60FCow0OXr4utZUGV_1ZUwW2iwaA/view?usp=drivesdk",
+  "Manager\u2013Employee Relationship Reset": "https://drive.google.com/file/d/1oqsMSuQuohL4F415QbdjjIVAtDs2_M86/view?usp=drivesdk",
+  "GPS Alignment Blueprint (Six Coordinates)": "https://drive.google.com/file/d/1Aci0rG3C5_2dHBemnxw-O9MepNKxs5p3/view?usp=drivesdk",
+  "GPS Strategic Working Agreements Worksheet": "https://drive.google.com/file/d/1wXpeAMWOq_VUIBqep5hl0i8vFJMSzHKV/view?usp=drivesdk",
+  "90-Day Leadership Impact Plan": "https://drive.google.com/file/d/1P5mqXp3QKYYW22QVsGJXmBwOSh6yF1lW/view?usp=drivesdk",
+  "90-Day Mentoring Partnership Plan": "https://drive.google.com/file/d/1oFwq97P5b-VEZxcXv60lD5752mUFZApK/view?usp=drivesdk",
+  "Executive Coaching Questions GROW Guide": "https://drive.google.com/file/d/1647RZln3UgdTsZCOCHlvkq2w0N7MCkoD/view?usp=drivesdk",
+  "Executive Life & Career Trajectory Blueprint": "https://drive.google.com/file/d/1XwJxL8xuDd330vi02CyuOYQgmPwdvN11/view?usp=drivesdk",
+  "CEO Financial Clarity Snapshot": ""
+};
+
+// ─────────────────────────────────────────────
+// Q&A TOOL — SYSTEM PROMPT BUILDER
+// ─────────────────────────────────────────────
+function qaBuildSystemPrompt(ctx) {
+  const hasCtx = ctx.full_name || ctx.organization || ctx.focus_pillar;
+  const metricLines = [
+    ctx.metric_1_name ? `Primary Metric: ${ctx.metric_1_name} | Baseline: ${ctx.metric_1_baseline} → Target: ${ctx.metric_1_target}` : '',
+    ctx.metric_2_name ? `Metric 2: ${ctx.metric_2_name} | Baseline: ${ctx.metric_2_baseline} → Target: ${ctx.metric_2_target}` : '',
+    ctx.metric_3_name ? `Metric 3: ${ctx.metric_3_name} | Baseline: ${ctx.metric_3_baseline} → Target: ${ctx.metric_3_target}` : '',
+  ].filter(Boolean).join('\n');
+  const ctxBlock = hasCtx ? `
+PORTAL CONTEXT FOR THIS CLIENT:
+${ctx.full_name ? 'Name: ' + ctx.full_name : ''}
+${ctx.role_title ? 'Role: ' + ctx.role_title : ''}
+${ctx.organization ? 'Organization: ' + ctx.organization : ''}
+${ctx.industry ? 'Industry: ' + ctx.industry : ''}
+${ctx.revenue_band ? 'Revenue: ' + ctx.revenue_band : ''}
+${ctx.num_locations ? 'Locations: ' + ctx.num_locations : ''}
+${ctx.regions_owned ? 'Regions: ' + ctx.regions_owned : ''}
+${ctx.direct_reports_count ? 'Direct reports: ' + ctx.direct_reports_count : ''}
+${ctx.focus_pillar ? 'TP3 Focus Pillar: ' + ctx.focus_pillar : ''}
+${ctx.goal_description ? '90-Day Goal: ' + ctx.goal_description : ''}
+${ctx.goal_30_day ? '30-Day Target: ' + ctx.goal_30_day : ''}
+${ctx.goal_90_day_statement ? '90-Day Statement: ' + ctx.goal_90_day_statement : ''}
+${ctx.behavior_1 ? 'Primary Committed Behavior: ' + ctx.behavior_1 : ''}
+${ctx.behavior_2 ? 'Secondary Committed Behavior: ' + ctx.behavior_2 : ''}
+${metricLines}
+Use this context to personalize examples and align advice with their active TP3 focus pillar and 90-Day goals.` :
+`PORTAL CONTEXT: No client context loaded. Assume CEO/owner of a multi-location, operations-heavy business.`;
+
+  return `You are Claude, the AI assistant inside the GPS Leadership Solutions client portal, answering on behalf of Alex Tremble.
+
+${ctxBlock}
+
+WHO YOU SERVE: Every user has already completed their own 14-Day Executive Leadership Diagnostic with Alex. They are in a 90-Day Executive Reset or ongoing 1:1 coaching. They know the GPS system. Never recommend a diagnostic ON the portal user. You MAY suggest an Executive 360 Snapshot for a direct report or team member. When you do, be explicit it is for others not them.
+
+ALEX'S VOICE: Direct, candid, calm. Short sentences. No buzzwords. Opens with the real problem before the answer. Calls out CEO habits plainly. Action steps are specific. Always ends with one concrete 7-day action. Never opens with Great question. Ties everything to business outcomes.
+
+PRIMARY AUDIENCE: CEOs/owners of multi-location, operations-heavy businesses: trucking, fleet, parts and service, logistics, industrial services, dealerships. Use their world in examples: drivers, dispatchers, shop managers, service bays, parts counters, fleet coordinators, GMs, regional managers.
+
+CLARIFYING QUESTIONS: Use portalContext first. Only ask follow-up questions when too broad. Max 2 before answering. Order: 1) WHO 2) OUTCOME 3) TRIED.
+
+ASSESS DELIVER SUSTAIN: Before prescribing, slow down enough to assess clearly. 1) ASSESS what is actually happening. 2) DELIVER a specific concrete move. 3) SUSTAIN by changing the system so it does not regress. Ask 1-2 diagnostic questions first when a CEO jumps straight to a solution without enough clarity.
+
+GPS FRAMEWORKS: TP3 (Trust enables Proactivity, Proactivity accelerates Productivity, Productivity drives Profitability). GPS (Goals-Plans-Stamina). 4C Connection Model (Mindset Change, Internal Clarity, External Clarity, Behavioral Choice). 3R Relationship Model (Recognize Detractors/Supporters/Advocates, Reflect, Reframe). Executive Operating Principles (45 Laws) across Reality and Ownership, Time and Execution, Thinking and Maturity, People and Trust, Influence and Relationships, Money and Scale.
+
+GPS TOOLS: 14-Day Executive Leadership Diagnostic. 5 CEO Bottlenecks Scorecard. GPS Executive Leadership Scorecard. Executive Talent Snapshot 4 or Better Bar. GPS Baseline Snapshot. GPS Workforce Capability and Training Assessment. Under-Pressure Communication Snapshot. Delegation Operating System Delegation Audit Plus Brief. Team Meeting Operating Standard. GPS 1-on-1 Alignment Guide. Executive Alignment Quickstart. Time Alignment Blueprint. Where I'm Spending Too Much Time Time Leak Audit. Decision-Ready Communication Blueprint. Decision-Ready Communication Quick Checklist. GPS Program Management Readiness and Alignment Checklist. GPS CLEAR Feedback Model. Brave Conversation Blueprint. Trust Accelerator Conversation. Under-Pressure Communication Playbook. Executive Speaking Playbook. Extended Speaking Guide Boardroom Buy-In. GPS Speak with Impact Workbook. Own the Outcome Personal Accountability Reset. Own the Outcome Mentor Exercise. Executive Performance Conversation Prep Guide. Executive 360 Connection Conversation Guide. Executive Relationship Matrix. Executive Influence Alignment Map. Manager-Employee Relationship Reset. GPS Alignment Blueprint Six Coordinates. GPS Strategic Working Agreements Worksheet. 90-Day Leadership Impact Plan. 90-Day Mentoring Partnership Plan. Executive Coaching Questions GROW Guide. Executive Life and Career Trajectory Blueprint. CEO Financial Clarity Snapshot.
+
+TOOL ROUTING: CEO bottleneck or everything runs through me: Delegation Operating System Delegation Audit Plus Brief and Where I'm Spending Too Much Time Time Leak Audit and 5 CEO Bottlenecks Scorecard. Meetings without decisions: Team Meeting Operating Standard and Decision-Ready Communication Blueprint. Avoids hard talks or unclear expectations: Brave Conversation Blueprint and GPS CLEAR Feedback Model. Reacts badly under pressure: Under-Pressure Communication Snapshot and Under-Pressure Communication Playbook. Trust issues between departments: Trust Accelerator Conversation and GPS CLEAR Feedback Model. Managers running locations inconsistently: Executive Talent Snapshot 4 or Better Bar and Delegation Operating System. Tolerating a 3 or talent decision: Executive Talent Snapshot 4 or Better Bar and Brave Conversation Blueprint. Multiple bottlenecks: 5 CEO Bottlenecks Scorecard. Building accountability: Own the Outcome Personal Accountability Reset and Team Meeting Operating Standard. Relationship gaps: Executive Relationship Matrix and Executive Influence Alignment Map. Strained working relationship: Manager-Employee Relationship Reset. Team culture or values vs behavior: GPS Strategic Working Agreements Worksheet and GPS Alignment Blueprint Six Coordinates. Burned out or misaligned: Executive Life and Career Trajectory Blueprint. Money or fear-based decisions: CEO Financial Clarity Snapshot. Presenting to board: Executive Speaking Playbook. Building bench: GPS 1-on-1 Alignment Guide and 90-Day Leadership Impact Plan and 90-Day Mentoring Partnership Plan.
+
+ESCALATION: If the issue involves firing, layoffs, major demotions, legal or HR risk, harassment, discrimination, big partnership or ownership conflicts, or the user says they are seriously stuck, overwhelmed, or considering quitting or selling, give 1-3 high-level principles and 1-3 reflection questions, then flag it for Alex. Set escalation to true.
+
+IMPORTANT - RESPONSE FORMAT: Return valid JSON only. No markdown fences. No special characters that would break JSON parsing. Use only standard ASCII characters. For the guidance field, use plain text formatting: use CAPS for emphasis instead of asterisks. Use PARAGRAPH_BREAK to separate paragraphs. Do not use actual line break characters inside JSON string values. Keep all text clean and JSON-safe.
+
+Return exactly this structure:
+{"guidance":"Your answer here. Use CAPS for key phrases. Max 4 paragraphs separated by PARAGRAPH_BREAK. Always end with one concrete 7-day action.","next_step":"Suggested next step here.","tools":["Exact Tool Name 1","Exact Tool Name 2"],"handoff":"","escalation":false}
+
+tools: 1-3 max, directly applicable only. Empty array if none fit. Use the EXACT tool names from the GPS TOOLS list above.
+handoff: one sentence string if coaching boundary triggered, else empty string.
+escalation: boolean true if escalation criteria met, else false.`;
+}
+
+// ─────────────────────────────────────────────
+// Q&A TOOL — STATE + LIMIT
+// ─────────────────────────────────────────────
+const QA_LIMIT = 20, QA_SK_C = 'gps_qa_c', QA_SK_D = 'gps_qa_d';
+let qaHistory = [], qaMsgCount = 0;
+
+function qaToday() { return new Date().toISOString().slice(0, 10); }
+function qaGetUsed() {
+  if (localStorage.getItem(QA_SK_D) !== qaToday()) {
+    localStorage.setItem(QA_SK_D, qaToday());
+    localStorage.setItem(QA_SK_C, '0');
+    return 0;
+  }
+  return parseInt(localStorage.getItem(QA_SK_C) || '0', 10);
+}
+function qaIncUsed() { const n = qaGetUsed() + 1; localStorage.setItem(QA_SK_C, String(n)); return n; }
+function qaGetLeft() { return Math.max(0, QA_LIMIT - qaGetUsed()); }
+function qaUpdateLimit() {
+  const r = qaGetLeft();
+  const lnEl = document.getElementById('qa-ln');
+  const lbEl = document.getElementById('qa-lb');
+  const lwEl = document.getElementById('qa-lwall');
+  const qiEl = document.getElementById('qa-qi');
+  const sbEl = document.getElementById('qa-sb');
+  if (!lnEl) return;
+  lnEl.textContent = r;
+  lbEl.classList.remove('low', 'critical');
+  if (r <= 5 && r > 0) lbEl.classList.add('low');
+  if (r === 0) {
+    lbEl.classList.add('critical');
+    lwEl.classList.add('visible');
+    if (qiEl) qiEl.disabled = true;
+    if (sbEl) sbEl.disabled = true;
+  }
+}
+
+// ─────────────────────────────────────────────
+// Q&A TOOL — INITIALIZE UI (called after client loads)
+// ─────────────────────────────────────────────
+function qaInitUI() {
+  qaUpdateLimit();
+  const qi = document.getElementById('qa-qi');
+  const sb = document.getElementById('qa-sb');
+  if (!qi || !sb) return;
+
+  qi.addEventListener('input', () => {
+    qi.style.height = 'auto';
+    qi.style.height = Math.min(qi.scrollHeight, 140) + 'px';
+    sb.disabled = qi.value.trim().length < 3 || qaGetLeft() === 0;
+  });
+  qi.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); qaSend(); }
+  });
+  document.querySelectorAll('.qa-chip').forEach(c => {
+    c.addEventListener('click', () => {
+      qi.value = c.textContent;
+      qi.dispatchEvent(new Event('input'));
+      qi.focus();
+    });
+  });
+  document.getElementById('qa-newBtn').addEventListener('click', () => {
+    qaHistory = []; qaMsgCount = 0;
+    document.getElementById('qa-thread').innerHTML = '';
+    document.getElementById('qa-intro').classList.remove('hidden');
+    document.getElementById('qa-boundary').classList.remove('hidden');
+    document.getElementById('qa-chips').classList.remove('hidden');
+    document.getElementById('qa-pl').classList.remove('hidden');
+    document.getElementById('qa-newBtn').classList.remove('v');
+    document.getElementById('qa-ec').classList.remove('v');
+    qi.value = ''; qi.style.height = 'auto'; sb.disabled = true;
+    qaUpdateLimit();
+  });
+  sb.addEventListener('click', qaSend);
+}
+
+// ─────────────────────────────────────────────
+// Q&A TOOL — PARSE RESPONSE (4-layer recovery)
+// ─────────────────────────────────────────────
+function qaParseResponse(raw) {
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch(e) {}
+  try { const m = raw.match(/\{[\s\S]*\}/); if (m) return JSON.parse(m[0]); } catch(e) {}
+  try {
+    const cleaned = raw.replace(/[\x00-\x1F\x7F]/g, ' ');
+    const m = cleaned.match(/\{[\s\S]*\}/); if (m) return JSON.parse(m[0]);
+  } catch(e) {}
+  return {
+    guidance: raw.replace(/\{|\}|"guidance"|"next_step"|"tools"|"handoff"|"escalation"/g, '').trim(),
+    next_step: '', tools: [], handoff: '', escalation: false
+  };
+}
+
+// ─────────────────────────────────────────────
+// Q&A TOOL — SEND
+// ─────────────────────────────────────────────
+async function qaSend() {
+  const qi = document.getElementById('qa-qi');
+  const sb = document.getElementById('qa-sb');
+  const thread = document.getElementById('qa-thread');
+  const typing = document.getElementById('qa-typing');
+  const ec = document.getElementById('qa-ec');
+  const q = qi.value.trim();
+  if (!q || q.length < 3 || qaGetLeft() === 0) return;
+
+  if (qaMsgCount === 0) {
+    document.getElementById('qa-intro').classList.add('hidden');
+    document.getElementById('qa-boundary').classList.add('hidden');
+    document.getElementById('qa-chips').classList.add('hidden');
+    document.getElementById('qa-pl').classList.add('hidden');
+    document.getElementById('qa-newBtn').classList.add('v');
+  }
+  qaMsgCount++;
+  qi.value = ''; qi.style.height = 'auto'; sb.disabled = true;
+  ec.classList.remove('v');
+
+  // CRISIS CHECK — runs before anything else
+  if (qaCrisisDetect(q)) {
+    qaRenderCrisis(q);
+    if (qaGetLeft() > 0) sb.disabled = false;
+    return;
+  }
+
+  qaAppendUserMsg(q);
+  qaHistory.push({ role: 'user', content: q });
+  if (qaHistory.length > 8) qaHistory = qaHistory.slice(-8);
+  qaIncUsed(); qaUpdateLimit();
+  typing.classList.add('v'); qaScrollBottom();
+
+  try {
+    // Uses /api/ask proxy — ANTHROPIC_API_KEY stays server-side
+    const res = await fetch('/api/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system: qaBuildSystemPrompt(portalContext),
+        messages: qaHistory
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || 'API error');
+
+    const raw = data.content?.[0]?.text || '';
+    const parsed = qaParseResponse(raw);
+
+    qaHistory.push({ role: 'assistant', content: raw });
+    if (qaHistory.length > 8) qaHistory = qaHistory.slice(-8);
+
+    typing.classList.remove('v');
+    if (parsed) {
+      qaAppendAlexMsg(parsed, q);
+    } else {
+      ec.textContent = 'Something went wrong processing the response. Try again.';
+      ec.classList.add('v');
+    }
+  } catch(err) {
+    typing.classList.remove('v');
+    ec.textContent = `Something went wrong: ${err.message}. Try again.`;
+    ec.classList.add('v');
+  }
+  qaScrollBottom();
+}
+
+function qaFmt(t) {
+  if (!t) return '';
+  return t
+    .replace(/PARAGRAPH_BREAK/g, '</p><p style="margin-top:14px">')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+}
+
+function qaEscHtml(t) {
+  return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function qaAppendUserMsg(text) {
+  const div = document.createElement('div');
+  div.className = 'qa-msg-user qa-fadein';
+  div.innerHTML = `<div class="qa-bubble">${qaEscHtml(text)}</div>`;
+  document.getElementById('qa-thread').appendChild(div);
+}
+
+function qaAppendAlexMsg(parsed, question) {
+  const msgId = 'qa-msg-' + Date.now();
+  const guidance = qaFmt(parsed.guidance || '');
+  const nextStep = qaFmt(parsed.next_step || '');
+  const handoff = parsed.handoff || '';
+  const escalation = !!parsed.escalation;
+  const tools = Array.isArray(parsed.tools) ? parsed.tools : [];
+  const arrowSvg = '<svg width="11" height="11" viewBox="0 0 15 15" fill="none"><path d="M3 7.5h9M8.5 3.5l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  function findToolUrl(name) {
+    if (QA_TOOL_LINKS[name] !== undefined) return QA_TOOL_LINKS[name];
+    const key = Object.keys(QA_TOOL_LINKS).find(k =>
+      k.toLowerCase().replace(/[^a-z0-9]/g,'').includes(
+        name.toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,15)
+      )
+    );
+    return key ? QA_TOOL_LINKS[key] : '';
+  }
+
+  let toolsHTML = '';
+  if (tools.length > 0) {
+    const pills = tools.map(t => {
+      const url = findToolUrl(t);
+      return url
+        ? `<a class="qa-tp" href="${url}" target="_blank" rel="noopener">${qaEscHtml(t)} ${arrowSvg}</a>`
+        : `<span class="qa-tp" title="Coming soon">${qaEscHtml(t)}</span>`;
+    }).join('');
+    toolsHTML = `<div class="qa-tools-wrap"><div class="qa-tools-label">Recommended Tool(s)</div><div class="qa-tool-pills">${pills}</div></div>`;
+  }
+
+  const nextStepHTML = nextStep
+    ? `<div class="qa-next-step"><div class="qa-next-step-label">Suggested Next Step</div><div class="qa-next-step-body"><p>${nextStep}</p></div></div>` : '';
+  const handoffHTML = handoff
+    ? `<div class="qa-handoff"><strong>Worth a real conversation.</strong> ${qaEscHtml(handoff)} <a href="mailto:alex@gpsleadership.org">Reach out to Alex →</a></div>` : '';
+  const escalationHTML = escalation
+    ? `<div class="qa-escalation"><strong>This one needs Alex directly.</strong> This is high-stakes enough that he would want to walk through it with you live. <a href="mailto:alex@gpsleadership.org">Email his team</a> or bring it to your next session.</div>` : '';
+
+  const div = document.createElement('div');
+  div.className = 'qa-msg-alex qa-fadein';
+  div.id = msgId;
+  div.innerHTML = `
+    <div class="qa-msg-header">
+      <div class="qa-av">AT</div>
+      <div><div class="qa-aname">Alex Tremble</div><div class="qa-atag">GPS Leadership</div></div>
+    </div>
+    <div class="qa-card">
+      <div class="qa-body"><p>${guidance}</p></div>
+      ${toolsHTML}${nextStepHTML}${handoffHTML}${escalationHTML}
+      <div class="qa-fbrow">
+        <span class="qa-fblabel">Helpful?</span>
+        <div class="qa-fbbtns">
+          <button class="qa-fbb qa-fbu-${msgId}">👍 <span class="qa-fbl">Yes</span></button>
+          <button class="qa-fbb qa-fbd-${msgId}">👎 <span class="qa-fbl">No</span></button>
+        </div>
+        <span class="qa-fbthanks" id="qa-fbt-${msgId}"></span>
+      </div>
+      <div class="qa-fbform" id="qa-fbf-${msgId}">
+        <label>What was missing or off? (optional)</label>
+        <textarea id="qa-fbc-${msgId}" placeholder="e.g. Too generic / Wrong tool / Didn't sound like Alex" maxlength="400"></textarea>
+        <button class="qa-fbsub" id="qa-fbs-${msgId}">Submit Feedback</button>
+      </div>
+    </div>`;
+  document.getElementById('qa-thread').appendChild(div);
+
+  let fbDone = false;
+  const btnUp = div.querySelector(`.qa-fbu-${msgId}`);
+  const btnDn = div.querySelector(`.qa-fbd-${msgId}`);
+  const fbThanks = document.getElementById(`qa-fbt-${msgId}`);
+  const fbForm = document.getElementById(`qa-fbf-${msgId}`);
+  const fbComment = document.getElementById(`qa-fbc-${msgId}`);
+  const fbSubmit = document.getElementById(`qa-fbs-${msgId}`);
+  btnUp.addEventListener('click', () => {
+    if (fbDone) return; fbDone = true;
+    btnUp.classList.add('up');
+    fbThanks.textContent = 'Thanks — glad that was helpful.';
+    fbThanks.classList.add('v');
+  });
+  btnDn.addEventListener('click', () => {
+    if (fbDone) return;
+    btnDn.classList.add('dn');
+    fbForm.classList.add('v');
+    fbComment.focus();
+  });
+  fbSubmit.addEventListener('click', () => {
+    fbDone = true;
+    const c = fbComment.value.trim();
+    fbForm.classList.remove('v');
+    fbThanks.textContent = c ? 'Feedback submitted. Thanks.' : 'Noted. Thanks.';
+    fbThanks.classList.add('v');
+    fbComment.value = '';
+  });
+}
+
+function qaScrollBottom() {
+  const qaPanel = document.getElementById('qaPanel');
+  if (qaPanel && qaPanel.classList.contains('active')) {
+    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+  }
+}
+
 </script>
 </body>
 </html>
