@@ -519,16 +519,23 @@ window.addEventListener('DOMContentLoaded', () => {
 // ─────────────────────────────────────────────
 async function loadClient() {
   try {
-    const { data: client, error } = await db
-      .from('clients')
-      .select('*')
-      .eq('token', token)
-      .single();
+    // Fetch client securely via server-side API (service role key never exposed to browser)
+    const clientRes = await fetch(`/api/get-client?token=${encodeURIComponent(token)}`);
 
-    if (error || !client) {
+    if (clientRes.status === 403) {
+      showError('Access not available.', 'Contact your coach at alex@gpsleadership.org.');
+      return;
+    }
+    if (clientRes.status === 404) {
       showError('Link not recognized.', 'This access link isn\'t valid. Please contact your GPS coach at alex@gpsleadership.org to get a new link.');
       return;
     }
+    if (!clientRes.ok) {
+      showError('Something went wrong.', 'Please refresh the page. If the problem continues, contact alex@gpsleadership.org.');
+      return;
+    }
+
+    const client = await clientRes.json();
 
     if (client.is_active === false) {
       showError('Engagement complete.', `Your 90-day engagement has been completed. Contact Alex at alex@gpsleadership.org to discuss what's next.`);
@@ -634,39 +641,101 @@ function renderFormB(client) {
     </div>
 
     <div class="card">
-      <div class="card-title">Step 3 — Your Metric</div>
-      <div class="card-subtitle">How will you know this is working? Choose one number you can track weekly.</div>
+      <div class="card-title">Step 3 — Your Metrics</div>
+      <div class="card-subtitle">How will you know this is working? Track up to 3 numbers weekly. At least one is required.</div>
 
-      <div class="form-group">
-        <label>Metric Name <span style="color:var(--red)">*</span></label>
-        <div class="hint">What are you measuring?</div>
-        <input type="text" id="metricName" placeholder="e.g. # decisions made without Alex's input per week" value="${esc(client.metric_name)}" />
+      <!-- METRIC 1 (required) -->
+      <div id="metric1Block">
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--navy);margin-bottom:10px;">Metric 1 <span style="color:var(--red)">*</span></div>
+        <div class="form-group">
+          <label>Metric Name</label>
+          <div class="hint">What are you measuring?</div>
+          <input type="text" id="metric1Name" placeholder="e.g. # decisions made without my input per week" value="${esc(client.metric_1_name || client.metric_name)}" />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Baseline (where you are now)</label>
+            <input type="number" id="metric1Baseline" placeholder="e.g. 2" step="any" value="${client.metric_1_baseline ?? client.metric_baseline ?? ''}" />
+          </div>
+          <div class="form-group">
+            <label>90-Day Target</label>
+            <input type="number" id="metric1Target" placeholder="e.g. 8" step="any" value="${client.metric_1_target ?? client.metric_target ?? ''}" />
+          </div>
+        </div>
       </div>
 
-      <div class="form-row">
+      <!-- METRIC 2 (optional) -->
+      <div id="metric2Toggle" style="${client.metric_2_name ? 'display:none;' : ''}">
+        <button type="button" onclick="showMetric(2)" style="background:none;border:1px dashed var(--teal);color:var(--teal);padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;margin-top:4px;">+ Add another metric (optional)</button>
+      </div>
+      <div id="metric2Block" style="${client.metric_2_name ? '' : 'display:none;'}">
+        <div style="border-top:1px solid var(--gray-200);margin:16px 0 12px;"></div>
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--navy);margin-bottom:10px;">Metric 2</div>
         <div class="form-group">
-          <label>Baseline (where you are now) <span style="color:var(--red)">*</span></label>
-          <input type="number" id="metricBaseline" placeholder="e.g. 2" step="any" value="${client.metric_baseline ?? ''}" />
+          <label>Metric Name</label>
+          <input type="text" id="metric2Name" placeholder="e.g. # direct reports who hit their weekly target" value="${esc(client.metric_2_name)}" />
         </div>
-        <div class="form-group">
-          <label>90-Day Target <span style="color:var(--red)">*</span></label>
-          <input type="number" id="metricTarget" placeholder="e.g. 8" step="any" value="${client.metric_target ?? ''}" />
+        <div class="form-row">
+          <div class="form-group">
+            <label>Baseline</label>
+            <input type="number" id="metric2Baseline" placeholder="e.g. 1" step="any" value="${client.metric_2_baseline ?? ''}" />
+          </div>
+          <div class="form-group">
+            <label>90-Day Target</label>
+            <input type="number" id="metric2Target" placeholder="e.g. 5" step="any" value="${client.metric_2_target ?? ''}" />
+          </div>
         </div>
       </div>
 
-      <div class="form-group">
+      <!-- METRIC 3 (optional) -->
+      <div id="metric3Toggle" style="${client.metric_3_name ? 'display:none;' : 'display:none;'}">
+        <button type="button" onclick="showMetric(3)" style="background:none;border:1px dashed var(--teal);color:var(--teal);padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;margin-top:4px;">+ Add a third metric (optional)</button>
+      </div>
+      <div id="metric3Block" style="${client.metric_3_name ? '' : 'display:none;'}">
+        <div style="border-top:1px solid var(--gray-200);margin:16px 0 12px;"></div>
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--navy);margin-bottom:10px;">Metric 3</div>
+        <div class="form-group">
+          <label>Metric Name</label>
+          <input type="text" id="metric3Name" placeholder="e.g. Team NPS score" value="${esc(client.metric_3_name)}" />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Baseline</label>
+            <input type="number" id="metric3Baseline" placeholder="e.g. 6" step="any" value="${client.metric_3_baseline ?? ''}" />
+          </div>
+          <div class="form-group">
+            <label>90-Day Target</label>
+            <input type="number" id="metric3Target" placeholder="e.g. 9" step="any" value="${client.metric_3_target ?? ''}" />
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-top:16px;">
         <label>Plan Start Date</label>
         <input type="date" id="planStartDate" value="${client.plan_start_date || today}" />
       </div>
     </div>
 
     <div class="card">
-      <div class="card-title">Step 4 — Your First Move</div>
+      <div class="card-title">Step 4 — Your Behaviors</div>
+      <div class="card-subtitle">The specific things you're committing to start doing. At least one is required.</div>
 
+      <!-- BEHAVIOR 1 (required) -->
       <div class="form-group">
-        <label>START Behavior <span style="color:var(--red)">*</span></label>
-        <div class="hint">The single behavior you're committing to start doing. Be specific about what it looks like in action.</div>
-        <textarea id="startBehavior" placeholder="e.g. Run a 20-minute Monday ops stand-up where each manager reports their top priority and any blockers — without me solving the blockers for them.">${esc(client.start_behavior)}</textarea>
+        <label>Behavior 1 <span style="color:var(--red)">*</span></label>
+        <div class="hint">Be specific about what it looks like in action — day, time, who's involved.</div>
+        <textarea id="behavior1" placeholder="e.g. Run a 20-minute Monday ops stand-up where each manager reports their top priority and any blockers — without me solving the blockers for them.">${esc(client.behavior_1 || client.start_behavior)}</textarea>
+      </div>
+
+      <!-- BEHAVIOR 2 (optional) -->
+      <div id="behavior2Toggle" style="${client.behavior_2 ? 'display:none;' : ''}">
+        <button type="button" onclick="showBehavior2()" style="background:none;border:1px dashed var(--teal);color:var(--teal);padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">+ Add another behavior (optional)</button>
+      </div>
+      <div id="behavior2Block" style="${client.behavior_2 ? '' : 'display:none;'}">
+        <div class="form-group" style="margin-top:12px;">
+          <label>Behavior 2</label>
+          <textarea id="behavior2" placeholder="e.g. Send a Friday 3-sentence update to my leadership team each week without fail.">${esc(client.behavior_2)}</textarea>
+        </div>
       </div>
     </div>
 
@@ -705,6 +774,17 @@ function selectPillar(pillar) {
   document.querySelectorAll('.pillar-option').forEach(el => el.classList.remove('selected'));
   document.getElementById('pillar-' + pillar).classList.add('selected');
   document.getElementById('tp3Pillar').value = pillar;
+}
+
+function showMetric(n) {
+  document.getElementById('metric' + n + 'Toggle').style.display = 'none';
+  document.getElementById('metric' + n + 'Block').style.display = '';
+  if (n === 2) document.getElementById('metric3Toggle').style.display = '';
+}
+
+function showBehavior2() {
+  document.getElementById('behavior2Toggle').style.display = 'none';
+  document.getElementById('behavior2Block').style.display = '';
 }
 
 async function submitFormB(clientId, clientName) {
