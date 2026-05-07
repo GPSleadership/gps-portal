@@ -6,6 +6,7 @@
   <title>GPS — Coach Dashboard</title>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     :root {
       --navy:       #004369;
@@ -427,8 +428,11 @@
             <div onclick="exportGHL();toggleExportMenu()" style="padding:10px 16px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--gray-200);" onmouseover="this.style.background='var(--gray-100)'" onmouseout="this.style.background=''">
               📊 Export for GoHighLevel (CSV)
             </div>
-            <div onclick="sendTestReminders();toggleExportMenu()" style="padding:10px 16px;font-size:13px;cursor:pointer;" onmouseover="this.style.background='var(--gray-100)'" onmouseout="this.style.background=''">
+            <div onclick="sendTestReminders();toggleExportMenu()" style="padding:10px 16px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--gray-200);" onmouseover="this.style.background='var(--gray-100)'" onmouseout="this.style.background=''">
               🧪 Send Test Reminders Now
+            </div>
+            <div onclick="openImportModal();toggleExportMenu()" style="padding:10px 16px;font-size:13px;cursor:pointer;" onmouseover="this.style.background='var(--gray-100)'" onmouseout="this.style.background=''">
+              📥 Import Clients from Excel
             </div>
           </div>
         </div>
@@ -520,6 +524,28 @@
     <div class="modal-actions">
       <button class="btn-cancel" id="cancelAddBtn" onclick="closeAddModal()">Cancel</button>
       <button class="btn-save" onclick="addClient()" id="saveClientBtn">Create Client</button>
+    </div>
+  </div>
+</div>
+
+<!-- IMPORT CLIENTS MODAL -->
+<div class="modal-overlay" id="importModal">
+  <div class="modal" style="max-width:680px;">
+    <h2>Import Clients from Excel</h2>
+    <p style="font-size:13px;color:var(--gray-600);margin-bottom:16px;">
+      Upload an <strong>.xlsx</strong> or <strong>.csv</strong> file. Required columns: <strong>Name</strong>, <strong>Email</strong>. Optional: Organization, Title, Industry.
+      <br/>Each client will receive a unique portal link automatically.
+    </p>
+    <div class="form-group">
+      <label>Select File</label>
+      <input type="file" id="importFileInput" accept=".xlsx,.xls,.csv" onchange="handleImportFile(this)"
+        style="padding:8px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;width:100%;font-family:'Open Sans',sans-serif;" />
+    </div>
+    <div id="importPreview" style="margin:12px 0;max-height:320px;overflow-y:auto;"></div>
+    <div id="importError" style="color:var(--red);font-size:13px;margin-bottom:8px;"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeImportModal()">Cancel</button>
+      <button class="btn-save" id="importConfirmBtn" onclick="confirmImport()" style="display:none;">Import Clients</button>
     </div>
   </div>
 </div>
@@ -810,8 +836,11 @@ function renderClientCard(client, checkins) {
   const planRows = client.plan_submitted_at ? `
     <div class="plan-summary-grid">
       <div class="plan-field" style="grid-column:1/-1;"><label>90-Day Goal</label><div class="val">${client.goal_statement || '—'}</div></div>
-      <div class="plan-field"><label>START Behavior</label><div class="val">${client.start_behavior || '—'}</div></div>
-      <div class="plan-field"><label>Metric</label><div class="val">${client.metric_name || '—'}</div></div>
+      <div class="plan-field" style="grid-column:1/-1;"><label>Behavior 1</label><div class="val">${client.behavior_1 || client.start_behavior || '—'}</div></div>
+      ${client.behavior_2 ? `<div class="plan-field" style="grid-column:1/-1;"><label>Behavior 2</label><div class="val">${client.behavior_2}</div></div>` : ''}
+      <div class="plan-field"><label>Metric 1</label><div class="val">${client.metric_1_name || client.metric_name || '—'}</div></div>
+      ${client.metric_2_name ? `<div class="plan-field"><label>Metric 2</label><div class="val">${client.metric_2_name}</div></div>` : ''}
+      ${client.metric_3_name ? `<div class="plan-field"><label>Metric 3</label><div class="val">${client.metric_3_name}</div></div>` : ''}
       <div class="plan-field"><label>Start Date</label><div class="val">${client.plan_start_date || '—'}</div></div>
       <div class="plan-field"><label>30-Day Reward</label><div class="val">${client.reward_30_day || '—'}</div></div>
       <div class="plan-field"><label>90-Day Reward</label><div class="val">${client.reward_90_day || '—'}</div></div>
@@ -919,6 +948,22 @@ function renderClientCard(client, checkins) {
             style="padding:8px 18px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;border:none;
               background:${client.allow_plan_edit ? 'var(--red)' : 'var(--teal)'};color:#fff;">
             ${client.allow_plan_edit ? 'Lock Plan Editing' : 'Unlock Plan Editing'}
+          </button>
+        </div>
+
+        <div class="detail-section">
+          <h4>Coaching Program Access</h4>
+          <p id="coachingStatus-${client.id}" style="font-size:12px;color:var(--gray-600);margin-bottom:10px;">
+            ${client.in_coaching_program !== false
+              ? 'Active — this client can access the portal and, when connected, the AI coaching assistant.'
+              : '⛔ Inactive — this client cannot access the AI coaching assistant.'}
+          </p>
+          <button
+            onclick="toggleCoachingProgram('${client.id}', ${client.in_coaching_program !== false})"
+            id="coachingBtn-${client.id}"
+            style="padding:8px 18px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;border:none;
+              background:${client.in_coaching_program !== false ? 'var(--red)' : 'var(--teal)'};color:#fff;">
+            ${client.in_coaching_program !== false ? 'Remove from Coaching Program' : 'Add to Coaching Program'}
           </button>
         </div>
 
@@ -1096,6 +1141,142 @@ async function togglePlanEdit(clientId, currentState) {
     btn.disabled = false;
     btn.setAttribute('onclick', `togglePlanEdit('${clientId}', false)`);
     if (statusEl) statusEl.textContent = 'Plan is locked. Unlock to let this client update their goals, metric, or rewards.';
+  }
+}
+
+async function toggleCoachingProgram(clientId, currentState) {
+  const newState = !currentState;
+  const btn = document.getElementById('coachingBtn-' + clientId);
+  const statusEl = document.getElementById('coachingStatus-' + clientId);
+  btn.textContent = 'Saving…';
+  btn.disabled = true;
+
+  const { error } = await db.from('clients').update({ in_coaching_program: newState }).eq('id', clientId);
+
+  if (error) {
+    btn.textContent = 'Error — try again';
+    btn.disabled = false;
+    return;
+  }
+
+  allClients = allClients.map(c => c.id === clientId ? { ...c, in_coaching_program: newState } : c);
+
+  if (newState) {
+    btn.textContent = 'Remove from Coaching Program';
+    btn.style.background = 'var(--red)';
+    btn.setAttribute('onclick', `toggleCoachingProgram('${clientId}', true)`);
+    if (statusEl) statusEl.textContent = 'Active — this client can access the portal and, when connected, the AI coaching assistant.';
+  } else {
+    btn.textContent = 'Add to Coaching Program';
+    btn.style.background = 'var(--teal)';
+    btn.setAttribute('onclick', `toggleCoachingProgram('${clientId}', false)`);
+    if (statusEl) statusEl.textContent = '⛔ Inactive — this client cannot access the AI coaching assistant.';
+  }
+  btn.disabled = false;
+}
+
+// ─────────────────────────────────────────────
+// IMPORT CLIENTS
+// ─────────────────────────────────────────────
+function openImportModal() {
+  document.getElementById('importModal').classList.add('open');
+  document.getElementById('importPreview').innerHTML = '';
+  document.getElementById('importError').textContent = '';
+  document.getElementById('importFileInput').value = '';
+  document.getElementById('importConfirmBtn').style.display = 'none';
+}
+
+function closeImportModal() {
+  document.getElementById('importModal').classList.remove('open');
+}
+
+let importParsedClients = [];
+
+async function handleImportFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const errEl = document.getElementById('importError');
+  errEl.textContent = '';
+  document.getElementById('importPreview').innerHTML = '<p style="color:var(--gray-600);font-size:13px;">Parsing file…</p>';
+  document.getElementById('importConfirmBtn').style.display = 'none';
+
+  try {
+    const data = await file.arrayBuffer();
+    const workbook = XLSX.read(data, { type: 'array' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+    if (rows.length === 0) {
+      errEl.textContent = 'No rows found in the spreadsheet.';
+      document.getElementById('importPreview').innerHTML = '';
+      return;
+    }
+
+    importParsedClients = rows;
+
+    // Build preview table
+    const preview = rows.slice(0, 20).map(r => {
+      const name  = (r.Name  || r.name  || '').toString().trim();
+      const email = (r.Email || r.email || '').toString().trim();
+      const org   = (r.Organization || r.organization || r.Org || r.org || '').toString().trim();
+      const valid = name && email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+      return `<tr style="background:${valid ? '' : '#fff8f0'};">
+        <td style="padding:6px 10px;font-size:13px;border-bottom:1px solid var(--gray-200);">${name || '<span style="color:var(--red)">Missing</span>'}</td>
+        <td style="padding:6px 10px;font-size:13px;border-bottom:1px solid var(--gray-200);">${email || '<span style="color:var(--red)">Missing</span>'}</td>
+        <td style="padding:6px 10px;font-size:13px;border-bottom:1px solid var(--gray-200);">${org || '—'}</td>
+        <td style="padding:6px 10px;font-size:13px;border-bottom:1px solid var(--gray-200);">${valid ? '✅' : '⚠️ Skip'}</td>
+      </tr>`;
+    }).join('');
+
+    document.getElementById('importPreview').innerHTML = `
+      <p style="font-size:13px;color:var(--gray-600);margin-bottom:8px;">${rows.length} row${rows.length !== 1 ? 's' : ''} found${rows.length > 20 ? ' (showing first 20)' : ''}:</p>
+      <table style="width:100%;border-collapse:collapse;border:1px solid var(--gray-200);border-radius:6px;overflow:hidden;">
+        <thead><tr style="background:var(--navy);">
+          <th style="padding:8px 10px;text-align:left;color:#fff;font-size:11px;text-transform:uppercase;">Name</th>
+          <th style="padding:8px 10px;text-align:left;color:#fff;font-size:11px;text-transform:uppercase;">Email</th>
+          <th style="padding:8px 10px;text-align:left;color:#fff;font-size:11px;text-transform:uppercase;">Organization</th>
+          <th style="padding:8px 10px;text-align:left;color:#fff;font-size:11px;text-transform:uppercase;">Status</th>
+        </tr></thead>
+        <tbody>${preview}</tbody>
+      </table>
+      <p style="font-size:11px;color:var(--gray-600);margin-top:8px;">Columns used: Name, Email, Organization (optional), Title (optional), Industry (optional).</p>
+    `;
+    document.getElementById('importConfirmBtn').style.display = 'inline-block';
+  } catch (err) {
+    errEl.textContent = 'Could not parse file. Please use .xlsx or .csv format.';
+    document.getElementById('importPreview').innerHTML = '';
+  }
+}
+
+async function confirmImport() {
+  const btn = document.getElementById('importConfirmBtn');
+  const errEl = document.getElementById('importError');
+  btn.textContent = 'Importing…';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/import-clients', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clients: importParsedClients }),
+    });
+    const result = await res.json();
+
+    if (!res.ok || !result.success) {
+      errEl.textContent = 'Import failed: ' + (result.error || 'Unknown error');
+      btn.textContent = 'Import Clients';
+      btn.disabled = false;
+      return;
+    }
+
+    closeImportModal();
+    alert(`✅ ${result.imported} client${result.imported !== 1 ? 's' : ''} imported successfully${result.skipped ? ` (${result.skipped} skipped due to missing data)` : ''}.`);
+    await loadAllClients();
+    renderClientList();
+  } catch (err) {
+    errEl.textContent = 'Error: ' + err.message;
+    btn.textContent = 'Import Clients';
+    btn.disabled = false;
   }
 }
 
@@ -1336,6 +1517,9 @@ function exportGHL() {
 // Close modal on overlay click
 document.getElementById('addModal').addEventListener('click', function(e) {
   if (e.target === this) closeAddModal();
+});
+document.getElementById('importModal').addEventListener('click', function(e) {
+  if (e.target === this) closeImportModal();
 });
 </script>
 </body>
