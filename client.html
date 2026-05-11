@@ -1687,6 +1687,11 @@ function renderPortal(client, checkins) {
     <!-- RESOURCES -->
     ${renderResources(client)}
   `;
+
+  // Load any saved draft into the check-in form (runs after innerHTML is set)
+  if (!alreadyCheckedInThisWeek) {
+    loadDraftIntoForm(client.id, currentWeek);
+  }
 }
 
 function renderCheckinForm(client, checkins, currentWeek) {
@@ -1772,9 +1777,16 @@ function renderCheckinForm(client, checkins, currentWeek) {
 
       <div id="formAError" style="display:none;color:var(--red);font-size:13px;font-weight:600;margin-bottom:12px;padding:10px 14px;background:#fff0f3;border-radius:6px;border:1px solid var(--red);"></div>
 
-      <button class="btn-primary" onclick="submitFormA('${client.id}', '${client.name}', ${currentWeek}, ${!priorAction})" id="submitABtn">
-        Submit Check-In →
-      </button>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <button class="btn-primary" onclick="submitFormA('${client.id}', '${client.name}', ${currentWeek}, ${!priorAction})" id="submitABtn">
+          Submit Check-In →
+        </button>
+        <button onclick="saveDraft('${client.id}', ${currentWeek}, ${!priorAction})" id="saveDraftBtn"
+          style="background:none;border:2px solid var(--navy);color:var(--navy);padding:12px 20px;border-radius:8px;font-family:'Montserrat',sans-serif;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:0.3px;">
+          Save Draft
+        </button>
+        <span id="draftStatus" style="font-size:12px;color:var(--gray-600);"></span>
+      </div>
     </div>
   `;
 }
@@ -1782,6 +1794,116 @@ function renderCheckinForm(client, checkins, currentWeek) {
 function selectRadio(groupId, labelEl) {
   document.querySelectorAll(`#${groupId} label`).forEach(l => l.classList.remove('selected'));
   labelEl.classList.add('selected');
+}
+
+// ─────────────────────────────────────────────
+// CHECK-IN DRAFT SAVE / LOAD
+// ─────────────────────────────────────────────
+function collectFormData(noCompletion) {
+  const metricEl   = document.getElementById('currentMetric');
+  const metric2El  = document.getElementById('currentMetric2');
+  const metric3El  = document.getElementById('currentMetric3');
+  const coachingLabel   = document.querySelector('#coachingGroup label.selected');
+  const completionLabel = document.querySelector('#completionGroup label.selected');
+
+  return {
+    metric:     metricEl  ? metricEl.value  : '',
+    metric2:    metric2El ? metric2El.value : '',
+    metric3:    metric3El ? metric3El.value : '',
+    coaching:   coachingLabel   ? coachingLabel.querySelector('input').value : '',
+    completion: (!noCompletion && completionLabel) ? completionLabel.querySelector('input').value : '',
+    action:     (document.getElementById('plannedAction')    || {}).value || '',
+    notes:      (document.getElementById('reflectionNotes')  || {}).value || '',
+  };
+}
+
+async function saveDraft(clientId, weekNumber, noCompletion) {
+  const btn      = document.getElementById('saveDraftBtn');
+  const statusEl = document.getElementById('draftStatus');
+  const data     = collectFormData(noCompletion);
+
+  btn.textContent = 'Saving…';
+  btn.disabled = true;
+
+  const { error } = await db.from('checkin_drafts').upsert(
+    { client_id: clientId, week_number: weekNumber, data, saved_at: new Date().toISOString() },
+    { onConflict: 'client_id,week_number' }
+  );
+
+  btn.disabled = false;
+  btn.textContent = 'Save Draft';
+
+  if (error) {
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = '✗ Could not save draft';
+  } else {
+    statusEl.style.color = 'var(--teal)';
+    const now = new Date();
+    statusEl.textContent = `✓ Draft saved at ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+  }
+}
+
+async function loadDraftIntoForm(clientId, weekNumber) {
+  const { data, error } = await db
+    .from('checkin_drafts')
+    .select('data, saved_at')
+    .eq('client_id', clientId)
+    .eq('week_number', weekNumber)
+    .maybeSingle();
+
+  if (error || !data) return;
+
+  const d = data.data || {};
+  const savedAt = data.saved_at;
+
+  // Fill in metric values
+  const metricEl  = document.getElementById('currentMetric');
+  const metric2El = document.getElementById('currentMetric2');
+  const metric3El = document.getElementById('currentMetric3');
+  if (metricEl  && d.metric  !== '') metricEl.value  = d.metric;
+  if (metric2El && d.metric2 !== '') metric2El.value = d.metric2;
+  if (metric3El && d.metric3 !== '') metric3El.value = d.metric3;
+
+  // Restore radio selections
+  if (d.coaching) {
+    document.querySelectorAll('#coachingGroup label').forEach(l => {
+      if (l.querySelector('input')?.value === d.coaching) {
+        l.classList.add('selected');
+      }
+    });
+  }
+  if (d.completion) {
+    document.querySelectorAll('#completionGroup label').forEach(l => {
+      if (l.querySelector('input')?.value === d.completion) {
+        l.classList.add('selected');
+      }
+    });
+  }
+
+  // Restore text areas
+  const actionEl = document.getElementById('plannedAction');
+  const notesEl  = document.getElementById('reflectionNotes');
+  if (actionEl && d.action) actionEl.value = d.action;
+  if (notesEl  && d.notes)  notesEl.value  = d.notes;
+
+  // Show draft notice
+  const statusEl = document.getElementById('draftStatus');
+  if (statusEl && savedAt) {
+    const ago = new Date(savedAt);
+    const fmtd = ago.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' at ' +
+                 ago.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    statusEl.style.color = 'var(--gray-600)';
+    statusEl.textContent = `Draft from ${fmtd}`;
+  }
+}
+
+async function deleteDraft(clientId, weekNumber) {
+  try {
+    await db.from('checkin_drafts')
+      .delete()
+      .eq('client_id', clientId)
+      .eq('week_number', weekNumber);
+  } catch (_) { /* silent */ }
 }
 
 async function submitFormA(clientId, clientName, weekNumber, noCompletion) {
@@ -1834,6 +1956,9 @@ async function submitFormA(clientId, clientName, weekNumber, noCompletion) {
     btn.textContent = 'Submit Check-In →';
     return;
   }
+
+  // Delete any saved draft now that the real check-in is submitted
+  await deleteDraft(clientId, weekNumber);
 
   // Update current metric on client record
   await db.from('clients').update({ metric_current: metricVal }).eq('id', clientId);
