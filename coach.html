@@ -339,6 +339,55 @@
     .spinner { width: 36px; height: 36px; border: 4px solid var(--gray-300); border-top-color: var(--teal); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 60px auto; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* ── SECTION NAV TABS ── */
+    .section-nav {
+      display: flex;
+      gap: 0;
+      margin-bottom: 20px;
+      border-bottom: 2px solid var(--gray-200);
+    }
+    .section-tab {
+      padding: 10px 20px;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      color: var(--gray-600);
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+      transition: all 0.15s;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+    .section-tab:hover { color: var(--navy); }
+    .section-tab.active { color: var(--navy); border-bottom-color: var(--teal); }
+
+    /* ── EMAIL LOG ── */
+    .email-log-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .email-log-table th { background: var(--navy); color: var(--white); padding: 8px 12px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; font-family: 'Montserrat', sans-serif; }
+    .email-log-table td { padding: 9px 12px; border-bottom: 1px solid var(--gray-200); vertical-align: middle; }
+    .email-log-table tr:last-child td { border-bottom: none; }
+    .email-log-table tr:nth-child(even) td { background: var(--light-sand); }
+    .status-sent  { color: #2e7d32; font-weight: 700; }
+    .status-error { color: var(--red); font-weight: 700; }
+
+    /* ── ADMIN SECTION ── */
+    .admin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .admin-table th { background: var(--navy); color: var(--white); padding: 8px 12px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; font-family: 'Montserrat', sans-serif; }
+    .admin-table td { padding: 10px 12px; border-bottom: 1px solid var(--gray-200); vertical-align: middle; }
+    .admin-table tr:last-child td { border-bottom: none; }
+
+    /* ── RESULT MODAL ── */
+    .result-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center; }
+    .result-modal-overlay.open { display: flex; }
+    .result-modal { background: var(--white); border-radius: 10px; padding: 28px 32px; max-width: 560px; width: 100%; margin: 20px; border-top: 4px solid var(--teal); max-height: 80vh; overflow-y: auto; }
+    .result-section { margin-top: 16px; }
+    .result-section h4 { font-family: 'Montserrat', sans-serif; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--gray-600); margin-bottom: 8px; }
+    .result-row { font-size: 13px; padding: 5px 0; border-bottom: 1px solid var(--gray-200); display: flex; gap: 10px; }
+    .result-row:last-child { border-bottom: none; }
+    .result-name { font-weight: 600; color: var(--navy); min-width: 140px; }
+    .result-detail { color: var(--gray-600); }
+
     @media (max-width: 640px) {
       .client-meta { display: none; }
       .header-stats { display: none; }
@@ -412,6 +461,16 @@
 <!-- MAIN DASHBOARD -->
 <div id="dashboardScreen" style="display:none;">
   <div class="container">
+
+    <!-- SECTION NAV -->
+    <div class="section-nav">
+      <div class="section-tab active" id="tab-clients" onclick="showSection('clients')">Clients</div>
+      <div class="section-tab"        id="tab-emails"  onclick="showSection('emails')">Emails</div>
+      <div class="section-tab"        id="tab-admins"  onclick="showSection('admins')">Admin Accounts</div>
+    </div>
+
+    <!-- ═══ CLIENTS SECTION ═══ -->
+    <div id="section-clients">
     <div class="toolbar">
       <div class="toolbar-title">Active Clients</div>
       <div class="toolbar-right">
@@ -444,6 +503,95 @@
 
     <div id="clientList">
       <div class="spinner"></div>
+    </div>
+    </div><!-- /section-clients -->
+
+    <!-- ═══ EMAILS SECTION ═══ -->
+    <div id="section-emails" style="display:none;">
+      <div class="toolbar" style="margin-bottom:16px;">
+        <div class="toolbar-title">Email Log</div>
+        <div class="toolbar-right">
+          <button class="btn-export" onclick="sendTestReminders()">🧪 Send Test Preview</button>
+          <button class="btn-add" onclick="runRemindersNow()">▶ Run Reminders Now</button>
+        </div>
+      </div>
+
+      <div style="background:var(--white);border-radius:8px;padding:14px 18px;margin-bottom:16px;border-left:4px solid var(--teal);font-size:13px;color:var(--text);line-height:1.6;">
+        <strong>How reminders work:</strong> Every Monday at 9 AM ET, the system automatically emails clients who haven't submitted their check-in yet. Use <em>Run Reminders Now</em> to trigger that same send immediately — useful for testing or for clients who missed the Monday window.
+      </div>
+
+      <div style="background:var(--white);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06);overflow:hidden;">
+        <div style="padding:14px 18px;border-bottom:1px solid var(--gray-200);display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-family:'Montserrat',sans-serif;font-size:13px;font-weight:700;color:var(--navy);">Recent Sends</span>
+          <button onclick="loadEmailLog()" style="background:none;border:1px solid var(--gray-300);border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--gray-600);">↻ Refresh</button>
+        </div>
+        <div id="emailLogContent" style="padding:16px 18px;">
+          <div class="spinner"></div>
+        </div>
+      </div>
+    </div><!-- /section-emails -->
+
+    <!-- ═══ ADMIN ACCOUNTS SECTION ═══ -->
+    <div id="section-admins" style="display:none;">
+      <div class="toolbar" style="margin-bottom:16px;">
+        <div class="toolbar-title">Admin Accounts</div>
+        <div class="toolbar-right">
+          <button class="btn-add" onclick="openAddAdminModal()">+ Add Account</button>
+        </div>
+      </div>
+
+      <div style="background:var(--white);border-radius:8px;padding:14px 18px;margin-bottom:16px;border-left:4px solid var(--navy);font-size:13px;color:var(--text);line-height:1.6;">
+        <strong>Admin accounts</strong> give your EA or assistant full access to this dashboard using their own password — without changing yours. They can add clients, view check-ins, and run reminders. They cannot change the main coach password.
+      </div>
+
+      <div style="background:var(--white);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06);overflow:hidden;">
+        <div id="adminAccountsContent" style="padding:16px 18px;">
+          <div class="spinner"></div>
+        </div>
+      </div>
+    </div><!-- /section-admins -->
+
+  </div>
+</div>
+
+<!-- ADD ADMIN MODAL -->
+<div class="modal-overlay" id="addAdminModal">
+  <div class="modal">
+    <h2>Add Admin Account</h2>
+    <div class="form-group">
+      <label>Name *</label>
+      <input type="text" id="adminName" placeholder="e.g. Sarah Johnson" />
+    </div>
+    <div class="form-group">
+      <label>Email <span style="font-weight:400;text-transform:none;opacity:0.6;">(optional — for reference)</span></label>
+      <input type="email" id="adminEmail" placeholder="e.g. sarah@gpsleadership.org" />
+    </div>
+    <div class="form-group">
+      <label>Password *</label>
+      <input type="password" id="adminPassword" placeholder="Min 6 characters" />
+    </div>
+    <div class="form-group">
+      <label>Notes <span style="font-weight:400;text-transform:none;opacity:0.6;">(optional)</span></label>
+      <input type="text" id="adminNotes" placeholder="e.g. Alex's EA" />
+    </div>
+    <div class="modal-error" id="adminModalError"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeAddAdminModal()">Cancel</button>
+      <button class="btn-save" onclick="addAdmin()">Create Account</button>
+    </div>
+  </div>
+</div>
+
+<!-- RUN REMINDERS RESULT MODAL -->
+<div class="result-modal-overlay" id="remindersResultModal">
+  <div class="result-modal">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div style="font-family:'Montserrat',sans-serif;font-size:17px;font-weight:800;color:var(--navy);">Reminder Results</div>
+      <button onclick="closeRemindersResultModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--gray-600);">✕</button>
+    </div>
+    <div id="remindersResultContent"></div>
+    <div class="modal-actions">
+      <button class="btn-save" onclick="closeRemindersResultModal()">Done</button>
     </div>
   </div>
 </div>
@@ -614,17 +762,31 @@ async function checkPassword() {
   const val = document.getElementById('passwordInput').value.trim();
   if (!val) return;
 
-  // Load password from Supabase settings
-  const { data, error } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
+  // Load coach password from settings
+  const { data } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
   const stored = (data && data.value) ? data.value : 'GPS2026'; // fallback
 
   if (val === stored) {
     saveSession();
     unlockDashboard();
-  } else {
-    document.getElementById('loginError').textContent = 'Incorrect password.';
-    document.getElementById('passwordInput').value = '';
+    return;
   }
+
+  // Check admin accounts as fallback
+  const { data: adminData } = await db
+    .from('admin_accounts')
+    .select('password')
+    .eq('is_active', true);
+
+  const adminPasswords = (adminData || []).map(a => a.password);
+  if (adminPasswords.includes(val)) {
+    saveSession();
+    unlockDashboard();
+    return;
+  }
+
+  document.getElementById('loginError').textContent = 'Incorrect password.';
+  document.getElementById('passwordInput').value = '';
 }
 
 // ─────────────────────────────────────────────
@@ -1684,6 +1846,297 @@ document.getElementById('addModal').addEventListener('click', function(e) {
 document.getElementById('importModal').addEventListener('click', function(e) {
   if (e.target === this) closeImportModal();
 });
+document.getElementById('addAdminModal').addEventListener('click', function(e) {
+  if (e.target === this) closeAddAdminModal();
+});
+
+// ─────────────────────────────────────────────
+// SECTION NAV
+// ─────────────────────────────────────────────
+let _currentSection = 'clients';
+
+function showSection(name) {
+  _currentSection = name;
+  ['clients', 'emails', 'admins'].forEach(s => {
+    document.getElementById('section-' + s).style.display = s === name ? 'block' : 'none';
+    document.getElementById('tab-' + s).classList.toggle('active', s === name);
+  });
+  if (name === 'emails')  loadEmailLog();
+  if (name === 'admins')  loadAdminAccounts();
+}
+
+// ─────────────────────────────────────────────
+// EMAIL LOG
+// ─────────────────────────────────────────────
+async function loadEmailLog() {
+  const el = document.getElementById('emailLogContent');
+  el.innerHTML = '<div class="spinner"></div>';
+
+  const { data, error } = await db
+    .from('email_log')
+    .select('*')
+    .order('sent_at', { ascending: false })
+    .limit(100);
+
+  if (error || !data) {
+    el.innerHTML = `<div style="color:var(--red);font-size:13px;">Failed to load email log: ${error?.message || 'Unknown error'}</div>`;
+    return;
+  }
+
+  if (data.length === 0) {
+    el.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--gray-600);font-size:14px;">No emails logged yet. Run reminders or send a test to see records here.</div>`;
+    return;
+  }
+
+  const fmt = (ts) => {
+    const d = new Date(ts);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' +
+           d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  };
+
+  el.innerHTML = `
+    <div style="overflow-x:auto;">
+      <table class="email-log-table">
+        <thead>
+          <tr>
+            <th>Sent</th>
+            <th>To</th>
+            <th>Type</th>
+            <th>Subject</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.map(row => `
+            <tr>
+              <td style="white-space:nowrap;color:var(--gray-600);">${fmt(row.sent_at)}</td>
+              <td>
+                <div style="font-weight:600;">${row.recipient_name || ''}</div>
+                <div style="font-size:11px;color:var(--gray-600);">${row.recipient_email}</div>
+              </td>
+              <td><span style="background:var(--light-sand);border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700;">${row.email_type}</span></td>
+              <td style="max-width:220px;font-size:12px;color:var(--gray-600);">${row.subject || '—'}</td>
+              <td class="${row.status === 'sent' ? 'status-sent' : 'status-error'}">${row.status === 'sent' ? '✓ Sent' : '✗ Error'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div style="padding:10px 0;font-size:11px;color:var(--gray-600);">Showing last ${data.length} email${data.length !== 1 ? 's' : ''}</div>
+  `;
+}
+
+// ─────────────────────────────────────────────
+// RUN REMINDERS NOW
+// ─────────────────────────────────────────────
+async function runRemindersNow() {
+  if (!confirm('Send reminder emails now to all clients who haven\'t submitted this week\'s check-in?')) return;
+
+  const btn = event.target;
+  const originalText = btn.textContent;
+  btn.textContent = 'Sending…';
+  btn.disabled = true;
+
+  // Get the current session password to authenticate the API call
+  const { data: pwData } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
+  const password = pwData?.value || 'GPS2026';
+
+  try {
+    const res = await fetch('/api/run-reminders-now', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+    const json = await res.json();
+    showRemindersResult(json);
+    // Reload the email log to show new entries
+    if (_currentSection === 'emails') {
+      setTimeout(loadEmailLog, 500);
+    }
+  } catch (err) {
+    alert('Error: ' + err.message);
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+}
+
+function showRemindersResult(json) {
+  const modal = document.getElementById('remindersResultModal');
+  const content = document.getElementById('remindersResultContent');
+
+  let html = `<div style="font-size:15px;font-weight:700;color:var(--teal);margin-bottom:6px;">${json.message || 'Done.'}</div>`;
+
+  if (json.sentList && json.sentList.length > 0) {
+    html += `
+      <div class="result-section">
+        <h4>✓ Reminders Sent (${json.sentList.length})</h4>
+        ${json.sentList.map(r => `
+          <div class="result-row">
+            <span class="result-name">${r.name}</span>
+            <span class="result-detail">${r.email} · Week ${r.week}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  if (json.skipped && json.skipped.length > 0) {
+    html += `
+      <div class="result-section">
+        <h4 style="color:var(--gray-600);">Skipped (${json.skipped.length})</h4>
+        ${json.skipped.map(r => `
+          <div class="result-row">
+            <span class="result-name" style="color:var(--gray-600);">${r.name}</span>
+            <span class="result-detail">${r.reason}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  if (json.errors && json.errors.length > 0) {
+    html += `
+      <div class="result-section">
+        <h4 style="color:var(--red);">Errors (${json.errors.length})</h4>
+        ${json.errors.map(r => `
+          <div class="result-row">
+            <span class="result-name" style="color:var(--red);">${r.client}</span>
+            <span class="result-detail">${r.email || ''} — ${JSON.stringify(r.error)}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  if (!json.sentList?.length && !json.errors?.length) {
+    html += `<p style="font-size:13px;color:var(--gray-600);margin-top:8px;">No emails were sent. This could mean: all clients have already submitted this week, or no clients have email addresses saved in their profiles.</p>`;
+  }
+
+  content.innerHTML = html;
+  modal.classList.add('open');
+}
+
+function closeRemindersResultModal() {
+  document.getElementById('remindersResultModal').classList.remove('open');
+}
+
+// ─────────────────────────────────────────────
+// ADMIN ACCOUNTS
+// ─────────────────────────────────────────────
+async function loadAdminAccounts() {
+  const el = document.getElementById('adminAccountsContent');
+  el.innerHTML = '<div class="spinner"></div>';
+
+  const { data, error } = await db
+    .from('admin_accounts')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    el.innerHTML = `<div style="color:var(--red);font-size:13px;">Failed to load accounts: ${error.message}</div>`;
+    return;
+  }
+
+  const accounts = data || [];
+
+  let html = `
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Notes</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+  if (accounts.length === 0) {
+    html += `<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--gray-600);">No admin accounts yet. Add your EA or assistant above.</td></tr>`;
+  } else {
+    html += accounts.map(a => `
+      <tr>
+        <td><strong>${a.name}</strong></td>
+        <td style="color:var(--gray-600);">${a.email || '—'}</td>
+        <td style="color:var(--gray-600);">${a.notes || '—'}</td>
+        <td>
+          <span style="background:${a.is_active ? '#e8f5e9' : '#f5f5f5'};color:${a.is_active ? '#2e7d32' : '#666'};padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;">
+            ${a.is_active ? 'Active' : 'Inactive'}
+          </span>
+        </td>
+        <td>
+          <button onclick="toggleAdminActive(${a.id}, ${a.is_active})"
+            style="font-size:12px;background:none;border:1px solid var(--gray-300);border-radius:4px;padding:4px 10px;cursor:pointer;margin-right:6px;">
+            ${a.is_active ? 'Deactivate' : 'Activate'}
+          </button>
+          <button onclick="deleteAdmin(${a.id}, '${a.name.replace(/'/g, "\\'")}')"
+            style="font-size:12px;background:none;border:1px solid var(--red);color:var(--red);border-radius:4px;padding:4px 10px;cursor:pointer;">
+            Remove
+          </button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  html += `</tbody></table>`;
+  el.innerHTML = html;
+}
+
+function openAddAdminModal() {
+  document.getElementById('addAdminModal').classList.add('open');
+  document.getElementById('adminName').value = '';
+  document.getElementById('adminEmail').value = '';
+  document.getElementById('adminPassword').value = '';
+  document.getElementById('adminNotes').value = '';
+  document.getElementById('adminModalError').textContent = '';
+}
+
+function closeAddAdminModal() {
+  document.getElementById('addAdminModal').classList.remove('open');
+}
+
+async function addAdmin() {
+  const name     = document.getElementById('adminName').value.trim();
+  const email    = document.getElementById('adminEmail').value.trim();
+  const password = document.getElementById('adminPassword').value.trim();
+  const notes    = document.getElementById('adminNotes').value.trim();
+  const errEl    = document.getElementById('adminModalError');
+
+  errEl.textContent = '';
+  if (!name)     { errEl.textContent = 'Name is required.'; return; }
+  if (!password) { errEl.textContent = 'Password is required.'; return; }
+  if (password.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; return; }
+
+  const { error } = await db.from('admin_accounts').insert({
+    name,
+    email: email || null,
+    password,
+    notes: notes || null,
+    role: 'admin',
+    is_active: true,
+  });
+
+  if (error) {
+    errEl.textContent = 'Error creating account: ' + error.message;
+  } else {
+    closeAddAdminModal();
+    loadAdminAccounts();
+  }
+}
+
+async function toggleAdminActive(id, currentlyActive) {
+  await db.from('admin_accounts').update({ is_active: !currentlyActive }).eq('id', id);
+  loadAdminAccounts();
+}
+
+async function deleteAdmin(id, name) {
+  if (!confirm(`Remove admin account for ${name}? This cannot be undone.`)) return;
+  await db.from('admin_accounts').delete().eq('id', id);
+  loadAdminAccounts();
+}
 </script>
 </body>
 </html>
