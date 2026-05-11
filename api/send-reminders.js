@@ -15,6 +15,42 @@ const RESEND_FROM    = process.env.RESEND_FROM_EMAIL || 'noreply@portal.gpsleade
 const PORTAL_BASE    = 'https://portal.gpsleadership.org/client.html';
 const CRON_SECRET    = process.env.CRON_SECRET;
 
+// ── Date helper: parse "YYYY-MM-DD" as LOCAL midnight, not UTC ──────────────
+// new Date("2026-03-16") parses as UTC → shows as Mar 15 in US timezones.
+// This helper avoids that off-by-one error.
+function parseLocalDate(str) {
+  if (!str) return new Date();
+  const [y, m, d] = str.split('-').map(Number);
+  return new Date(y, m - 1, d); // local midnight
+}
+
+// ── Log an email send to the email_log table ─────────────────────────────────
+async function logEmail({ clientId, recipientEmail, recipientName, emailType, subject, status, errorDetails, resendId }) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/email_log`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_ANON,
+        Authorization: `Bearer ${SUPABASE_ANON}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({
+        client_id:       clientId || null,
+        recipient_email: recipientEmail,
+        recipient_name:  recipientName || null,
+        email_type:      emailType,
+        subject:         subject || null,
+        status,
+        error_details:   errorDetails ? JSON.stringify(errorDetails) : null,
+        resend_id:       resendId || null,
+      }),
+    });
+  } catch (_) {
+    // Logging failure should never break the main send flow
+  }
+}
+
 export default async function handler(req, res) {
   // Allow GET (Vercel cron) or POST (manual trigger)
   if (req.method !== 'GET' && req.method !== 'POST') {
@@ -26,7 +62,10 @@ export default async function handler(req, res) {
   const isVercelCron = req.headers['x-vercel-cron'] === '1';
   const hasSecret = CRON_SECRET && authHeader === `Bearer ${CRON_SECRET}`;
 
-  if (!isVercelCron && !hasSecret) {
+  // Also accept POST from run-reminders-now.js (which handles its own auth)
+  const isManualTrigger = req.method === 'POST' && req.body?.manual_trigger === true;
+
+  if (!isVercelCron && !hasSecret && !isManualTrigger) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -38,7 +77,7 @@ export default async function handler(req, res) {
   const clients = await clientsRes.json();
 
   if (!Array.isArray(clients) || clients.length === 0) {
-    return res.status(200).json({ message: 'No active clients found.', sent: 0 });
+    return res.status(200).json({ message: 'No active clients with email addresses found.', sent: 0, skipped: 0, errors: [] });
   }
 
   // ─── FETCH ALL CHECK-INS ────────────────────────────────────────────────────
@@ -53,28 +92,44 @@ export default async function handler(req, res) {
 
   // ─── DETERMINE WHO NEEDS A REMINDER ────────────────────────────────────────
   const today = new Date();
+  const skipped = [];
+
   const toRemind = clients.filter(client => {
-    const startDate  = new Date(client.plan_start_date);
+    const startDate  = parseLocalDate(client.plan_start_date); // fix UTC off-by-one
     const daysDiff   = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
     const currentWeek = Math.min(Math.max(Math.ceil((daysDiff + 1) / 7), 1), 12);
 
     // Only remind if engagement is in progress (weeks 1–12)
-    if (currentWeek < 1 || currentWeek > 12) return false;
+    if (currentWeek < 1 || currentWeek > 12) {
+      skipped.push({ name: client.name, reason: `Week ${currentWeek} out of range` });
+      return false;
+    }
 
     // Only remind if they haven't submitted this week's check-in
-    return !submitted.has(`${client.id}-${currentWeek}`);
+    if (submitted.has(`${client.id}-${currentWeek}`)) {
+      skipped.push({ name: client.name, reason: `Already submitted week ${currentWeek}` });
+      return false;
+    }
+
+    return true;
   });
 
   if (toRemind.length === 0) {
-    return res.status(200).json({ message: 'All clients have checked in this week.', sent: 0 });
+    return res.status(200).json({
+      message: 'All eligible clients have already checked in this week.',
+      sent: 0,
+      skipped,
+      errors: [],
+    });
   }
 
   // ─── SEND REMINDERS ────────────────────────────────────────────────────────
   let sent = 0;
   const errors = [];
+  const sentList = [];
 
   for (const client of toRemind) {
-    const startDate   = new Date(client.plan_start_date);
+    const startDate   = parseLocalDate(client.plan_start_date); // fix UTC off-by-one
     const daysDiff    = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
     const currentWeek = Math.min(Math.max(Math.ceil((daysDiff + 1) / 7), 1), 12);
     const firstName   = (client.name || '').split(' ')[0] || 'there';
@@ -154,18 +209,48 @@ export default async function handler(req, res) {
 
       const result = await emailRes.json();
       if (!emailRes.ok) {
-        errors.push({ client: client.name, error: result });
+        errors.push({ client: client.name, email: client.email, error: result });
+        await logEmail({
+          clientId: client.id,
+          recipientEmail: client.email,
+          recipientName: client.name,
+          emailType: 'reminder',
+          subject,
+          status: 'error',
+          errorDetails: result,
+        });
       } else {
         sent++;
+        sentList.push({ name: client.name, email: client.email, week: currentWeek });
+        await logEmail({
+          clientId: client.id,
+          recipientEmail: client.email,
+          recipientName: client.name,
+          emailType: 'reminder',
+          subject,
+          status: 'sent',
+          resendId: result.id,
+        });
       }
     } catch (err) {
-      errors.push({ client: client.name, error: err.message });
+      errors.push({ client: client.name, email: client.email, error: err.message });
+      await logEmail({
+        clientId: client.id,
+        recipientEmail: client.email,
+        recipientName: client.name,
+        emailType: 'reminder',
+        subject,
+        status: 'error',
+        errorDetails: err.message,
+      });
     }
   }
 
   return res.status(200).json({
     message: `Reminders sent: ${sent} of ${toRemind.length}`,
     sent,
-    errors: errors.length > 0 ? errors : undefined,
+    sentList,
+    skipped,
+    errors: errors.length > 0 ? errors : [],
   });
 }
