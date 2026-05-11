@@ -923,9 +923,17 @@
     }
     .terms-full-wrap {
       flex: 1;
+      min-height: 0;
       overflow-y: auto;
       padding: 16px 28px;
       border-bottom: 1px solid rgba(201,168,76,0.1);
+    }
+    @media (max-width: 480px) {
+      .terms-modal { max-height: 96vh; }
+      .terms-modal-header { padding: 14px 16px 10px; }
+      .terms-summary { padding: 10px 16px; }
+      .terms-full-wrap { padding: 10px 16px; }
+      .terms-footer { padding: 12px 16px 14px; }
     }
     .terms-toggle-btn {
       background: transparent;
@@ -1582,11 +1590,19 @@ async function submitFormB(clientId, clientName) {
 }
 
 // ─────────────────────────────────────────────
+// DATE HELPER — parse "YYYY-MM-DD" as local midnight (avoids UTC offset shifting date back 1 day)
+// ─────────────────────────────────────────────
+function parseLocalDate(str) {
+  const [y, m, d] = str.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+// ─────────────────────────────────────────────
 // PORTAL — RETURNING CLIENT VIEW
 // ─────────────────────────────────────────────
 function renderPortal(client, checkins) {
   currentClient = client; // store for use in submitFormA
-  const startDate  = new Date(client.plan_start_date);
+  const startDate  = parseLocalDate(client.plan_start_date);
   const today      = new Date();
   const daysDiff   = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
   const currentWeek = Math.min(Math.max(Math.ceil((daysDiff + 1) / 7), 1), 13);
@@ -1678,7 +1694,7 @@ function renderCheckinForm(client, checkins, currentWeek) {
   const priorAction = lastCheckin ? lastCheckin.planned_action : null;
 
   // Compute week start/end from program start date
-  const programStart = new Date(client.plan_start_date);
+  const programStart = parseLocalDate(client.plan_start_date);
   const weekStartDate = new Date(programStart);
   weekStartDate.setDate(programStart.getDate() + (currentWeek - 1) * 7);
   const weekEndDate = new Date(weekStartDate);
@@ -1866,7 +1882,7 @@ async function submitFormA(clientId, clientName, weekNumber, noCompletion) {
 }
 
 function renderWeekTimeline(client, checkins, currentWeek) {
-  const startDate = new Date(client.plan_start_date);
+  const startDate = parseLocalDate(client.plan_start_date);
   const pills = Array.from({length: 13}, (_, i) => {
     const weekNum  = i + 1;
     const unlockDate = new Date(startDate);
