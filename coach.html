@@ -1947,7 +1947,14 @@ async function runRemindersNow() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password }),
     });
-    const json = await res.json();
+    const text = await res.text();
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch (_) {
+      alert('API error — the endpoint may still be deploying. Wait 30 seconds and try again.\n\nDetails: ' + text.slice(0, 200));
+      return;
+    }
     showRemindersResult(json);
     // Reload the email log to show new entries
     if (_currentSection === 'emails') {
