@@ -1,7 +1,8 @@
 {
   "rewrites": [
     { "source": "/client", "destination": "/client.html" },
-    { "source": "/coach",  "destination": "/coach.html"  }
+    { "source": "/coach",  "destination": "/coach.html"  },
+    { "source": "/api/run-reminders-now", "destination": "/api/run-reminders-now.js" }
   ],
   "crons": [
     {
