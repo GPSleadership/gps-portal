@@ -38,12 +38,12 @@ export default async function handler(req, res) {
     const data = await response.json();
     res.setHeader('Access-Control-Allow-Origin', '*');
 
-    // ── Log usage (fire-and-forget — never blocks the AI response) ──────────
+    // ── Log usage (awaited so Vercel doesn't kill the function before it runs) ──
     if (response.ok && token && SUPABASE_SECRET) {
       const questionLength = Array.isArray(messages) && messages.length > 0
         ? (messages[messages.length - 1]?.content || '').length
         : 0;
-      logUsage(token, questionLength).catch(() => {});
+      await logUsage(token, questionLength).catch(() => {});
     }
 
     return res.status(response.status).json(data);
