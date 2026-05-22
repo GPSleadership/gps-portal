@@ -1,0 +1,41 @@
+# Binary assets — store these in Google Drive, Dropbox, or similar, not git
+*.pdf
+*.PDF
+*.zip
+*.ZIP
+*.docx
+*.DOCX
+*.pptx
+*.PPTX
+*.xlsx
+*.XLSX
+*.mp4
+*.MP4
+*.mov
+*.MOV
+*.m4a
+*.M4A
+*.png
+*.PNG
+*.jpg
+*.JPG
+*.jpeg
+*.JPEG
+*.gif
+*.GIF
+*.svg
+
+# Exceptions — keep these tracked (code/config files that happen to be SVG)
+# Uncomment if needed: !public/*.svg
+
+# Environment & secrets
+.env
+.env.local
+.env*.local
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/

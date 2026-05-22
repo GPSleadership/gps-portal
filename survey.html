@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Leadership Survey | GPS Leadership Solutions</title>
+<style>
+  :root {
+    --navy:     #1B2A4A;
+    --gold:     #C9A84C;
+    --white:    #FFFFFF;
+    --gray-100: #F5F6F8;
+    --gray-300: #D1D5DB;
+    --gray-600: #6B7280;
+    --red:      #DC2626;
+    --green:    #16A34A;
+    --teal:     #01949A;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--gray-100);
+    color: var(--navy);
+    min-height: 100vh;
+    padding-bottom: 60px;
+  }
+  .header {
+    background: var(--navy);
+    color: var(--white);
+    padding: 20px 24px;
+    text-align: center;
+  }
+  .header .logo {
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--gold);
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .header h1 { font-size: 18px; font-weight: 700; }
+  .header .checkpoint-label {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    background: rgba(201,168,76,0.25);
+    color: var(--gold);
+    padding: 3px 12px;
+    border-radius: 20px;
+    border: 1px solid rgba(201,168,76,0.4);
+  }
+  .container { max-width: 640px; margin: 0 auto; padding: 24px 16px; }
+  .card {
+    background: var(--white);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+
+  /* State screens */
+  .state-card { text-align: center; padding: 48px 24px; }
+  .state-icon { font-size: 52px; margin-bottom: 16px; }
+  .state-card h2 { font-size: 22px; font-weight: 700; margin-bottom: 10px; }
+  .state-card p { font-size: 15px; color: var(--gray-600); line-height: 1.6; max-width: 400px; margin: 0 auto; }
+  #loadingState, #errorState, #alreadyDoneState, #successState { display: none; }
+  #surveyForm { display: none; }
+
+  /* Intro */
+  .intro-text { font-size: 15px; line-height: 1.7; color: var(--navy); }
+  .behavior-highlight {
+    display: block;
+    margin-top: 12px;
+    background: var(--gray-100);
+    border-left: 3px solid var(--gold);
+    padding: 10px 14px;
+    font-size: 14px;
+    color: var(--navy);
+    font-style: italic;
+    border-radius: 0 6px 6px 0;
+  }
+
+  /* Anchor key */
+  .anchor-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+  }
+  .anchor-item {
+    flex: 1;
+    min-width: 80px;
+    background: var(--gray-100);
+    border-radius: 8px;
+    padding: 8px 10px;
+    text-align: center;
+  }
+  .anchor-item .score { font-size: 18px; font-weight: 800; color: var(--navy); }
+  .anchor-item .label { font-size: 11px; color: var(--gray-600); margin-top: 2px; line-height: 1.3; }
+
+  /* Question label */
+  .question-label {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--navy);
+    line-height: 1.6;
+    margin-bottom: 16px;
+  }
+  .question-behavior {
+    display: inline;
+    font-style: italic;
+    color: var(--teal);
+  }
+
+  /* Rating buttons */
+  .rating-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .rating-btn {
+    width: 46px; height: 46px;
+    border-radius: 8px;
+    border: 2px solid var(--gray-300);
+    background: var(--white);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--gray-600);
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .rating-btn:hover { border-color: var(--navy); color: var(--navy); }
+  .rating-btn.selected       { background: var(--navy);  border-color: var(--navy);  color: var(--white); }
+  .rating-btn.selected.high  { background: var(--green); border-color: var(--green); color: var(--white); }
+  .rating-btn.selected.mid   { background: var(--gold);  border-color: var(--gold);  color: var(--navy); }
+  .rating-btn.selected.low   { background: var(--red);   border-color: var(--red);   color: var(--white); }
+
+  /* Text inputs */
+  .section-label { font-size: 15px; font-weight: 600; color: var(--navy); margin-bottom: 6px; line-height: 1.5; }
+  .section-hint  { font-size: 13px; color: var(--gray-600); margin-bottom: 10px; line-height: 1.5; }
+  textarea {
+    width: 100%;
+    padding: 12px 14px;
+    border: 2px solid var(--gray-300);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 90px;
+    color: var(--navy);
+    transition: border-color 0.15s;
+    line-height: 1.6;
+  }
+  textarea:focus { outline: none; border-color: var(--navy); }
+
+  /* Visibility toggle */
+  .visibility-toggle {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--gray-300);
+  }
+  .visibility-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--navy);
+    margin-bottom: 8px;
+  }
+  .toggle-options { display: flex; gap: 8px; flex-wrap: wrap; }
+  .toggle-option {
+    flex: 1;
+    min-width: 140px;
+    padding: 10px 12px;
+    border: 2px solid var(--gray-300);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+  }
+  .toggle-option:hover { border-color: var(--navy); }
+  .toggle-option.selected { border-color: var(--navy); background: #EEF2F7; }
+  .toggle-option .opt-title { font-size: 13px; font-weight: 700; color: var(--navy); }
+  .toggle-option .opt-desc  { font-size: 11px; color: var(--gray-600); margin-top: 2px; line-height: 1.3; }
+
+  /* Submit */
+  .submit-btn {
+    width: 100%;
+    padding: 16px;
+    background: var(--navy);
+    color: var(--white);
+    border: none;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .submit-btn:hover    { opacity: 0.88; }
+  .submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .error-msg { color: var(--red); font-size: 13px; margin-top: 10px; display: none; }
+
+  hr { border: none; border-top: 1px solid var(--gray-300); margin: 20px 0; }
+
+  @media (max-width: 480px) {
+    .card { padding: 18px 14px; }
+    .rating-btn { width: 40px; height: 40px; font-size: 14px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">GPS Leadership Solutions</div>
+  <h1>Leadership Perception Survey</h1>
+  <div class="checkpoint-label" id="checkpointLabel">Loading…</div>
+</div>
+
+<div class="container">
+
+  <div id="loadingState" class="card state-card">
+    <div class="state-icon">⏳</div>
+    <h2>Loading your survey…</h2>
+  </div>
+
+  <div id="errorState" class="card state-card">
+    <div class="state-icon">⚠️</div>
+    <h2>Survey link not found</h2>
+    <p>This link may be invalid or expired. If you believe this is an error, reply to the email you received from Alex Tremble.</p>
+  </div>
+
+  <div id="alreadyDoneState" class="card state-card">
+    <div class="state-icon">✅</div>
+    <h2>Already submitted</h2>
+    <p>We already received your response for this survey. Thank you — your feedback makes a real difference.</p>
+  </div>
+
+  <div id="successState" class="card state-card">
+    <div class="state-icon">🎯</div>
+    <h2>Thank you for your feedback</h2>
+    <p>Your response has been recorded. Your perspective directly supports this leader's development over the next 90 days.</p>
+  </div>
+
+  <div id="surveyForm">
+
+    <!-- Intro card -->
+    <div class="card">
+      <p class="intro-text">
+        You've been asked to share your perspective on <strong id="clientNameDisplay">your colleague</strong>'s leadership development.
+        Your individual responses are <strong>confidential</strong> — they will not be attributed to you by name.
+        Only aggregated scores are visible in reporting.
+      </p>
+      <p class="intro-text" style="margin-top:12px;">
+        This survey is focused on one specific leadership behavior <strong id="clientFirstDisplay">they</strong> are working on:
+        <span class="behavior-highlight" id="behaviorDisplay">Loading…</span>
+      </p>
+    </div>
+
+    <!-- Rating card -->
+    <div class="card">
+      <div class="question-label">
+        In the last 2 weeks, how consistently did <span id="clientFirstRating">they</span>
+        <span class="question-behavior" id="behaviorRatingDisplay">…</span>?
+      </div>
+
+      <div class="anchor-row">
+        <div class="anchor-item"><div class="score">1–3</div><div class="label">Rarely or never</div></div>
+        <div class="anchor-item"><div class="score">4–6</div><div class="label">Sometimes — inconsistent</div></div>
+        <div class="anchor-item"><div class="score">7–8</div><div class="label">Usually — still developing</div></div>
+        <div class="anchor-item"><div class="score">9–10</div><div class="label">Consistently and effectively</div></div>
+      </div>
+
+      <div class="rating-row" id="ratingRow" style="margin-top:18px;"></div>
+    </div>
+
+    <!-- Open-ended card (baseline + day90 only — hidden at day45) -->
+    <div class="card" id="openEndedCard">
+      <div class="section-label" id="openEndedLabel">In one sentence, what's the most noticeable way this behavior affects you or the team?</div>
+      <div class="section-hint">Please share a recent example.</div>
+      <textarea id="openResponseField" placeholder="Your answer…"></textarea>
+    </div>
+
+    <!-- Comments card (all checkpoints) -->
+    <div class="card">
+      <div class="section-label">Additional comments <span style="font-weight:400;color:var(--gray-600);">(optional)</span></div>
+      <div class="section-hint">Anything else you'd like to share — what's working, or where you'd most like to see growth.</div>
+      <textarea id="commentsField" placeholder="Any additional thoughts…"></textarea>
+
+      <!-- Visibility toggle -->
+      <div class="visibility-toggle">
+        <div class="visibility-label">Who should see your comments?</div>
+        <div class="toggle-options">
+          <div class="toggle-option selected" id="opt-both" onclick="setVisibility(true)">
+            <div class="opt-title">Coach + Leader</div>
+            <div class="opt-desc">Shared with both the coach and <span class="clientFirstVis">the leader</span></div>
+          </div>
+          <div class="toggle-option" id="opt-coach" onclick="setVisibility(false)">
+            <div class="opt-title">Coach only</div>
+            <div class="opt-desc">Only the coach sees these comments</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Submit -->
+    <div class="card">
+      <button class="submit-btn" id="submitBtn" onclick="submitSurvey()" disabled>
+        Select a rating to submit
+      </button>
+      <div class="error-msg" id="submitError"></div>
+    </div>
+
+  </div><!-- /surveyForm -->
+
+</div><!-- /container -->
+
+<script>
+const SUPABASE_URL = 'https://pbnkefuqpoztcxfagiod.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBibmtlZnVxcG96dGN4ZmFnaW9kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYxMjM2MzgsImV4cCI6MjA2MTY5OTYzOH0.P2b9pzCkDkZgbvBIpjmDuEFzJLGScQEBcjXV6XHVQNM';
+
+let tokenData       = null;
+let selectedScore   = null;
+let commentsVisible = true;  // default: share with coach + client
+
+const checkpointLabels = {
+  baseline: 'Baseline Survey',
+  day45:    'Day 45 Check-In',
+  day90:    '90-Day Survey'
+};
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  show('loadingState');
+
+  const params = new URLSearchParams(window.location.search);
+  const token  = params.get('t');
+  if (!token) { show('errorState'); return; }
+
+  try {
+    const tRes = await sbFetch(`/rest/v1/survey_tokens?token=eq.${encodeURIComponent(token)}&select=*`, 'GET');
+    if (!tRes.ok) { show('errorState'); return; }
+    const tokens = await tRes.json();
+    if (!tokens || tokens.length === 0) { show('errorState'); return; }
+
+    tokenData = tokens[0];
+    if (tokenData.is_used) { show('alreadyDoneState'); return; }
+    if (tokenData.expires_at && new Date(tokenData.expires_at) < new Date()) { show('errorState'); return; }
+
+    buildSurvey();
+  } catch(e) {
+    show('errorState');
+  }
+});
+
+function show(id) {
+  ['loadingState','errorState','alreadyDoneState','successState','surveyForm']
+    .forEach(s => document.getElementById(s).style.display = (s === id ? 'block' : 'none'));
+}
+
+// ── Build survey UI ───────────────────────────────────────────────────────────
+function buildSurvey() {
+  const checkpoint       = tokenData.checkpoint || 'baseline';
+  const behavior         = tokenData.priority_behavior || 'demonstrate the target leadership behavior';
+  const clientFirst      = tokenData.client_first_name || 'the leader';
+  const checkpointLabel  = checkpointLabels[checkpoint] || 'Survey';
+
+  // Header
+  document.getElementById('checkpointLabel').textContent = checkpointLabel;
+
+  // Intro
+  document.getElementById('clientNameDisplay').textContent  = clientFirst;
+  document.getElementById('clientFirstDisplay').textContent = clientFirst;
+  document.getElementById('behaviorDisplay').textContent    = behavior;
+
+  // Rating question
+  document.getElementById('clientFirstRating').textContent   = clientFirst;
+  document.getElementById('behaviorRatingDisplay').textContent = behavior;
+
+  // Visibility toggle client name
+  document.querySelectorAll('.clientFirstVis').forEach(el => el.textContent = clientFirst);
+
+  // Build rating buttons 1–10
+  const ratingRow = document.getElementById('ratingRow');
+  for (let i = 1; i <= 10; i++) {
+    const btn = document.createElement('button');
+    btn.className   = 'rating-btn';
+    btn.textContent = i;
+    btn.type        = 'button';
+    btn.addEventListener('click', () => selectScore(i));
+    ratingRow.appendChild(btn);
+  }
+
+  // Open-ended section — shown at baseline and day90, hidden at day45
+  const openCard = document.getElementById('openEndedCard');
+  if (checkpoint === 'day45') {
+    openCard.style.display = 'none';
+  } else {
+    const labelEl = document.getElementById('openEndedLabel');
+    if (checkpoint === 'baseline') {
+      labelEl.innerHTML = `In one sentence, what's the most noticeable way <strong>${clientFirst}'s</strong> current behavior around this area affects you or the team?`;
+    } else {
+      // day90
+      labelEl.innerHTML = `In one sentence, what's the most noticeable change you've experienced in the last 2–4 weeks around <strong>${clientFirst}'s</strong> behavior in this area?`;
+    }
+  }
+
+  show('surveyForm');
+}
+
+// ── Rating selection ──────────────────────────────────────────────────────────
+function selectScore(val) {
+  selectedScore = val;
+  document.querySelectorAll('.rating-btn').forEach((btn, idx) => {
+    btn.classList.remove('selected','high','mid','low');
+    if (idx + 1 === val) {
+      btn.classList.add('selected');
+      if (val >= 9)      btn.classList.add('high');
+      else if (val >= 7) btn.classList.add('mid');
+      else               btn.classList.add('low');
+    }
+  });
+  const submitBtn = document.getElementById('submitBtn');
+  submitBtn.disabled   = false;
+  submitBtn.textContent = 'Submit My Response →';
+}
+
+// ── Visibility toggle ─────────────────────────────────────────────────────────
+function setVisibility(visibleToClient) {
+  commentsVisible = visibleToClient;
+  document.getElementById('opt-both').classList.toggle('selected',  visibleToClient);
+  document.getElementById('opt-coach').classList.toggle('selected', !visibleToClient);
+}
+
+// ── Submit ────────────────────────────────────────────────────────────────────
+async function submitSurvey() {
+  if (!selectedScore) return;
+  const btn    = document.getElementById('submitBtn');
+  const errEl  = document.getElementById('submitError');
+  btn.disabled = true;
+  btn.textContent = 'Submitting…';
+  errEl.style.display = 'none';
+
+  const checkpoint    = tokenData.checkpoint || 'baseline';
+  const openResponse  = checkpoint !== 'day45'
+    ? (document.getElementById('openResponseField').value.trim() || null)
+    : null;
+  const comments      = document.getElementById('commentsField').value.trim() || null;
+
+  try {
+    const res = await fetch('/api/submit-survey', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token:                     tokenData.token,
+        token_id:                  tokenData.id,
+        client_id:                 tokenData.client_id,
+        stakeholder_id:            tokenData.stakeholder_id,
+        checkpoint,
+        score:                     selectedScore,
+        open_response:             openResponse,
+        comments,
+        comments_visible_to_client: commentsVisible
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      errEl.textContent   = data.error || 'Submission failed. Please try again.';
+      errEl.style.display = 'block';
+      btn.disabled        = false;
+      btn.textContent     = 'Submit My Response →';
+      return;
+    }
+    show('successState');
+  } catch(e) {
+    errEl.textContent   = 'Network error — please check your connection and try again.';
+    errEl.style.display = 'block';
+    btn.disabled        = false;
+    btn.textContent     = 'Submit My Response →';
+  }
+}
+
+// ── Supabase helper ───────────────────────────────────────────────────────────
+function sbFetch(path, method, body) {
+  return fetch(SUPABASE_URL + path, {
+    method,
+    headers: {
+      apikey:          SUPABASE_KEY,
+      Authorization:   'Bearer ' + SUPABASE_KEY,
+      'Content-Type':  'application/json'
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+}
+</script>
+</body>
+</html>

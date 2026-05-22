@@ -1,0 +1,3716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GPS — Coach Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --navy:       #004369;
+      --red:        #DB1F48;
+      --teal:       #01949A;
+      --sand:       #E5DDC8;
+      --navy-dark:  #002D47;
+      --light-teal: #E8F7F7;
+      --light-sand: #F7F4EE;
+      --white:      #ffffff;
+      --gray-100:   #f5f5f5;
+      --gray-200:   #e8e8e8;
+      --gray-300:   #d0d0d0;
+      --gray-600:   #666666;
+      --text:       #1a1a1a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Open Sans', sans-serif; background: var(--gray-100); color: var(--text); min-height: 100vh; }
+
+    .top-bar { height: 6px; background: linear-gradient(to right, var(--navy), var(--teal), var(--red)); }
+
+    .header {
+      background: var(--navy);
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header-left { display: flex; align-items: center; gap: 14px; }
+    .header-logo-text { font-family: 'Montserrat', sans-serif; font-size: 22px; font-weight: 800; color: var(--sand); letter-spacing: 1px; }
+    .header-title-block { }
+    .header-title { color: rgba(255,255,255,0.75); font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; }
+    .header-sub   { color: var(--white); font-family: 'Montserrat', sans-serif; font-size: 15px; font-weight: 700; }
+
+    .header-stats { display: flex; gap: 20px; }
+    .stat-pill {
+      background: rgba(255,255,255,0.12);
+      border-radius: 6px;
+      padding: 6px 16px;
+      text-align: center;
+    }
+    .stat-pill .stat-num { color: var(--sand); font-family: 'Montserrat', sans-serif; font-size: 20px; font-weight: 800; }
+    .stat-pill .stat-lbl { color: rgba(255,255,255,0.7); font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* LOGIN SCREEN */
+    .login-screen {
+      max-width: 400px;
+      margin: 80px auto;
+      background: var(--white);
+      border-radius: 10px;
+      padding: 40px;
+      text-align: center;
+      border-top: 4px solid var(--navy);
+    }
+    .login-screen h2 { font-family: 'Montserrat', sans-serif; color: var(--navy); margin-bottom: 8px; }
+    .login-screen p  { color: var(--gray-600); font-size: 14px; margin-bottom: 24px; }
+    .login-screen input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 2px solid var(--gray-300);
+      border-radius: 6px;
+      font-size: 16px;
+      margin-bottom: 14px;
+      font-family: 'Open Sans', sans-serif;
+    }
+    .login-screen input:focus { outline: none; border-color: var(--teal); }
+    .login-error { color: var(--red); font-size: 13px; margin-bottom: 10px; min-height: 18px; }
+
+    /* MAIN */
+    .container { max-width: 1100px; margin: 28px auto; padding: 0 20px 60px; }
+
+    /* TOOLBAR */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .toolbar-title { font-family: 'Montserrat', sans-serif; font-size: 18px; font-weight: 800; color: var(--navy); }
+    .toolbar-right { display: flex; gap: 10px; align-items: center; }
+
+    .filter-tabs { display: flex; gap: 6px; }
+    .filter-tab {
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 2px solid var(--gray-300);
+      font-size: 12px;
+      font-weight: 700;
+      font-family: 'Montserrat', sans-serif;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: var(--white);
+    }
+    .filter-tab.active { border-color: var(--navy); background: var(--navy); color: var(--white); }
+
+    .btn-add {
+      background: var(--teal);
+      color: var(--white);
+      border: none;
+      border-radius: 6px;
+      padding: 8px 18px;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .btn-add:hover { background: #017a7f; }
+
+    /* CLIENT CARDS */
+    .client-card {
+      background: var(--white);
+      border-radius: 8px;
+      margin-bottom: 14px;
+      border-left: 5px solid var(--teal);
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    .client-card.pillar-trust       { border-left-color: #1565c0; }
+    .client-card.pillar-proactivity { border-left-color: #2e7d32; }
+    .client-card.pillar-productivity{ border-left-color: #e65100; }
+    .client-card.inactive { opacity: 0.55; }
+
+    .client-header {
+      display: flex;
+      align-items: center;
+      padding: 16px 20px;
+      cursor: pointer;
+      gap: 16px;
+      user-select: none;
+    }
+    .client-header:hover { background: var(--gray-100); }
+
+    .client-avatar {
+      width: 42px; height: 42px;
+      border-radius: 50%;
+      background: var(--navy);
+      color: var(--white);
+      font-family: 'Montserrat', sans-serif;
+      font-size: 16px;
+      font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .client-name-block { flex: 1; min-width: 0; }
+    .client-name { font-family: 'Montserrat', sans-serif; font-size: 15px; font-weight: 700; color: var(--navy); }
+    .client-org  { font-size: 12px; color: var(--gray-600); margin-top: 1px; }
+
+    .client-meta { display: flex; gap: 20px; align-items: center; flex-shrink: 0; flex-wrap: wrap; }
+
+    .meta-item { text-align: center; }
+    .meta-item .val { font-family: 'Montserrat', sans-serif; font-size: 18px; font-weight: 800; color: var(--navy); }
+    .meta-item .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--gray-600); }
+
+    .week-badge {
+      background: var(--navy);
+      color: var(--sand);
+      border-radius: 6px;
+      padding: 4px 12px;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .pillar-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+    }
+    .pillar-trust       { background: #e3edf9; color: #1565c0; }
+    .pillar-proactivity { background: #e8f5e9; color: #2e7d32; }
+    .pillar-productivity{ background: #fff3e0; color: #e65100; }
+
+    .completion-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .dot-yes  { background: #2e7d32; }
+    .dot-part { background: #e65100; }
+    .dot-no   { background: var(--red); }
+    .dot-none { background: var(--gray-300); }
+
+    .expand-arrow { font-size: 16px; color: var(--gray-600); flex-shrink: 0; transition: transform 0.2s; }
+    .expanded .expand-arrow { transform: rotate(180deg); }
+
+    /* DETAIL PANEL */
+    .client-detail {
+      display: none;
+      border-top: 1px solid var(--gray-200);
+      padding: 20px 24px;
+    }
+    .client-detail.open { display: block; }
+
+    .detail-section { margin-bottom: 20px; }
+    .detail-section h4 {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--teal);
+      margin-bottom: 10px;
+      border-bottom: 1px solid var(--gray-200);
+      padding-bottom: 6px;
+    }
+
+    .plan-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 10px;
+    }
+    .plan-field { background: var(--light-sand); border-radius: 6px; padding: 10px 12px; }
+    .plan-field label { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--gray-600); margin-bottom: 3px; }
+    .plan-field .val  { font-size: 13px; font-weight: 600; color: var(--navy); }
+
+    .metric-bar-wrap { background: var(--light-teal); border-radius: 6px; padding: 12px 16px; margin-bottom: 12px; }
+    .metric-bar-track { background: var(--gray-300); height: 10px; border-radius: 5px; overflow: hidden; margin: 6px 0; }
+    .metric-bar-fill  { height: 100%; background: linear-gradient(to right, var(--teal), var(--navy)); border-radius: 5px; }
+    .metric-nums { display: flex; justify-content: space-between; font-size: 11px; color: var(--gray-600); }
+
+    .history-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .history-table th { background: var(--navy); color: var(--white); padding: 7px 10px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; font-family: 'Montserrat', sans-serif; font-weight: 700; }
+    .history-table td { padding: 8px 10px; border-bottom: 1px solid var(--gray-200); vertical-align: top; font-size: 12px; }
+    .history-table tr:last-child td { border-bottom: none; }
+    .history-table tr:nth-child(even) td { background: var(--light-sand); }
+    .c-yes  { color: #2e7d32; font-weight: 700; }
+    .c-part { color: #e65100; font-weight: 700; }
+    .c-no   { color: var(--red); font-weight: 700; }
+
+    .client-url-box {
+      background: var(--gray-100);
+      border: 1px solid var(--gray-300);
+      border-radius: 6px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 6px;
+    }
+    .client-url-box code { flex: 1; font-size: 12px; color: var(--navy); word-break: break-all; }
+    .copy-btn {
+      background: var(--teal);
+      color: var(--white);
+      border: none;
+      border-radius: 4px;
+      padding: 5px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .copy-btn:hover { background: #017a7f; }
+
+    /* ADD CLIENT MODAL */
+    .modal-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--white);
+      border-radius: 10px;
+      padding: 32px;
+      max-width: 480px;
+      width: 100%;
+      margin: 20px;
+      border-top: 4px solid var(--navy);
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .modal h2 { font-family: 'Montserrat', sans-serif; color: var(--navy); font-size: 18px; margin-bottom: 20px; }
+    .modal .form-group { margin-bottom: 14px; }
+    .modal .form-group label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--navy); margin-bottom: 5px; }
+    .modal .form-group input, .modal .form-group select {
+      width: 100%;
+      padding: 9px 12px;
+      border: 2px solid var(--gray-300);
+      border-radius: 6px;
+      font-family: 'Open Sans', sans-serif;
+      font-size: 14px;
+    }
+    .modal .form-group input:focus, .modal .form-group select:focus { outline: none; border-color: var(--teal); }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+    .btn-cancel { padding: 10px 20px; border: 2px solid var(--gray-300); background: var(--white); border-radius: 6px; cursor: pointer; font-family: 'Montserrat', sans-serif; font-size: 12px; font-weight: 700; }
+    .btn-save   { padding: 10px 22px; background: var(--navy); color: var(--white); border: none; border-radius: 6px; cursor: pointer; font-family: 'Montserrat', sans-serif; font-size: 12px; font-weight: 700; }
+    .modal-error { color: var(--red); font-size: 12px; margin-top: 8px; min-height: 16px; }
+
+    /* NEW CLIENT CONFIRM */
+    .new-client-result {
+      background: #e8f5e9;
+      border: 2px solid #2e7d32;
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-top: 12px;
+    }
+    .new-client-result h4 { color: #2e7d32; font-family: 'Montserrat', sans-serif; font-size: 14px; margin-bottom: 8px; }
+
+
+    /* CONFIRM MODAL */
+    .confirm-modal-body { font-size: 14px; color: var(--gray-600); line-height: 1.6; margin-bottom: 20px; }
+    .btn-danger  { padding: 10px 22px; border: none; border-radius: 6px; cursor: pointer; font-family: 'Montserrat', sans-serif; font-size: 12px; font-weight: 700; background: var(--red); color: var(--white); }
+    .btn-warning { padding: 10px 22px; border: none; border-radius: 6px; cursor: pointer; font-family: 'Montserrat', sans-serif; font-size: 12px; font-weight: 700; background: #e65100; color: var(--white); }
+    .btn-export  { padding: 8px 16px; background: var(--navy-dark); color: var(--white); border: none; border-radius: 6px; cursor: pointer; font-family: 'Montserrat', sans-serif; font-size: 12px; font-weight: 700; }
+    .btn-export:hover { background: #001f33; }
+    .action-btns { margin-top: 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .btn-action-sm { font-size: 12px; background: none; border-radius: 4px; padding: 5px 12px; cursor: pointer; font-family: 'Open Sans', sans-serif; font-weight: 600; }
+    .btn-archive { color: #e65100; border: 1px solid #e65100; }
+    .btn-archive:hover { background: #fff3e0; }
+    .btn-unarchive { color: var(--teal); border: 1px solid var(--teal); }
+    .btn-unarchive:hover { background: var(--light-teal); }
+    .btn-delete  { color: var(--red); border: 1px solid var(--red); }
+    .btn-delete:hover { background: #fff0f3; }
+    .client-card.archived { opacity: 0.5; border-left-color: var(--gray-300) !important; }
+    .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; height: 4px; background: linear-gradient(to right, var(--teal), var(--navy)); }
+
+    .spinner { width: 36px; height: 36px; border: 4px solid var(--gray-300); border-top-color: var(--teal); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 60px auto; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── SECTION NAV TABS ── */
+    .section-nav {
+      display: flex;
+      gap: 0;
+      margin-bottom: 20px;
+      border-bottom: 2px solid var(--gray-200);
+    }
+    .section-tab {
+      padding: 10px 20px;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      color: var(--gray-600);
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+      transition: all 0.15s;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+    .section-tab:hover { color: var(--navy); }
+    .section-tab.active { color: var(--navy); border-bottom-color: var(--teal); }
+
+    /* ── EMAIL LOG ── */
+    .email-log-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .email-log-table th { background: var(--navy); color: var(--white); padding: 8px 12px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; font-family: 'Montserrat', sans-serif; }
+    .email-log-table td { padding: 9px 12px; border-bottom: 1px solid var(--gray-200); vertical-align: middle; }
+    .email-log-table tr:last-child td { border-bottom: none; }
+    .email-log-table tr:nth-child(even) td { background: var(--light-sand); }
+    .status-sent  { color: #2e7d32; font-weight: 700; }
+    .status-error { color: var(--red); font-weight: 700; }
+
+    /* ── ADMIN SECTION ── */
+    .admin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .admin-table th { background: var(--navy); color: var(--white); padding: 8px 12px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; font-family: 'Montserrat', sans-serif; }
+    .admin-table td { padding: 10px 12px; border-bottom: 1px solid var(--gray-200); vertical-align: middle; }
+    .admin-table tr:last-child td { border-bottom: none; }
+
+    /* ── RESULT MODAL ── */
+    .result-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center; }
+    .result-modal-overlay.open { display: flex; }
+    .result-modal { background: var(--white); border-radius: 10px; padding: 28px 32px; max-width: 560px; width: 100%; margin: 20px; border-top: 4px solid var(--teal); max-height: 80vh; overflow-y: auto; }
+    .result-section { margin-top: 16px; }
+    .result-section h4 { font-family: 'Montserrat', sans-serif; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--gray-600); margin-bottom: 8px; }
+    .result-row { font-size: 13px; padding: 5px 0; border-bottom: 1px solid var(--gray-200); display: flex; gap: 10px; }
+    .result-row:last-child { border-bottom: none; }
+    .result-name { font-weight: 600; color: var(--navy); min-width: 140px; }
+    .result-detail { color: var(--gray-600); }
+
+    /* ── STAKEHOLDERS & SCOREBOARD ── */
+    .stakeholder-row { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--gray-200); flex-wrap:wrap; }
+    .stakeholder-row:last-child { border-bottom:none; }
+    .stakeholder-name { font-weight:700; color:var(--navy); min-width:120px; }
+    .stakeholder-email { font-size:12px; color:var(--gray-600); flex:1; min-width:140px; }
+    .stakeholder-role  { font-size:11px; background:var(--light-sand); padding:2px 8px; border-radius:10px; white-space:nowrap; font-weight:600; }
+    .scoreboard-table  { width:100%; border-collapse:collapse; font-size:13px; margin-top:8px; }
+    .scoreboard-table th { background:var(--navy); color:#fff; padding:7px 10px; text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:0.4px; font-family:'Montserrat',sans-serif; font-weight:700; }
+    .scoreboard-table td { padding:8px 10px; border-bottom:1px solid var(--gray-200); }
+    .scoreboard-table tr:last-child td { border-bottom:none; }
+    .score-badge { display:inline-block; padding:3px 10px; border-radius:12px; font-weight:800; font-size:14px; font-family:'Montserrat',sans-serif; }
+    .score-high  { background:#e8f5e9; color:#2e7d32; }
+    .score-mid   { background:#fff3e0; color:#e65100; }
+    .score-low   { background:#ffebee; color:var(--red); }
+    .engagement-badge  { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:700; font-family:'Montserrat',sans-serif; }
+    .badge-none        { background:var(--gray-200); color:var(--gray-600); }
+    .badge-sent        { background:#e3edf9; color:#1565c0; }
+    .badge-partial     { background:#fff3e0; color:#e65100; }
+    .badge-complete    { background:#e8f5e9; color:#2e7d32; }
+
+    @media (max-width: 640px) {
+      .client-meta { display: none; }
+      .header-stats { display: none; }
+    }
+
+    /* ── CLIENT PROFILE OVERLAY ── */
+    #clientProfileOverlay {
+      display:none;position:fixed;inset:0;z-index:200;
+      background:var(--gray-100);flex-direction:column;
+    }
+    .profile-top-bar {
+      background:var(--navy);padding:14px 24px;
+      display:flex;align-items:center;gap:16px;flex-shrink:0;
+    }
+    .profile-back-btn {
+      background:none;border:1px solid rgba(255,255,255,0.3);color:white;
+      padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px;
+      font-weight:700;font-family:'Montserrat',sans-serif;
+    }
+    .profile-header-avatar {
+      width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,0.2);
+      color:white;font-family:'Montserrat',sans-serif;font-size:14px;font-weight:800;
+      display:flex;align-items:center;justify-content:center;flex-shrink:0;
+    }
+    .profile-body { display:flex;flex:1;overflow:hidden; }
+    .profile-sidenav {
+      width:210px;background:white;border-right:1px solid var(--gray-200);
+      padding:16px 0;overflow-y:auto;flex-shrink:0;
+    }
+    .profile-nav-item {
+      padding:11px 20px;font-size:13px;font-weight:600;cursor:pointer;
+      display:flex;align-items:center;gap:9px;color:var(--text);
+      transition:background 0.15s;border-right:3px solid transparent;
+    }
+    .profile-nav-item:hover { background:var(--gray-100); }
+    .profile-nav-item.active {
+      background:var(--light-teal);color:var(--teal);
+      font-weight:700;border-right-color:var(--teal);
+    }
+    .profile-content { flex:1;overflow-y:auto;padding:28px 32px; }
+    .profile-section-title {
+      font-family:'Montserrat',sans-serif;font-size:16px;font-weight:800;
+      color:var(--navy);margin-bottom:20px;
+    }
+
+    /* ── DASHBOARD SECTION ── */
+    .dash-stats { display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px; }
+    .dash-stat-card {
+      background:white;border-radius:8px;padding:18px 20px;text-align:center;
+      box-shadow:0 1px 4px rgba(0,0,0,0.06);
+    }
+    .dash-stat-card .dsn {
+      font-family:'Montserrat',sans-serif;font-size:32px;font-weight:800;color:var(--navy);
+    }
+    .dash-stat-card .dsl {
+      font-size:11px;text-transform:uppercase;letter-spacing:0.5px;
+      color:var(--gray-600);margin-top:4px;
+    }
+    .attention-card {
+      background:white;border-radius:8px;margin-bottom:12px;
+      box-shadow:0 1px 4px rgba(0,0,0,0.06);overflow:hidden;
+    }
+    .attention-header {
+      padding:12px 18px;display:flex;align-items:center;
+      gap:10px;font-weight:700;font-size:13px;color:var(--navy);
+    }
+    .attention-badge {
+      border-radius:12px;padding:2px 9px;font-size:11px;
+      font-weight:700;font-family:'Montserrat',sans-serif;color:white;
+    }
+    .ab-red { background:var(--red); }
+    .ab-amber { background:#e65100; }
+    .ab-teal { background:var(--teal); }
+    .ab-gray { background:var(--gray-300);color:var(--gray-600); }
+    .attention-chips { padding:0 18px 14px;display:flex;flex-wrap:wrap;gap:6px; }
+    .client-chip {
+      padding:5px 13px;border-radius:20px;background:var(--light-sand);
+      font-size:12px;font-weight:600;cursor:pointer;color:var(--navy);
+      border:1px solid var(--gray-200);
+    }
+    .client-chip:hover { background:var(--light-teal);border-color:var(--teal); }
+    .recent-feed { background:white;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06);overflow:hidden; }
+    .feed-row {
+      padding:11px 18px;display:flex;align-items:center;justify-content:space-between;
+      border-bottom:1px solid var(--gray-200);cursor:pointer;font-size:13px;
+    }
+    .feed-row:last-child { border-bottom:none; }
+    .feed-row:hover { background:var(--gray-100); }
+  </style>
+</head>
+<body>
+
+<div class="top-bar"></div>
+<header class="header">
+  <div class="header-left">
+    <div class="header-logo-text">GPS</div>
+    <div class="header-title-block">
+      <div class="header-title">Leadership Solutions</div>
+      <div class="header-sub">Coach Dashboard</div>
+    </div>
+  </div>
+  <div class="header-stats" id="headerStats" style="display:none;"></div>
+  <div id="headerChangePwBtn" style="display:none;display:flex;gap:8px;align-items:center;">
+    <button onclick="openChangePwModal()" style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);color:#E5DDC8;font-size:12px;font-weight:600;padding:6px 14px;border-radius:6px;cursor:pointer;letter-spacing:0.3px;">Change Password</button>
+    <button onclick="clearSession();location.reload();" style="background:rgba(219,31,72,0.25);border:1px solid rgba(219,31,72,0.5);color:#ffaaaa;font-size:12px;font-weight:600;padding:6px 14px;border-radius:6px;cursor:pointer;letter-spacing:0.3px;">Log Out</button>
+  </div>
+</header>
+
+<!-- CHANGE PASSWORD MODAL -->
+<div id="changePwModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:36px;width:100%;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+    <div style="font-family:'Montserrat',sans-serif;font-size:18px;font-weight:800;color:#004369;margin-bottom:6px;">Change Dashboard Password</div>
+    <div style="font-size:13px;color:#666;margin-bottom:24px;">We'll send a verification code to alex@gpsleadership.org first.</div>
+
+    <!-- Step 1: Request code -->
+    <div id="changePwStep1">
+      <p style="font-size:14px;color:#1a1a1a;margin-bottom:20px;">Click below to receive your verification code by email. The code expires in 15 minutes.</p>
+      <button id="btnSendCode" onclick="sendVerificationCode()" style="background:#004369;color:#fff;border:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;width:100%;">Send Verification Code</button>
+    </div>
+
+    <!-- Step 2: Enter code + new password -->
+    <div id="changePwStep2" style="display:none;">
+      <div style="margin-bottom:14px;">
+        <label style="font-size:12px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px;">Verification Code</label>
+        <input id="verifyCodeInput" type="text" maxlength="6" placeholder="6-digit code" style="width:100%;padding:10px 14px;border:1.5px solid #d0d0d0;border-radius:8px;font-size:18px;letter-spacing:6px;text-align:center;" />
+      </div>
+      <div style="margin-bottom:14px;">
+        <label style="font-size:12px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px;">New Password</label>
+        <input id="newPwInput" type="password" placeholder="New password (min 6 characters)" style="width:100%;padding:10px 14px;border:1.5px solid #d0d0d0;border-radius:8px;font-size:14px;" />
+      </div>
+      <div style="margin-bottom:20px;">
+        <label style="font-size:12px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px;">Confirm New Password</label>
+        <input id="confirmPwInput" type="password" placeholder="Confirm new password" style="width:100%;padding:10px 14px;border:1.5px solid #d0d0d0;border-radius:8px;font-size:14px;" onkeydown="if(event.key==='Enter') verifyAndChangePassword()" />
+      </div>
+      <button id="btnChangePw" onclick="verifyAndChangePassword()" style="background:#004369;color:#fff;border:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;width:100%;">Change Password</button>
+    </div>
+
+    <div id="changePwMsg" style="margin-top:14px;font-size:13px;font-weight:600;min-height:18px;"></div>
+    <button onclick="closeChangePwModal()" style="margin-top:16px;background:none;border:none;color:#666;font-size:13px;cursor:pointer;width:100%;text-align:center;">Cancel</button>
+  </div>
+</div>
+
+<!-- CLIENT PROFILE OVERLAY -->
+<div id="clientProfileOverlay">
+  <div class="profile-top-bar">
+    <button class="profile-back-btn" onclick="closeClientProfile()">← Back</button>
+    <div class="profile-header-avatar" id="profileHeaderAvatar">?</div>
+    <div style="flex:1;min-width:0;">
+      <div style="font-family:'Montserrat',sans-serif;font-size:16px;font-weight:800;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" id="profileHeaderName"></div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.7);margin-top:1px;" id="profileHeaderMeta"></div>
+    </div>
+  </div>
+  <div class="profile-body">
+    <div class="profile-sidenav">
+      <div class="profile-nav-item active" id="profNav-overview"  onclick="switchProfileNav('overview')">📊 Overview</div>
+      <div class="profile-nav-item"        id="profNav-plan"      onclick="switchProfileNav('plan')">🎯 Plan</div>
+      <div class="profile-nav-item"        id="profNav-checkins"  onclick="switchProfileNav('checkins')">✅ Check-ins</div>
+      <div class="profile-nav-item"        id="profNav-surveys"   onclick="switchProfileNav('surveys')">👥 Surveys &amp; Stakeholders</div>
+      <div class="profile-nav-item"        id="profNav-settings"  onclick="switchProfileNav('settings')">⚙️ Settings</div>
+    </div>
+    <div class="profile-content" id="profileContent">
+    </div>
+  </div>
+</div>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-screen">
+    <div style="font-size:36px;margin-bottom:12px;">🔐</div>
+    <h2>Coach Access</h2>
+    <p>Enter your dashboard password to continue.</p>
+    <input type="password" id="passwordInput" placeholder="Password" onkeydown="if(event.key==='Enter') checkPassword()" autofocus />
+    <div class="login-error" id="loginError"></div>
+    <button class="btn-add" style="width:100%;padding:12px;" onclick="checkPassword()">Enter Dashboard</button>
+  </div>
+</div>
+
+<!-- MAIN DASHBOARD -->
+<div id="dashboardScreen" style="display:none;">
+  <div class="container">
+
+    <!-- SECTION NAV -->
+    <div class="section-nav">
+      <div class="section-tab active" id="tab-dashboard"  onclick="showSection('dashboard')">Dashboard</div>
+      <div class="section-tab"        id="tab-clients"    onclick="showSection('clients')">Clients</div>
+      <div class="section-tab"        id="tab-emails"     onclick="showSection('emails')">Emails</div>
+      <div class="section-tab"        id="tab-templates"  onclick="showSection('templates')">Email Templates</div>
+      <div class="section-tab"        id="tab-admins"     onclick="showSection('admins')">Admin Accounts</div>
+    </div>
+
+    <!-- ═══ DASHBOARD SECTION ═══ -->
+    <div id="section-dashboard">
+      <div id="dashboardContent">
+        <div class="spinner"></div>
+      </div>
+    </div>
+
+    <!-- ═══ CLIENTS SECTION ═══ -->
+    <div id="section-clients" style="display:none;">
+    <div class="toolbar">
+      <div class="toolbar-title" id="clientListTitle">Active Clients</div>
+      <div class="toolbar-right">
+        <div class="filter-tabs">
+          <div class="filter-tab active" onclick="setFilter('active', this)">Active</div>
+          <div class="filter-tab" onclick="setFilter('all', this)">All</div>
+          <div class="filter-tab" onclick="setFilter('complete', this)">Complete</div>
+          <div class="filter-tab" onclick="setFilter('archived', this)">Archived</div>
+        </div>
+<div style="position:relative;display:inline-block;" id="exportDropdownWrap">
+          <button class="btn-export" onclick="toggleExportMenu()">⬇ Export ▾</button>
+          <div id="exportMenu" style="display:none;position:absolute;right:0;top:36px;background:white;border:1px solid var(--gray-300);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.12);z-index:50;min-width:210px;">
+            <div onclick="exportData();toggleExportMenu()" style="padding:10px 16px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--gray-200);" onmouseover="this.style.background='var(--gray-100)'" onmouseout="this.style.background=''">
+              📄 Full Backup (JSON)
+            </div>
+            <div onclick="exportGHL();toggleExportMenu()" style="padding:10px 16px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--gray-200);" onmouseover="this.style.background='var(--gray-100)'" onmouseout="this.style.background=''">
+              📊 Export for GoHighLevel (CSV)
+            </div>
+            <div onclick="sendTestReminders();toggleExportMenu()" style="padding:10px 16px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--gray-200);" onmouseover="this.style.background='var(--gray-100)'" onmouseout="this.style.background=''">
+              🧪 Send Test Reminders Now
+            </div>
+            <div onclick="openImportModal();toggleExportMenu()" style="padding:10px 16px;font-size:13px;cursor:pointer;" onmouseover="this.style.background='var(--gray-100)'" onmouseout="this.style.background=''">
+              📥 Import Clients from Excel
+            </div>
+          </div>
+        </div>
+        <button class="btn-add" onclick="openAddModal()">+ Add Client</button>
+      </div>
+    </div>
+
+    <!-- ── CLIENT FILTER BAR ── -->
+    <div id="clientFilterBar" style="background:var(--white);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;box-shadow:0 1px 3px rgba(0,0,0,0.07);">
+      <input type="text" id="clientSearch" placeholder="Search name or company…"
+        oninput="renderClients()"
+        style="flex:1;min-width:160px;padding:7px 12px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;"
+        onfocus="this.style.borderColor='var(--teal)'" onblur="this.style.borderColor='var(--gray-300)'" />
+      <select id="clientSort" onchange="renderClients()" style="padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;color:var(--text);">
+        <option value="newest">Newest first</option>
+        <option value="oldest">Oldest first</option>
+        <option value="name_az">Name A–Z</option>
+        <option value="name_za">Name Z–A</option>
+        <option value="activity">Last activity</option>
+      </select>
+      <select id="clientCompFilter" onchange="renderClients()" style="padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;color:var(--text);">
+        <option value="all">All completion</option>
+        <option value="green">Green ≥80%</option>
+        <option value="yellow">Yellow 70–79%</option>
+        <option value="red">Red ≤69%</option>
+        <option value="none">No check-ins</option>
+      </select>
+      <select id="clientCoachingFilter" onchange="renderClients()" style="padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;color:var(--text);">
+        <option value="all">All clients</option>
+        <option value="yes">Coaching program</option>
+        <option value="no">No coaching</option>
+      </select>
+      <select id="clientIndustryFilter" onchange="renderClients()" style="padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;color:var(--text);">
+        <option value="all">All industries</option>
+        <option value="Trucking / Transportation">Trucking / Transportation</option>
+        <option value="Logistics / Supply Chain">Logistics / Supply Chain</option>
+        <option value="Manufacturing">Manufacturing</option>
+        <option value="Industrial Services">Industrial Services</option>
+        <option value="Parts & Service">Parts &amp; Service</option>
+        <option value="Distribution">Distribution</option>
+        <option value="Healthcare">Healthcare</option>
+        <option value="Construction">Construction</option>
+        <option value="Technology">Technology</option>
+        <option value="Financial Services">Financial Services</option>
+        <option value="Federal Government">Federal Government</option>
+        <option value="State/Local Government">State/Local Government</option>
+        <option value="Other">Other</option>
+      </select>
+      <button onclick="clearClientFilters()" style="padding:7px 12px;background:none;border:1px solid var(--gray-300);border-radius:6px;font-size:12px;cursor:pointer;color:var(--gray-600);font-family:'Open Sans',sans-serif;white-space:nowrap;">✕ Clear</button>
+    </div>
+
+    <div id="clientList">
+      <div class="spinner"></div>
+    </div>
+    </div><!-- /section-clients -->
+
+    <!-- ═══ EMAILS SECTION ═══ -->
+    <div id="section-emails" style="display:none;">
+      <div class="toolbar" style="margin-bottom:16px;">
+        <div class="toolbar-title">Email Log</div>
+        <div class="toolbar-right">
+          <button class="btn-export" onclick="sendTestReminders()">🧪 Send Test Preview</button>
+          <button class="btn-add" onclick="runRemindersNow()">▶ Run Reminders Now</button>
+        </div>
+      </div>
+
+      <div style="background:var(--white);border-radius:8px;padding:14px 18px;margin-bottom:16px;border-left:4px solid var(--teal);font-size:13px;color:var(--text);line-height:1.6;">
+        <strong>How reminders work:</strong> Every Monday at 9 AM ET, the system automatically emails clients who haven't submitted their check-in yet. Use <em>Run Reminders Now</em> to trigger that same send immediately — useful for testing or for clients who missed the Monday window.
+      </div>
+
+      <div style="background:var(--white);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06);overflow:hidden;">
+        <div style="padding:14px 18px;border-bottom:1px solid var(--gray-200);display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-family:'Montserrat',sans-serif;font-size:13px;font-weight:700;color:var(--navy);">Recent Sends</span>
+          <button onclick="loadEmailLog()" style="background:none;border:1px solid var(--gray-300);border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--gray-600);">↻ Refresh</button>
+        </div>
+        <div id="emailLogContent" style="padding:16px 18px;">
+          <div class="spinner"></div>
+        </div>
+      </div>
+    </div><!-- /section-emails -->
+
+    <!-- ═══ ADMIN ACCOUNTS SECTION ═══ -->
+    <div id="section-admins" style="display:none;">
+      <div class="toolbar" style="margin-bottom:16px;">
+        <div class="toolbar-title">Admin Accounts</div>
+        <div class="toolbar-right">
+          <button class="btn-add" onclick="openAddAdminModal()">+ Add Account</button>
+        </div>
+      </div>
+
+      <div style="background:var(--white);border-radius:8px;padding:14px 18px;margin-bottom:16px;border-left:4px solid var(--navy);font-size:13px;color:var(--text);line-height:1.6;">
+        <strong>Admin accounts</strong> give your EA or assistant full access to this dashboard using their own password — without changing yours. They can add clients, view check-ins, and run reminders. They cannot change the main coach password.
+      </div>
+
+      <div style="background:var(--white);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06);overflow:hidden;">
+        <div id="adminAccountsContent" style="padding:16px 18px;">
+          <div class="spinner"></div>
+        </div>
+      </div>
+    </div><!-- /section-admins -->
+
+    <!-- ═══ EMAIL TEMPLATES SECTION ═══ -->
+    <div id="section-templates" style="display:none;">
+      <div class="toolbar" style="margin-bottom:16px;">
+        <div class="toolbar-title">Email Templates</div>
+        <div class="toolbar-right">
+          <button class="btn-secondary" onclick="loadEmailTemplates()">↻ Refresh</button>
+        </div>
+      </div>
+
+      <div style="background:var(--white);border-radius:8px;padding:14px 18px;margin-bottom:16px;border-left:4px solid var(--teal);font-size:13px;color:var(--text);line-height:1.6;">
+        <strong>Review before activating.</strong> These templates control the emails sent to stakeholders. Edit the subject and body as needed, then toggle <strong>Approved</strong> to activate each one. Unapproved templates fall back to the system default. Placeholders like <code>[ClientFirstName]</code> and <code>[SurveyLink]</code> are replaced automatically.
+      </div>
+
+      <div id="templatesContent">
+        <div class="spinner"></div>
+      </div>
+    </div><!-- /section-templates -->
+
+  </div>
+</div>
+
+<!-- ADD ADMIN MODAL -->
+<div class="modal-overlay" id="addAdminModal">
+  <div class="modal">
+    <h2>Add Admin Account</h2>
+    <div class="form-group">
+      <label>Name *</label>
+      <input type="text" id="adminName" placeholder="e.g. Sarah Johnson" />
+    </div>
+    <div class="form-group">
+      <label>Email <span style="font-weight:400;text-transform:none;opacity:0.6;">(optional — for reference)</span></label>
+      <input type="email" id="adminEmail" placeholder="e.g. sarah@gpsleadership.org" />
+    </div>
+    <div class="form-group">
+      <label>Password *</label>
+      <input type="password" id="adminPassword" placeholder="Min 6 characters" />
+    </div>
+    <div class="form-group">
+      <label>Notes <span style="font-weight:400;text-transform:none;opacity:0.6;">(optional)</span></label>
+      <input type="text" id="adminNotes" placeholder="e.g. Alex's EA" />
+    </div>
+    <div class="modal-error" id="adminModalError"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeAddAdminModal()">Cancel</button>
+      <button class="btn-save" onclick="addAdmin()">Create Account</button>
+    </div>
+  </div>
+</div>
+
+<!-- RUN REMINDERS RESULT MODAL -->
+<div class="result-modal-overlay" id="remindersResultModal">
+  <div class="result-modal">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div style="font-family:'Montserrat',sans-serif;font-size:17px;font-weight:800;color:var(--navy);">Reminder Results</div>
+      <button onclick="closeRemindersResultModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--gray-600);">✕</button>
+    </div>
+    <div id="remindersResultContent"></div>
+    <div class="modal-actions">
+      <button class="btn-save" onclick="closeRemindersResultModal()">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD CLIENT MODAL -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <h2>Add New Client</h2>
+    <div class="form-group">
+      <label>Full Name *</label>
+      <input type="text" id="newName" placeholder="e.g. David Hernandez" />
+    </div>
+    <div class="form-group">
+      <label>Email *</label>
+      <input type="email" id="newEmail" placeholder="e.g. david@company.com" oninput="document.getElementById('modalError').textContent=''" />
+    </div>
+    <div class="form-group">
+      <label>Title</label>
+      <input type="text" id="newTitle" placeholder="e.g. VP of Operations" />
+    </div>
+    <div class="form-group">
+      <label>Organization</label>
+      <input type="text" id="newOrg" placeholder="e.g. Hernandez Logistics" />
+    </div>
+    <div class="form-group">
+      <label>Diagnostic Report Link <span style="font-weight:400;text-transform:none;opacity:0.6;">(optional — paste Google Drive URL)</span></label>
+      <input type="url" id="newDiagnosticUrl" placeholder="https://drive.google.com/..." />
+    </div>
+
+    <div style="margin:18px 0 10px;padding-top:16px;border-top:1px solid var(--gray-200);">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--gray-600);margin-bottom:12px;">Business Context <span style="font-weight:400;opacity:0.7;">(optional — used for coaching insights)</span></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group" style="margin:0;">
+        <label>Industry</label>
+        <select id="newIndustry">
+          <option value="">— Select —</option>
+          <option value="Trucking / Transportation">Trucking / Transportation</option>
+          <option value="Logistics / Supply Chain">Logistics / Supply Chain</option>
+          <option value="Manufacturing">Manufacturing</option>
+          <option value="Industrial Services">Industrial Services</option>
+          <option value="Parts & Service">Parts &amp; Service</option>
+          <option value="Distribution">Distribution</option>
+          <option value="Healthcare">Healthcare</option>
+          <option value="Construction">Construction</option>
+          <option value="Technology">Technology</option>
+          <option value="Financial Services">Financial Services</option>
+          <option value="Federal Government">Federal Government</option>
+          <option value="State/Local Government">State/Local Government</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label>Revenue Band</label>
+        <select id="newRevenueBand">
+          <option value="">— Select —</option>
+          <option value="<$10M">&lt;$10M</option>
+          <option value="$10–25M">$10–25M</option>
+          <option value="$25–50M">$25–50M</option>
+          <option value="$50–100M">$50–100M</option>
+          <option value="$100M+">$100M+</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label>No. of Locations</label>
+        <select id="newNumLocations">
+          <option value="">— Select —</option>
+          <option value="1">1</option>
+          <option value="2–4">2–4</option>
+          <option value="5–10">5–10</option>
+          <option value="10+">10+</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label>Direct Reports</label>
+        <input type="number" id="newDirectReports" placeholder="e.g. 6" min="0" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Regions Owned</label>
+      <input type="text" id="newRegions" placeholder="e.g. TX/OK, Southwest, National" />
+    </div>
+
+    <div class="form-group" style="margin-top:4px;">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;">
+        <input type="checkbox" id="newCoachingSessions" style="width:16px;height:16px;accent-color:var(--teal);">
+        Client has weekly coaching sessions
+      </label>
+      <div style="font-size:11px;color:var(--gray-600);margin-top:4px;margin-left:24px;">When checked, their weekly check-in will ask if they attended their coaching session that week.</div>
+    </div>
+
+    <div class="modal-error" id="modalError"></div>
+    <div id="newClientResult"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="cancelAddBtn" onclick="closeAddModal()">Cancel</button>
+      <button class="btn-save" onclick="addClient()" id="saveClientBtn">Create Client</button>
+    </div>
+  </div>
+</div>
+
+<!-- IMPORT CLIENTS MODAL -->
+<div class="modal-overlay" id="importModal">
+  <div class="modal" style="max-width:680px;">
+    <h2>Import Clients from Excel</h2>
+    <p style="font-size:13px;color:var(--gray-600);margin-bottom:16px;">
+      Upload an <strong>.xlsx</strong> or <strong>.csv</strong> file. Required columns: <strong>Name</strong>, <strong>Email</strong>. Optional: Organization, Title, Industry.
+      <br/>Each client will receive a unique portal link automatically.
+    </p>
+    <div class="form-group">
+      <label>Select File</label>
+      <input type="file" id="importFileInput" accept=".xlsx,.xls,.csv" onchange="handleImportFile(this)"
+        style="padding:8px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;width:100%;font-family:'Open Sans',sans-serif;" />
+    </div>
+    <div id="importPreview" style="margin:12px 0;max-height:320px;overflow-y:auto;"></div>
+    <div id="importError" style="color:var(--red);font-size:13px;margin-bottom:8px;"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeImportModal()">Cancel</button>
+      <button class="btn-save" id="importConfirmBtn" onclick="confirmImport()" style="display:none;">Import Clients</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- CONFIRM MODAL (archive / delete) -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal" id="confirmModalInner" style="border-top-color:var(--red);">
+    <h2 id="confirmTitle"></h2>
+    <p class="confirm-modal-body" id="confirmMessage"></p>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeConfirmModal()">Cancel</button>
+      <button id="confirmActionBtn"></button>
+    </div>
+  </div>
+</div>
+
+<div class="bottom-bar"></div>
+
+<script>
+// ─────────────────────────────────────────────
+// CONFIGURATION — same as client.html
+// ─────────────────────────────────────────────
+const SUPABASE_URL  = 'https://pbnkefuqpoztcxfagiod.supabase.co';
+const SUPABASE_ANON = 'sb_publishable_nu9GXGeoqDXcxVocodQ4UA_ke7Yrzyw';
+const PORTAL_BASE_URL = 'https://portal.gpsleadership.org/client.html';
+
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+let allClients = [];
+let allCheckins = [];
+let currentFilter = 'active';
+
+// ─────────────────────────────────────────────
+// AUTH
+// ─────────────────────────────────────────────
+const SESSION_KEY    = 'gps_coach_authed';
+const SESSION_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours in ms
+
+function saveSession() {
+  localStorage.setItem(SESSION_KEY, Date.now().toString());
+}
+function clearSession() {
+  localStorage.removeItem(SESSION_KEY);
+}
+function hasValidSession() {
+  const ts = localStorage.getItem(SESSION_KEY);
+  if (!ts) return false;
+  return (Date.now() - parseInt(ts)) < SESSION_EXPIRY;
+}
+function unlockDashboard() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('dashboardScreen').style.display = 'block';
+  loadDashboard();
+}
+
+// Auto-login if session is still valid
+if (hasValidSession()) {
+  unlockDashboard();
+}
+
+async function checkPassword() {
+  const val = document.getElementById('passwordInput').value.trim();
+  if (!val) return;
+
+  // Load coach password from settings
+  const { data } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
+  const stored = (data && data.value) ? data.value : 'GPS2026'; // fallback
+
+  if (val === stored) {
+    saveSession();
+    unlockDashboard();
+    return;
+  }
+
+  // Check admin accounts as fallback
+  const { data: adminData } = await db
+    .from('admin_accounts')
+    .select('password')
+    .eq('is_active', true);
+
+  const adminPasswords = (adminData || []).map(a => a.password);
+  if (adminPasswords.includes(val)) {
+    saveSession();
+    unlockDashboard();
+    return;
+  }
+
+  document.getElementById('loginError').textContent = 'Incorrect password.';
+  document.getElementById('passwordInput').value = '';
+}
+
+// ─────────────────────────────────────────────
+// CHANGE PASSWORD FLOW
+// ─────────────────────────────────────────────
+let _pendingCode = null;
+let _codeExpires = null;
+
+function openChangePwModal() {
+  document.getElementById('changePwModal').style.display = 'flex';
+  document.getElementById('changePwStep1').style.display = 'block';
+  document.getElementById('changePwStep2').style.display = 'none';
+  document.getElementById('changePwMsg').textContent = '';
+}
+function closeChangePwModal() {
+  document.getElementById('changePwModal').style.display = 'none';
+  _pendingCode = null;
+  _codeExpires = null;
+}
+
+async function sendVerificationCode() {
+  const btn = document.getElementById('btnSendCode');
+  btn.textContent = 'Sending…';
+  btn.disabled = true;
+
+  // Generate a 6-digit code
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  _pendingCode = code;
+  _codeExpires = Date.now() + 15 * 60 * 1000; // 15 minutes
+
+  try {
+    const res = await fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'password_change_request', code }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Send failed');
+
+    document.getElementById('changePwStep1').style.display = 'none';
+    document.getElementById('changePwStep2').style.display = 'block';
+    document.getElementById('changePwMsg').style.color = '#2e7d32';
+    document.getElementById('changePwMsg').textContent = 'Verification code sent to alex@gpsleadership.org';
+  } catch (err) {
+    document.getElementById('changePwMsg').style.color = '#DB1F48';
+    document.getElementById('changePwMsg').textContent = 'Failed to send code: ' + err.message;
+    btn.textContent = 'Send Verification Code';
+    btn.disabled = false;
+  }
+}
+
+async function verifyAndChangePassword() {
+  const enteredCode = document.getElementById('verifyCodeInput').value.trim();
+  const newPw       = document.getElementById('newPwInput').value.trim();
+  const confirmPw   = document.getElementById('confirmPwInput').value.trim();
+  const msg         = document.getElementById('changePwMsg');
+
+  if (!enteredCode || !newPw || !confirmPw) {
+    msg.style.color = '#DB1F48';
+    msg.textContent = 'All fields are required.';
+    return;
+  }
+  if (newPw !== confirmPw) {
+    msg.style.color = '#DB1F48';
+    msg.textContent = 'Passwords do not match.';
+    return;
+  }
+  if (newPw.length < 6) {
+    msg.style.color = '#DB1F48';
+    msg.textContent = 'Password must be at least 6 characters.';
+    return;
+  }
+  if (!_pendingCode || Date.now() > _codeExpires) {
+    msg.style.color = '#DB1F48';
+    msg.textContent = 'Verification code expired. Please start over.';
+    return;
+  }
+  if (enteredCode !== _pendingCode) {
+    msg.style.color = '#DB1F48';
+    msg.textContent = 'Incorrect verification code.';
+    return;
+  }
+
+  const btn = document.getElementById('btnChangePw');
+  btn.textContent = 'Saving…';
+  btn.disabled = true;
+
+  const { error } = await db.from('coach_settings')
+    .upsert({ key: 'coach_password', value: newPw, updated_at: new Date().toISOString() });
+
+  if (error) {
+    msg.style.color = '#DB1F48';
+    msg.textContent = 'Error saving password: ' + error.message;
+    btn.textContent = 'Change Password';
+    btn.disabled = false;
+  } else {
+    msg.style.color = '#2e7d32';
+    msg.textContent = '✓ Password changed successfully.';
+    _pendingCode = null;
+    clearSession(); // force re-login with new password next visit
+    setTimeout(closeChangePwModal, 2000);
+  }
+}
+
+// ─────────────────────────────────────────────
+// LOAD DATA
+// ─────────────────────────────────────────────
+async function loadDashboard() {
+  const [clientsRes, checkinsRes] = await Promise.all([
+    db.from('clients').select('*').order('created_at', { ascending: false }),
+    db.from('checkins').select('*').order('submitted_at', { ascending: false })
+  ]);
+
+  allClients  = clientsRes.data  || [];
+  allCheckins = checkinsRes.data || [];
+
+  renderStats();
+  renderClients();
+  renderDashboardSection();
+}
+
+function renderStats() {
+  const active   = allClients.filter(c => c.is_active && !c.is_archived).length;
+  const complete = allClients.filter(c => !c.is_active && !c.is_archived && c.plan_submitted_at).length;
+  const archived = allClients.filter(c => c.is_archived).length;
+  const total    = allCheckins.length;
+
+  document.getElementById('headerChangePwBtn').style.display = 'block';
+  document.getElementById('headerStats').style.display = 'flex';
+  document.getElementById('headerStats').innerHTML = `
+    <div class="stat-pill"><div class="stat-num">${active}</div><div class="stat-lbl">Active</div></div>
+    <div class="stat-pill"><div class="stat-num">${complete}</div><div class="stat-lbl">Complete</div></div>
+    <div class="stat-pill"><div class="stat-num">${total}</div><div class="stat-lbl">Check-Ins</div></div>
+    <div class="stat-pill"><div class="stat-num">${archived}</div><div class="stat-lbl">Archived</div></div>
+  `;
+}
+
+// ─────────────────────────────────────────────
+// FILTER & RENDER
+// ─────────────────────────────────────────────
+function setFilter(f, el) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  const titles = { active: 'Active Clients', all: 'All Clients', complete: 'Complete', archived: 'Archived Clients' };
+  const titleEl = document.getElementById('clientListTitle');
+  if (titleEl) titleEl.textContent = titles[f] || 'Clients';
+  renderClients();
+}
+
+function clearClientFilters() {
+  const s = document.getElementById('clientSearch');
+  const so = document.getElementById('clientSort');
+  const cp = document.getElementById('clientCompFilter');
+  const co = document.getElementById('clientCoachingFilter');
+  if (s)  s.value  = '';
+  if (so) so.value = 'newest';
+  if (cp) cp.value = 'all';
+  if (co) co.value = 'all';
+  const ind = document.getElementById('clientIndustryFilter');
+  if (ind) ind.value = 'all';
+  renderClients();
+}
+
+function renderClients() {
+  const search    = (document.getElementById('clientSearch')?.value           || '').toLowerCase();
+  const sort      =  document.getElementById('clientSort')?.value             || 'newest';
+  const compF     =  document.getElementById('clientCompFilter')?.value       || 'all';
+  const coachF    =  document.getElementById('clientCoachingFilter')?.value   || 'all';
+  const industryF =  document.getElementById('clientIndustryFilter')?.value   || 'all';
+
+  let filtered = allClients.filter(c => {
+    if (currentFilter === 'active')   return c.is_active && !c.is_archived;
+    if (currentFilter === 'complete') return !c.is_active && !c.is_archived && c.plan_submitted_at;
+    if (currentFilter === 'archived') return c.is_archived;
+    return !c.is_archived; // 'all' excludes archived
+  });
+
+  // Text search
+  if (search) {
+    filtered = filtered.filter(c =>
+      (c.name         || '').toLowerCase().includes(search) ||
+      (c.organization || '').toLowerCase().includes(search)
+    );
+  }
+
+  // Completion band filter
+  if (compF !== 'all') {
+    filtered = filtered.filter(c => {
+      const cks = allCheckins.filter(ch => ch.client_id === c.id);
+      const sub = cks.filter(ch => ch.completion_status);
+      const yes = cks.filter(ch => ch.completion_status === 'Yes');
+      const pct = sub.length > 0 ? Math.round((yes.length / sub.length) * 100) : null;
+      if (compF === 'green')  return pct !== null && pct >= 80;
+      if (compF === 'yellow') return pct !== null && pct >= 70 && pct < 80;
+      if (compF === 'red')    return pct !== null && pct < 70;
+      if (compF === 'none')   return pct === null;
+      return true;
+    });
+  }
+
+  // Coaching program filter
+  if (coachF === 'yes') filtered = filtered.filter(c =>  c.coaching_sessions_enabled);
+  if (coachF === 'no')  filtered = filtered.filter(c => !c.coaching_sessions_enabled);
+
+  // Industry filter
+  if (industryF !== 'all') filtered = filtered.filter(c => (c.industry || '') === industryF);
+
+  // Sort
+  filtered.sort((a, b) => {
+    if (sort === 'newest')   return new Date(b.created_at)  - new Date(a.created_at);
+    if (sort === 'oldest')   return new Date(a.created_at)  - new Date(b.created_at);
+    if (sort === 'name_az')  return (a.name || '').localeCompare(b.name || '');
+    if (sort === 'name_za')  return (b.name || '').localeCompare(a.name || '');
+    if (sort === 'activity') {
+      const aD = a.last_active_at || a.created_at;
+      const bD = b.last_active_at || b.created_at;
+      return new Date(bD) - new Date(aD);
+    }
+    return 0;
+  });
+
+  if (filtered.length === 0) {
+    document.getElementById('clientList').innerHTML = `
+      <div style="text-align:center;padding:60px 20px;color:var(--gray-600);font-size:14px;">
+        ${currentFilter === 'active' ? 'No active clients. Add your first one above.' : 'No clients match these filters.'}
+      </div>`;
+    return;
+  }
+
+  document.getElementById('clientList').innerHTML = filtered.map(client => {
+    const clientCheckins = allCheckins.filter(c => c.client_id === client.id).sort((a,b) => a.week_number - b.week_number);
+    return renderClientCard(client, clientCheckins);
+  }).join('');
+}
+
+function renderClientCard(client, checkins) {
+  const today     = new Date();
+  const startDate = client.plan_start_date ? new Date(client.plan_start_date) : null;
+  const daysDiff  = startDate ? Math.floor((today - startDate) / (1000 * 60 * 60 * 24)) : 0;
+  const currentWeek = client.plan_submitted_at ? Math.min(Math.max(Math.ceil((daysDiff + 1) / 7), 1), 13) : null;
+
+  const baseline  = parseFloat(client.metric_baseline) || 0;
+  const target    = parseFloat(client.metric_target) || 0;
+  const current   = parseFloat(client.metric_current) || baseline;
+  const range     = target - baseline;
+  const progress  = range !== 0 ? Math.min(Math.max(((current - baseline) / range) * 100, 0), 100) : 0;
+
+  const pillarKey  = (client.tp3_pillar || '').toLowerCase();
+  const pillarClass= pillarKey ? 'pillar-' + pillarKey : '';
+
+  const submittedCheckins = checkins.filter(c => c.completion_status);
+  const yesCheckins       = checkins.filter(c => c.completion_status === 'Yes');
+  const completionPct     = submittedCheckins.length > 0
+    ? Math.round((yesCheckins.length / submittedCheckins.length) * 100)
+    : null;
+  const completionRate    = completionPct !== null ? completionPct + '%' : '—';
+
+  // Colored ring on avatar: green ≥80%, orange 40–79%, red <40%, gray = no checkins
+  const avatarRingColor = completionPct === null ? 'transparent'
+    : completionPct >= 80 ? '#2e7d32'   // green  ≥80%
+    : completionPct >= 70 ? '#f9a825'   // yellow 70–79%
+    : '#DB1F48';                         // red    ≤69%
+  // outline instead of box-shadow — not clipped by overflow:hidden on .client-card
+  const avatarRingStyle = completionPct !== null
+    ? `outline: 3px solid ${avatarRingColor}; outline-offset: 2px;`
+    : '';
+
+  const lastCheckin = checkins[checkins.length - 1];
+  const lastDate = lastCheckin?.submitted_at
+    ? new Date(lastCheckin.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : '—';
+
+  const dotClass = !lastCheckin ? 'dot-none'
+    : lastCheckin.completion_status === 'Yes' ? 'dot-yes'
+    : lastCheckin.completion_status === 'Partially' ? 'dot-part'
+    : lastCheckin.completion_status === 'No' ? 'dot-no' : 'dot-none';
+
+  const initials = (client.name || '?').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+
+  const portalURL = `${PORTAL_BASE_URL}?token=${client.token}`;
+
+  // ── Edit Client Info section ───────────────────────────────────────────────
+  const industryOpts = ['Trucking / Transportation','Logistics / Supply Chain','Manufacturing','Industrial Services','Parts & Service','Distribution','Healthcare','Construction','Technology','Financial Services','Federal Government','State/Local Government','Other']
+    .map(o => `<option value="${o}"${client.industry===o?' selected':''}>${o}</option>`).join('');
+  const editInfoSection = `
+    <div class="detail-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h4 style="margin:0;">Client Info</h4>
+        <button onclick="toggleEditInfo('${client.id}')" id="editInfoBtn-${client.id}" style="font-size:12px;padding:4px 14px;border:1px solid var(--teal);color:var(--teal);background:none;border-radius:6px;cursor:pointer;font-weight:700;">Edit</button>
+      </div>
+      <div id="editInfoView-${client.id}">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;">
+          <div><div style="color:var(--gray-600);font-size:11px;text-transform:uppercase;">Name</div><div style="font-weight:600;margin-top:2px;">${client.name || '—'}</div></div>
+          <div><div style="color:var(--gray-600);font-size:11px;text-transform:uppercase;">Email</div><div style="font-weight:600;margin-top:2px;">${client.email || '—'}</div></div>
+          <div><div style="color:var(--gray-600);font-size:11px;text-transform:uppercase;">Organization</div><div style="font-weight:600;margin-top:2px;">${client.organization || '—'}</div></div>
+          <div><div style="color:var(--gray-600);font-size:11px;text-transform:uppercase;">Title</div><div style="font-weight:600;margin-top:2px;">${client.title || '—'}</div></div>
+          <div><div style="color:var(--gray-600);font-size:11px;text-transform:uppercase;">Industry</div><div style="font-weight:600;margin-top:2px;">${client.industry || '—'}</div></div>
+        </div>
+      </div>
+      <div id="editInfoForm-${client.id}" style="display:none;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Name</label><input id="editName-${client.id}" value="${(client.name||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /></div>
+          <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Email</label><input id="editEmail-${client.id}" type="email" value="${(client.email||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /></div>
+          <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Organization</label><input id="editOrg-${client.id}" value="${(client.organization||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /></div>
+          <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Title</label><input id="editTitle-${client.id}" value="${(client.title||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /></div>
+        </div>
+        <div style="margin-bottom:10px;"><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Industry</label>
+          <select id="editIndustry-${client.id}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;">
+            <option value="">— Select —</option>${industryOpts}
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button onclick="saveClientInfo('${client.id}')" id="saveInfoBtn-${client.id}" style="padding:7px 16px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;">Save</button>
+          <button onclick="cancelEditInfo('${client.id}')" style="padding:7px 12px;background:none;border:1px solid var(--gray-300);border-radius:6px;font-size:13px;cursor:pointer;color:var(--gray-600);">Cancel</button>
+          <span id="saveInfoMsg-${client.id}" style="font-size:12px;"></span>
+        </div>
+      </div>
+    </div>`;
+
+  // Build dots for weeks 1-13
+  const dotRow = Array.from({length: 13}, (_, i) => {
+    const w = i + 1;
+    const ci = checkins.find(c => c.week_number === w);
+    if (!ci) return `<span title="Week ${w}: not submitted" style="width:10px;height:10px;border-radius:50%;background:var(--gray-300);display:inline-block;margin:0 1px;"></span>`;
+    const dc = ci.completion_status === 'Yes' ? '#2e7d32' : ci.completion_status === 'Partially' ? '#e65100' : ci.completion_status === 'No' ? '#DB1F48' : '#aaa';
+    return `<span title="Week ${w}: ${ci.completion_status || 'submitted'}" style="width:10px;height:10px;border-radius:50%;background:${dc};display:inline-block;margin:0 1px;"></span>`;
+  }).join('');
+
+  const planRows = client.plan_submitted_at ? `
+    <div class="plan-summary-grid">
+      <div class="plan-field" style="grid-column:1/-1;"><label>90-Day Goal</label><div class="val">${client.goal_statement || '—'}</div></div>
+      <div class="plan-field" style="grid-column:1/-1;"><label>Behavior 1</label><div class="val">${client.behavior_1 || client.start_behavior || '—'}</div></div>
+      ${client.behavior_2 ? `<div class="plan-field" style="grid-column:1/-1;"><label>Behavior 2</label><div class="val">${client.behavior_2}</div></div>` : ''}
+      <div class="plan-field"><label>Metric 1</label><div class="val">${client.metric_1_name || client.metric_name || '—'}</div></div>
+      ${client.metric_2_name ? `<div class="plan-field"><label>Metric 2</label><div class="val">${client.metric_2_name}</div></div>` : ''}
+      ${client.metric_3_name ? `<div class="plan-field"><label>Metric 3</label><div class="val">${client.metric_3_name}</div></div>` : ''}
+      <div class="plan-field"><label>Start Date</label><div class="val">${client.plan_start_date || '—'}</div></div>
+      <div class="plan-field"><label>30-Day Reward</label><div class="val">${client.reward_30_day || '—'}</div></div>
+      <div class="plan-field"><label>90-Day Reward</label><div class="val">${client.reward_90_day || '—'}</div></div>
+    </div>` : `<p style="color:var(--gray-600);font-size:13px;font-style:italic;">Client has not yet submitted their plan (Form B).</p>`;
+
+  const historyRows = checkins.length > 0 ? `
+    <table class="history-table">
+      <thead><tr><th>Week</th><th>Date</th><th>Metric</th><th>Follow-Through</th><th>Action</th><th>Notes</th></tr></thead>
+      <tbody>
+        ${[...checkins].reverse().map(c => {
+          const cc = c.completion_status === 'Yes' ? 'c-yes' : c.completion_status === 'Partially' ? 'c-part' : c.completion_status === 'No' ? 'c-no' : '';
+          const d  = c.submitted_at ? new Date(c.submitted_at).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—';
+          return `<tr>
+            <td style="font-weight:700;color:var(--navy);">Wk ${c.week_number}</td>
+            <td>${d}</td>
+            <td style="font-weight:700;">${c.metric_value ?? '—'}</td>
+            <td class="${cc}">${c.completion_status || '—'}</td>
+            <td>${c.planned_action ? c.planned_action.substring(0,80) + (c.planned_action.length>80?'…':'') : '—'}</td>
+            <td style="color:var(--gray-600);">${c.notes ? c.notes.substring(0,80) + (c.notes.length>80?'…':'') : ''}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>` : `<p style="color:var(--gray-600);font-size:13px;font-style:italic;">No check-ins submitted yet.</p>`;
+
+  return `
+    <div class="client-card ${pillarClass} ${!client.is_active ? 'inactive' : ''}" id="card-${client.id}">
+      <div class="client-header" onclick="openClientProfile('${client.id}')">
+        <div class="client-avatar" style="${avatarRingStyle}" title="${completionPct !== null ? completionPct + '% follow-through rate' : 'No check-ins yet'}">${initials}</div>
+        <div class="client-name-block">
+          <div class="client-name">${client.name || 'Unnamed'}</div>
+          <div class="client-org">${client.organization || ''} ${client.tp3_pillar ? '&nbsp;·&nbsp;<span class="pillar-badge pillar-'+pillarKey+'">'+client.tp3_pillar+'</span>' : ''}</div>
+        </div>
+        <div class="client-meta">
+          ${currentWeek ? `<div class="meta-item"><div class="week-badge">Wk ${currentWeek}</div>${(client.current_sprint_number || 1) > 1 ? `<div style="font-size:10px;text-align:center;color:var(--teal);font-weight:700;margin-top:2px;">Sprint ${client.current_sprint_number}</div>` : ''}</div>` : '<div class="meta-item"><div style="font-size:11px;color:var(--gray-600);">No plan yet</div></div>'}
+          <div class="meta-item">
+            <div class="val" style="font-size:13px;font-weight:700;color:var(--navy);">${current} <span style="font-size:11px;color:var(--gray-600);">/ ${target}</span></div>
+            <div class="lbl">${client.metric_name ? client.metric_name.substring(0,16) : 'Metric'}</div>
+          </div>
+          <div class="meta-item"><div class="val">${completionRate}</div><div class="lbl">Follow-Through</div></div>
+          <div class="meta-item">
+            <div class="val" style="font-size:13px;font-weight:700;color:var(--navy);">${client.ask_alex_total_questions || 0}</div>
+            <div class="lbl">Ask Alex Q's</div>
+          </div>
+          <div class="meta-item">
+            <div style="display:flex;align-items:center;gap:5px;">
+              <span class="completion-dot ${dotClass}"></span>
+              <span style="font-size:12px;color:var(--gray-600);">${lastDate}</span>
+            </div>
+            <div class="lbl">Last Check-In</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ─────────────────────────────────────────────
+// CLIENT PROFILE OVERLAY
+// ─────────────────────────────────────────────
+let currentProfileClientId = null;
+
+function openClientProfile(clientId) {
+  const client = allClients.find(c => c.id === clientId);
+  if (!client) return;
+  currentProfileClientId = clientId;
+  document.getElementById('profileHeaderName').textContent = client.name || 'Client';
+  document.getElementById('profileHeaderMeta').textContent = [client.organization, client.title].filter(Boolean).join(' · ');
+  const initials = (client.name||'?').split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase();
+  document.getElementById('profileHeaderAvatar').textContent = initials;
+  document.getElementById('clientProfileOverlay').style.display = 'flex';
+  document.getElementById('clientProfileOverlay').style.flexDirection = 'column';
+  document.body.style.overflow = 'hidden';
+  switchProfileNav('overview');
+}
+
+function closeClientProfile() {
+  document.getElementById('clientProfileOverlay').style.display = 'none';
+  document.body.style.overflow = '';
+  currentProfileClientId = null;
+}
+
+function switchProfileNav(section) {
+  document.querySelectorAll('.profile-nav-item').forEach(el => el.classList.remove('active'));
+  const navEl = document.getElementById('profNav-' + section);
+  if (navEl) navEl.classList.add('active');
+  const client = allClients.find(c => c.id === currentProfileClientId);
+  if (!client) return;
+  const checkins = allCheckins.filter(c => c.client_id === currentProfileClientId).sort((a,b) => a.week_number - b.week_number);
+  renderProfileSection(section, client, checkins);
+}
+
+function renderProfileSection(section, client, checkins) {
+  const el = document.getElementById('profileContent');
+  if (!el || !client) return;
+
+  const today     = new Date();
+  const startDate = client.plan_start_date ? new Date(client.plan_start_date) : null;
+  const daysDiff  = startDate ? Math.floor((today - startDate) / (1000 * 60 * 60 * 24)) : 0;
+  const currentWeek = client.plan_submitted_at ? Math.min(Math.max(Math.ceil((daysDiff + 1) / 7), 1), 13) : null;
+  const baseline  = parseFloat(client.metric_baseline) || 0;
+  const target    = parseFloat(client.metric_target) || 0;
+  const current   = parseFloat(client.metric_current) || baseline;
+  const range     = target - baseline;
+  const progress  = range !== 0 ? Math.min(Math.max(((current - baseline) / range) * 100, 0), 100) : 0;
+
+  const submittedCheckins = checkins.filter(c => c.completion_status);
+  const yesCheckins       = checkins.filter(c => c.completion_status === 'Yes');
+  const completionPct     = submittedCheckins.length > 0
+    ? Math.round((yesCheckins.length / submittedCheckins.length) * 100)
+    : null;
+  const completionRate    = completionPct !== null ? completionPct + '%' : '—';
+  const lastCheckin       = checkins[checkins.length - 1];
+  const lastDate          = lastCheckin?.submitted_at
+    ? new Date(lastCheckin.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : '—';
+
+  const dotRow = Array.from({length: 13}, (_, i) => {
+    const w = i + 1;
+    const ci = checkins.find(c => c.week_number === w);
+    if (!ci) return `<span title="Week ${w}: not submitted" style="width:10px;height:10px;border-radius:50%;background:var(--gray-300);display:inline-block;margin:0 1px;"></span>`;
+    const dc = ci.completion_status === 'Yes' ? '#2e7d32' : ci.completion_status === 'Partially' ? '#e65100' : ci.completion_status === 'No' ? '#DB1F48' : '#aaa';
+    return `<span title="Week ${w}: ${ci.completion_status || 'submitted'}" style="width:10px;height:10px;border-radius:50%;background:${dc};display:inline-block;margin:0 1px;"></span>`;
+  }).join('');
+
+  const planRows = client.plan_submitted_at ? `
+    <div class="plan-summary-grid">
+      <div class="plan-field" style="grid-column:1/-1;"><label>90-Day Goal</label><div class="val">${client.goal_statement || '—'}</div></div>
+      <div class="plan-field" style="grid-column:1/-1;"><label>Behavior 1</label><div class="val">${client.behavior_1 || client.start_behavior || '—'}</div></div>
+      ${client.behavior_2 ? `<div class="plan-field" style="grid-column:1/-1;"><label>Behavior 2</label><div class="val">${client.behavior_2}</div></div>` : ''}
+      <div class="plan-field"><label>Metric 1</label><div class="val">${client.metric_1_name || client.metric_name || '—'}</div></div>
+      ${client.metric_2_name ? `<div class="plan-field"><label>Metric 2</label><div class="val">${client.metric_2_name}</div></div>` : ''}
+      ${client.metric_3_name ? `<div class="plan-field"><label>Metric 3</label><div class="val">${client.metric_3_name}</div></div>` : ''}
+      <div class="plan-field"><label>Start Date</label><div class="val">${client.plan_start_date || '—'}</div></div>
+      <div class="plan-field"><label>30-Day Reward</label><div class="val">${client.reward_30_day || '—'}</div></div>
+      <div class="plan-field"><label>90-Day Reward</label><div class="val">${client.reward_90_day || '—'}</div></div>
+    </div>` : `<p style="color:var(--gray-600);font-size:13px;font-style:italic;">Client has not yet submitted their plan (Form B).</p>`;
+
+  const historyRows = checkins.length > 0 ? `
+    <table class="history-table">
+      <thead><tr><th>Week</th><th>Date</th><th>Metric</th><th>Follow-Through</th><th>Action</th><th>Notes</th></tr></thead>
+      <tbody>
+        ${[...checkins].reverse().map(c => {
+          const cc = c.completion_status === 'Yes' ? 'c-yes' : c.completion_status === 'Partially' ? 'c-part' : c.completion_status === 'No' ? 'c-no' : '';
+          const d  = c.submitted_at ? new Date(c.submitted_at).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—';
+          return `<tr>
+            <td style="font-weight:700;color:var(--navy);">Wk ${c.week_number}</td>
+            <td>${d}</td>
+            <td style="font-weight:700;">${c.metric_value ?? '—'}</td>
+            <td class="${cc}">${c.completion_status || '—'}</td>
+            <td>${c.planned_action ? c.planned_action.substring(0,80) + (c.planned_action.length>80?'…':'') : '—'}</td>
+            <td style="color:var(--gray-600);">${c.notes ? c.notes.substring(0,80) + (c.notes.length>80?'…':'') : ''}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>` : `<p style="color:var(--gray-600);font-size:13px;font-style:italic;">No check-ins submitted yet.</p>`;
+
+  const portalURL = `${PORTAL_BASE_URL}?token=${client.token}`;
+
+  const industryOpts = ['Trucking / Transportation','Logistics / Supply Chain','Manufacturing','Industrial Services','Parts & Service','Distribution','Healthcare','Construction','Technology','Financial Services','Federal Government','State/Local Government','Other']
+    .map(o => `<option value="${o}"${client.industry===o?' selected':''}>${o}</option>`).join('');
+
+  const editInfoSection = `
+    <div class="detail-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h4 style="margin:0;">Client Info</h4>
+        <button onclick="toggleEditInfo('${client.id}')" id="editInfoBtn-${client.id}" style="font-size:12px;padding:4px 14px;border:1px solid var(--teal);color:var(--teal);background:none;border-radius:6px;cursor:pointer;font-weight:700;">Edit</button>
+      </div>
+      <div id="editInfoView-${client.id}">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;">
+          <div><div style="color:var(--gray-600);font-size:11px;text-transform:uppercase;">Name</div><div style="font-weight:600;margin-top:2px;">${client.name || '—'}</div></div>
+          <div><div style="color:var(--gray-600);font-size:11px;text-transform:uppercase;">Email</div><div style="font-weight:600;margin-top:2px;">${client.email || '—'}</div></div>
+          <div><div style="color:var(--gray-600);font-size:11px;text-transform:uppercase;">Organization</div><div style="font-weight:600;margin-top:2px;">${client.organization || '—'}</div></div>
+          <div><div style="color:var(--gray-600);font-size:11px;text-transform:uppercase;">Title</div><div style="font-weight:600;margin-top:2px;">${client.title || '—'}</div></div>
+          <div><div style="color:var(--gray-600);font-size:11px;text-transform:uppercase;">Industry</div><div style="font-weight:600;margin-top:2px;">${client.industry || '—'}</div></div>
+        </div>
+      </div>
+      <div id="editInfoForm-${client.id}" style="display:none;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Name</label><input id="editName-${client.id}" value="${(client.name||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /></div>
+          <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Email</label><input id="editEmail-${client.id}" type="email" value="${(client.email||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /></div>
+          <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Organization</label><input id="editOrg-${client.id}" value="${(client.organization||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /></div>
+          <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Title</label><input id="editTitle-${client.id}" value="${(client.title||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /></div>
+        </div>
+        <div style="margin-bottom:10px;"><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Industry</label>
+          <select id="editIndustry-${client.id}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;">
+            <option value="">— Select —</option>${industryOpts}
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button onclick="saveClientInfo('${client.id}')" id="saveInfoBtn-${client.id}" style="padding:7px 16px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;">Save</button>
+          <button onclick="cancelEditInfo('${client.id}')" style="padding:7px 12px;background:none;border:1px solid var(--gray-300);border-radius:6px;font-size:13px;cursor:pointer;color:var(--gray-600);">Cancel</button>
+          <span id="saveInfoMsg-${client.id}" style="font-size:12px;"></span>
+        </div>
+      </div>
+    </div>`;
+
+  if (section === 'overview') {
+    el.innerHTML = `
+      <div class="profile-section-title">Overview</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;">
+        <div style="background:white;border-radius:8px;padding:16px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+          <div style="font-family:'Montserrat',sans-serif;font-size:28px;font-weight:800;color:var(--navy);">${currentWeek ? 'Wk ' + currentWeek : '—'}</div>
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);margin-top:4px;">Current Week</div>
+        </div>
+        <div style="background:white;border-radius:8px;padding:16px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+          <div style="font-family:'Montserrat',sans-serif;font-size:28px;font-weight:800;color:var(--navy);">${completionRate}</div>
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);margin-top:4px;">Follow-Through</div>
+        </div>
+        <div style="background:white;border-radius:8px;padding:16px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+          <div style="font-family:'Montserrat',sans-serif;font-size:28px;font-weight:800;color:var(--navy);">${client.ask_alex_total_questions || 0}</div>
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);margin-top:4px;">Ask Alex Q's</div>
+        </div>
+        <div style="background:white;border-radius:8px;padding:16px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+          <div style="font-family:'Montserrat',sans-serif;font-size:14px;font-weight:700;color:var(--navy);">${lastDate}</div>
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);margin-top:4px;">Last Check-In</div>
+        </div>
+      </div>
+      <div style="background:white;border-radius:8px;padding:18px 20px;margin-bottom:18px;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);margin-bottom:10px;">13-Week Submission Track</div>
+        <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
+          ${dotRow}
+          <span style="font-size:11px;color:var(--gray-600);margin-left:8px;">${checkins.length}/13 submitted</span>
+        </div>
+      </div>
+      ${client.plan_submitted_at ? `
+      <div style="background:white;border-radius:8px;padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);margin-bottom:10px;">Metric Progress</div>
+        <div class="metric-bar-wrap">
+          <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:4px;">${client.metric_name || 'Metric'}</div>
+          <div class="metric-bar-track"><div class="metric-bar-fill" style="width:${progress}%"></div></div>
+          <div class="metric-nums"><span>Baseline: ${baseline}</span><span style="font-weight:700;color:var(--navy);">Current: ${current} &nbsp;(${Math.round(progress)}%)</span><span>Target: ${target}</span></div>
+        </div>
+      </div>` : ''}
+    `;
+  } else if (section === 'plan') {
+    el.innerHTML = `
+      <div class="profile-section-title">Plan</div>
+      <div style="background:white;border-radius:8px;padding:20px 24px;box-shadow:0 1px 4px rgba(0,0,0,0.06);margin-bottom:18px;">
+        ${planRows}
+      </div>
+      <div style="background:white;border-radius:8px;padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);margin-bottom:10px;">Plan Edit Access</div>
+        <p id="planEditStatus-${client.id}" style="font-size:12px;color:var(--gray-600);margin-bottom:10px;">
+          ${client.allow_plan_edit
+            ? '⚠️ Edit is unlocked. This client can currently update their plan. Lock it again once they\'ve resubmitted.'
+            : 'Plan is locked. Unlock to let this client update their goals, metric, or rewards.'
+          }
+        </p>
+        <button onclick="togglePlanEdit('${client.id}', ${!!client.allow_plan_edit})" id="planEditBtn-${client.id}"
+          style="padding:8px 18px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;border:none;
+            background:${client.allow_plan_edit ? 'var(--red)' : 'var(--teal)'};color:#fff;">
+          ${client.allow_plan_edit ? 'Lock Plan Editing' : 'Unlock Plan Editing'}
+        </button>
+      </div>
+    `;
+  } else if (section === 'checkins') {
+    el.innerHTML = `
+      <div class="profile-section-title">Check-ins</div>
+      <div style="background:white;border-radius:8px;padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.06);overflow-x:auto;">
+        ${historyRows}
+      </div>
+    `;
+  } else if (section === 'surveys') {
+    el.innerHTML = `
+      <div class="profile-section-title">Surveys &amp; Stakeholders</div>
+      <div id="stakeholders-section-${client.id}">
+        <div id="stakeholders-content-${client.id}">
+          <div class="spinner" style="width:24px;height:24px;border-width:3px;margin:12px auto;"></div>
+        </div>
+      </div>
+      <div id="closeout-section-${client.id}" style="display:none;margin-top:20px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);margin-bottom:10px;">90-Day Closeout</div>
+        <div id="closeout-content-${client.id}">
+          <div class="spinner" style="width:24px;height:24px;border-width:3px;margin:12px auto;"></div>
+        </div>
+      </div>
+      <div id="sprint-section-${client.id}" style="margin-top:20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);">Sprint History
+            <span style="font-family:'Open Sans',sans-serif;font-size:11px;font-weight:400;color:var(--gray-600);margin-left:6px;">Sprint ${client.current_sprint_number || 1} active</span>
+          </div>
+          ${client.closeout_submitted_at ? `
+            <button onclick="openStartSprintModal('${client.id}')"
+              style="font-size:12px;background:var(--teal);color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-weight:700;">
+              ▶ Start Next Sprint
+            </button>` : `
+            <span style="font-size:11px;color:var(--gray-600);font-style:italic;">Complete 90-day closeout first.</span>`}
+        </div>
+        <div id="sprint-content-${client.id}">
+          <div class="spinner" style="width:24px;height:24px;border-width:3px;margin:12px auto;"></div>
+        </div>
+      </div>
+    `;
+    loadStakeholderData(client.id);
+    loadCloseoutData(client.id);
+    loadSprintData(client.id);
+    loadAskAlexStats(client.id);
+  } else if (section === 'settings') {
+    // Render settings HTML first, then load async stats
+    el.innerHTML = `
+      <div class="profile-section-title">Settings</div>
+      ${editInfoSection}
+      <div class="detail-section" style="margin-top:20px;">
+        <h4>Client Portal Link</h4>
+        <div class="client-url-box" id="portalUrlBox-${client.id}">
+          <code id="portalUrlDisplay-${client.id}">${portalURL}</code>
+          <button class="copy-btn" id="portalCopyBtn-${client.id}" onclick="copyURL('${portalURL}', this)">Copy</button>
+        </div>
+        <p style="font-size:11px;color:var(--gray-600);margin-top:6px;">Send this link to ${client.name ? client.name.split(' ')[0] : 'the client'}. They should bookmark it — it's their permanent portal access.</p>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+          <button onclick="sendWelcomeEmail('${client.id}')" id="welcomeEmailBtn-${client.id}" style="padding:7px 16px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">Send Welcome Email</button>
+          <button onclick="regenerateToken('${client.id}')" id="regenBtn-${client.id}" style="padding:7px 14px;background:none;border:1px solid #e65100;color:#e65100;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Regenerate Link</button>
+        </div>
+        <div id="regenMsg-${client.id}" style="margin-top:8px;"></div>
+      </div>
+      <div class="detail-section">
+        <h4>Coaching Sessions</h4>
+        <p id="coachingSessionStatus-${client.id}" style="font-size:12px;color:var(--gray-600);margin-bottom:10px;">
+          ${client.coaching_sessions_enabled
+            ? 'Enabled. Their weekly check-in includes a coaching session attendance question.'
+            : 'Not enabled. The coaching session attendance question is hidden from their check-in.'
+          }
+        </p>
+        <button onclick="toggleCoachingSessions('${client.id}', ${!!client.coaching_sessions_enabled})" id="coachingSessionBtn-${client.id}"
+          style="padding:8px 18px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;border:none;
+            background:${client.coaching_sessions_enabled ? 'var(--red)' : 'var(--teal)'};color:#fff;">
+          ${client.coaching_sessions_enabled ? 'Disable Coaching Sessions' : 'Enable Coaching Sessions'}
+        </button>
+      </div>
+      <div class="detail-section" id="aa-section-${client.id}">
+        <h4>Ask Alex Usage</h4>
+        ${client.ask_alex_enabled ? `
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:10px;" id="aa-stats-${client.id}">
+          <div style="background:var(--light-sand);border-radius:6px;padding:10px 12px;text-align:center;">
+            <div style="font-size:20px;font-weight:800;color:var(--navy);font-family:'Montserrat',sans-serif;">${client.ask_alex_total_questions || 0}</div>
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--gray-600);margin-top:2px;">Total</div>
+          </div>
+          <div style="background:var(--light-sand);border-radius:6px;padding:10px 12px;text-align:center;" id="aa-7d-${client.id}">
+            <div style="font-size:20px;font-weight:800;color:var(--navy);font-family:'Montserrat',sans-serif;">—</div>
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--gray-600);margin-top:2px;">Last 7 days</div>
+          </div>
+          <div style="background:var(--light-sand);border-radius:6px;padding:10px 12px;text-align:center;" id="aa-30d-${client.id}">
+            <div style="font-size:20px;font-weight:800;color:var(--navy);font-family:'Montserrat',sans-serif;">—</div>
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--gray-600);margin-top:2px;">Last 30 days</div>
+          </div>
+          <div style="background:var(--light-sand);border-radius:6px;padding:10px 12px;text-align:center;">
+            <div style="font-size:12px;font-weight:700;color:var(--navy);">${client.ask_alex_last_used_at ? new Date(client.ask_alex_last_used_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : 'Never'}</div>
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--gray-600);margin-top:2px;">Last Used</div>
+          </div>
+        </div>
+        <p style="font-size:11px;color:var(--gray-600);">7 &amp; 30-day counts load automatically.</p>
+        ` : `<p style="font-size:13px;color:var(--gray-600);font-style:italic;">Ask Alex is not enabled for this client.</p>`}
+      </div>
+      <div class="detail-section">
+        <h4>Access Controls</h4>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--gray-200);">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--navy);">Portal locked</div>
+            <div id="portalLockStatus-${client.id}" style="font-size:12px;color:var(--gray-600);margin-top:2px;">
+              ${client.portal_locked
+                ? '🔒 Locked — client sees a locked screen and cannot access the portal.'
+                : '✓ Unlocked — client can access the portal normally.'}
+            </div>
+          </div>
+          <button id="portalLockBtn-${client.id}"
+            onclick="togglePortalLock('${client.id}', ${!!client.portal_locked})"
+            style="padding:7px 16px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;border:none;white-space:nowrap;
+              background:${client.portal_locked ? 'var(--teal)' : 'var(--red)'};color:#fff;">
+            ${client.portal_locked ? 'Unlock Portal' : 'Lock Portal'}
+          </button>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--gray-200);">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--navy);">Ask Alex enabled</div>
+            <div id="askAlexStatus-${client.id}" style="font-size:12px;color:var(--gray-600);margin-top:2px;">
+              ${client.ask_alex_enabled
+                ? '✓ Enabled — client sees the Ask Alex tab in their portal.'
+                : '⛔ Disabled — Ask Alex tab is hidden for this client.'}
+            </div>
+          </div>
+          <button id="askAlexBtn-${client.id}"
+            onclick="toggleAskAlex('${client.id}', ${!!client.ask_alex_enabled})"
+            style="padding:7px 16px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;border:none;white-space:nowrap;
+              background:${client.ask_alex_enabled ? 'var(--red)' : 'var(--teal)'};color:#fff;">
+            ${client.ask_alex_enabled ? 'Disable Ask Alex' : 'Enable Ask Alex'}
+          </button>
+        </div>
+        <div style="padding:12px 0;">
+          <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:8px;">Coaching Program Dates <span style="font-weight:400;font-size:11px;color:var(--gray-600);">(informational only)</span></div>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;">
+            <div>
+              <label style="font-size:11px;text-transform:uppercase;letter-spacing:0.4px;color:var(--gray-600);display:block;margin-bottom:4px;">Start Date</label>
+              <input type="date" id="cpStart-${client.id}"
+                value="${client.coaching_program_start_date || ''}"
+                onchange="saveCoachingDates('${client.id}')"
+                style="padding:6px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;"
+                onfocus="this.style.borderColor='var(--teal)'"
+                onblur="this.style.borderColor='var(--gray-300)'" />
+            </div>
+            <div>
+              <label style="font-size:11px;text-transform:uppercase;letter-spacing:0.4px;color:var(--gray-600);display:block;margin-bottom:4px;">End Date</label>
+              <input type="date" id="cpEnd-${client.id}"
+                value="${client.coaching_program_end_date || ''}"
+                onchange="saveCoachingDates('${client.id}')"
+                style="padding:6px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;"
+                onfocus="this.style.borderColor='var(--teal)'"
+                onblur="this.style.borderColor='var(--gray-300)'" />
+            </div>
+          </div>
+          <p id="cpDatesMsg-${client.id}" style="font-size:11px;color:var(--gray-600);margin-top:6px;">Dates auto-save on change.</p>
+        </div>
+      </div>
+      <div class="detail-section">
+        <h4>Diagnostic Report Link</h4>
+        <p style="font-size:12px;color:var(--gray-600);margin-bottom:8px;">Paste the client's Google Drive report URL here. It will appear as a button on their portal.</p>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="url" id="diagUrl-${client.id}"
+            value="${client.diagnostic_report_url || ''}"
+            placeholder="https://drive.google.com/..."
+            style="flex:1;padding:8px 12px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;"
+            onfocus="this.style.borderColor='var(--teal)'"
+            onblur="this.style.borderColor='var(--gray-300)'" />
+          <button class="copy-btn" style="background:var(--navy);white-space:nowrap;" onclick="saveDiagnosticUrl('${client.id}', this)">Save Link</button>
+        </div>
+        ${client.diagnostic_report_url
+          ? `<p style="font-size:11px;color:#2e7d32;margin-top:6px;">✓ Report link saved — visible to client on their portal.</p>`
+          : `<p style="font-size:11px;color:var(--gray-600);margin-top:6px;">No report link saved yet.</p>`
+        }
+      </div>
+      <div class="action-btns">
+        <button class="btn-action-sm" style="color:var(--gray-600);border:1px solid var(--gray-300);" onclick="toggleActive('${client.id}', ${client.is_active})">
+          ${client.is_active ? 'Mark as Complete' : 'Reactivate'}
+        </button>
+        ${!client.is_archived
+          ? `<button class="btn-action-sm btn-archive" onclick="archiveClient('${client.id}','${(client.name||'').replace(/'/g,"\\\'")}')">Archive</button>`
+          : `<button class="btn-action-sm btn-unarchive" onclick="unarchiveClient('${client.id}','${(client.name||'').replace(/'/g,"\\\'")}')">Unarchive</button>`
+        }
+        <button class="btn-action-sm btn-delete" onclick="hardDeleteClient('${client.id}','${(client.name||'').replace(/'/g,"\\\'")}')">Delete Permanently</button>
+      </div>
+    `;
+    if (client.ask_alex_enabled) {
+      loadAskAlexStats(client.id);
+    }
+  }
+}
+
+// ─────────────────────────────────────────────
+// INTERACTIONS
+// ─────────────────────────────────────────────
+function toggleDetail(id) {}  // stub — kept for safety
+
+async function loadAskAlexStats(clientId) {
+  const el7  = document.getElementById('aa-7d-' + clientId);
+  const el30 = document.getElementById('aa-30d-' + clientId);
+  if (!el7 || !el30) return;
+
+  const now   = new Date();
+  const s7    = new Date(now - 7  * 24 * 60 * 60 * 1000).toISOString();
+  const s30   = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const [r7, r30] = await Promise.all([
+    db.from('ask_alex_usage').select('*', { count: 'exact', head: true })
+       .eq('client_id', clientId).gte('asked_at', s7),
+    db.from('ask_alex_usage').select('*', { count: 'exact', head: true })
+       .eq('client_id', clientId).gte('asked_at', s30),
+  ]);
+
+  el7.querySelector('div:first-child').textContent  = r7.count  ?? '—';
+  el30.querySelector('div:first-child').textContent = r30.count ?? '—';
+}
+
+function copyURL(url, btn) {
+  navigator.clipboard.writeText(url).then(() => {
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 2000);
+  });
+}
+
+async function loadCloseoutData(clientId) {
+  const section = document.getElementById('closeout-section-' + clientId);
+  const el      = document.getElementById('closeout-content-'  + clientId);
+  if (!el || !section) return;
+
+  const { data, error } = await db
+    .from('sprint_closeouts')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('sprint_number', { ascending: false })
+    .limit(5);
+
+  if (!data || data.length === 0) {
+    section.style.display = 'none'; // hide if no closeout yet
+    return;
+  }
+
+  section.style.display = 'block';
+
+  el.innerHTML = data.map(co => {
+    const submittedAt = co.submitted_at
+      ? new Date(co.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : '';
+    const coachingBadge = co.is_coaching_client
+      ? `<span style="background:#e8f5e9;color:#2e7d32;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;">Interested in coaching</span>`
+      : `<span style="background:var(--gray-200);color:var(--gray-600);font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;">No coaching requested</span>`;
+    const nextSprintBadge = co.next_sprint_requested
+      ? `<span style="background:#fff3cd;color:#856404;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;">⭐ Next sprint requested</span>`
+      : '';
+
+    return `
+      <div style="border:1px solid var(--gray-200);border-radius:8px;padding:14px 16px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+          <div style="font-family:'Montserrat',sans-serif;font-size:12px;font-weight:700;color:var(--navy);">Sprint ${co.sprint_number} Closeout</div>
+          ${submittedAt ? `<span style="font-size:11px;color:var(--gray-600);">${submittedAt}</span>` : ''}
+          ${coachingBadge}
+          ${nextSprintBadge}
+        </div>
+        ${co.q1_response ? `
+          <div style="margin-bottom:10px;">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);margin-bottom:4px;">How they describe the change</div>
+            <div style="background:var(--gray-100);border-radius:6px;padding:10px 12px;font-size:13px;color:var(--text);line-height:1.6;">${escHtml(co.q1_response)}</div>
+          </div>` : ''}
+        ${co.q2_response ? `
+          <div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);margin-bottom:4px;">Next behavior focus</div>
+            <div style="background:var(--gray-100);border-radius:6px;padding:10px 12px;font-size:13px;color:var(--text);line-height:1.6;">${escHtml(co.q2_response)}</div>
+          </div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────────────
+// SPRINT HISTORY
+// ─────────────────────────────────────────────
+async function loadSprintData(clientId) {
+  const el = document.getElementById('sprint-content-' + clientId);
+  if (!el) return;
+
+  const { data, error } = await db
+    .from('sprints')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('sprint_number', { ascending: true });
+
+  if (!data || data.length === 0) {
+    // No sprint records yet — show a "Sprint 1 (current)" placeholder
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--light-teal);border-radius:8px;font-size:13px;color:var(--navy);">
+        <span style="font-weight:700;">Sprint 1</span>
+        <span style="background:#e8f5e9;color:#2e7d32;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;">Active</span>
+        <span style="color:var(--gray-600);font-size:12px;">No sprint record yet — will be created when next sprint starts.</span>
+      </div>`;
+    return;
+  }
+
+  el.innerHTML = data.map(s => {
+    const statusColor = s.status === 'active' ? '#2e7d32' : s.status === 'complete' ? '#1565c0' : '#666';
+    const statusBg    = s.status === 'active' ? '#e8f5e9'  : s.status === 'complete' ? '#e3edf9'  : '#f5f5f5';
+    const startLabel  = s.start_date ? new Date(s.start_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+    const endLabel    = s.end_date   ? new Date(s.end_date   + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : (s.status === 'active' ? 'Ongoing' : '—');
+    return `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--gray-100);border-radius:8px;margin-bottom:8px;flex-wrap:wrap;">
+        <div style="font-weight:700;color:var(--navy);font-size:13px;min-width:64px;">Sprint ${s.sprint_number}</div>
+        <span style="background:${statusBg};color:${statusColor};font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;text-transform:capitalize;">${s.status}</span>
+        <div style="font-size:12px;color:var(--gray-600);">${startLabel} → ${endLabel}</div>
+        ${s.behavior_focus ? `<div style="font-size:12px;color:var(--navy);font-style:italic;flex:1;">"${escHtml(s.behavior_focus)}"</div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+function openStartSprintModal(clientId) {
+  const behavior = prompt('What is the behavior focus for the next sprint? (Optional — leave blank to set later)');
+  if (behavior === null) return; // user cancelled
+  const dateStr = prompt('Sprint start date? (YYYY-MM-DD format, or leave blank for today)');
+  if (dateStr === null) return;
+  startNextSprint(clientId, behavior.trim(), dateStr.trim());
+}
+
+async function startNextSprint(clientId, behaviorFocus, startDate) {
+  const { data: pwData } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
+  const password = pwData?.value || 'GPS2026';
+
+  try {
+    const res = await fetch('/api/start-sprint', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        client_id:      clientId,
+        behavior_focus: behaviorFocus || null,
+        start_date:     startDate     || null,
+        password
+      })
+    });
+    const json = await res.json();
+    if (!res.ok || json.error) {
+      alert('Error starting sprint: ' + (json.error || 'Unknown error'));
+      return;
+    }
+    alert(`✓ Sprint ${json.new_sprint_number} started!`);
+    await loadDashboard(); // refresh dashboard to update sprint badge
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+}
+
+async function toggleActive(clientId, currentlyActive) {
+  await db.from('clients').update({ is_active: !currentlyActive }).eq('id', clientId);
+  await loadDashboard();
+}
+
+// ─────────────────────────────────────────────
+// ADD CLIENT
+// ─────────────────────────────────────────────
+function openAddModal() {
+  document.getElementById('addModal').classList.add('open');
+  document.getElementById('newName').focus();
+  document.getElementById('newClientResult').innerHTML = '';
+  document.getElementById('modalError').textContent = '';
+  const btn = document.getElementById('saveClientBtn');
+  btn.textContent = 'Create Client';
+  btn.disabled = false;
+  btn.style.display = 'inline-block';
+  document.getElementById('newName').value = '';
+  document.getElementById('newEmail').value = '';
+  document.getElementById('newTitle').value = '';
+  document.getElementById('newOrg').value = '';
+  document.getElementById('newDiagnosticUrl').value = '';
+  document.getElementById('newIndustry').value = '';
+  document.getElementById('newRevenueBand').value = '';
+  document.getElementById('newNumLocations').value = '';
+  document.getElementById('newDirectReports').value = '';
+  document.getElementById('newRegions').value = '';
+}
+
+function closeAddModal() {
+  document.getElementById('addModal').classList.remove('open');
+}
+
+async function addClient() {
+  const name            = document.getElementById('newName').value.trim();
+  const email           = document.getElementById('newEmail').value.trim();
+  const title           = document.getElementById('newTitle').value.trim();
+  const org             = document.getElementById('newOrg').value.trim();
+  const diagnosticUrl   = document.getElementById('newDiagnosticUrl').value.trim();
+  const industry        = document.getElementById('newIndustry').value || null;
+  const revenueBand     = document.getElementById('newRevenueBand').value || null;
+  const numLocations    = document.getElementById('newNumLocations').value || null;
+  const directReports         = document.getElementById('newDirectReports').value ? parseInt(document.getElementById('newDirectReports').value) : null;
+  const regions               = document.getElementById('newRegions').value.trim() || null;
+  const coachingSessionsEnabled = document.getElementById('newCoachingSessions').checked;
+  const errEl = document.getElementById('modalError');
+
+  if (!name)  { errEl.textContent = 'Name is required.'; return; }
+  if (!email) { errEl.textContent = 'Email is required — needed for client notifications.'; return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { errEl.textContent = 'Please enter a valid email address.'; return; }
+
+  const saveBtn = document.getElementById('saveClientBtn');
+  saveBtn.textContent = 'Creating…';
+  saveBtn.disabled = true;
+
+  const { data, error } = await db
+    .from('clients')
+    .insert({ name, email: email || null, title: title || null, organization: org || null, diagnostic_report_url: diagnosticUrl || null, is_active: true, ask_alex_enabled: true, industry, revenue_band: revenueBand, num_locations: numLocations, direct_reports_count: directReports, regions_owned: regions, coaching_sessions_enabled: coachingSessionsEnabled })
+    .select()
+    .single();
+
+  if (error || !data) {
+    errEl.textContent = 'Error creating client. Try again.';
+    saveBtn.textContent = 'Create Client';
+    saveBtn.disabled = false;
+    return;
+  }
+
+  const portalURL = `${PORTAL_BASE_URL}?token=${data.token}`;
+
+  document.getElementById('newClientResult').innerHTML = `
+    <div class="new-client-result">
+      <h4>✅ ${name} created successfully.</h4>
+      <p style="font-size:13px;margin-bottom:8px;">Their portal link (send this to them):</p>
+      <div class="client-url-box">
+        <code>${portalURL}</code>
+        <button class="copy-btn" onclick="copyURL('${portalURL}', this)">Copy</button>
+      </div>
+    </div>
+  `;
+
+  saveBtn.style.display = 'none';
+  errEl.textContent = '';
+  document.getElementById('cancelAddBtn').textContent = 'Done';
+  allClients.unshift(data);
+  renderClients();
+  renderStats();
+}
+
+
+async function togglePlanEdit(clientId, currentState) {
+  const newState = !currentState;
+  const btn = document.getElementById('planEditBtn-' + clientId);
+  const statusEl = document.getElementById('planEditStatus-' + clientId);
+  btn.textContent = 'Saving…';
+  btn.disabled = true;
+
+  const { error } = await db.from('clients').update({ allow_plan_edit: newState }).eq('id', clientId);
+
+  if (error) {
+    btn.textContent = 'Error — try again';
+    btn.disabled = false;
+    return;
+  }
+
+  // Update local state
+  allClients = allClients.map(c => c.id === clientId ? { ...c, allow_plan_edit: newState } : c);
+
+  // Update button + status text in place (no full re-render needed)
+  if (newState) {
+    btn.textContent = 'Lock Plan Editing';
+    btn.style.background = 'var(--red)';
+    btn.disabled = false;
+    btn.setAttribute('onclick', `togglePlanEdit('${clientId}', true)`);
+    if (statusEl) statusEl.textContent = '⚠️ Edit is unlocked. This client can currently update their plan. Lock it again once they\'ve resubmitted.';
+  } else {
+    btn.textContent = 'Unlock Plan Editing';
+    btn.style.background = 'var(--teal)';
+    btn.disabled = false;
+    btn.setAttribute('onclick', `togglePlanEdit('${clientId}', false)`);
+    if (statusEl) statusEl.textContent = 'Plan is locked. Unlock to let this client update their goals, metric, or rewards.';
+  }
+}
+
+async function toggleCoachingSessions(clientId, currentState) {
+  const newState  = !currentState;
+  const btn       = document.getElementById('coachingSessionBtn-' + clientId);
+  const statusEl  = document.getElementById('coachingSessionStatus-' + clientId);
+  btn.textContent = 'Saving…';
+  btn.disabled    = true;
+
+  const { error } = await db.from('clients').update({ coaching_sessions_enabled: newState }).eq('id', clientId);
+
+  if (error) {
+    btn.textContent = 'Error — try again';
+    btn.disabled    = false;
+    return;
+  }
+
+  allClients = allClients.map(c => c.id === clientId ? { ...c, coaching_sessions_enabled: newState } : c);
+
+  if (newState) {
+    btn.textContent = 'Disable Coaching Sessions';
+    btn.style.background = 'var(--red)';
+    btn.setAttribute('onclick', `toggleCoachingSessions('${clientId}', true)`);
+    if (statusEl) statusEl.textContent = 'Enabled. Their weekly check-in includes a coaching session attendance question.';
+  } else {
+    btn.textContent = 'Enable Coaching Sessions';
+    btn.style.background = 'var(--teal)';
+    btn.setAttribute('onclick', `toggleCoachingSessions('${clientId}', false)`);
+    if (statusEl) statusEl.textContent = 'Not enabled. The coaching session attendance question is hidden from their check-in.';
+  }
+  btn.disabled = false;
+}
+
+async function togglePortalLock(clientId, currentState) {
+  const newState = !currentState;
+  const btn = document.getElementById('portalLockBtn-' + clientId);
+  const statusEl = document.getElementById('portalLockStatus-' + clientId);
+  btn.textContent = 'Saving…';
+  btn.disabled = true;
+
+  const { error } = await db.from('clients').update({ portal_locked: newState }).eq('id', clientId);
+
+  if (error) {
+    btn.textContent = 'Error — try again';
+    btn.disabled = false;
+    return;
+  }
+
+  allClients = allClients.map(c => c.id === clientId ? { ...c, portal_locked: newState } : c);
+
+  if (newState) {
+    btn.textContent = 'Unlock Portal';
+    btn.style.background = 'var(--teal)';
+    btn.setAttribute('onclick', `togglePortalLock('${clientId}', true)`);
+    if (statusEl) statusEl.textContent = '🔒 Locked — client sees a locked screen and cannot access the portal.';
+  } else {
+    btn.textContent = 'Lock Portal';
+    btn.style.background = 'var(--red)';
+    btn.setAttribute('onclick', `togglePortalLock('${clientId}', false)`);
+    if (statusEl) statusEl.textContent = '✓ Unlocked — client can access the portal normally.';
+  }
+  btn.disabled = false;
+}
+
+async function toggleAskAlex(clientId, currentState) {
+  const newState = !currentState;
+  const btn = document.getElementById('askAlexBtn-' + clientId);
+  const statusEl = document.getElementById('askAlexStatus-' + clientId);
+  btn.textContent = 'Saving…';
+  btn.disabled = true;
+
+  const { error } = await db.from('clients').update({ ask_alex_enabled: newState }).eq('id', clientId);
+
+  if (error) {
+    btn.textContent = 'Error — try again';
+    btn.disabled = false;
+    return;
+  }
+
+  allClients = allClients.map(c => c.id === clientId ? { ...c, ask_alex_enabled: newState } : c);
+
+  if (newState) {
+    btn.textContent = 'Disable Ask Alex';
+    btn.style.background = 'var(--red)';
+    btn.setAttribute('onclick', `toggleAskAlex('${clientId}', true)`);
+    if (statusEl) statusEl.textContent = '✓ Enabled — client sees the Ask Alex tab in their portal.';
+  } else {
+    btn.textContent = 'Enable Ask Alex';
+    btn.style.background = 'var(--teal)';
+    btn.setAttribute('onclick', `toggleAskAlex('${clientId}', false)`);
+    if (statusEl) statusEl.textContent = '⛔ Disabled — Ask Alex tab is hidden for this client.';
+  }
+  btn.disabled = false;
+}
+
+async function saveCoachingDates(clientId) {
+  const startEl = document.getElementById('cpStart-' + clientId);
+  const endEl   = document.getElementById('cpEnd-'   + clientId);
+  const msgEl   = document.getElementById('cpDatesMsg-' + clientId);
+
+  const payload = {
+    coaching_program_start_date: startEl.value || null,
+    coaching_program_end_date:   endEl.value   || null,
+  };
+
+  msgEl.textContent = 'Saving…';
+  const { error } = await db.from('clients').update(payload).eq('id', clientId);
+
+  if (error) {
+    msgEl.textContent = 'Error saving dates — try again.';
+    msgEl.style.color = 'var(--red)';
+    return;
+  }
+
+  allClients = allClients.map(c => c.id === clientId ? { ...c, ...payload } : c);
+  msgEl.textContent = '✓ Dates saved.';
+  msgEl.style.color = '#2e7d32';
+  setTimeout(() => { msgEl.textContent = 'Dates auto-save on change.'; msgEl.style.color = 'var(--gray-600)'; }, 2500);
+}
+
+// ─────────────────────────────────────────────
+// IMPORT CLIENTS
+// ─────────────────────────────────────────────
+function openImportModal() {
+  document.getElementById('importModal').classList.add('open');
+  document.getElementById('importPreview').innerHTML = '';
+  document.getElementById('importError').textContent = '';
+  document.getElementById('importFileInput').value = '';
+  document.getElementById('importConfirmBtn').style.display = 'none';
+}
+
+function closeImportModal() {
+  document.getElementById('importModal').classList.remove('open');
+}
+
+let importParsedClients = [];
+
+async function handleImportFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const errEl = document.getElementById('importError');
+  errEl.textContent = '';
+  document.getElementById('importPreview').innerHTML = '<p style="color:var(--gray-600);font-size:13px;">Parsing file…</p>';
+  document.getElementById('importConfirmBtn').style.display = 'none';
+
+  try {
+    const data = await file.arrayBuffer();
+    const workbook = XLSX.read(data, { type: 'array' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+    if (rows.length === 0) {
+      errEl.textContent = 'No rows found in the spreadsheet.';
+      document.getElementById('importPreview').innerHTML = '';
+      return;
+    }
+
+    importParsedClients = rows;
+
+    // Build preview table
+    const preview = rows.slice(0, 20).map(r => {
+      const name  = (r.Name  || r.name  || '').toString().trim();
+      const email = (r.Email || r.email || '').toString().trim();
+      const org   = (r.Organization || r.organization || r.Org || r.org || '').toString().trim();
+      const valid = name && email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+      return `<tr style="background:${valid ? '' : '#fff8f0'};">
+        <td style="padding:6px 10px;font-size:13px;border-bottom:1px solid var(--gray-200);">${name || '<span style="color:var(--red)">Missing</span>'}</td>
+        <td style="padding:6px 10px;font-size:13px;border-bottom:1px solid var(--gray-200);">${email || '<span style="color:var(--red)">Missing</span>'}</td>
+        <td style="padding:6px 10px;font-size:13px;border-bottom:1px solid var(--gray-200);">${org || '—'}</td>
+        <td style="padding:6px 10px;font-size:13px;border-bottom:1px solid var(--gray-200);">${valid ? '✅' : '⚠️ Skip'}</td>
+      </tr>`;
+    }).join('');
+
+    document.getElementById('importPreview').innerHTML = `
+      <p style="font-size:13px;color:var(--gray-600);margin-bottom:8px;">${rows.length} row${rows.length !== 1 ? 's' : ''} found${rows.length > 20 ? ' (showing first 20)' : ''}:</p>
+      <table style="width:100%;border-collapse:collapse;border:1px solid var(--gray-200);border-radius:6px;overflow:hidden;">
+        <thead><tr style="background:var(--navy);">
+          <th style="padding:8px 10px;text-align:left;color:#fff;font-size:11px;text-transform:uppercase;">Name</th>
+          <th style="padding:8px 10px;text-align:left;color:#fff;font-size:11px;text-transform:uppercase;">Email</th>
+          <th style="padding:8px 10px;text-align:left;color:#fff;font-size:11px;text-transform:uppercase;">Organization</th>
+          <th style="padding:8px 10px;text-align:left;color:#fff;font-size:11px;text-transform:uppercase;">Status</th>
+        </tr></thead>
+        <tbody>${preview}</tbody>
+      </table>
+      <p style="font-size:11px;color:var(--gray-600);margin-top:8px;">Columns used: Name, Email, Organization (optional), Title (optional), Industry (optional).</p>
+    `;
+    document.getElementById('importConfirmBtn').style.display = 'inline-block';
+  } catch (err) {
+    errEl.textContent = 'Could not parse file. Please use .xlsx or .csv format.';
+    document.getElementById('importPreview').innerHTML = '';
+  }
+}
+
+async function confirmImport() {
+  const btn = document.getElementById('importConfirmBtn');
+  const errEl = document.getElementById('importError');
+  btn.textContent = 'Importing…';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/import-clients', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clients: importParsedClients }),
+    });
+    const result = await res.json();
+
+    if (!res.ok || !result.success) {
+      errEl.textContent = 'Import failed: ' + (result.error || 'Unknown error');
+      btn.textContent = 'Import Clients';
+      btn.disabled = false;
+      return;
+    }
+
+    closeImportModal();
+    alert(`✅ ${result.imported} client${result.imported !== 1 ? 's' : ''} imported successfully${result.skipped ? ` (${result.skipped} skipped due to missing data)` : ''}.`);
+    await loadDashboard();
+  } catch (err) {
+    errEl.textContent = 'Error: ' + err.message;
+    btn.textContent = 'Import Clients';
+    btn.disabled = false;
+  }
+}
+
+async function saveDiagnosticUrl(clientId, btn) {
+  const input = document.getElementById('diagUrl-' + clientId);
+  const url   = input.value.trim();
+  btn.textContent = 'Saving…';
+  btn.disabled = true;
+  const { error } = await db.from('clients')
+    .update({ diagnostic_report_url: url || null })
+    .eq('id', clientId);
+  if (error) {
+    btn.textContent = 'Error';
+    btn.style.background = 'var(--red)';
+    setTimeout(() => { btn.textContent = 'Save Link'; btn.style.background = ''; btn.disabled = false; }, 2000);
+  } else {
+    allClients = allClients.map(c => c.id === clientId ? {...c, diagnostic_report_url: url || null} : c);
+    btn.textContent = 'Saved ✓';
+    btn.style.background = '#2e7d32';
+    setTimeout(() => { btn.textContent = 'Save Link'; btn.style.background = 'var(--navy)'; btn.disabled = false; }, 2000);
+  }
+}
+// ─────────────────────────────────────────────
+// CONFIRM MODAL HELPERS
+// ─────────────────────────────────────────────
+function showConfirmModal(title, message, btnText, btnClass, onConfirm) {
+  document.getElementById('confirmTitle').textContent = title;
+  document.getElementById('confirmMessage').textContent = message;
+  const btn = document.getElementById('confirmActionBtn');
+  btn.textContent = btnText;
+  btn.className = btnClass;
+  btn.onclick = async () => {
+    btn.disabled = true;
+    btn.textContent = 'Working…';
+    await onConfirm();
+    closeConfirmModal();
+  };
+  document.getElementById('confirmModal').classList.add('open');
+}
+function closeConfirmModal() {
+  document.getElementById('confirmModal').classList.remove('open');
+  document.getElementById('confirmActionBtn').disabled = false;
+}
+document.getElementById('confirmModal').addEventListener('click', function(e) {
+  if (e.target === this) closeConfirmModal();
+});
+
+// ─────────────────────────────────────────────
+// ARCHIVE / UNARCHIVE
+// ─────────────────────────────────────────────
+function archiveClient(clientId, clientName) {
+  showConfirmModal(
+    'Archive this profile?',
+    `"${clientName}" will be removed from the active dashboard but kept in the database. You can view or restore them using the Archived filter.`,
+    'Archive Profile', 'btn-warning',
+    async () => {
+      await db.from('clients').update({ is_archived: true }).eq('id', clientId);
+      allClients = allClients.map(c => c.id === clientId ? {...c, is_archived: true} : c);
+      renderStats();
+      renderClients();
+    }
+  );
+}
+
+function unarchiveClient(clientId, clientName) {
+  showConfirmModal(
+    'Restore this profile?',
+    `"${clientName}" will be moved back to the active dashboard.`,
+    'Restore Profile', 'btn-save',
+    async () => {
+      await db.from('clients').update({ is_archived: false }).eq('id', clientId);
+      allClients = allClients.map(c => c.id === clientId ? {...c, is_archived: false} : c);
+      renderStats();
+      renderClients();
+    }
+  );
+}
+
+// ─────────────────────────────────────────────
+// HARD DELETE
+// ─────────────────────────────────────────────
+function hardDeleteClient(clientId, clientName) {
+  showConfirmModal(
+    '⚠️ Permanently delete?',
+    `This will PERMANENTLY delete "${clientName}" and ALL their check-in history. Use this ONLY for test or dummy profiles. This cannot be undone.`,
+    'Delete Permanently', 'btn-danger',
+    async () => {
+      await db.from('checkins').delete().eq('client_id', clientId);
+      await db.from('clients').delete().eq('id', clientId);
+      allClients  = allClients.filter(c => c.id !== clientId);
+      allCheckins = allCheckins.filter(c => c.client_id !== clientId);
+      renderStats();
+      renderClients();
+    }
+  );
+}
+
+// ─────────────────────────────────────────────
+// EXPORT DATA (downloads JSON to your computer)
+// ─────────────────────────────────────────────
+function exportData() {
+  const payload = {
+    exported_at: new Date().toISOString(),
+    export_version: '1.0',
+    clients: allClients,
+    checkins: allCheckins
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'gps-portal-backup-' + new Date().toISOString().split('T')[0] + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+
+// ─────────────────────────────────────────────
+// EXPORT DROPDOWN TOGGLE
+// ─────────────────────────────────────────────
+function toggleExportMenu() {
+  const menu = document.getElementById('exportMenu');
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+document.addEventListener('click', function(e) {
+  const wrap = document.getElementById('exportDropdownWrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('exportMenu').style.display = 'none';
+  }
+});
+
+// ─────────────────────────────────────────────
+// EXPORT FOR GOHIGHLEVEL (CSV)
+// ─────────────────────────────────────────────
+async function sendTestReminders() {
+  if (!confirm('This will send a sample reminder email to alex@gpsleadership.org so you can see exactly what your clients receive. Send it now?')) return;
+  try {
+    const res = await fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'test_reminder',
+        toEmail: 'alex@gpsleadership.org'
+      })
+    });
+    const json = await res.json();
+    if (json.success) {
+      alert('Test reminder sent to alex@gpsleadership.org — check your inbox.');
+    } else {
+      alert('Error: ' + (json.error || 'Unknown error'));
+    }
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+}
+
+function exportGHL() {
+  const year = new Date().getFullYear();
+
+  // Build one row per non-archived client who has a real email
+  const rows = allClients
+    .filter(c => !c.is_archived)
+    .map(c => {
+      const clientCheckins = allCheckins.filter(ci => ci.client_id === c.id);
+      const submitted      = clientCheckins.length;
+      const yesCount       = clientCheckins.filter(ci => ci.completion_status === 'Yes').length;
+      const followThrough  = submitted > 0 ? Math.round((yesCount / submitted) * 100) + '%' : '';
+
+      // GHL Tags — matches exactly what to create in GHL Tags settings
+      const tags = [
+        'GPS 90-Day Client',
+        `GPS-${year}`,
+        c.tp3_pillar ? `GPS-${c.tp3_pillar}` : null,
+        c.is_active ? 'GPS-Active' : 'GPS-Complete',
+      ].filter(Boolean).join(', ');
+
+      const nameParts  = (c.name || '').trim().split(/\s+/);
+      const firstName  = nameParts[0] || '';
+      const lastName   = nameParts.slice(1).join(' ') || '';
+
+      // Status
+      const status = !c.plan_submitted_at ? 'Enrolled – Plan Pending'
+        : c.is_active ? 'Active'
+        : 'Complete';
+
+      return {
+        'First Name':              firstName,
+        'Last Name':               lastName,
+        'Email':                   c.email || '',
+        'Company Name':            c.organization || '',
+        'Tags':                    tags,
+        // ── GPS Custom Fields (create these in GHL → Settings → Custom Fields) ──
+        'GPS TP3 Pillar':          c.tp3_pillar || '',
+        'GPS Engagement Status':   status,
+        'GPS Coaching Year':       String(year),
+        'GPS Plan Start Date':     c.plan_start_date || '',
+        'GPS 90-Day Goal':         c.goal_statement || '',
+        'GPS 30-Day Goal':         c.goal_30_day || '',
+        'GPS Start Behavior':      c.start_behavior || '',
+        'GPS Metric Name':         c.metric_name || '',
+        'GPS Metric Baseline':     c.metric_baseline != null ? String(c.metric_baseline) : '',
+        'GPS Metric Target':       c.metric_target  != null ? String(c.metric_target)  : '',
+        'GPS Metric Current':      c.metric_current != null ? String(c.metric_current) : '',
+        'GPS Weeks Completed':     String(submitted),
+        'GPS Follow-Through Rate': followThrough,
+      };
+    });
+
+  if (rows.length === 0) {
+    alert('No active clients to export.');
+    return;
+  }
+
+  // Build CSV string
+  const headers = Object.keys(rows[0]);
+  const csvLines = [
+    headers.join(','),
+    ...rows.map(row =>
+      headers.map(h => {
+        const val = String(row[h] || '').replace(/"/g, '""');
+        return val.includes(',') || val.includes('"') || val.includes('\n') ? `"${val}"` : val;
+      }).join(',')
+    )
+  ];
+
+  const blob = new Blob([csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'gps-clients-ghl-' + new Date().toISOString().split('T')[0] + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+// Close modal on overlay click
+document.getElementById('addModal').addEventListener('click', function(e) {
+  if (e.target === this) closeAddModal();
+});
+document.getElementById('importModal').addEventListener('click', function(e) {
+  if (e.target === this) closeImportModal();
+});
+document.getElementById('addAdminModal').addEventListener('click', function(e) {
+  if (e.target === this) closeAddAdminModal();
+});
+
+// ─────────────────────────────────────────────
+// SECTION NAV
+// ─────────────────────────────────────────────
+let _currentSection = 'dashboard';
+
+function showSection(name) {
+  _currentSection = name;
+  ['dashboard', 'clients', 'emails', 'templates', 'admins'].forEach(s => {
+    document.getElementById('section-' + s).style.display = s === name ? 'block' : 'none';
+    document.getElementById('tab-' + s).classList.toggle('active', s === name);
+  });
+  if (name === 'emails')    loadEmailLog();
+  if (name === 'admins')    loadAdminAccounts();
+  if (name === 'templates') loadEmailTemplates();
+  if (name === 'dashboard') renderDashboardSection();
+}
+
+// ─────────────────────────────────────────────
+// EMAIL TEMPLATES
+// ─────────────────────────────────────────────
+async function loadEmailTemplates() {
+  const el = document.getElementById('templatesContent');
+  el.innerHTML = '<div class="spinner"></div>';
+
+  const { data, error } = await db
+    .from('email_templates')
+    .select('*')
+    .order('created_at', { ascending: true });
+
+  if (error || !data || data.length === 0) {
+    el.innerHTML = `<div style="padding:24px;text-align:center;color:var(--gray-600);font-size:14px;">
+      ${error ? 'Error loading templates: ' + error.message : 'No templates found. Run migration v4 to seed defaults.'}
+    </div>`;
+    return;
+  }
+
+  el.innerHTML = data.map(t => renderTemplateCard(t)).join('');
+}
+
+function renderTemplateCard(t) {
+  const approved = t.is_approved;
+  const updatedAt = t.updated_at
+    ? new Date(t.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : '';
+
+  return `
+    <div id="tpl-card-${t.id}" style="background:var(--white);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.07);margin-bottom:16px;overflow:hidden;border-left:4px solid ${approved ? 'var(--teal)' : 'var(--gray-300)'};">
+      <div style="padding:14px 18px;background:${approved ? 'var(--light-teal)' : 'var(--gray-100)'};display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <div>
+          <div style="font-family:'Montserrat',sans-serif;font-size:14px;font-weight:700;color:var(--navy);">${escHtml(t.label)}</div>
+          <div style="font-size:11px;color:var(--gray-600);margin-top:2px;">Key: <code>${escHtml(t.template_key)}</code>${updatedAt ? ' · Last saved ' + updatedAt : ''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--navy);font-weight:600;">
+            <input type="checkbox" id="tpl-approved-${t.id}" ${approved ? 'checked' : ''}
+              style="width:16px;height:16px;cursor:pointer;"
+              onchange="toggleTemplateApproval('${t.id}', '${t.template_key}', this.checked)" />
+            ${approved ? '✓ Approved' : 'Approve'}
+          </label>
+        </div>
+      </div>
+      <div style="padding:16px 18px;">
+        <div style="margin-bottom:12px;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);display:block;margin-bottom:6px;">Subject Line</label>
+          <input id="tpl-subject-${t.id}" type="text" value="${escHtml(t.subject)}"
+            style="width:100%;padding:8px 12px;border:2px solid var(--gray-300);border-radius:6px;font-size:14px;font-family:'Open Sans',sans-serif;" />
+        </div>
+        <div style="margin-bottom:12px;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);display:block;margin-bottom:6px;">Email Body</label>
+          <textarea id="tpl-body-${t.id}"
+            style="width:100%;padding:10px 12px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;resize:vertical;min-height:180px;line-height:1.6;"
+            >${escHtml(t.body_text)}</textarea>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <button onclick="saveEmailTemplate('${t.id}', '${t.template_key}')"
+            style="background:var(--navy);color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;">
+            Save Changes
+          </button>
+          <span id="tpl-status-${t.id}" style="font-size:13px;color:var(--teal);min-height:18px;"></span>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function saveEmailTemplate(templateId, templateKey) {
+  const subjectEl = document.getElementById('tpl-subject-' + templateId);
+  const bodyEl    = document.getElementById('tpl-body-'    + templateId);
+  const statusEl  = document.getElementById('tpl-status-'  + templateId);
+
+  const subject = subjectEl ? subjectEl.value.trim() : '';
+  const body    = bodyEl    ? bodyEl.value            : '';
+
+  if (!subject) { statusEl.textContent = 'Subject cannot be empty.'; statusEl.style.color = 'var(--red)'; return; }
+  if (!body.trim()) { statusEl.textContent = 'Body cannot be empty.'; statusEl.style.color = 'var(--red)'; return; }
+
+  statusEl.textContent = 'Saving…'; statusEl.style.color = 'var(--gray-600)';
+
+  const { data: pwData } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
+  const password = pwData?.value || 'GPS2026';
+
+  try {
+    const res = await fetch('/api/email-templates', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ template_key: templateKey, subject, body_text: body, password })
+    });
+    const json = await res.json();
+    if (!res.ok || json.error) {
+      statusEl.textContent = 'Error: ' + (json.error || 'Unknown error');
+      statusEl.style.color = 'var(--red)';
+    } else {
+      statusEl.textContent = '✓ Saved';
+      statusEl.style.color = 'var(--teal)';
+      setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
+      loadEmailTemplates(); // refresh to update "last saved" timestamp
+    }
+  } catch (err) {
+    statusEl.textContent = 'Error: ' + err.message;
+    statusEl.style.color = 'var(--red)';
+  }
+}
+
+async function toggleTemplateApproval(templateId, templateKey, approved) {
+  const statusEl = document.getElementById('tpl-status-' + templateId);
+  if (statusEl) { statusEl.textContent = 'Saving…'; statusEl.style.color = 'var(--gray-600)'; }
+
+  const { data: pwData } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
+  const password = pwData?.value || 'GPS2026';
+
+  try {
+    const res = await fetch('/api/email-templates', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ template_key: templateKey, is_approved: approved, password })
+    });
+    const json = await res.json();
+    if (!res.ok || json.error) {
+      if (statusEl) { statusEl.textContent = 'Error: ' + (json.error || 'Unknown'); statusEl.style.color = 'var(--red)'; }
+    } else {
+      if (statusEl) { statusEl.textContent = approved ? '✓ Approved' : 'Approval removed'; statusEl.style.color = 'var(--teal)'; }
+      setTimeout(() => loadEmailTemplates(), 600); // refresh card border/color
+    }
+  } catch (err) {
+    if (statusEl) { statusEl.textContent = 'Error: ' + err.message; statusEl.style.color = 'var(--red)'; }
+  }
+}
+
+// ─────────────────────────────────────────────
+// EMAIL LOG
+// ─────────────────────────────────────────────
+async function loadEmailLog() {
+  const el = document.getElementById('emailLogContent');
+  el.innerHTML = '<div class="spinner"></div>';
+
+  const { data, error } = await db
+    .from('email_log')
+    .select('*')
+    .order('sent_at', { ascending: false })
+    .limit(100);
+
+  if (error || !data) {
+    el.innerHTML = `<div style="color:var(--red);font-size:13px;">Failed to load email log: ${error?.message || 'Unknown error'}</div>`;
+    return;
+  }
+
+  if (data.length === 0) {
+    el.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--gray-600);font-size:14px;">No emails logged yet. Run reminders or send a test to see records here.</div>`;
+    return;
+  }
+
+  const fmt = (ts) => {
+    const d = new Date(ts);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' +
+           d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  };
+
+  el.innerHTML = `
+    <div style="overflow-x:auto;">
+      <table class="email-log-table">
+        <thead>
+          <tr>
+            <th>Sent</th>
+            <th>To</th>
+            <th>Type</th>
+            <th>Subject</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.map(row => `
+            <tr>
+              <td style="white-space:nowrap;color:var(--gray-600);">${fmt(row.sent_at)}</td>
+              <td>
+                <div style="font-weight:600;">${row.recipient_name || ''}</div>
+                <div style="font-size:11px;color:var(--gray-600);">${row.recipient_email}</div>
+              </td>
+              <td><span style="background:var(--light-sand);border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700;">${row.email_type}</span></td>
+              <td style="max-width:220px;font-size:12px;color:var(--gray-600);">${row.subject || '—'}</td>
+              <td class="${row.status === 'sent' ? 'status-sent' : 'status-error'}">${row.status === 'sent' ? '✓ Sent' : '✗ Error'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div style="padding:10px 0;font-size:11px;color:var(--gray-600);">Showing last ${data.length} email${data.length !== 1 ? 's' : ''}</div>
+  `;
+}
+
+// ─────────────────────────────────────────────
+// RUN REMINDERS NOW
+// ─────────────────────────────────────────────
+async function runRemindersNow() {
+  if (!confirm('Send reminder emails now to all clients who haven\'t submitted this week\'s check-in?')) return;
+
+  const btn = event.target;
+  const originalText = btn.textContent;
+  btn.textContent = 'Sending…';
+  btn.disabled = true;
+
+  // Get the current session password to authenticate the API call
+  const { data: pwData } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
+  const password = pwData?.value || 'GPS2026';
+
+  try {
+    const res = await fetch('/api/run-reminders-now', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+    const text = await res.text();
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch (_) {
+      alert('API error — the endpoint may still be deploying. Wait 30 seconds and try again.\n\nDetails: ' + text.slice(0, 200));
+      return;
+    }
+    showRemindersResult(json);
+    // Reload the email log to show new entries
+    if (_currentSection === 'emails') {
+      setTimeout(loadEmailLog, 500);
+    }
+  } catch (err) {
+    alert('Error: ' + err.message);
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+}
+
+function showRemindersResult(json) {
+  const modal = document.getElementById('remindersResultModal');
+  const content = document.getElementById('remindersResultContent');
+
+  let html = `<div style="font-size:15px;font-weight:700;color:var(--teal);margin-bottom:6px;">${json.message || 'Done.'}</div>`;
+
+  if (json.sentList && json.sentList.length > 0) {
+    html += `
+      <div class="result-section">
+        <h4>✓ Reminders Sent (${json.sentList.length})</h4>
+        ${json.sentList.map(r => `
+          <div class="result-row">
+            <span class="result-name">${r.name}</span>
+            <span class="result-detail">${r.email} · Week ${r.week}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  if (json.skipped && json.skipped.length > 0) {
+    html += `
+      <div class="result-section">
+        <h4 style="color:var(--gray-600);">Skipped (${json.skipped.length})</h4>
+        ${json.skipped.map(r => `
+          <div class="result-row">
+            <span class="result-name" style="color:var(--gray-600);">${r.name}</span>
+            <span class="result-detail">${r.reason}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  if (json.errors && json.errors.length > 0) {
+    html += `
+      <div class="result-section">
+        <h4 style="color:var(--red);">Errors (${json.errors.length})</h4>
+        ${json.errors.map(r => `
+          <div class="result-row">
+            <span class="result-name" style="color:var(--red);">${r.client}</span>
+            <span class="result-detail">${r.email || ''} — ${JSON.stringify(r.error)}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  if (!json.sentList?.length && !json.errors?.length) {
+    html += `<p style="font-size:13px;color:var(--gray-600);margin-top:8px;">No emails were sent. This could mean: all clients have already submitted this week, or no clients have email addresses saved in their profiles.</p>`;
+  }
+
+  content.innerHTML = html;
+  modal.classList.add('open');
+}
+
+function closeRemindersResultModal() {
+  document.getElementById('remindersResultModal').classList.remove('open');
+}
+
+// ─────────────────────────────────────────────
+// ADMIN ACCOUNTS
+// ─────────────────────────────────────────────
+async function loadAdminAccounts() {
+  const el = document.getElementById('adminAccountsContent');
+  el.innerHTML = '<div class="spinner"></div>';
+
+  const { data, error } = await db
+    .from('admin_accounts')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    el.innerHTML = `<div style="color:var(--red);font-size:13px;">Failed to load accounts: ${error.message}</div>`;
+    return;
+  }
+
+  const accounts = data || [];
+
+  let html = `
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Notes</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+  if (accounts.length === 0) {
+    html += `<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--gray-600);">No admin accounts yet. Add your EA or assistant above.</td></tr>`;
+  } else {
+    html += accounts.map(a => `
+      <tr>
+        <td><strong>${a.name}</strong></td>
+        <td style="color:var(--gray-600);">${a.email || '—'}</td>
+        <td style="color:var(--gray-600);">${a.notes || '—'}</td>
+        <td>
+          <span style="background:${a.is_active ? '#e8f5e9' : '#f5f5f5'};color:${a.is_active ? '#2e7d32' : '#666'};padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;">
+            ${a.is_active ? 'Active' : 'Inactive'}
+          </span>
+        </td>
+        <td>
+          <button onclick="toggleAdminActive(${a.id}, ${a.is_active})"
+            style="font-size:12px;background:none;border:1px solid var(--gray-300);border-radius:4px;padding:4px 10px;cursor:pointer;margin-right:6px;">
+            ${a.is_active ? 'Deactivate' : 'Activate'}
+          </button>
+          <button onclick="deleteAdmin(${a.id}, '${a.name.replace(/'/g, "\\'")}')"
+            style="font-size:12px;background:none;border:1px solid var(--red);color:var(--red);border-radius:4px;padding:4px 10px;cursor:pointer;">
+            Remove
+          </button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  html += `</tbody></table>`;
+  el.innerHTML = html;
+}
+
+function openAddAdminModal() {
+  document.getElementById('addAdminModal').classList.add('open');
+  document.getElementById('adminName').value = '';
+  document.getElementById('adminEmail').value = '';
+  document.getElementById('adminPassword').value = '';
+  document.getElementById('adminNotes').value = '';
+  document.getElementById('adminModalError').textContent = '';
+}
+
+function closeAddAdminModal() {
+  document.getElementById('addAdminModal').classList.remove('open');
+}
+
+async function addAdmin() {
+  const name     = document.getElementById('adminName').value.trim();
+  const email    = document.getElementById('adminEmail').value.trim();
+  const password = document.getElementById('adminPassword').value.trim();
+  const notes    = document.getElementById('adminNotes').value.trim();
+  const errEl    = document.getElementById('adminModalError');
+
+  errEl.textContent = '';
+  if (!name)     { errEl.textContent = 'Name is required.'; return; }
+  if (!password) { errEl.textContent = 'Password is required.'; return; }
+  if (password.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; return; }
+
+  const { error } = await db.from('admin_accounts').insert({
+    name,
+    email: email || null,
+    password,
+    notes: notes || null,
+    role: 'admin',
+    is_active: true,
+  });
+
+  if (error) {
+    errEl.textContent = 'Error creating account: ' + error.message;
+  } else {
+    closeAddAdminModal();
+    loadAdminAccounts();
+  }
+}
+
+async function toggleAdminActive(id, currentlyActive) {
+  await db.from('admin_accounts').update({ is_active: !currentlyActive }).eq('id', id);
+  loadAdminAccounts();
+}
+
+async function deleteAdmin(id, name) {
+  if (!confirm(`Remove admin account for ${name}? This cannot be undone.`)) return;
+  await db.from('admin_accounts').delete().eq('id', id);
+  loadAdminAccounts();
+}
+
+// ─────────────────────────────────────────────
+// STAKEHOLDERS & SURVEY SCOREBOARD
+// ─────────────────────────────────────────────
+function escHtml(str) {
+  return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function loadStakeholderData(clientId) {
+  const el = document.getElementById('stakeholders-content-' + clientId);
+  if (!el) return;
+
+  const [stakeholderRes, responseRes, tokenRes] = await Promise.all([
+    db.from('stakeholders').select('*').eq('client_id', clientId).order('created_at'),
+    db.from('survey_responses')
+      .select('stakeholder_id,checkpoint,score,open_response,comments,comments_visible_to_client,submitted_at')
+      .eq('client_id', clientId)
+      .order('submitted_at', { ascending: true }),
+    db.from('survey_tokens')
+      .select('id,checkpoint,is_used,stakeholder_id,non_response_flagged,reminder_1_sent_at,reminder_2_sent_at,reminder_3_sent_at,sent_at')
+      .eq('client_id', clientId)
+  ]);
+
+  const stakeholders = stakeholderRes.data || [];
+  const responses    = responseRes.data    || [];
+  const tokens       = tokenRes.data       || [];
+
+  // Group full response objects by checkpoint
+  const responsesByCheckpoint = {};
+  responses.forEach(r => {
+    if (!responsesByCheckpoint[r.checkpoint]) responsesByCheckpoint[r.checkpoint] = [];
+    responsesByCheckpoint[r.checkpoint].push(r);
+  });
+
+  renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpoint, tokens, responses);
+}
+
+function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpoint, tokens, rawResponses) {
+  const activeStakeholders = stakeholders.filter(s => s.is_active);
+  const canAddMore         = activeStakeholders.length < 3;
+  const checkpoints        = ['baseline', 'day45', 'day90'];
+  const cpLabels           = { baseline: 'Baseline', day45: 'Day 45', day90: 'Day 90' };
+  const baselineTokens     = tokens.filter(t => t.checkpoint === 'baseline');
+  const baselineResponses  = (responsesByCheckpoint['baseline'] || []).length;
+
+  // Helpers
+  const isSupervisorOrBoard = s => s.relationship === 'supervisor' || s.is_board_member;
+  const roleLabel = s => s.relationship === 'supervisor' ? 'Supervisor'
+    : s.relationship === 'peer' ? 'Peer'
+    : s.relationship === 'direct_report' ? 'Direct Report'
+    : s.is_board_member ? 'Board Member'
+    : 'Other';
+
+  // Build per-stakeholder score map: { stakeholder_id: { baseline: num, day45: num, day90: num } }
+  const scoreMap = {};
+  (rawResponses || []).forEach(r => {
+    if (!scoreMap[r.stakeholder_id]) scoreMap[r.stakeholder_id] = {};
+    scoreMap[r.stakeholder_id][r.checkpoint] = parseFloat(r.score);
+  });
+
+  // Per-stakeholder non-response flag map
+  const nonResponseMap = {};
+  tokens.forEach(t => {
+    if (t.non_response_flagged) nonResponseMap[t.stakeholder_id] = true;
+  });
+
+  // Most-advanced checkpoint status per stakeholder
+  const cpOrder = { day90: 3, day45: 2, baseline: 1 };
+  const stakeholderTokenStatus = {}; // { stakeholder_id: { checkpoint, is_used } }
+  tokens.forEach(t => {
+    const prev = stakeholderTokenStatus[t.stakeholder_id];
+    if (!prev || (cpOrder[t.checkpoint] || 0) > (cpOrder[prev.checkpoint] || 0)) {
+      stakeholderTokenStatus[t.stakeholder_id] = t;
+    }
+  });
+
+  // ── Engagement badge ──────────────────────────────────────────────────────
+  let badgeHtml = '';
+  if (activeStakeholders.length === 0) {
+    badgeHtml = `<span class="engagement-badge badge-none">No stakeholders added</span>`;
+  } else if (baselineTokens.length === 0) {
+    badgeHtml = `<span class="engagement-badge badge-none">${activeStakeholders.length} stakeholder${activeStakeholders.length !== 1 ? 's' : ''} — survey not sent</span>`;
+  } else if (baselineResponses === 0) {
+    badgeHtml = `<span class="engagement-badge badge-sent">Baseline sent — awaiting responses</span>`;
+  } else if (baselineResponses < activeStakeholders.length) {
+    badgeHtml = `<span class="engagement-badge badge-partial">${baselineResponses}/${activeStakeholders.length} responses received</span>`;
+  } else {
+    badgeHtml = `<span class="engagement-badge badge-complete">✓ All baseline responses in</span>`;
+  }
+
+  // ── Stakeholder list rows ─────────────────────────────────────────────────
+  let listHtml = '';
+  if (activeStakeholders.length === 0) {
+    listHtml = `<p style="color:var(--gray-600);font-size:13px;font-style:italic;margin-bottom:4px;">No stakeholders added yet. Add up to 3 people who work closely with this client.</p>`;
+  } else {
+    listHtml = activeStakeholders.map(s => {
+      const tkStatus     = stakeholderTokenStatus[s.id];
+      const responded    = tkStatus && tkStatus.is_used;
+      const sent         = !!tkStatus;
+      const nonResponse  = nonResponseMap[s.id];
+      const cpSentLabel  = tkStatus ? cpLabels[tkStatus.checkpoint] : '';
+
+      const statusBadge = responded
+        ? `<span style="background:#e8f5e9;color:#2e7d32;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;">✓ Responded</span>`
+        : nonResponse
+        ? `<span style="background:#fff3cd;color:#856404;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;">⚠ Non-Response Flagged</span>`
+        : sent
+        ? `<span style="background:#e3edf9;color:#1565c0;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;">${cpSentLabel} Sent</span>`
+        : `<span style="background:var(--gray-200);color:var(--gray-600);font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;">Not Sent</span>`;
+
+      const supBoardBadge = isSupervisorOrBoard(s)
+        ? `<span style="background:#f0e6ff;color:#6b21a8;font-size:9px;font-weight:700;padding:1px 5px;border-radius:6px;margin-left:4px;">${s.is_board_member ? 'Board' : 'Supervisor'}</span>`
+        : '';
+
+      return `
+        <div class="stakeholder-row">
+          <div>
+            <div class="stakeholder-name">${escHtml(s.name)}${s.is_supervisor ? ' ⭐' : ''}${supBoardBadge}</div>
+            <div class="stakeholder-email">${escHtml(s.email)}</div>
+          </div>
+          <span class="stakeholder-role">${roleLabel(s)}</span>
+          ${statusBadge}
+          <button onclick="removeStakeholder('${s.id}','${clientId}','${s.name.replace(/'/g,"\\'").replace(/"/g,'\\"')}',this)"
+            style="margin-left:auto;font-size:11px;color:var(--red);background:none;border:1px solid var(--red);border-radius:4px;padding:3px 8px;cursor:pointer;white-space:nowrap;">
+            Remove
+          </button>
+        </div>`;
+    }).join('');
+  }
+
+  // ── Scoreboard ────────────────────────────────────────────────────────────
+  const hasScores = Object.keys(responsesByCheckpoint).length > 0;
+  let scoreboardHtml = '';
+
+  if (hasScores && activeStakeholders.length > 0) {
+    const peerStakeholders   = activeStakeholders.filter(s => !isSupervisorOrBoard(s));
+    const supBoardStakeholders = activeStakeholders.filter(s => isSupervisorOrBoard(s));
+
+    // Peer-only averages per checkpoint
+    const peerAvg = {};
+    checkpoints.forEach(cp => {
+      const scores = peerStakeholders.map(s => scoreMap[s.id]?.[cp]).filter(v => v != null && !isNaN(v));
+      peerAvg[cp] = scores.length ? scores.reduce((a,b) => a+b, 0) / scores.length : null;
+    });
+
+    // % change helper
+    const pct = (base, current) => {
+      if (base == null || current == null || base === 0) return null;
+      const v = ((current - base) / base * 100);
+      return (v > 0 ? '+' : '') + v.toFixed(0) + '%';
+    };
+
+    const scoreBadge = v => {
+      if (v == null) return `<span style="color:var(--gray-300);">—</span>`;
+      const cls = v >= 7 ? 'score-high' : v >= 4 ? 'score-mid' : 'score-low';
+      return `<span class="score-badge ${cls}">${v.toFixed(1)}</span>`;
+    };
+
+    const changeBadge = (base, current) => {
+      const p = pct(base, current);
+      if (!p) return `<span style="color:var(--gray-300);">—</span>`;
+      const up = p.startsWith('+');
+      return `<span style="font-size:11px;font-weight:700;color:${up ? '#16a34a' : '#dc2626'};">${p}</span>`;
+    };
+
+    // Individual stakeholder rows (peers first, then supervisor/board)
+    const orderedStakeholders = [...peerStakeholders, ...supBoardStakeholders];
+    const individualRows = orderedStakeholders.map(s => {
+      const scores = scoreMap[s.id] || {};
+      const base   = scores['baseline'];
+      const d45    = scores['day45'];
+      const d90    = scores['day90'];
+      const latest = d90 ?? d45 ?? null;
+      const isSB   = isSupervisorOrBoard(s);
+      const rowStyle = isSB
+        ? 'background:#faf5ff;'
+        : '';
+      return `<tr style="${rowStyle}">
+        <td style="font-weight:600;color:var(--navy);">${escHtml(s.name.split(' ')[0])} ${escHtml(s.name.split(' ').slice(1).map(w=>w[0]+'.').join(' '))}
+          ${isSB ? `<span style="font-size:9px;color:#6b21a8;font-weight:700;"> ${s.is_board_member ? '(Board)' : '(Sup)'}</span>` : ''}
+          ${nonResponseMap[s.id] ? `<span style="font-size:9px;color:#856404;"> ⚠</span>` : ''}
+        </td>
+        <td>${scoreBadge(base)}</td>
+        <td>${scoreBadge(d45)}</td>
+        <td>${scoreBadge(d90)}</td>
+        <td>${changeBadge(base, latest)}</td>
+      </tr>`;
+    }).join('');
+
+    // Peer average row
+    const peerAvgRow = peerStakeholders.length > 0 ? `
+      <tr style="border-top:2px solid var(--gray-300);background:var(--light-sand);">
+        <td style="font-weight:700;color:var(--navy);font-size:11px;text-transform:uppercase;letter-spacing:0.4px;">Peer Avg</td>
+        <td>${scoreBadge(peerAvg['baseline'])}</td>
+        <td>${scoreBadge(peerAvg['day45'])}</td>
+        <td>${scoreBadge(peerAvg['day90'])}</td>
+        <td>${changeBadge(peerAvg['baseline'], peerAvg['day90'] ?? peerAvg['day45'])}</td>
+      </tr>` : '';
+
+    // Supervisor/Board alert
+    let alertHtml = '';
+    supBoardStakeholders.forEach(s => {
+      const sbBase    = scoreMap[s.id]?.['baseline'];
+      const peerBase  = peerAvg['baseline'];
+      if (sbBase != null && peerBase != null) {
+        const diff = sbBase - peerBase;
+        if (Math.abs(diff) >= 2) {
+          const dir = diff > 0 ? 'higher' : 'lower';
+          const label = s.is_board_member ? 'Board member' : 'Supervisor';
+          alertHtml += `<div style="background:#fff8e1;border-left:3px solid #f59e0b;border-radius:0 6px 6px 0;padding:9px 13px;margin-bottom:8px;font-size:13px;color:#78350f;">
+            <strong>⚠ ${label} divergence:</strong> ${escHtml(s.name)}'s baseline score (${sbBase.toFixed(1)}) is ${Math.abs(diff).toFixed(1)} pts ${dir} than peer average (${peerBase.toFixed(1)}). Flag for coaching discussion.
+          </div>`;
+        }
+      }
+    });
+
+    // Narrative responses
+    let narrativeHtml = '';
+    checkpoints.forEach(cp => {
+      const cpRows = responsesByCheckpoint[cp] || [];
+      const items  = [];
+      cpRows.forEach(r => {
+        if (r.open_response) items.push({ text: r.open_response, type: 'observation', visible: true });
+        if (r.comments)      items.push({ text: r.comments, type: 'comment', visible: !!r.comments_visible_to_client });
+      });
+      if (!items.length) return;
+      narrativeHtml += `<div style="margin-bottom:14px;">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--teal);margin-bottom:8px;">${cpLabels[cp]}</div>
+        ${items.map(item => `
+          <div style="background:var(--gray-100);border-left:3px solid ${item.visible ? 'var(--teal)' : '#C9A84C'};border-radius:0 5px 5px 0;padding:8px 12px;margin-bottom:6px;font-size:13px;color:var(--text);line-height:1.55;">
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);margin-bottom:4px;">
+              ${item.type === 'observation' ? 'Key Observation' : 'Comment'} · ${item.visible ? '👁 Visible to client' : '🔒 Coach only'}
+            </div>
+            ${escHtml(item.text)}
+          </div>`).join('')}
+      </div>`;
+    });
+
+    scoreboardHtml = `
+      <div style="margin-top:18px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);margin-bottom:8px;border-bottom:1px solid var(--gray-200);padding-bottom:6px;">Perception Scoreboard</div>
+        ${alertHtml}
+        <div style="overflow-x:auto;">
+          <table class="scoreboard-table">
+            <thead>
+              <tr>
+                <th>Stakeholder</th>
+                <th>Baseline</th>
+                <th>Day 45</th>
+                <th>Day 90</th>
+                <th>Change</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${individualRows}
+              ${peerAvgRow}
+            </tbody>
+          </table>
+        </div>
+        ${narrativeHtml ? `<div style="margin-top:16px;border-top:1px solid var(--gray-200);padding-top:14px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--navy);margin-bottom:12px;">Written Responses</div>
+          ${narrativeHtml}
+        </div>` : ''}
+      </div>`;
+  }
+
+  // ── Add stakeholder inline form ───────────────────────────────────────────
+  const addFormHtml = canAddMore ? `
+    <div id="add-sh-form-${clientId}" style="display:none;margin-top:12px;background:var(--light-sand);border-radius:8px;padding:14px 16px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--gray-600);display:block;margin-bottom:4px;">Name *</label>
+          <input id="sh-name-${clientId}" type="text" placeholder="Full name" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" />
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--gray-600);display:block;margin-bottom:4px;">Email *</label>
+          <input id="sh-email-${clientId}" type="email" placeholder="email@company.com" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" />
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px;">
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--gray-600);display:block;margin-bottom:4px;">Relationship</label>
+          <select id="sh-rel-${clientId}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;">
+            <option value="supervisor">Supervisor</option>
+            <option value="peer" selected>Peer</option>
+            <option value="direct_report">Direct Report</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:flex-end;padding-bottom:4px;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--navy);">
+            <input type="checkbox" id="sh-sup-${clientId}" style="width:16px;height:16px;" />
+            Supervisor ⭐
+          </label>
+        </div>
+        <div style="display:flex;align-items:flex-end;padding-bottom:4px;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--navy);">
+            <input type="checkbox" id="sh-board-${clientId}" style="width:16px;height:16px;" />
+            Board Member
+          </label>
+        </div>
+      </div>
+      <div id="sh-err-${clientId}" style="color:var(--red);font-size:12px;margin-bottom:8px;min-height:16px;"></div>
+      <div style="display:flex;gap:8px;">
+        <button onclick="saveStakeholder('${clientId}',this)" style="background:var(--navy);color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;">Add Stakeholder</button>
+        <button onclick="document.getElementById('add-sh-form-${clientId}').style.display='none'" style="background:none;border:2px solid var(--gray-300);border-radius:6px;padding:8px 14px;font-size:13px;cursor:pointer;">Cancel</button>
+      </div>
+    </div>` : '';
+
+  const baselineSent    = baselineTokens.length > 0;
+  const sendDisabled    = activeStakeholders.length === 0 || baselineSent;
+  const sendBtnStyle    = sendDisabled
+    ? 'background:var(--gray-300);color:var(--gray-600);border:none;cursor:not-allowed;'
+    : 'background:var(--teal);color:#fff;border:none;cursor:pointer;';
+  const sendBtnLabel    = baselineSent ? '✓ Baseline Sent' : '▶ Send Baseline Survey';
+
+  el.innerHTML = `
+    <div style="margin-bottom:12px;">${badgeHtml}</div>
+    <div id="sh-list-${clientId}">${listHtml}</div>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+      ${canAddMore ? `
+        <button onclick="document.getElementById('add-sh-form-${clientId}').style.display='block';document.getElementById('sh-name-${clientId}').focus()"
+          style="font-size:12px;background:none;border:2px solid var(--navy);color:var(--navy);border-radius:6px;padding:6px 14px;cursor:pointer;font-weight:700;">
+          + Add Stakeholder
+        </button>` : `<span style="font-size:12px;color:var(--gray-600);font-style:italic;">Max 3 stakeholders reached.</span>`}
+      <button onclick="triggerBaselineSurvey('${clientId}',this)" ${sendDisabled ? 'disabled' : ''}
+        style="font-size:12px;${sendBtnStyle}border-radius:6px;padding:6px 14px;font-weight:700;">
+        ${sendBtnLabel}
+      </button>
+    </div>
+    ${addFormHtml}
+    ${scoreboardHtml}
+  `;
+}
+
+async function saveStakeholder(clientId, btn) {
+  const nameEl  = document.getElementById('sh-name-'  + clientId);
+  const emailEl = document.getElementById('sh-email-' + clientId);
+  const relEl   = document.getElementById('sh-rel-'   + clientId);
+  const supEl   = document.getElementById('sh-sup-'   + clientId);
+  const boardEl = document.getElementById('sh-board-' + clientId);
+  const errEl   = document.getElementById('sh-err-'   + clientId);
+
+  const name    = nameEl.value.trim();
+  const email   = emailEl.value.trim();
+  const rel     = relEl.value;
+  const isSup   = supEl ? supEl.checked : false;
+  const isBoard = boardEl ? boardEl.checked : false;
+
+  errEl.textContent = '';
+  if (!name)  { errEl.textContent = 'Name is required.'; return; }
+  if (!email) { errEl.textContent = 'Email is required.'; return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { errEl.textContent = 'Enter a valid email address.'; return; }
+
+  const { data: existing } = await db.from('stakeholders').select('id').eq('client_id', clientId).eq('is_active', true);
+  if ((existing || []).length >= 3) { errEl.textContent = 'Maximum 3 stakeholders per client.'; return; }
+
+  btn.textContent = 'Saving…';
+  btn.disabled = true;
+
+  const { error } = await db.from('stakeholders').insert({
+    client_id: clientId, name, email, relationship: rel,
+    is_supervisor: isSup, is_board_member: isBoard, is_active: true
+  });
+
+  if (error) {
+    errEl.textContent = 'Error: ' + error.message;
+    btn.textContent = 'Add Stakeholder';
+    btn.disabled = false;
+  } else {
+    loadStakeholderData(clientId);
+  }
+}
+
+async function removeStakeholder(stakeholderId, clientId, name, btn) {
+  if (!confirm(`Remove ${name} as a stakeholder? This cannot be undone.`)) return;
+  btn.textContent = 'Removing…';
+  btn.disabled = true;
+  await db.from('stakeholders').update({ is_active: false }).eq('id', stakeholderId);
+  loadStakeholderData(clientId);
+}
+
+async function triggerBaselineSurvey(clientId, btn) {
+  if (!confirm('Send the Baseline Survey to all active stakeholders for this client? Each will receive a unique survey link by email.')) return;
+
+  btn.textContent = 'Sending…';
+  btn.disabled = true;
+
+  const { data: pwData } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
+  const password = pwData?.value || 'GPS2026';
+
+  try {
+    const res  = await fetch('/api/send-survey', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ client_id: clientId, checkpoint: 'baseline', password })
+    });
+    const text = await res.text();
+    let json;
+    try { json = JSON.parse(text); }
+    catch(_) { alert('API error — response was not valid JSON:\n\n' + text.slice(0,300)); loadStakeholderData(clientId); return; }
+
+    // Surface top-level API errors (e.g. no behavior set, auth failed)
+    if (!res.ok || json.error) {
+      alert('Could not send survey:\n\n' + (json.error || `HTTP ${res.status}`));
+      loadStakeholderData(clientId);
+      return;
+    }
+
+    const sentCount = (json.sent    || []).length;
+    const errCount  = (json.errors  || []).length;
+    const skipCount = (json.skipped || []).length;
+    let msg = '';
+    if (sentCount > 0)  msg += `✓ Survey sent to ${sentCount} stakeholder${sentCount !== 1 ? 's' : ''}.\n`;
+    if (skipCount > 0)  msg += `${skipCount} already sent (skipped).\n`;
+    if (errCount  > 0)  msg += `⚠️ ${errCount} failed — check the Emails tab for details.`;
+    if (!msg)           msg  = 'No surveys were sent. Check that stakeholders are active and the client has a plan with a priority behavior set.';
+    alert(msg.trim());
+
+    // Reload to show updated badge/buttons
+    loadStakeholderData(clientId);
+    // Refresh email log if visible
+    if (_currentSection === 'emails') setTimeout(loadEmailLog, 500);
+  } catch(err) {
+    alert('Error: ' + err.message);
+    loadStakeholderData(clientId);
+  }
+}
+
+// ─────────────────────────────────────────────
+// REGENERATE TOKEN
+// ─────────────────────────────────────────────
+async function regenerateToken(clientId) {
+  const btn = document.getElementById('regenBtn-' + clientId);
+  const msg = document.getElementById('regenMsg-' + clientId);
+
+  if (!confirm('This will invalidate their current portal link. Anyone using the old link will be locked out immediately. Continue?')) return;
+
+  btn.textContent = 'Generating…'; btn.disabled = true;
+
+  const newToken = crypto.randomUUID();
+  const { error } = await db.from('clients').update({ token: newToken }).eq('id', clientId);
+
+  if (error) {
+    if (msg) msg.innerHTML = '<span style="color:var(--red);font-size:12px;">Error — try again.</span>';
+    btn.textContent = 'Regenerate Link'; btn.disabled = false;
+    return;
+  }
+
+  // Update local cache
+  allClients = allClients.map(c => c.id === clientId ? { ...c, token: newToken } : c);
+
+  const newURL = `${PORTAL_BASE_URL}?token=${newToken}`;
+
+  // Update the URL display in-place
+  const codeEl  = document.getElementById('portalUrlDisplay-' + clientId);
+  const copyBtn = document.getElementById('portalCopyBtn-'    + clientId);
+  if (codeEl)  codeEl.textContent = newURL;
+  if (copyBtn) copyBtn.onclick = () => copyURL(newURL, copyBtn);
+
+  if (msg) msg.innerHTML = `
+    <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:10px 14px;">
+      <div style="font-weight:700;color:#856404;font-size:12px;margin-bottom:8px;">⚠️ Old link is now invalid. New link is live above.</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button onclick="sendNewLink('${clientId}', '${newToken}')"
+          style="padding:6px 14px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">
+          Send New Link to Client
+        </button>
+        <span style="font-size:11px;color:var(--gray-600);">or share the updated link above manually</span>
+      </div>
+    </div>`;
+
+  btn.textContent = 'Regenerate Again'; btn.disabled = false;
+}
+
+async function sendNewLink(clientId, newToken) {
+  const client = allClients.find(c => c.id === clientId);
+  if (!client) return;
+  if (!client.email) { alert('No email address on file for this client.'); return; }
+
+  const portalURL = `${PORTAL_BASE_URL}?token=${newToken || client.token}`;
+
+  try {
+    const r = await fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'new_portal_link', clientEmail: client.email, clientName: client.name, portalURL })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Send failed');
+
+    const msg = document.getElementById('regenMsg-' + clientId);
+    if (msg) msg.innerHTML = `<span style="color:#2e7d32;font-size:12px;">✓ New link sent to ${client.email}</span>`;
+  } catch (err) {
+    alert('Error sending new link: ' + err.message);
+  }
+}
+
+async function sendWelcomeEmail(clientId) {
+  const client = allClients.find(c => c.id === clientId);
+  if (!client) return;
+  if (!client.email) { alert('No email address on file for this client.'); return; }
+
+  if (!confirm(`Send welcome email to ${client.email}?`)) return;
+
+  const btn = document.getElementById('welcomeEmailBtn-' + clientId);
+  btn.textContent = 'Sending…'; btn.disabled = true;
+
+  const portalURL = `${PORTAL_BASE_URL}?token=${client.token}`;
+
+  try {
+    const r = await fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'welcome_email', clientEmail: client.email, clientName: client.name, portalURL })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Send failed');
+
+    btn.textContent = '✓ Welcome Sent';
+    btn.style.background = '#2e7d32';
+    setTimeout(() => { btn.textContent = 'Send Welcome Email'; btn.style.background = ''; btn.disabled = false; }, 4000);
+
+    // Stamp welcome_sent_at so the reminder cron can track follow-up
+    await fetch(`${SUPABASE_URL}/rest/v1/clients?id=eq.${clientId}`, {
+      method: 'PATCH',
+      headers: {
+        apikey: SUPABASE_ANON,
+        Authorization: `Bearer ${SUPABASE_ANON}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal'
+      },
+      body: JSON.stringify({ welcome_sent_at: new Date().toISOString() })
+    });
+
+  } catch (err) {
+    alert('Error sending welcome email: ' + err.message);
+    btn.textContent = 'Send Welcome Email'; btn.disabled = false;
+  }
+}
+
+// ─────────────────────────────────────────────
+// DASHBOARD SECTION
+// ─────────────────────────────────────────────
+function renderDashboardSection() {
+  const el = document.getElementById('dashboardContent');
+  if (!el) return;
+
+  const now = new Date();
+
+  // Quick stats
+  const activeClients    = allClients.filter(c => c.is_active && !c.is_archived).length;
+  const noPlanYet        = allClients.filter(c => c.is_active && !c.is_archived && !c.plan_submitted_at).length;
+  const coachingEnrolled = allClients.filter(c => c.is_active && !c.is_archived && c.coaching_sessions_enabled).length;
+
+  // Check-ins this week (Mon–Sun)
+  const dayOfWeek = now.getDay(); // 0=Sun
+  const startOfWeek = new Date(now);
+  startOfWeek.setDate(now.getDate() - ((dayOfWeek + 6) % 7)); // Monday
+  startOfWeek.setHours(0, 0, 0, 0);
+  const checkinsThisWeek = allCheckins.filter(c => c.submitted_at && new Date(c.submitted_at) >= startOfWeek).length;
+
+  // Attention categories
+  const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
+
+  const invitedNotOpened = allClients.filter(c =>
+    !c.is_archived && c.welcome_sent_at && !c.portal_first_active_at
+  );
+
+  const haventSetUpPlan = allClients.filter(c =>
+    c.is_active && !c.is_archived && !c.plan_submitted_at
+  );
+
+  const daysSinceFirstActive = (c) => {
+    if (!c.portal_first_active_at) return null;
+    return Math.floor((now - new Date(c.portal_first_active_at)) / (1000 * 60 * 60 * 24));
+  };
+
+  const expiringIn5 = allClients.filter(c => {
+    if (c.is_archived || !c.portal_first_active_at) return false;
+    const days = daysSinceFirstActive(c);
+    return days !== null && days >= 85;
+  });
+
+  const expiringIn21 = allClients.filter(c => {
+    if (c.is_archived || !c.portal_first_active_at) return false;
+    const days = daysSinceFirstActive(c);
+    return days !== null && days >= 69 && days < 85;
+  });
+
+  const noCheckinThisWeek = allClients.filter(c => {
+    if (!c.is_active || c.is_archived || !c.plan_submitted_at) return false;
+    const hasCheckin = allCheckins.some(ch =>
+      ch.client_id === c.id && ch.submitted_at && new Date(ch.submitted_at) >= sevenDaysAgo
+    );
+    return !hasCheckin;
+  });
+
+  const attentionCategories = [
+    { label: 'Invited, not opened',    clients: invitedNotOpened, badgeClass: 'ab-amber' },
+    { label: "Haven't set up plan",    clients: haventSetUpPlan,  badgeClass: 'ab-amber' },
+    { label: 'Expiring in 5 days or less',  clients: expiringIn5,       badgeClass: 'ab-red' },
+    { label: 'Expiring in 21 days or less', clients: expiringIn21,      badgeClass: 'ab-amber' },
+    { label: 'No check-in this week',  clients: noCheckinThisWeek, badgeClass: 'ab-teal' },
+  ];
+
+  const attentionHTML = attentionCategories.map(cat => {
+    const count = cat.clients.length;
+    const badgeClass = count === 0 ? 'ab-gray' : cat.badgeClass;
+    const chipsHTML = count === 0 ? '' : `
+      <div class="attention-chips">
+        ${cat.clients.slice(0, 5).map(c =>
+          `<span class="client-chip" onclick="openClientProfile('${c.id}')">${c.name || 'Unnamed'}</span>`
+        ).join('')}
+        ${count > 5 ? `<span style="font-size:12px;color:var(--gray-600);padding:5px 4px;">+${count - 5} more</span>` : ''}
+      </div>`;
+    return `
+      <div class="attention-card">
+        <div class="attention-header">
+          <span class="attention-badge ${badgeClass}">${count}</span>
+          <span style="${count === 0 ? 'color:var(--gray-600);font-weight:600;' : ''}">${cat.label}</span>
+        </div>
+        ${chipsHTML}
+      </div>`;
+  }).join('');
+
+  // Recent submissions feed — last 7
+  const recentCheckins = [...allCheckins]
+    .filter(c => c.submitted_at)
+    .sort((a, b) => new Date(b.submitted_at) - new Date(a.submitted_at))
+    .slice(0, 7);
+
+  const feedHTML = recentCheckins.length === 0
+    ? `<div style="padding:20px;text-align:center;color:var(--gray-600);font-size:13px;">No check-ins yet.</div>`
+    : recentCheckins.map(c => {
+        const client = allClients.find(cl => cl.id === c.client_id);
+        const name   = client ? (client.name || 'Unknown') : 'Unknown';
+        const date   = new Date(c.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        return `
+          <div class="feed-row" onclick="${client ? `openClientProfile('${c.client_id}')` : ''}">
+            <div>
+              <div style="font-weight:600;color:var(--navy);">${name}</div>
+              <div style="font-size:12px;color:var(--gray-600);">Week ${c.week_number} check-in</div>
+            </div>
+            <div style="font-size:12px;color:var(--gray-600);">${date}</div>
+          </div>`;
+      }).join('');
+
+  el.innerHTML = `
+    <div class="dash-stats">
+      <div class="dash-stat-card"><div class="dsn">${activeClients}</div><div class="dsl">Active Clients</div></div>
+      <div class="dash-stat-card"><div class="dsn">${noPlanYet}</div><div class="dsl">No Plan Yet</div></div>
+      <div class="dash-stat-card"><div class="dsn">${coachingEnrolled}</div><div class="dsl">Coaching Enrolled</div></div>
+      <div class="dash-stat-card"><div class="dsn">${checkinsThisWeek}</div><div class="dsl">Check-ins This Week</div></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;">
+      <div>
+        <div style="font-family:'Montserrat',sans-serif;font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">Needs Attention</div>
+        ${attentionHTML}
+      </div>
+      <div>
+        <div style="font-family:'Montserrat',sans-serif;font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">Recent Submissions</div>
+        <div class="recent-feed">${feedHTML}</div>
+      </div>
+    </div>
+  `;
+}
+
+// ─────────────────────────────────────────────
+// EDIT CLIENT INFO
+// ─────────────────────────────────────────────
+function toggleEditInfo(clientId) {
+  const view = document.getElementById('editInfoView-' + clientId);
+  const form = document.getElementById('editInfoForm-' + clientId);
+  const btn  = document.getElementById('editInfoBtn-'  + clientId);
+  if (!view || !form) return;
+  const isEditing = form.style.display !== 'none';
+  view.style.display = isEditing ? 'block' : 'none';
+  form.style.display = isEditing ? 'none'  : 'block';
+  btn.textContent    = isEditing ? 'Edit'  : 'Cancel';
+}
+
+function cancelEditInfo(clientId) {
+  const view = document.getElementById('editInfoView-' + clientId);
+  const form = document.getElementById('editInfoForm-' + clientId);
+  const btn  = document.getElementById('editInfoBtn-'  + clientId);
+  if (view) view.style.display = 'block';
+  if (form) form.style.display = 'none';
+  if (btn)  btn.textContent = 'Edit';
+}
+
+async function saveClientInfo(clientId) {
+  const name     = document.getElementById('editName-'     + clientId)?.value.trim() || '';
+  const email    = document.getElementById('editEmail-'    + clientId)?.value.trim() || '';
+  const org      = document.getElementById('editOrg-'      + clientId)?.value.trim() || '';
+  const title    = document.getElementById('editTitle-'    + clientId)?.value.trim() || '';
+  const industry = document.getElementById('editIndustry-' + clientId)?.value || null;
+  const btn      = document.getElementById('saveInfoBtn-'  + clientId);
+  const msg      = document.getElementById('saveInfoMsg-'  + clientId);
+
+  if (!name)  { msg.style.color = 'var(--red)'; msg.textContent = 'Name required.'; return; }
+  if (!email) { msg.style.color = 'var(--red)'; msg.textContent = 'Email required.'; return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { msg.style.color = 'var(--red)'; msg.textContent = 'Invalid email.'; return; }
+
+  btn.textContent = 'Saving…'; btn.disabled = true;
+
+  const { error } = await db.from('clients')
+    .update({ name, email, organization: org || null, title: title || null, industry })
+    .eq('id', clientId);
+
+  if (error) {
+    msg.style.color = 'var(--red)'; msg.textContent = 'Error — try again.';
+    btn.textContent = 'Save'; btn.disabled = false;
+    return;
+  }
+
+  // Update local cache
+  allClients = allClients.map(c => c.id === clientId
+    ? { ...c, name, email, organization: org || null, title: title || null, industry }
+    : c);
+
+  // Update card header in-place (avoid full re-render)
+  const card = document.getElementById('card-' + clientId);
+  if (card) {
+    const nameEl = card.querySelector('.client-name');
+    const orgEl  = card.querySelector('.client-org');
+    if (nameEl) nameEl.textContent = name;
+    if (orgEl) {
+      const client = allClients.find(c => c.id === clientId);
+      const pillarKey = (client?.tp3_pillar || '').toLowerCase();
+      orgEl.innerHTML = `${org || ''}${client?.tp3_pillar ? ' &nbsp;·&nbsp;<span class="pillar-badge pillar-' + pillarKey + '">' + client.tp3_pillar + '</span>' : ''}`;
+    }
+  }
+
+  // Refresh the read-only view
+  const view = document.getElementById('editInfoView-' + clientId);
+  if (view) {
+    view.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;">
+        <div><div style="color:var(--gray-600);font-size:11px;text-transform:uppercase;">Name</div><div style="font-weight:600;margin-top:2px;">${name || '—'}</div></div>
+        <div><div style="color:var(--gray-600);font-size:11px;text-transform:uppercase;">Email</div><div style="font-weight:600;margin-top:2px;">${email || '—'}</div></div>
+        <div><div style="color:var(--gray-600);font-size:11px;text-transform:uppercase;">Organization</div><div style="font-weight:600;margin-top:2px;">${org || '—'}</div></div>
+        <div><div style="color:var(--gray-600);font-size:11px;text-transform:uppercase;">Title</div><div style="font-weight:600;margin-top:2px;">${title || '—'}</div></div>
+        <div><div style="color:var(--gray-600);font-size:11px;text-transform:uppercase;">Industry</div><div style="font-weight:600;margin-top:2px;">${industry || '—'}</div></div>
+      </div>`;
+  }
+
+  cancelEditInfo(clientId);
+  msg.style.color = '#2e7d32'; msg.textContent = '✓ Saved';
+  btn.textContent = 'Save'; btn.disabled = false;
+  setTimeout(() => { if (msg) msg.textContent = ''; }, 3000);
+}
+</script>
+</body>
+</html>
