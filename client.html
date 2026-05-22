@@ -3745,7 +3745,7 @@ function renderMeetYourCoach(client) {
     : 'https://drive.google.com/thumbnail?id=1M_7qdC3G7zgPMGwrA-kxf9mWCrXlgYoK&sz=w400';
 
   const bullet2 = isGov
-    ? 'Has coached SES, state and local executives, and CEOs.'
+    ? 'Has coached SES, state and local executives, and CEOs of multi-location, operations-heavy companies.'
     : 'Has coached CEOs of multi-location, operations-heavy companies generating $10M–$50M+ in annual revenue, Fortune 500 C-suite executives, and federal and state/local government executives.';
 
   const ctaHtml = client.is_coaching_client
@@ -3787,7 +3787,7 @@ function openCoachModal() {
   const bullet2El = document.getElementById('coachModalBullet2');
   if (bullet2El) {
     bullet2El.textContent = isGov
-      ? 'Has coached SES, state and local executives, and CEOs.'
+      ? 'Has coached SES, state and local executives, and CEOs of multi-location, operations-heavy companies.'
       : 'Has coached CEOs of multi-location, operations-heavy companies generating $10M–$50M+ in annual revenue, Fortune 500 C-suite executives, and federal and state/local government executives.';
   }
 
@@ -5157,7 +5157,7 @@ By clicking "I Agree and Continue," you confirm that you have read and understoo
       <div class="coach-modal-title">Executive coach &amp; founder, GPS Leadership Solutions</div>
       <ul class="coach-modal-bullets">
         <li>Industrial-organizational psychologist and award-winning executive coach.</li>
-        <li id="coachModalBullet2">Has coached CEOs of multi-location, operations-heavy companies generating $10M–$50M+ in annual revenue, Fortune 500 C-suite executives, and federal and state/local government executives.</li>
+        <li id="coachModalBullet2">Has coached SES, state and local executives, and CEOs of multi-location, operations-heavy companies.</li>
         <li>Host of The Executive Appeal podcast with 200+ senior-leader interviews.</li>
       </ul>
       <a id="coachModalCta" href="https://api.leadconnectorhq.com/widget/bookings/30-minute-coaching-discovery-call" target="_blank" class="coach-modal-cta">Explore 1:1 Executive Coaching</a>
