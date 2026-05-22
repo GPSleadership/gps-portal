@@ -2774,6 +2774,11 @@ function renderCheckinForm(client, checkins, currentWeek) {
           <label onclick="selectRadio('completionGroup', this)"><input type="radio" name="completion" value="Partially" /><span>Partially</span></label>
           <label onclick="selectRadio('completionGroup', this)"><input type="radio" name="completion" value="No" /><span>No</span></label>
         </div>
+      </div>
+      <div class="form-group" id="barrierGroup" style="display:none;">
+        <label>What got in the way? <span style="color:var(--red)">*</span></label>
+        <div class="hint">1–2 sentences. This helps us troubleshoot the system, not judge you.</div>
+        <textarea id="completionBarrier" placeholder="Be brief — what specifically got in the way?"></textarea>
       </div>` : ''}
 
       <!-- METRIC INPUTS (1 required, 2-3 if defined) -->
@@ -2796,14 +2801,14 @@ function renderCheckinForm(client, checkins, currentWeek) {
       </div>` : ''}
 
       <div class="form-group">
-        <label>This Week's Commitment</label>
-        <div class="hint">What specific action will you take before next check-in?</div>
-        <textarea id="plannedAction" placeholder="Be specific. What exactly will you do, and when?"></textarea>
+        <label>This Week's Most Important Commitment (ONE)</label>
+        <div class="hint">What is the single most important commitment you will complete before your next check-in that will move you furthest toward your 90-day goal? Make it specific and measurable so next week you can clearly say 'done' or 'not done' (include what, by when, and with whom if relevant).</div>
+        <textarea id="plannedAction" placeholder="e.g., 'Run the weekly team meeting using the new agenda OS on Thursday at 9am.'"></textarea>
       </div>
 
       <div class="form-group">
-        <label>Reflection</label>
-        <div class="hint">What's working? What's getting in the way? Anything you want Alex to know before your call?</div>
+        <label>Reflection (Wins, Friction, Notes for Alex)</label>
+        <div class="hint">1–3 bullets is enough. • What's working / wins? • What's getting in the way? • Anything you want Alex to know before your call?</div>
         <textarea id="reflectionNotes" placeholder="Optional — but the more honest, the better your coaching call will be."></textarea>
       </div>
 
@@ -2826,6 +2831,20 @@ function renderCheckinForm(client, checkins, currentWeek) {
 function selectRadio(groupId, labelEl) {
   document.querySelectorAll(`#${groupId} label`).forEach(l => l.classList.remove('selected'));
   labelEl.classList.add('selected');
+
+  // Show/hide the "What got in the way?" field based on completion selection
+  if (groupId === 'completionGroup') {
+    const val = labelEl.querySelector('input').value;
+    const barrierGroup = document.getElementById('barrierGroup');
+    if (barrierGroup) {
+      const show = val === 'Partially' || val === 'No';
+      barrierGroup.style.display = show ? 'block' : 'none';
+      if (!show) {
+        const barrierField = document.getElementById('completionBarrier');
+        if (barrierField) barrierField.value = '';
+      }
+    }
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -2844,8 +2863,9 @@ function collectFormData(noCompletion) {
     metric3:    metric3El ? metric3El.value : '',
     coaching:   coachingLabel   ? coachingLabel.querySelector('input').value : '',
     completion: (!noCompletion && completionLabel) ? completionLabel.querySelector('input').value : '',
-    action:     (document.getElementById('plannedAction')    || {}).value || '',
-    notes:      (document.getElementById('reflectionNotes')  || {}).value || '',
+    action:     (document.getElementById('plannedAction')      || {}).value || '',
+    barrier:    (document.getElementById('completionBarrier') || {}).value || '',
+    notes:      (document.getElementById('reflectionNotes')   || {}).value || '',
   };
 }
 
@@ -2910,13 +2930,20 @@ async function loadDraftIntoForm(clientId, weekNumber) {
         l.classList.add('selected');
       }
     });
+    // Restore barrier field visibility
+    const barrierGroup = document.getElementById('barrierGroup');
+    if (barrierGroup && (d.completion === 'Partially' || d.completion === 'No')) {
+      barrierGroup.style.display = 'block';
+    }
   }
 
   // Restore text areas
-  const actionEl = document.getElementById('plannedAction');
-  const notesEl  = document.getElementById('reflectionNotes');
-  if (actionEl && d.action) actionEl.value = d.action;
-  if (notesEl  && d.notes)  notesEl.value  = d.notes;
+  const actionEl  = document.getElementById('plannedAction');
+  const barrierEl = document.getElementById('completionBarrier');
+  const notesEl   = document.getElementById('reflectionNotes');
+  if (actionEl  && d.action)  actionEl.value  = d.action;
+  if (barrierEl && d.barrier) barrierEl.value = d.barrier;
+  if (notesEl   && d.notes)   notesEl.value   = d.notes;
 
   // Show draft notice
   const statusEl = document.getElementById('draftStatus');
@@ -2950,6 +2977,8 @@ async function submitFormA(clientId, clientName, weekNumber, noCompletion) {
   const metric3Val = metric3El ? parseFloat(metric3El.value) : null;
   const action     = document.getElementById('plannedAction').value.trim();
   const notes      = document.getElementById('reflectionNotes').value.trim();
+  const barrierEl  = document.getElementById('completionBarrier');
+  const barrier    = barrierEl ? barrierEl.value.trim() : '';
 
   const coachingLabel   = document.querySelector('#coachingGroup label.selected');
   const completionLabel = document.querySelector('#completionGroup label.selected');
@@ -2963,20 +2992,29 @@ async function submitFormA(clientId, clientName, weekNumber, noCompletion) {
     return;
   }
 
+  // Require barrier text if completion is Partially or No
+  if (!noCompletion && (completionStatus === 'Partially' || completionStatus === 'No') && !barrier) {
+    errEl.textContent = 'Please fill in "What got in the way?" before submitting.';
+    errEl.style.display = 'block';
+    document.getElementById('completionBarrier')?.focus();
+    return;
+  }
+
   btn.disabled = true;
   btn.textContent = 'Submitting…';
 
   const checkinData = {
-    client_id:         clientId,
-    week_number:       weekNumber,
-    attended_coaching: attendedCoaching,
-    planned_action:    action || null,
-    completion_status: noCompletion ? null : completionStatus,
-    metric_value:      metricVal,
-    metric_2_value:    !isNaN(metric2Val) ? metric2Val : null,
-    metric_3_value:    !isNaN(metric3Val) ? metric3Val : null,
-    notes:             notes || null,
-    submitted_at:      new Date().toISOString(),
+    client_id:          clientId,
+    week_number:        weekNumber,
+    attended_coaching:  attendedCoaching,
+    planned_action:     action || null,
+    completion_status:  noCompletion ? null : completionStatus,
+    completion_barrier: (!noCompletion && barrier) ? barrier : null,
+    metric_value:       metricVal,
+    metric_2_value:     !isNaN(metric2Val) ? metric2Val : null,
+    metric_3_value:     !isNaN(metric3Val) ? metric3Val : null,
+    notes:              notes || null,
+    submitted_at:       new Date().toISOString(),
   };
 
   const { error: checkinError } = await db.from('checkins').insert(checkinData);
@@ -3006,6 +3044,7 @@ async function submitFormA(clientId, clientName, weekNumber, noCompletion) {
         weekNumber,
         attendedCoaching,
         completionStatus,
+        completionBarrier: barrier || null,
         metricValue: metricVal,
         plannedAction: action,
         notes,
