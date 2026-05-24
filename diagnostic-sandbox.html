@@ -1,0 +1,1817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPS Diagnostic — Sandbox v2</title>
+<style>
+:root {
+  --blue:#1A3D6E;--gold:#C09A2A;--dark:#1C1C1C;--mid:#555;
+  --light:#F4F6F9;--white:#fff;--border:#DDE2EA;
+  --green:#1A7A3A;--amber:#BF6A00;--red:#CC2200;
+  --blue-light:#EAF0FA;--gold-light:#FDF8EE;
+  --radius:8px;--shadow:0 2px 12px rgba(0,0,0,.08);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--light);color:var(--dark);font-size:14px;}
+
+/* BANNER */
+.sandbox-banner{background:var(--gold);color:var(--dark);text-align:center;padding:6px 16px;font-size:12px;font-weight:600;letter-spacing:.04em;position:sticky;top:0;z-index:200;}
+
+/* TOP NAV */
+.top-nav{background:var(--blue);display:flex;align-items:center;padding:0 24px;position:sticky;top:30px;z-index:99;min-height:48px;}
+.top-nav .logo{color:var(--gold);font-weight:700;font-size:15px;padding:14px 20px 14px 0;border-right:1px solid rgba(255,255,255,.15);margin-right:8px;white-space:nowrap;}
+.top-nav button{background:none;border:none;color:rgba(255,255,255,.7);cursor:pointer;padding:14px 14px;font-size:13px;font-weight:500;transition:.15s;border-bottom:3px solid transparent;white-space:nowrap;}
+.top-nav button:hover{color:var(--white);}
+.top-nav button.active{color:var(--white);border-bottom-color:var(--gold);}
+.top-nav .sep{width:1px;height:24px;background:rgba(255,255,255,.2);margin:0 6px;}
+.role-badge{margin-left:auto;font-size:11px;padding:4px 10px;border-radius:20px;font-weight:600;white-space:nowrap;}
+.role-coach{background:rgba(192,154,42,.25);color:var(--gold);}
+.role-leader{background:rgba(255,255,255,.15);color:var(--white);}
+.role-rater{background:rgba(255,255,255,.1);color:rgba(255,255,255,.8);}
+
+/* SECTION TOGGLE (within coach) */
+.mode-toggle{display:flex;gap:0;background:var(--white);border:1.5px solid var(--border);border-radius:8px;overflow:hidden;display:inline-flex;}
+.mode-btn{padding:8px 20px;font-size:13px;font-weight:600;border:none;cursor:pointer;background:none;color:var(--mid);transition:.15s;}
+.mode-btn.active{background:var(--blue);color:var(--white);}
+
+/* SCREENS */
+.screen{display:none;max-width:1100px;margin:0 auto;padding:32px 24px;}
+.screen.active{display:block;}
+
+/* CARDS */
+.card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:24px;box-shadow:var(--shadow);margin-bottom:20px;}
+.card-title{font-size:15px;font-weight:700;color:var(--blue);margin-bottom:4px;}
+.card-sub{font-size:12px;color:var(--mid);}
+
+/* BUTTONS */
+.btn{padding:9px 18px;border-radius:6px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:.15s;display:inline-flex;align-items:center;gap:6px;}
+.btn-primary{background:var(--blue);color:var(--white);}
+.btn-primary:hover{background:#0F2D5A;}
+.btn-gold{background:var(--gold);color:var(--dark);}
+.btn-gold:hover{background:#A88520;}
+.btn-outline{background:none;border:1.5px solid var(--border);color:var(--mid);}
+.btn-outline:hover{border-color:var(--blue);color:var(--blue);}
+.btn-sm{padding:5px 12px;font-size:12px;}
+.btn-green{background:var(--green);color:var(--white);}
+.btn[disabled]{opacity:.4;cursor:not-allowed;}
+
+/* BADGES */
+.badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.03em;}
+.badge-setup{background:#EEF2FF;color:#4355B9;}
+.badge-open{background:#E7F7EE;color:var(--green);}
+.badge-closed{background:#FFF4E5;color:var(--amber);}
+.badge-final{background:#1A3D6E;color:var(--white);}
+.badge-standard{background:var(--blue-light);color:var(--blue);}
+.badge-pro{background:var(--gold-light);color:var(--amber);}
+.badge-coaching{background:#F0E8FF;color:#5B21B6;}
+
+/* TABLES */
+table{width:100%;border-collapse:collapse;}
+th{background:var(--light);color:var(--mid);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:10px 14px;text-align:left;border-bottom:2px solid var(--border);}
+td{padding:11px 14px;border-bottom:1px solid var(--border);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:#FAFBFC;}
+.td-name{font-weight:600;color:var(--dark);}
+.td-sub{font-size:12px;color:var(--mid);}
+
+/* FORMS */
+.form-group{margin-bottom:16px;}
+label{display:block;font-size:12px;font-weight:700;color:var(--dark);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;}
+input,select,textarea{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:6px;font-size:13.5px;color:var(--dark);background:var(--white);transition:.15s;}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(26,61,110,.1);}
+textarea{resize:vertical;min-height:80px;}
+.hint{font-size:12px;color:var(--mid);margin-top:4px;}
+.computed-val{background:var(--light);border:1.5px solid var(--border);border-radius:6px;padding:9px 12px;font-size:13.5px;color:var(--mid);}
+
+/* TABS */
+.tabs{display:flex;border-bottom:2px solid var(--border);margin-bottom:24px;}
+.tab{padding:10px 20px;cursor:pointer;font-size:13px;font-weight:600;color:var(--mid);border-bottom:3px solid transparent;margin-bottom:-2px;transition:.15s;}
+.tab:hover{color:var(--blue);}
+.tab.active{color:var(--blue);border-bottom-color:var(--blue);}
+.tab-pane{display:none;}
+.tab-pane.active{display:block;}
+
+/* PROGRESS BAR */
+.progress-bar{background:#E5E9F0;border-radius:20px;height:10px;overflow:hidden;}
+.progress-fill{height:100%;border-radius:20px;background:var(--green);transition:.4s;}
+
+/* SCORE CARDS */
+.score-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;}
+.score-card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center;box-shadow:var(--shadow);}
+.score-card .pillar{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mid);margin-bottom:6px;}
+.score-card .score{font-size:32px;font-weight:800;color:var(--blue);line-height:1;}
+.score-card .denom{font-size:14px;color:var(--mid);}
+.score-card .self-score{font-size:11px;color:var(--mid);margin-top:4px;}
+.score-card.tp3idx{border-top:3px solid var(--gold);}
+.score-card.tp3idx .score{color:var(--gold);}
+
+/* ALERTS */
+.alert{padding:14px 18px;border-radius:var(--radius);margin-bottom:16px;display:flex;align-items:flex-start;gap:12px;font-size:13px;}
+.alert-amber{background:#FFF8E7;border:1.5px solid #F5C842;color:#7A4F00;}
+.alert-red{background:#FFF0EE;border:1.5px solid #F5B3AC;color:#7A1500;}
+.alert-green{background:#EDF7F1;border:1.5px solid #7EC89A;color:#0D5226;}
+.alert-blue{background:var(--blue-light);border:1.5px solid #9AB8E0;color:#0D2B5E;}
+.alert-icon{font-size:18px;margin-top:-1px;flex-shrink:0;}
+
+/* SECTION HEADER */
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;}
+.section-title{font-size:18px;font-weight:800;color:var(--blue);}
+
+/* RATER STATUS DOT */
+.status-dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:6px;}
+.dot-complete{background:var(--green);}
+.dot-pending{background:#C5CAD3;}
+.dot-self{background:var(--blue);}
+
+/* RADIO */
+.radio-group{display:flex;gap:8px;flex-wrap:wrap;}
+.radio-btn{padding:7px 16px;border:1.5px solid var(--border);border-radius:20px;cursor:pointer;font-size:13px;transition:.15s;}
+.radio-btn:hover{border-color:var(--blue);color:var(--blue);}
+.radio-btn.selected{background:var(--blue);color:var(--white);border-color:var(--blue);}
+
+/* LIKERT */
+.likert{display:flex;gap:0;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;width:100%;}
+.likert-opt{flex:1;text-align:center;padding:10px 4px;cursor:pointer;border-right:1px solid var(--border);font-size:13px;font-weight:600;transition:.15s;color:var(--mid);}
+.likert-opt:last-child{border-right:none;}
+.likert-opt:hover{background:var(--blue-light);color:var(--blue);}
+.likert-opt.sel{background:var(--blue);color:var(--white);}
+.likert-labels{display:flex;justify-content:space-between;font-size:11px;color:var(--mid);margin-top:4px;}
+
+/* SURVEY QUESTIONS */
+.q-block{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;margin-bottom:14px;}
+.q-num{font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;}
+.q-text{font-size:14px;font-weight:600;color:var(--dark);margin-bottom:12px;line-height:1.5;}
+.pillar-header{background:var(--blue);color:var(--white);padding:10px 18px;border-radius:var(--radius);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin:20px 0 12px;}
+
+/* REPORT */
+.report-wrap{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:40px 48px;max-width:820px;margin:0 auto;box-shadow:var(--shadow);}
+.report-header{text-align:center;border-bottom:3px solid var(--gold);padding-bottom:24px;margin-bottom:28px;}
+.report-header .org{font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;}
+.report-header h1{font-size:26px;font-weight:800;color:var(--blue);margin-bottom:4px;}
+.report-header .sub{font-size:14px;color:var(--mid);}
+.report-section{margin-bottom:32px;}
+.report-section h2{font-size:16px;font-weight:800;color:var(--blue);border-left:4px solid var(--gold);padding-left:12px;margin-bottom:12px;}
+.report-section h3{font-size:13px;font-weight:700;color:var(--dark);margin-bottom:6px;margin-top:14px;}
+.report-section p{font-size:13.5px;line-height:1.7;color:var(--dark);margin-bottom:10px;}
+.report-section ul{padding-left:20px;}
+.report-section li{font-size:13.5px;line-height:1.7;margin-bottom:4px;}
+.tp3-table{width:100%;border-collapse:collapse;font-size:12.5px;margin:10px 0;}
+.tp3-table th{background:var(--blue);color:var(--white);padding:8px 10px;text-align:center;}
+.tp3-table th:first-child{text-align:left;}
+.tp3-table td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:center;}
+.tp3-table td:first-child{text-align:left;font-weight:600;}
+.score-hi{color:var(--green);font-weight:700;}
+.score-mid{color:var(--amber);font-weight:700;}
+.tool-callout{background:var(--blue-light);border:1.5px solid var(--blue);border-radius:var(--radius);padding:14px 18px;margin:12px 0;}
+.tool-callout .tc-label{font-size:11px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;}
+.tool-callout a{color:var(--blue);font-weight:600;text-decoration:none;}
+
+/* DIVIDER */
+.divider{border:none;border-top:1px solid var(--border);margin:20px 0;}
+
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;align-items:center;justify-content:center;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--white);border-radius:var(--radius);width:560px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.2);}
+.modal-lg{width:760px;}
+.modal-header{padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.modal-header h3{font-size:16px;font-weight:700;color:var(--blue);}
+.modal-body{padding:24px;}
+.modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;}
+.close-btn{background:none;border:none;cursor:pointer;color:var(--mid);font-size:20px;line-height:1;padding:2px;}
+
+/* FLOW STEPS */
+.flow-steps{display:flex;align-items:center;gap:0;margin-bottom:28px;overflow-x:auto;padding-bottom:4px;}
+.flow-step{display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:20px;font-size:12px;font-weight:600;white-space:nowrap;}
+.flow-step.done{background:#E7F7EE;color:var(--green);}
+.flow-step.current{background:var(--blue);color:var(--white);}
+.flow-step.future{background:var(--light);color:var(--mid);}
+.flow-arrow{color:var(--mid);font-size:16px;padding:0 2px;}
+
+/* GRIDS */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
+
+/* UPLOAD DROP ZONE */
+.upload-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:28px;text-align:center;cursor:pointer;transition:.15s;background:var(--light);}
+.upload-zone:hover{border-color:var(--blue);background:var(--blue-light);}
+.upload-zone.has-file{border-color:var(--green);background:#EDF7F1;border-style:solid;}
+
+/* EXTRACTION STATE */
+.extraction-spinner{display:none;text-align:center;padding:20px;}
+.extraction-result{display:none;}
+
+/* QUESTION EDITOR */
+.q-edit-row{background:var(--white);border:1px solid var(--border);border-radius:6px;padding:14px 16px;margin-bottom:10px;}
+.q-edit-row .q-meta{font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;}
+.q-edit-row textarea{min-height:60px;font-size:13px;}
+.q-edit-row .q-actions{display:flex;gap:8px;margin-top:8px;align-items:center;}
+.override-badge{background:var(--gold-light);border:1px solid var(--gold);border-radius:4px;font-size:10px;font-weight:700;color:var(--amber);padding:2px 7px;text-transform:uppercase;}
+
+@media(max-width:700px){
+  .score-grid,.two-col,.three-col{grid-template-columns:1fr 1fr;}
+  .report-wrap{padding:24px 18px;}
+  .top-nav button{padding:14px 10px;font-size:12px;}
+}
+</style>
+</head>
+<body>
+
+<div class="sandbox-banner">⚙ SANDBOX PROTOTYPE v2 — Simulated data only. No database. Click through all screens to explore the full workflow.</div>
+
+<!-- ══ TOP NAV ══ -->
+<nav class="top-nav">
+  <div class="logo">GPS Portal</div>
+  <button class="active" onclick="showScreen('coach-home')" id="nav-coach-home">Home</button>
+  <button onclick="showScreen('coach-clients')" id="nav-coach-clients">Coaching</button>
+  <button onclick="showScreen('coach-diag')" id="nav-coach-diag">Diagnostics</button>
+  <div class="sep"></div>
+  <button onclick="showScreen('diag-detail')" id="nav-diag-detail">Diagnostic Detail</button>
+  <button onclick="showScreen('rater-survey')" id="nav-rater-survey">Rater Survey</button>
+  <button onclick="showScreen('leader-portal')" id="nav-leader-portal">Leader Portal</button>
+  <button onclick="showScreen('report-view')" id="nav-report-view">Report Viewer</button>
+  <span class="role-badge role-coach" id="role-badge">Alex's View</span>
+</nav>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SCREEN: COACH — HOME DASHBOARD
+══════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-coach-home" class="screen active">
+  <div style="margin-bottom:24px;">
+    <div style="font-size:13px;color:var(--mid);">Sunday, May 24, 2026</div>
+    <div style="font-size:24px;font-weight:800;color:var(--blue);">Good morning, Alex.</div>
+    <div style="font-size:13px;color:var(--mid);">3 things need your attention today.</div>
+  </div>
+
+  <!-- Stat row -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;">
+    <div class="card" style="padding:18px;text-align:center;margin-bottom:0;">
+      <div style="font-size:28px;font-weight:800;color:var(--blue);">2</div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mid);margin-top:4px;">Active Coaching</div>
+    </div>
+    <div class="card" style="padding:18px;text-align:center;margin-bottom:0;">
+      <div style="font-size:28px;font-weight:800;color:var(--blue);">3</div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mid);margin-top:4px;">Active Diagnostics</div>
+    </div>
+    <div class="card" style="padding:18px;text-align:center;border-top:3px solid var(--amber);margin-bottom:0;">
+      <div style="font-size:28px;font-weight:800;color:var(--amber);">3</div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mid);margin-top:4px;">Need Attention</div>
+    </div>
+    <div class="card" style="padding:18px;text-align:center;border-top:3px solid var(--red);margin-bottom:0;">
+      <div style="font-size:28px;font-weight:800;color:var(--red);">1</div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mid);margin-top:4px;">Closing This Week</div>
+    </div>
+  </div>
+
+  <!-- Action-needed flags -->
+  <div class="card" style="margin-bottom:20px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div class="card-title">Needs Your Attention</div>
+      <span style="font-size:12px;color:var(--mid);">Today · May 24</span>
+    </div>
+
+    <!-- Flag 1: Closing diagnostic -->
+    <div style="display:flex;gap:14px;padding:14px;background:#FFF8E7;border:1.5px solid #F5C842;border-radius:var(--radius);margin-bottom:10px;">
+      <div style="font-size:22px;flex-shrink:0;margin-top:-2px;">⏰</div>
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:700;color:var(--amber);">Jordan Carter's diagnostic closes today — May 24</div>
+        <div style="font-size:12px;color:var(--mid);margin-top:3px;">10 of 14 raters responded (71%). Above the 7-rater minimum. Data locks tonight. You can start the report once the window closes.</div>
+        <div style="margin-top:10px;display:flex;gap:8px;">
+          <button class="btn btn-outline btn-sm" onclick="showScreen('diag-detail')">View Diagnostic →</button>
+        </div>
+      </div>
+      <span class="badge badge-open" style="flex-shrink:0;align-self:flex-start;">Pro</span>
+    </div>
+
+    <!-- Flag 2: Missing check-in -->
+    <div style="display:flex;gap:14px;padding:14px;background:var(--light);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:10px;">
+      <div style="font-size:22px;flex-shrink:0;margin-top:-2px;">📋</div>
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:700;color:var(--dark);">Maria Chen hasn't submitted this week's check-in</div>
+        <div style="font-size:12px;color:var(--mid);margin-top:3px;">Last submitted May 12 — now 12 days ago. Check in with her or send a nudge.</div>
+        <div style="margin-top:10px;display:flex;gap:8px;">
+          <button class="btn btn-outline btn-sm" onclick="showScreen('coach-clients')">View Client →</button>
+          <button class="btn btn-outline btn-sm" style="color:var(--amber);border-color:var(--amber);">Send Reminder</button>
+        </div>
+      </div>
+      <span class="badge badge-open" style="flex-shrink:0;align-self:flex-start;">Coaching</span>
+    </div>
+
+    <!-- Flag 3: Stalled diagnostic -->
+    <div style="display:flex;gap:14px;padding:14px;background:var(--light);border:1px solid var(--border);border-radius:var(--radius);">
+      <div style="font-size:22px;flex-shrink:0;margin-top:-2px;">📊</div>
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:700;color:var(--dark);">Derek Walsh's survey response rate is low — 4 of 12 (33%)</div>
+        <div style="font-size:12px;color:var(--mid);margin-top:3px;">Survey closes May 28. T-2 alert will fire May 26 if below 7 responses. Consider reaching out to Derek to follow up with non-responders now.</div>
+        <div style="margin-top:10px;display:flex;gap:8px;">
+          <button class="btn btn-outline btn-sm" onclick="showScreen('coach-diag')">View Diagnostic →</button>
+        </div>
+      </div>
+      <span class="badge badge-standard" style="flex-shrink:0;align-self:flex-start;">Standard</span>
+    </div>
+  </div>
+
+  <!-- Two-column: Diagnostics + Coaching -->
+  <div class="two-col" style="margin-bottom:20px;">
+
+    <!-- Diagnostics quick view -->
+    <div class="card" style="margin-bottom:0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div class="card-title">Active Diagnostics</div>
+        <button class="btn btn-outline btn-sm" onclick="showScreen('coach-diag')">View All →</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--light);border-radius:6px;">
+          <div>
+            <div style="font-size:13px;font-weight:700;">Jordan Carter</div>
+            <div style="font-size:11px;color:var(--mid);">Closes today · 10/14 raters</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:13px;font-weight:700;color:var(--amber);">71%</div>
+            <div style="font-size:11px;color:var(--red);">Closes today</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--light);border-radius:6px;">
+          <div>
+            <div style="font-size:13px;font-weight:700;">Derek Walsh</div>
+            <div style="font-size:11px;color:var(--mid);">Closes May 28 · 4/12 raters</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:13px;font-weight:700;color:var(--red);">33%</div>
+            <div style="font-size:11px;color:var(--amber);">4 days left</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--light);border-radius:6px;">
+          <div>
+            <div style="font-size:13px;font-weight:700;">Priya Nair</div>
+            <div style="font-size:11px;color:var(--mid);">Closes Jun 1 · 9/13 raters</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:13px;font-weight:700;color:var(--green);">69%</div>
+            <div style="font-size:11px;color:var(--mid);">8 days left</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Coaching quick view -->
+    <div class="card" style="margin-bottom:0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div class="card-title">Coaching Clients</div>
+        <button class="btn btn-outline btn-sm" onclick="showScreen('coach-clients')">View All →</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--light);border-radius:6px;">
+          <div>
+            <div style="font-size:13px;font-weight:700;">Jordan Carter</div>
+            <div style="font-size:11px;color:var(--mid);">Sprint 3, Wk 2 · Carter Truck</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:12px;color:var(--green);font-weight:600;">✓ Check-in submitted</div>
+            <div style="font-size:11px;color:var(--mid);">May 22</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#FFF8E7;border:1px solid #F5C842;border-radius:6px;">
+          <div>
+            <div style="font-size:13px;font-weight:700;">Maria Chen</div>
+            <div style="font-size:11px;color:var(--mid);">Sprint 1, Wk 4 · Apex Logistics</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:12px;color:var(--amber);font-weight:600;">⚠ Not submitted</div>
+            <div style="font-size:11px;color:var(--mid);">Last: May 12</div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+        <div style="font-size:12px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">Upcoming Sessions</div>
+        <div style="font-size:12px;color:var(--dark);">Jordan Carter — <strong>Tue, May 26, 10:00 AM</strong></div>
+        <div style="font-size:12px;color:var(--mid);margin-top:4px;">Maria Chen — <span style="color:var(--amber);">Not yet scheduled</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reports ready -->
+  <div class="card">
+    <div class="card-title" style="margin-bottom:14px;">Reports & Deliverables</div>
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid var(--border);border-radius:6px;background:var(--light);opacity:.5;">
+      <div style="font-size:18px;">📄</div>
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--mid);">Jordan Carter — Report available after survey closes today</div>
+        <div style="font-size:11px;color:var(--mid);">Data locks tonight · Generate report from Diagnostic Detail → Report tab</div>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--mid);margin-top:10px;">No reports are currently finalized. Once Jordan's window closes today, you can generate the draft from the Diagnostic Detail screen.</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SCREEN: COACH — CLIENTS (existing coaching portal mode)
+══════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-coach-clients" class="screen">
+  <div class="section-header">
+    <div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
+        <div class="section-title">Coaching Clients</div>
+        <div class="mode-toggle">
+          <button class="mode-btn active" onclick="showScreen('coach-clients')">Coaching</button>
+          <button class="mode-btn" onclick="showScreen('coach-diag')">Diagnostics</button>
+        </div>
+      </div>
+      <div style="font-size:13px;color:var(--mid);">Active coaching engagements — check-ins, 90-day plans, sprint data</div>
+    </div>
+    <button class="btn btn-primary">+ New Client</button>
+  </div>
+
+  <!-- Client type tabs -->
+  <div class="tabs" style="margin-bottom:0;border-bottom:none;">
+    <div class="tab active" onclick="switchTab(event,'coaching-tab','active')" id="coaching-tab-active-btn">Active Clients</div>
+    <div class="tab" onclick="switchTab(event,'coaching-tab','alumni')" id="coaching-tab-alumni-btn" style="color:var(--mid);">Workshop Alumni <span style="font-size:10px;background:var(--light);border:1px solid var(--border);border-radius:10px;padding:1px 7px;margin-left:4px;font-weight:600;">4</span></div>
+  </div>
+
+  <!-- Active clients tab -->
+  <div id="coaching-tab-active" class="tab-pane active">
+    <div class="card" style="padding:0;overflow:hidden;margin-top:0;border-top-left-radius:0;">
+      <table>
+        <thead><tr><th>Client</th><th>Status</th><th>This Week</th><th>90-Day Goal</th><th>Sprint</th><th></th></tr></thead>
+        <tbody>
+          <tr>
+            <td><div class="td-name">Jordan Carter</div><div class="td-sub">Carter Truck &amp; Equipment Group</div></td>
+            <td><span class="badge badge-open">Active</span> <span class="badge badge-pro" style="margin-left:4px;">Has Diagnostic</span></td>
+            <td><span style="color:var(--green);font-size:12px;">✓ Check-in submitted</span></td>
+            <td style="font-size:12px;max-width:200px;">Ask before solving — 80% of escalations arrive with a recommendation</td>
+            <td style="font-size:12px;color:var(--mid);">Sprint 3, Wk 2</td>
+            <td><button class="btn btn-outline btn-sm">Open →</button></td>
+          </tr>
+          <tr>
+            <td><div class="td-name">Maria Chen</div><div class="td-sub">Apex Logistics Group</div></td>
+            <td><span class="badge badge-open">Active</span></td>
+            <td><span style="color:var(--amber);font-size:12px;">⚠ Not submitted</span></td>
+            <td style="font-size:12px;max-width:200px;">Weekly ops reviews run without her — team owns the agenda</td>
+            <td style="font-size:12px;color:var(--mid);">Sprint 1, Wk 4</td>
+            <td><button class="btn btn-outline btn-sm">Open →</button></td>
+          </tr>
+          <tr>
+            <td><div class="td-name">Derek Walsh</div><div class="td-sub">Walsh Industrial Services</div></td>
+            <td><span class="badge badge-coaching">Diagnostic Only</span></td>
+            <td><span style="color:var(--mid);font-size:12px;">—</span></td>
+            <td style="font-size:12px;color:var(--mid);">Not a coaching client</td>
+            <td style="font-size:12px;color:var(--mid);">—</td>
+            <td><button class="btn btn-outline btn-sm" onclick="showScreen('coach-diag')">View Diagnostic →</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="font-size:12px;color:var(--mid);margin-top:8px;">Clients marked "Diagnostic Only" appear here for reference but don't have active coaching features enabled.</div>
+  </div>
+
+  <!-- Workshop alumni tab (intentionally behind a click — not visible by default) -->
+  <div id="coaching-tab-alumni" class="tab-pane">
+    <div class="alert alert-blue" style="margin-top:16px;">
+      <span class="alert-icon">ℹ</span>
+      <div><strong>Workshop alumni</strong> completed a GPS workshop and have portal access to maintain their own 90-day plan. They are not paying coaching or diagnostic clients. Their data is visible here when you need it — it does not appear on your Home dashboard or Active Clients view.</div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <table>
+        <thead><tr><th>Name</th><th>Company</th><th>Workshop</th><th>Portal Status</th><th>90-Day Plan</th><th></th></tr></thead>
+        <tbody>
+          <tr>
+            <td><div class="td-name">Kevin Rawls</div><div class="td-sub">VP Operations</div></td>
+            <td style="font-size:12px;">Harrington Distribution</td>
+            <td style="font-size:12px;color:var(--mid);">GPS Workshop · Feb 2026</td>
+            <td><span style="color:var(--green);font-size:12px;">Active — last login May 18</span></td>
+            <td style="font-size:12px;max-width:180px;">Run weekly team meetings without solving problems for the team</td>
+            <td><button class="btn btn-outline btn-sm">View →</button></td>
+          </tr>
+          <tr>
+            <td><div class="td-name">Sandra Ife</div><div class="td-sub">Director of Service</div></td>
+            <td style="font-size:12px;">Midwest Parts &amp; Service</td>
+            <td style="font-size:12px;color:var(--mid);">GPS Workshop · Feb 2026</td>
+            <td><span style="color:var(--mid);font-size:12px;">Last login Apr 30</span></td>
+            <td style="font-size:12px;max-width:180px;">Delegate two recurring decisions to team by end of Q2</td>
+            <td><button class="btn btn-outline btn-sm">View →</button></td>
+          </tr>
+          <tr>
+            <td><div class="td-name">Carl Okonkwo</div><div class="td-sub">General Manager</div></td>
+            <td style="font-size:12px;">Peak Fleet Solutions</td>
+            <td style="font-size:12px;color:var(--mid);">GPS Workshop · Feb 2026</td>
+            <td><span style="color:var(--mid);font-size:12px;">Last login Apr 12</span></td>
+            <td style="font-size:12px;max-width:180px;">Hold one-on-ones with all 6 direct reports weekly — no cancellations</td>
+            <td><button class="btn btn-outline btn-sm">View →</button></td>
+          </tr>
+          <tr>
+            <td><div class="td-name">Tricia Holt</div><div class="td-sub">Branch Manager</div></td>
+            <td style="font-size:12px;">Holt Equipment Rentals</td>
+            <td style="font-size:12px;color:var(--mid);">GPS Workshop · Nov 2025</td>
+            <td><span style="color:var(--mid);font-size:12px;font-style:italic;">Inactive — last login Mar 2026</span></td>
+            <td style="font-size:12px;color:var(--mid);">Plan expired</td>
+            <td><button class="btn btn-outline btn-sm">View →</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="font-size:12px;color:var(--mid);margin-top:8px;">Alumni with expired or inactive plans are not included in your coaching metrics. Want to convert an alumnus to a coaching client? Use the client upgrade flow in their profile.</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SCREEN: COACH — DIAGNOSTICS LIST
+══════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-coach-diag" class="screen">
+  <div class="section-header">
+    <div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
+        <div class="section-title">Diagnostics</div>
+        <div class="mode-toggle">
+          <button class="mode-btn" onclick="showScreen('coach-clients')">Coaching</button>
+          <button class="mode-btn active" onclick="showScreen('coach-diag')">Diagnostics</button>
+        </div>
+      </div>
+      <div style="font-size:13px;color:var(--mid);">14-Day Executive Leadership Diagnostics — all active and completed</div>
+    </div>
+    <button class="btn btn-primary" onclick="openModal('new-diag-modal')">+ New Diagnostic</button>
+  </div>
+
+  <div class="three-col" style="margin-bottom:24px;">
+    <div class="card" style="padding:18px;">
+      <div style="font-size:11px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Active</div>
+      <div style="font-size:36px;font-weight:800;color:var(--blue);">3</div>
+    </div>
+    <div class="card" style="padding:18px;">
+      <div style="font-size:11px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Avg Completion</div>
+      <div style="font-size:36px;font-weight:800;color:var(--green);">74%</div>
+    </div>
+    <div class="card" style="padding:18px;">
+      <div style="font-size:11px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Finalized (90 days)</div>
+      <div style="font-size:36px;font-weight:800;color:var(--gold);">5</div>
+    </div>
+  </div>
+
+  <div class="card" style="padding:0;overflow:hidden;">
+    <table>
+      <thead><tr><th>Leader</th><th>Tier</th><th>Status</th><th>Raters</th><th>Completion</th><th>Survey Window</th><th></th></tr></thead>
+      <tbody>
+        <tr>
+          <td><div class="td-name">Jordan Carter</div><div class="td-sub">Carter Truck &amp; Equipment Group</div></td>
+          <td><span class="badge badge-pro">Pro</span></td>
+          <td><span class="badge badge-open">Open</span></td>
+          <td style="font-weight:600;">14 invited</td>
+          <td><div style="display:flex;align-items:center;gap:10px;"><div class="progress-bar" style="width:90px;"><div class="progress-fill" style="width:71%;"></div></div><span style="font-size:12px;color:var(--mid);">10/14</span></div></td>
+          <td><div style="font-size:12px;">May 17 → <span style="color:var(--amber);font-weight:600;">May 24 ⚠</span></div></td>
+          <td><button class="btn btn-primary btn-sm" onclick="showScreen('diag-detail')">Open →</button></td>
+        </tr>
+        <tr>
+          <td><div class="td-name">Maria Chen</div><div class="td-sub">Apex Logistics Group</div></td>
+          <td><span class="badge badge-standard">Standard</span></td>
+          <td><span class="badge badge-setup">Setup</span></td>
+          <td style="color:var(--mid);">Not sent</td>
+          <td><span style="color:var(--mid);font-size:12px;">—</span></td>
+          <td><div style="font-size:12px;color:var(--mid);">May 30 → Jun 6</div></td>
+          <td><button class="btn btn-outline btn-sm">Open →</button></td>
+        </tr>
+        <tr>
+          <td><div class="td-name">Derek Walsh</div><div class="td-sub">Walsh Industrial Services</div></td>
+          <td><span class="badge badge-pro">Pro</span></td>
+          <td><span class="badge badge-final">Finalized</span></td>
+          <td style="font-weight:600;">12 invited</td>
+          <td><div style="display:flex;align-items:center;gap:10px;"><div class="progress-bar" style="width:90px;"><div class="progress-fill" style="width:92%;background:var(--blue);"></div></div><span style="font-size:12px;color:var(--mid);">11/12</span></div></td>
+          <td><div style="font-size:12px;color:var(--mid);">May 3 → May 10</div></td>
+          <td><button class="btn btn-outline btn-sm">Open →</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SCREEN: DIAGNOSTIC DETAIL (COACH)
+══════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-diag-detail" class="screen">
+  <div style="margin-bottom:20px;">
+    <a href="#" onclick="showScreen('coach-diag');return false;" style="color:var(--mid);font-size:13px;text-decoration:none;">← All Diagnostics</a>
+    <div style="display:flex;align-items:center;gap:12px;margin-top:8px;flex-wrap:wrap;">
+      <div class="section-title">Jordan Carter</div>
+      <span class="badge badge-pro">Pro</span>
+      <span class="badge badge-open">Open</span>
+      <span style="font-size:12px;color:var(--mid);">Survey: May 17 → May 24 (7 days) · Email: GPS Sends</span>
+    </div>
+  </div>
+
+  <div class="flow-steps">
+    <div class="flow-step done">✓ Setup</div><div class="flow-arrow">›</div>
+    <div class="flow-step done">✓ Intake</div><div class="flow-arrow">›</div>
+    <div class="flow-step done">✓ Invitations Sent</div><div class="flow-arrow">›</div>
+    <div class="flow-step current">Survey Open</div><div class="flow-arrow">›</div>
+    <div class="flow-step future">Close &amp; Generate</div><div class="flow-arrow">›</div>
+    <div class="flow-step future">Review &amp; Finalize</div><div class="flow-arrow">›</div>
+    <div class="flow-step future">Debrief</div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(event,'dt','intake')">Intake</div>
+    <div class="tab" onclick="switchTab(event,'dt','stakeholders')">Stakeholders</div>
+    <div class="tab" onclick="switchTab(event,'dt','status')">Survey Status</div>
+    <div class="tab" onclick="switchTab(event,'dt','questions')">Questions</div>
+    <div class="tab" onclick="switchTab(event,'dt','report')">Report</div>
+  </div>
+
+  <!-- TAB: INTAKE -->
+  <div id="dt-intake" class="tab-pane active">
+    <div class="two-col">
+      <div>
+        <div class="card">
+          <div class="card-title" style="margin-bottom:6px;">Leader Context</div>
+          <div class="card-sub" style="margin-bottom:14px;">Alex fills in title/org. Remaining fields can be auto-extracted from the call transcript.</div>
+          <div class="form-group">
+            <label>Leader's Current Role / Title</label>
+            <input value="CEO, Carter Truck &amp; Equipment Group">
+            <div class="hint">Filled in by Alex</div>
+          </div>
+          <div class="form-group">
+            <label>90-Day Priority Behavior <span style="background:#E7F7EE;color:var(--green);font-size:10px;padding:2px 6px;border-radius:4px;font-weight:700;">Auto-extracted</span></label>
+            <textarea id="field-90day">In leadership and branch review meetings, ask "What do you recommend?" before giving my view — so leaders build the habit of owning problems and solutions.</textarea>
+          </div>
+          <div class="form-group">
+            <label>Top Business Challenge <span style="background:#E7F7EE;color:var(--green);font-size:10px;padding:2px 6px;border-radius:4px;font-weight:700;">Auto-extracted</span></label>
+            <textarea id="field-challenge">Business still runs through me. Every major customer issue or ops problem escalates to the CEO. I need the next layer of leaders to solve without me intervening.</textarea>
+          </div>
+          <div class="form-group">
+            <label>What Success Looks Like in 90 Days <span style="background:#E7F7EE;color:var(--green);font-size:10px;padding:2px 6px;border-radius:4px;font-weight:700;">Auto-extracted</span></label>
+            <textarea id="field-success">Exec team and regional managers bring me problems with options and a recommendation — not just "what do you want to do?" At least 80% of escalations come with a clear recommendation.</textarea>
+          </div>
+        </div>
+      </div>
+      <div>
+        <!-- TRANSCRIPT UPLOAD -->
+        <div class="card">
+          <div class="card-title" style="margin-bottom:6px;">Intake Call Transcript</div>
+          <div class="card-sub" style="margin-bottom:12px;">Upload a PDF (Fireflies export) or paste text. Click Extract to auto-populate the fields on the left.</div>
+
+          <!-- Upload zone -->
+          <div id="upload-zone" class="upload-zone has-file" onclick="simulateUpload()">
+            <div style="font-size:28px;margin-bottom:8px;">📄</div>
+            <div style="font-weight:700;color:var(--green);margin-bottom:4px;">Carter_intake_Apr29.pdf</div>
+            <div style="font-size:12px;color:var(--mid);">Uploaded · Click to replace</div>
+          </div>
+
+          <!-- Extraction UI -->
+          <div id="extract-btn-area" style="margin-top:12px;">
+            <div class="alert alert-green" style="margin-bottom:10px;">
+              <span class="alert-icon">✓</span>
+              <div><strong>Extracted May 1, 2026.</strong> 90-day behavior, top challenge, and success definition auto-populated from transcript. Alex reviewed and confirmed.</div>
+            </div>
+            <button class="btn btn-outline btn-sm" onclick="simulateExtract()">Re-extract from Transcript</button>
+          </div>
+
+          <div id="extracting-state" style="display:none;text-align:center;padding:20px;">
+            <div style="font-size:24px;margin-bottom:8px;">⚙️</div>
+            <div style="font-size:13px;font-weight:600;color:var(--blue);">Sending transcript to Claude...</div>
+            <div style="font-size:12px;color:var(--mid);margin-top:4px;">Extracting 90-day behavior, challenge, and success definition</div>
+          </div>
+        </div>
+
+        <!-- Custom questions -->
+        <div class="card" style="margin-top:0;">
+          <div class="card-title" style="margin-bottom:6px;">Custom Questions</div>
+          <div class="card-sub" style="margin-bottom:12px;">Claude-generated from intake context · Approved by Alex</div>
+          <div style="background:var(--light);border-radius:6px;padding:12px 14px;margin-bottom:10px;">
+            <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;margin-bottom:4px;">Rated (1–10)</div>
+            <div style="font-size:13px;">In the last 30 days, how often has this leader asked for your recommendation before giving their own view when you brought them a problem?</div>
+          </div>
+          <div style="background:var(--light);border-radius:6px;padding:12px 14px;">
+            <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;margin-bottom:4px;">Open-Ended</div>
+            <div style="font-size:13px;">When you bring this leader a tough problem, what typically happens next? Walk us through a recent example.</div>
+          </div>
+          <div style="margin-top:12px;display:flex;gap:8px;">
+            <button class="btn btn-outline btn-sm">Regenerate</button>
+            <span style="font-size:12px;color:var(--green);align-self:center;">✓ Approved May 1</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: STAKEHOLDERS -->
+  <div id="dt-stakeholders" class="tab-pane">
+    <div class="alert alert-green"><span class="alert-icon">✓</span><div>Invitations sent May 17, 2026. Email delivery: GPS Sends.</div></div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <table>
+        <thead><tr><th>Name</th><th>Relationship</th><th>Invite Sent</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="rater-table"></tbody>
+      </table>
+    </div>
+    <div style="margin-top:12px;font-size:12px;color:var(--mid);">
+      Anonymity check: 3+ listed in all categories ✓ &nbsp;|&nbsp; Supervisor: 1 (exempt) ✓
+    </div>
+  </div>
+
+  <!-- TAB: SURVEY STATUS -->
+  <div id="dt-status" class="tab-pane">
+    <div class="two-col" style="margin-bottom:20px;">
+      <div class="card">
+        <div class="card-sub">Total Completions (excl. Self)</div>
+        <div style="font-size:40px;font-weight:800;color:var(--blue);margin:4px 0;">10 <span style="font-size:18px;color:var(--mid);">/ 14</span></div>
+        <div class="progress-bar" style="margin-top:8px;"><div class="progress-fill" style="width:71%;"></div></div>
+        <div style="font-size:12px;color:var(--green);margin-top:6px;">✓ Above 7-response minimum</div>
+      </div>
+      <div class="card">
+        <div class="card-sub" style="margin-bottom:8px;">By Category</div>
+        <div id="cat-breakdown"></div>
+      </div>
+    </div>
+    <div class="alert alert-amber"><span class="alert-icon">⚠</span><div><strong>T−2 Alert Sent</strong> May 22 at 8am — to Alex + Jordan Carter. 4 raters haven't responded. Survey closes May 24.</div></div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <table>
+        <thead><tr><th>Rater</th><th>Relationship</th><th>Invited</th><th>Status</th><th>Reminders</th><th>Action</th></tr></thead>
+        <tbody id="status-table"></tbody>
+      </table>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:10px;">
+      <button class="btn btn-outline" onclick="openModal('close-diag-modal')">Close Diagnostic &amp; Generate Report</button>
+      <span style="font-size:12px;color:var(--mid);align-self:center;">Minimum 7 completions required (currently 10 ✓)</span>
+    </div>
+  </div>
+
+  <!-- TAB: QUESTIONS -->
+  <div id="dt-questions" class="tab-pane">
+    <div class="alert alert-blue">
+      <span class="alert-icon">ℹ</span>
+      <div>
+        <strong>Two levels of editing.</strong> Changes here are <strong>per-client overrides</strong> — they only affect Jordan Carter's survey. To make a permanent change across all future diagnostics, use the Global Question Bank editor at the bottom of this tab.
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div style="font-size:15px;font-weight:700;color:var(--blue);">Jordan Carter — Question Overrides</div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-outline btn-sm" onclick="resetOverrides()">Reset to Global Defaults</button>
+        <button class="btn btn-primary btn-sm">Save Changes</button>
+      </div>
+    </div>
+
+    <div style="font-size:11px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;">Section A — Trust</div>
+    <div class="q-edit-row">
+      <div class="q-meta">A2 · Trust — Rated</div>
+      <textarea id="q-a2">This leader creates an environment where people feel safe raising problems and bad news early.</textarea>
+      <div class="q-actions">
+        <span style="font-size:12px;color:var(--mid);">Global default</span>
+        <button class="btn btn-outline btn-sm" onclick="markOverride('q-a2', this)">Edit for This Client</button>
+      </div>
+    </div>
+    <div class="q-edit-row" id="q-row-b2" style="border-color:var(--gold);">
+      <div class="q-meta">B2 · Proactivity — Rated <span class="override-badge">Client Override</span></div>
+      <textarea id="q-b2">This leader clarifies the top 3 priorities each quarter so the team can make decisions without escalating to the CEO.</textarea>
+      <div class="q-actions">
+        <span style="font-size:12px;color:var(--amber);">Modified for this client only</span>
+        <button class="btn btn-outline btn-sm" onclick="resetSingleQ('q-b2','q-row-b2',this)">Reset to Default</button>
+      </div>
+    </div>
+
+    <div style="font-size:11px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.05em;margin:20px 0 10px;">Section E — Custom Questions (this client only)</div>
+    <div class="q-edit-row" style="border-color:var(--gold);">
+      <div class="q-meta">E1 · Custom — Rated (1–10) <span class="override-badge">Custom</span></div>
+      <textarea>In the last 30 days, how often has this leader asked for your recommendation before giving their own view when you brought them a problem?</textarea>
+      <div class="q-actions"><span style="font-size:12px;color:var(--amber);">Unique to this diagnostic</span></div>
+    </div>
+    <div class="q-edit-row" style="border-color:var(--gold);">
+      <div class="q-meta">E2 · Custom — Open Ended <span class="override-badge">Custom</span></div>
+      <textarea>When you bring this leader a tough problem, what typically happens next? Walk us through a recent example.</textarea>
+      <div class="q-actions"><span style="font-size:12px;color:var(--amber);">Unique to this diagnostic</span></div>
+    </div>
+
+    <div style="font-size:11px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.05em;margin:20px 0 10px;">Section F — Succession &amp; Bench Strength <span style="font-weight:400;text-transform:none;font-style:italic;letter-spacing:0;">(standard — all diagnostics)</span></div>
+    <div class="q-edit-row">
+      <div class="q-meta">F1 · Bench Continuity — Agreement Scale</div>
+      <textarea style="min-height:52px;">If this leader had to step away from their role for the next 6–12 months, our team/function would continue to operate effectively.</textarea>
+      <div class="q-actions"><span style="font-size:12px;color:var(--mid);">Standard question · all diagnostics</span></div>
+    </div>
+    <div class="q-edit-row">
+      <div class="q-meta">F2 · Developing Successors — Agreement Scale</div>
+      <textarea style="min-height:52px;">This leader actively develops people on the team so they can take on bigger responsibilities over the next 1–3 years.</textarea>
+      <div class="q-actions"><span style="font-size:12px;color:var(--mid);">Standard question · all diagnostics</span></div>
+    </div>
+    <div class="q-edit-row">
+      <div class="q-meta">F3 · Succession Suggestion — Open Ended (optional)</div>
+      <textarea style="min-height:52px;">What is one thing this leader could do over the next 12–18 months to better prepare the team to succeed if they were not in this role?</textarea>
+      <div class="q-actions"><span style="font-size:12px;color:var(--mid);">Standard question · all diagnostics</span></div>
+    </div>
+
+    <div style="font-size:11px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.05em;margin:20px 0 10px;">Section G — Vision Alignment <span style="font-weight:400;text-transform:none;font-style:italic;letter-spacing:0;">(generated from leader's self-report)</span></div>
+    <div class="q-edit-row" id="q-row-g1" style="border-color:var(--gold);background:var(--gold-light);">
+      <div class="q-meta">G1 · Vision Alignment — Agreement Scale <span class="override-badge">AI-Generated</span></div>
+      <textarea id="q-g1" style="background:#FFFDF5;">This leader is building leaders who can run day-to-day operations effectively without their constant involvement.</textarea>
+      <div class="q-actions">
+        <span style="font-size:12px;color:var(--amber);">Generated from Jordan's 3-year vision · May 1, 2026</span>
+        <button class="btn btn-outline btn-sm">Regenerate</button>
+        <button class="btn btn-outline btn-sm" onclick="markOverride('q-g1', this)">Edit Manually</button>
+      </div>
+    </div>
+
+    <hr class="divider" style="margin:28px 0;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div>
+        <div style="font-size:15px;font-weight:700;color:var(--blue);">Global Question Bank</div>
+        <div style="font-size:12px;color:var(--mid);margin-top:2px;">Changes here apply to ALL future diagnostics. Existing diagnostics already in progress are not affected.</div>
+      </div>
+      <button class="btn btn-gold btn-sm" onclick="openModal('global-bank-modal')">Open Global Editor →</button>
+    </div>
+  </div>
+
+  <!-- TAB: REPORT -->
+  <div id="dt-report" class="tab-pane">
+    <div class="alert alert-amber"><span class="alert-icon">⏳</span><div><strong>Survey still open.</strong> Close the diagnostic from the Survey Status tab to generate the report draft.</div></div>
+    <div style="background:var(--light);border-radius:var(--radius);padding:24px;text-align:center;border:2px dashed var(--border);">
+      <div style="font-size:32px;margin-bottom:8px;">📄</div>
+      <div style="font-size:14px;font-weight:600;color:var(--mid);margin-bottom:16px;">Report not yet generated</div>
+      <button class="btn btn-outline" disabled>Generate Report Draft</button>
+    </div>
+    <div style="margin-top:20px;">
+      <div style="font-size:13px;font-weight:700;color:var(--dark);margin-bottom:8px;">Pro Interview Notes</div>
+      <textarea placeholder="Enter notes from 1:1 confidential interviews (Pro tier). These will be included in the report generation prompt." style="min-height:120px;">Interview 1 — Mike Reyes (COO), May 15:
+"Jordan moves fast and that's great — but when he's in the room, nobody else leads. The habit is expensive at scale."
+
+Interview 2 — Sandra Boyle (Board), May 18:
+"My concern is what happens in 18 months when we do the next acquisition. The business needs a CEO who can delegate authority, not just tasks."</textarea>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SCREEN: RATER SURVEY
+══════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-rater-survey" class="screen">
+  <div style="max-width:680px;margin:0 auto;">
+    <div class="card" style="text-align:center;padding:28px;margin-bottom:20px;">
+      <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px;">GPS Leadership Solutions</div>
+      <div style="font-size:20px;font-weight:800;color:var(--blue);margin-bottom:6px;">14-Day Executive Leadership Diagnostic</div>
+      <div id="survey-who" style="font-size:14px;color:var(--mid);">You have been asked to provide feedback for <strong>Jordan Carter</strong>, CEO of Carter Truck &amp; Equipment Group.</div>
+      <div style="font-size:12px;color:var(--mid);margin-top:8px;">Takes ~12–15 minutes. Your responses are confidential and aggregated across all raters.</div>
+    </div>
+
+    <div id="survey-content">
+
+      <!-- STICKY PROGRESS BAR -->
+      <div id="survey-progress-bar" style="position:sticky;top:78px;z-index:50;background:var(--white);border-bottom:1px solid var(--border);padding:12px 0 14px;margin-bottom:20px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <div id="survey-prog-label" style="font-size:13px;font-weight:700;color:var(--blue);">Section 1 of 5: Trust — 0% complete</div>
+          <div style="font-size:11px;color:var(--mid);font-weight:600;">Step <span id="survey-prog-step">1</span> of 5</div>
+        </div>
+        <div class="progress-bar" style="height:8px;"><div class="progress-fill" id="survey-prog-fill" style="width:3%;transition:width .4s;"></div></div>
+      </div>
+
+      <!-- ═══ SECTION A: TRUST ═══ -->
+      <div id="survey-sec-a">
+        <div class="pillar-header">Section A — Trust</div>
+        <div style="font-size:12px;color:var(--mid);margin-bottom:12px;">1 = Strongly Disagree &nbsp;·&nbsp; 5 = Strongly Agree</div>
+
+        <div class="q-block">
+          <div class="q-num">A1 · Trust — Overall</div>
+          <div class="q-text">This leader fosters trust within our team.</div>
+          <div class="likert"><div class="likert-opt" onclick="selL(this)">1</div><div class="likert-opt" onclick="selL(this)">2</div><div class="likert-opt" onclick="selL(this)">3</div><div class="likert-opt sel" onclick="selL(this)">4</div><div class="likert-opt" onclick="selL(this)">5</div></div>
+          <div class="likert-labels"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+        </div>
+        <div class="q-block">
+          <div class="q-num">A2 · Communication Clarity</div>
+          <div class="q-text">This leader communicates clearly and effectively.</div>
+          <div class="likert"><div class="likert-opt" onclick="selL(this)">1</div><div class="likert-opt" onclick="selL(this)">2</div><div class="likert-opt sel" onclick="selL(this)">3</div><div class="likert-opt" onclick="selL(this)">4</div><div class="likert-opt" onclick="selL(this)">5</div></div>
+          <div class="likert-labels"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+        </div>
+        <div class="q-block">
+          <div class="q-num">A3 · Conflict &amp; Difficult Conversations</div>
+          <div class="q-text">This leader handles conflict and difficult conversations in a constructive way.</div>
+          <div class="likert"><div class="likert-opt" onclick="selL(this)">1</div><div class="likert-opt" onclick="selL(this)">2</div><div class="likert-opt" onclick="selL(this)">3</div><div class="likert-opt sel" onclick="selL(this)">4</div><div class="likert-opt" onclick="selL(this)">5</div></div>
+          <div class="likert-labels"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+        </div>
+        <div class="q-block">
+          <div class="q-num">A4 · Developing Others</div>
+          <div class="q-text">This leader effectively helps others on the team grow and develop professionally.</div>
+          <div class="likert"><div class="likert-opt" onclick="selL(this)">1</div><div class="likert-opt" onclick="selL(this)">2</div><div class="likert-opt sel" onclick="selL(this)">3</div><div class="likert-opt" onclick="selL(this)">4</div><div class="likert-opt" onclick="selL(this)">5</div></div>
+          <div class="likert-labels"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+        </div>
+        <div class="q-block">
+          <div class="q-num">A5 · Cross-Team Collaboration</div>
+          <div class="q-text">This leader helps departments and teams work together effectively toward shared goals.</div>
+          <div class="likert"><div class="likert-opt" onclick="selL(this)">1</div><div class="likert-opt" onclick="selL(this)">2</div><div class="likert-opt" onclick="selL(this)">3</div><div class="likert-opt" onclick="selL(this)">4</div><div class="likert-opt sel" onclick="selL(this)">5</div></div>
+          <div class="likert-labels"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+        </div>
+        <div class="q-block">
+          <div class="q-num">A6 · Follow-Through &amp; Accountability</div>
+          <div class="q-text">This leader follows through on commitments and holds others accountable.</div>
+          <div class="likert"><div class="likert-opt" onclick="selL(this)">1</div><div class="likert-opt" onclick="selL(this)">2</div><div class="likert-opt" onclick="selL(this)">3</div><div class="likert-opt sel" onclick="selL(this)">4</div><div class="likert-opt" onclick="selL(this)">5</div></div>
+          <div class="likert-labels"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+        </div>
+        <div class="q-block">
+          <div class="q-num">A7 · Clarity of Expectations</div>
+          <div class="q-text">This leader sets and communicates clear expectations.</div>
+          <div class="likert"><div class="likert-opt" onclick="selL(this)">1</div><div class="likert-opt" onclick="selL(this)">2</div><div class="likert-opt" onclick="selL(this)">3</div><div class="likert-opt sel" onclick="selL(this)">4</div><div class="likert-opt" onclick="selL(this)">5</div></div>
+          <div class="likert-labels"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+        </div>
+        <div class="q-block">
+          <div class="q-num">A8 · START — Trust (open-ended)</div>
+          <div class="q-text">What is one thing this leader could START doing to build even greater trust with their colleagues and team members?</div>
+          <textarea placeholder="Your response is confidential...">Start sharing more of the "why" behind priority changes. When he explains what he is optimizing for, it is easier to get on board.</textarea>
+        </div>
+        <div class="q-block">
+          <div class="q-num">A9 · STOP — Communication / Effectiveness (open-ended)</div>
+          <div class="q-text">What is one thing this leader could STOP doing to improve their communication or leadership effectiveness?</div>
+          <textarea placeholder="Your response is confidential...">Stop answering his own questions in team meetings. He asks for input and then fills the silence before anyone can respond.</textarea>
+        </div>
+        <div class="q-block">
+          <div class="q-num">A10 · CONTINUE — Trust (open-ended)</div>
+          <div class="q-text">What is one thing this leader already does that strongly builds trust and should absolutely CONTINUE?</div>
+          <textarea placeholder="Your response is confidential...">He follows through on what he says. When Jordan commits to something, it happens. That predictability matters more than people say.</textarea>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:10px;margin:24px 0 40px;">
+          <button class="btn btn-primary" onclick="surveyNext()">Next: Proactivity →</button>
+        </div>
+      </div>
+
+      <!-- ═══ SECTION B: PROACTIVITY ═══ -->
+      <div id="survey-sec-b" style="display:none;">
+        <div class="pillar-header">Section B — Proactivity</div>
+        <div style="font-size:12px;color:var(--mid);margin-bottom:12px;">1 = Strongly Disagree &nbsp;·&nbsp; 5 = Strongly Agree</div>
+
+        <div class="q-block">
+          <div class="q-num">B1 · Proactive in Anticipating Issues</div>
+          <div class="q-text">This leader is proactive in anticipating and addressing issues before they escalate.</div>
+          <div class="likert"><div class="likert-opt" onclick="selL(this)">1</div><div class="likert-opt" onclick="selL(this)">2</div><div class="likert-opt" onclick="selL(this)">3</div><div class="likert-opt" onclick="selL(this)">4</div><div class="likert-opt sel" onclick="selL(this)">5</div></div>
+          <div class="likert-labels"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+        </div>
+        <div class="q-block">
+          <div class="q-num">B2 · Influencing Positive Change — <span style="color:var(--amber);font-size:11px;">[Client Override]</span></div>
+          <div class="q-text">This leader clarifies the top 3 priorities each quarter so the team can make decisions without escalating to the CEO.</div>
+          <div class="likert"><div class="likert-opt" onclick="selL(this)">1</div><div class="likert-opt" onclick="selL(this)">2</div><div class="likert-opt sel" onclick="selL(this)">3</div><div class="likert-opt" onclick="selL(this)">4</div><div class="likert-opt" onclick="selL(this)">5</div></div>
+          <div class="likert-labels"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+        </div>
+        <div class="q-block">
+          <div class="q-num">B3 · Inspiring Others</div>
+          <div class="q-text">This leader is inspiring to work with.</div>
+          <div class="likert"><div class="likert-opt" onclick="selL(this)">1</div><div class="likert-opt" onclick="selL(this)">2</div><div class="likert-opt" onclick="selL(this)">3</div><div class="likert-opt sel" onclick="selL(this)">4</div><div class="likert-opt" onclick="selL(this)">5</div></div>
+          <div class="likert-labels"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+        </div>
+        <div class="q-block">
+          <div class="q-num">B4 · Initiative — Emerging Issues</div>
+          <div class="q-text">This leader consistently takes initiative to address emerging issues before they become bigger problems.</div>
+          <div class="likert"><div class="likert-opt" onclick="selL(this)">1</div><div class="likert-opt" onclick="selL(this)">2</div><div class="likert-opt" onclick="selL(this)">3</div><div class="likert-opt" onclick="selL(this)">4</div><div class="likert-opt sel" onclick="selL(this)">5</div></div>
+          <div class="likert-labels"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+        </div>
+        <div class="q-block">
+          <div class="q-num">B5 · Encouraging Solutions, Not Just Problems</div>
+          <div class="q-text">This leader encourages team members to bring solutions, not just problems.</div>
+          <div class="likert"><div class="likert-opt" onclick="selL(this)">1</div><div class="likert-opt" onclick="selL(this)">2</div><div class="likert-opt sel" onclick="selL(this)">3</div><div class="likert-opt" onclick="selL(this)">4</div><div class="likert-opt" onclick="selL(this)">5</div></div>
+          <div class="likert-labels"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+        </div>
+        <div class="q-block">
+          <div class="q-num">B6 · Commitment to Own Growth</div>
+          <div class="q-text">This leader is strongly committed to their own personal and professional development.</div>
+          <div class="likert"><div class="likert-opt" onclick="selL(this)">1</div><div class="likert-opt" onclick="selL(this)">2</div><div class="likert-opt" onclick="selL(this)">3</div><div class="likert-opt sel" onclick="selL(this)">4</div><div class="likert-opt" onclick="selL(this)">5</div></div>
+          <div class="likert-labels"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+        </div>
+        <div class="q-block">
+          <div class="q-num">B7 · Ownership Without Stepping In (open-ended)</div>
+          <div class="q-text">What, if anything, would make it easier for you (and others) to take more ownership so this leader does not need to step in as often?</div>
+          <textarea placeholder="Your response is confidential...">Clearer decision rights would help. Right now it is ambiguous what we can decide vs. what needs Jordan's sign-off. If those lines were sharper, we would escalate less.</textarea>
+        </div>
+        <div class="q-block">
+          <div class="q-num">B8 · START — Elevating Impact (open-ended)</div>
+          <div class="q-text">What is one thing you believe this leader should START doing to elevate their leadership impact?</div>
+          <textarea placeholder="Your response is confidential...">Start holding a brief weekly priorities check — not an ops meeting, just 15 minutes on what matters most this week and what does not.</textarea>
+        </div>
+        <div class="q-block">
+          <div class="q-num">B9 · STOP — Overall Effectiveness (open-ended)</div>
+          <div class="q-text">What is one thing this leader could STOP doing that is hindering the team's initiative or overall effectiveness?</div>
+          <textarea placeholder="Your response is confidential...">Stop being the first to answer in group settings. It shuts down thinking before it starts.</textarea>
+        </div>
+        <div class="q-block">
+          <div class="q-num">B10 · CONTINUE — Proactivity (open-ended)</div>
+          <div class="q-text">What is one thing this leader does that consistently increases initiative or ownership on the team and should absolutely CONTINUE?</div>
+          <textarea placeholder="Your response is confidential...">He holds people to their word without being punitive. When he asks for a follow-up, it actually happens. That drives ownership.</textarea>
+        </div>
+        <div style="display:flex;justify-content:space-between;gap:10px;margin:24px 0 40px;">
+          <button class="btn btn-outline" onclick="surveyBack()">← Back</button>
+          <button class="btn btn-primary" onclick="surveyNext()">Next: Productivity →</button>
+        </div>
+      </div>
+
+      <!-- ═══ SECTION C: PRODUCTIVITY ═══ -->
+      <div id="survey-sec-c" style="display:none;">
+        <div class="pillar-header">Section C — Productivity</div>
+        <div style="font-size:12px;color:var(--mid);margin-bottom:12px;">1 = Strongly Disagree &nbsp;·&nbsp; 5 = Strongly Agree</div>
+
+        <div class="q-block">
+          <div class="q-num">C1 · Enhancing Team Productivity</div>
+          <div class="q-text">This leader is effective at enhancing team productivity.</div>
+          <div class="likert"><div class="likert-opt" onclick="selL(this)">1</div><div class="likert-opt" onclick="selL(this)">2</div><div class="likert-opt" onclick="selL(this)">3</div><div class="likert-opt sel" onclick="selL(this)">4</div><div class="likert-opt" onclick="selL(this)">5</div></div>
+          <div class="likert-labels"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+        </div>
+        <div class="q-block">
+          <div class="q-num">C2 · Balancing Short-Term &amp; Long-Term</div>
+          <div class="q-text">This leader balances short-term execution with long-term strategic vision.</div>
+          <div class="likert"><div class="likert-opt" onclick="selL(this)">1</div><div class="likert-opt" onclick="selL(this)">2</div><div class="likert-opt sel" onclick="selL(this)">3</div><div class="likert-opt" onclick="selL(this)">4</div><div class="likert-opt" onclick="selL(this)">5</div></div>
+          <div class="likert-labels"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+        </div>
+        <div class="q-block">
+          <div class="q-num">C3 · Leading Under Pressure / Crisis</div>
+          <div class="q-text">This leader manages pressure and leads effectively during times of crisis or uncertainty.</div>
+          <div class="likert"><div class="likert-opt" onclick="selL(this)">1</div><div class="likert-opt" onclick="selL(this)">2</div><div class="likert-opt" onclick="selL(this)">3</div><div class="likert-opt" onclick="selL(this)">4</div><div class="likert-opt sel" onclick="selL(this)">5</div></div>
+          <div class="likert-labels"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+        </div>
+        <div class="q-block">
+          <div class="q-num">C4 · Prioritization &amp; Focus</div>
+          <div class="q-text">This leader keeps the team focused on the most important priorities and avoids distractions.</div>
+          <div class="likert"><div class="likert-opt" onclick="selL(this)">1</div><div class="likert-opt" onclick="selL(this)">2</div><div class="likert-opt sel" onclick="selL(this)">3</div><div class="likert-opt" onclick="selL(this)">4</div><div class="likert-opt" onclick="selL(this)">5</div></div>
+          <div class="likert-labels"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+        </div>
+        <div class="q-block">
+          <div class="q-num">C5 · Dependence on This Leader for Execution</div>
+          <div class="q-text">The team/organization can execute well without this leader needing to step in frequently.</div>
+          <div style="background:var(--light);border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:11px;color:var(--mid);">Use 1 if things often stall without this leader's direct involvement. Use 5 if the team executes well without them having to rescue work.</div>
+          <div class="likert"><div class="likert-opt sel" onclick="selL(this)">1</div><div class="likert-opt" onclick="selL(this)">2</div><div class="likert-opt" onclick="selL(this)">3</div><div class="likert-opt" onclick="selL(this)">4</div><div class="likert-opt" onclick="selL(this)">5</div></div>
+          <div class="likert-labels"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+        </div>
+        <div class="q-block">
+          <div class="q-num">C6 · Meeting Efficiency</div>
+          <div class="q-text">This leader's meetings are efficient and drive clear decisions, owners, and next steps within the scheduled time.</div>
+          <div class="likert"><div class="likert-opt" onclick="selL(this)">1</div><div class="likert-opt" onclick="selL(this)">2</div><div class="likert-opt sel" onclick="selL(this)">3</div><div class="likert-opt" onclick="selL(this)">4</div><div class="likert-opt" onclick="selL(this)">5</div></div>
+          <div class="likert-labels"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+        </div>
+        <div class="q-block">
+          <div class="q-num">C7 · START — Productivity / Speed (open-ended)</div>
+          <div class="q-text">What is one thing this leader could START doing to improve the team's productivity or execution speed?</div>
+          <textarea placeholder="Your response is confidential...">Start ending every meeting with a written list of who owns what and by when. It would cut at least a third of the follow-up confusion.</textarea>
+        </div>
+        <div class="q-block">
+          <div class="q-num">C8 · STOP — Productivity / Friction (open-ended)</div>
+          <div class="q-text">What is one thing this leader should STOP doing because it slows execution or creates unnecessary work?</div>
+          <textarea placeholder="Your response is confidential...">Stop reopening decisions that were already made. When it happens mid-execution it creates rework and erodes trust in the process.</textarea>
+        </div>
+        <div class="q-block">
+          <div class="q-num">C9 · CONTINUE — Productivity (open-ended)</div>
+          <div class="q-text">What is one thing this leader does that has a significant positive impact on team productivity and should absolutely CONTINUE?</div>
+          <textarea placeholder="Your response is confidential...">He removes obstacles fast. When something is blocking the team, Jordan clears it without bureaucracy. That keeps momentum.</textarea>
+        </div>
+        <div style="display:flex;justify-content:space-between;gap:10px;margin:24px 0 40px;">
+          <button class="btn btn-outline" onclick="surveyBack()">← Back</button>
+          <button class="btn btn-primary" onclick="surveyNext()">Next: Overall Impact →</button>
+        </div>
+      </div>
+
+      <!-- ═══ SECTION D: OVERALL IMPACT ═══ -->
+      <div id="survey-sec-d" style="display:none;">
+        <div class="pillar-header">Section D — Overall Impact &amp; Descriptors</div>
+
+        <div class="q-block">
+          <div class="q-num">D1 · Overall Leadership Impact (1–10)</div>
+          <div class="q-text">Overall, on a scale of 1 to 10, how would you rate this leader's impact on the team and organization?</div>
+          <div class="likert"><div class="likert-opt" onclick="selL(this)">1</div><div class="likert-opt" onclick="selL(this)">2</div><div class="likert-opt" onclick="selL(this)">3</div><div class="likert-opt" onclick="selL(this)">4</div><div class="likert-opt" onclick="selL(this)">5</div><div class="likert-opt" onclick="selL(this)">6</div><div class="likert-opt" onclick="selL(this)">7</div><div class="likert-opt sel" onclick="selL(this)">8</div><div class="likert-opt" onclick="selL(this)">9</div><div class="likert-opt" onclick="selL(this)">10</div></div>
+          <div class="likert-labels"><span>Low impact</span><span>Exceptional impact</span></div>
+        </div>
+        <div class="q-block">
+          <div class="q-num">D2 · Leader Description (open-ended)</div>
+          <div class="q-text">If you were to describe this leader to someone outside the team, what words or phrases would you use?</div>
+          <textarea placeholder="Your response is confidential...">Driven, decisive, high-standards. Gets things done but sometimes at the expense of letting others grow. Genuinely cares about the business.</textarea>
+        </div>
+        <div style="display:flex;justify-content:space-between;gap:10px;margin:24px 0 40px;">
+          <button class="btn btn-outline" onclick="surveyBack()">← Back</button>
+          <button class="btn btn-primary" onclick="surveyNext()">Next: Succession &amp; Vision →</button>
+        </div>
+      </div>
+
+      <!-- ═══ SECTION F+G: SUCCESSION & VISION ═══ -->
+      <div id="survey-sec-f" style="display:none;">
+        <div class="pillar-header" style="background:#3B2070;">Section F — Succession &amp; Bench Strength</div>
+        <div style="font-size:12px;color:var(--mid);margin-bottom:12px;">1 = Strongly Disagree &nbsp;·&nbsp; 5 = Strongly Agree</div>
+
+        <div class="q-block">
+          <div class="q-num">F1 · Bench Continuity</div>
+          <div class="q-text">If this leader had to step away from their role for the next 6–12 months, our team/function would continue to operate effectively.</div>
+          <div class="likert"><div class="likert-opt sel" onclick="selL(this)">1</div><div class="likert-opt" onclick="selL(this)">2</div><div class="likert-opt" onclick="selL(this)">3</div><div class="likert-opt" onclick="selL(this)">4</div><div class="likert-opt" onclick="selL(this)">5</div></div>
+          <div class="likert-labels"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+        </div>
+        <div class="q-block">
+          <div class="q-num">F2 · Developing Successors</div>
+          <div class="q-text">This leader actively develops people on the team so they can take on bigger responsibilities over the next 1–3 years.</div>
+          <div class="likert"><div class="likert-opt" onclick="selL(this)">1</div><div class="likert-opt" onclick="selL(this)">2</div><div class="likert-opt" onclick="selL(this)">3</div><div class="likert-opt sel" onclick="selL(this)">4</div><div class="likert-opt" onclick="selL(this)">5</div></div>
+          <div class="likert-labels"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+        </div>
+        <div class="q-block">
+          <div class="q-num">F3 · Succession Suggestion <span style="font-size:11px;color:var(--mid);font-weight:400;">(optional)</span></div>
+          <div class="q-text">What is one thing this leader could do over the next 12–18 months to better prepare the team to succeed if they were not in this role?</div>
+          <textarea placeholder="Optional — your response is confidential...">Delegate the ops reviews completely to Mike. Stop attending unless invited. It would force the team to own the agenda.</textarea>
+        </div>
+
+        <div class="pillar-header" style="background:#0F4A2A;margin-top:24px;">Section G — Vision Alignment</div>
+        <div style="background:var(--gold-light);border:1px solid var(--gold);border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--dark);">
+          <strong style="color:var(--amber);">⚡ AI-Generated Item</strong> — This question was written by Claude based on this leader's confidential 3-year vision statement. It uses generic language and does not reveal specific details.
+        </div>
+        <div class="q-block" style="border-color:var(--gold);background:var(--gold-light);">
+          <div class="q-num" style="color:var(--amber);">G1 · Vision Alignment &nbsp;<span class="override-badge">AI-Generated</span></div>
+          <div class="q-text">This leader is building leaders who can run day-to-day operations effectively without their constant involvement.</div>
+          <div class="likert"><div class="likert-opt" onclick="selL(this)">1</div><div class="likert-opt" onclick="selL(this)">2</div><div class="likert-opt" onclick="selL(this)">3</div><div class="likert-opt sel" onclick="selL(this)">4</div><div class="likert-opt" onclick="selL(this)">5</div></div>
+          <div class="likert-labels"><span>Strongly Disagree</span><span>Strongly Agree</span></div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;gap:10px;margin:24px 0 40px;">
+          <button class="btn btn-outline" onclick="surveyBack()">← Back</button>
+          <button class="btn btn-primary" onclick="simulateSurveySubmit()" style="padding:12px 28px;">Submit My Feedback ✓</button>
+        </div>
+      </div>
+
+    </div>
+        <div id="survey-thankyou" style="display:none;text-align:center;padding:60px 24px;">
+      <div style="font-size:48px;margin-bottom:16px;">✅</div>
+      <div style="font-size:22px;font-weight:800;color:var(--blue);margin-bottom:8px;">Thank you for your feedback.</div>
+      <div style="font-size:14px;color:var(--mid);">Your responses have been submitted and are confidential. All feedback is aggregated across raters.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SCREEN: LEADER PORTAL
+══════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-leader-portal" class="screen">
+  <div style="max-width:760px;margin:0 auto;">
+    <div style="margin-bottom:24px;">
+      <div style="font-size:13px;color:var(--mid);">Welcome back</div>
+      <div style="font-size:24px;font-weight:800;color:var(--blue);">Jordan Carter</div>
+      <div style="font-size:13px;color:var(--mid);">CEO · Carter Truck &amp; Equipment Group</div>
+    </div>
+
+    <div class="alert alert-amber" style="margin-bottom:20px;">
+      <span class="alert-icon">⚠</span>
+      <div><strong>Action needed: Complete your self-assessment.</strong> Your rater survey invitations cannot go out until you finish your self-view. Two of the rater questions are generated from your answers. Takes ~15 minutes.</div>
+    </div>
+
+    <!-- ── 8-MILESTONE PIPELINE ── -->
+    <div class="card" style="margin-bottom:20px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+        <div class="card-title">Your Diagnostic Journey</div>
+        <span style="font-size:12px;color:var(--amber);font-weight:700;">Action needed — Step 2 of 8</span>
+      </div>
+      <div class="card-sub" style="margin-bottom:18px;">Your self-assessment is needed before rater invitations can be sent. Once complete, Alex will finalize your stakeholder list and send survey invites.</div>
+
+      <!-- Step 1: Intake Call (merged scheduled + completed) -->
+      <div style="display:flex;gap:14px;margin-bottom:12px;align-items:flex-start;">
+        <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:28px;">
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;color:white;font-weight:800;font-size:12px;">✓</div>
+          <div style="width:2px;background:var(--green);height:16px;margin-top:2px;"></div>
+        </div>
+        <div style="padding-top:5px;">
+          <div style="font-size:13px;font-weight:700;color:var(--dark);">Discovery &amp; Intake Call</div>
+          <div style="font-size:11px;color:var(--mid);">Scheduled Apr 28 · Completed Apr 29, 2026</div>
+        </div>
+      </div>
+
+      <!-- Step 2: Self-assessment (amber — action needed) -->
+      <div style="display:flex;gap:14px;margin-bottom:12px;align-items:flex-start;background:#FFF8E7;padding:10px 12px;border-radius:var(--radius);border:1.5px solid #F5C842;margin-left:-12px;margin-right:-12px;">
+        <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:28px;">
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--amber);display:flex;align-items:center;justify-content:center;color:white;font-weight:800;font-size:12px;">2</div>
+          <div style="width:2px;background:var(--border);height:16px;margin-top:2px;"></div>
+        </div>
+        <div style="padding-top:4px;flex:1;">
+          <div style="font-size:13px;font-weight:700;color:var(--amber);">Self-assessment not yet completed</div>
+          <div style="font-size:11px;color:var(--mid);margin-bottom:8px;">Your self-view comparison is needed for the report. Takes ~15 minutes.</div>
+          <button class="btn btn-primary btn-sm" onclick="startSelfReportSurvey()">Complete Self-Assessment →</button>
+        </div>
+      </div>
+
+      <!-- Step 3: Stakeholder list — LOCKED until self-assessment complete -->
+      <div style="display:flex;gap:14px;margin-bottom:12px;align-items:flex-start;background:var(--light);padding:10px 12px;border-radius:var(--radius);border:1.5px solid var(--border);margin-left:-12px;margin-right:-12px;opacity:.7;">
+        <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:28px;">
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--mid);display:flex;align-items:center;justify-content:center;color:white;font-weight:800;font-size:12px;">🔒</div>
+          <div style="width:2px;background:var(--border);height:16px;margin-top:2px;"></div>
+        </div>
+        <div style="padding-top:4px;">
+          <div style="font-size:13px;font-weight:700;color:var(--mid);">Stakeholder list &amp; rater invites</div>
+          <div style="font-size:11px;color:var(--mid);">Locked until self-assessment is complete — invites are generated using your survey responses.</div>
+        </div>
+      </div>
+
+      <!-- Step 4: Rater surveys (upcoming — locked until Steps 2+3 complete) -->
+      <div style="display:flex;gap:14px;margin-bottom:12px;align-items:flex-start;">
+        <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:28px;">
+          <div style="width:28px;height:28px;border-radius:50%;border:2px solid var(--border);background:var(--white);display:flex;align-items:center;justify-content:center;color:var(--mid);font-weight:700;font-size:12px;">4</div>
+          <div style="width:2px;background:var(--border);height:16px;margin-top:2px;"></div>
+        </div>
+        <div style="padding-top:5px;"><div style="font-size:13px;font-weight:600;color:var(--mid);">Rater surveys in progress</div><div style="font-size:11px;color:var(--mid);">Surveys open once your rater list is confirmed and invites are sent.</div></div>
+      </div>
+
+      <!-- Steps 5–8: Upcoming (greyed) -->
+      <div style="opacity:.45;">
+        <div style="display:flex;gap:14px;margin-bottom:10px;align-items:flex-start;">
+          <div style="width:28px;height:28px;border-radius:50%;border:2px solid var(--border);background:var(--white);display:flex;align-items:center;justify-content:center;color:var(--mid);font-weight:700;font-size:12px;flex-shrink:0;">5</div>
+          <div style="padding-top:5px;font-size:13px;font-weight:600;color:var(--mid);">Survey window closed &amp; data locked</div>
+        </div>
+        <div style="display:flex;gap:14px;margin-bottom:10px;align-items:flex-start;">
+          <div style="width:28px;height:28px;border-radius:50%;border:2px solid var(--border);background:var(--white);display:flex;align-items:center;justify-content:center;color:var(--mid);font-weight:700;font-size:12px;flex-shrink:0;">6</div>
+          <div style="padding-top:5px;font-size:13px;font-weight:600;color:var(--mid);">Diagnostic report finalized &amp; available in portal</div>
+        </div>
+        <div style="display:flex;gap:14px;margin-bottom:10px;align-items:flex-start;">
+          <div style="width:28px;height:28px;border-radius:50%;border:2px solid var(--border);background:var(--white);display:flex;align-items:center;justify-content:center;color:var(--mid);font-weight:700;font-size:12px;flex-shrink:0;">7</div>
+          <div style="padding-top:5px;font-size:13px;font-weight:600;color:var(--mid);">Coaching &amp; debrief session completed</div>
+        </div>
+        <div style="display:flex;gap:14px;align-items:flex-start;">
+          <div style="width:28px;height:28px;border-radius:50%;border:2px solid var(--border);background:var(--white);display:flex;align-items:center;justify-content:center;color:var(--mid);font-weight:700;font-size:12px;flex-shrink:0;">8</div>
+          <div style="padding-top:5px;">
+            <div style="font-size:13px;font-weight:600;color:var(--mid);">90-Day implementation plan locked &amp; active</div>
+            <div style="font-size:11px;color:var(--mid);margin-top:2px;">You'll have 24 hours after the debrief to finalize — then it locks automatically.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Diagnostic card -->
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <div><div class="card-title">Your Leadership Diagnostic</div><div class="card-sub">14-Day Executive Leadership Diagnostic · Pro · May 17 → May 24</div></div>
+        <span class="badge badge-open">In Progress</span>
+      </div>
+      <div style="background:var(--light);border-radius:var(--radius);padding:16px;margin-bottom:16px;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span style="font-size:13px;font-weight:600;">Rater Responses</span><span style="font-size:13px;font-weight:700;color:var(--green);">10 of 14</span></div>
+        <div class="progress-bar" style="height:12px;"><div class="progress-fill" style="width:71%;"></div></div>
+        <div id="leader-cat-breakdown" style="margin-top:10px;"></div>
+      </div>
+      <div style="background:var(--blue-light);border:1.5px solid var(--blue);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div><div style="font-size:13px;font-weight:700;color:var(--blue);">Your Self-Assessment</div><div style="font-size:12px;color:var(--mid);margin-top:2px;">Complete your own version of the survey to provide a self-view comparison in your report.</div></div>
+          <button class="btn btn-primary btn-sm" onclick="startSelfReportSurvey()">Complete Self-Assessment →</button>
+        </div>
+      </div>
+
+      <!-- Rater entry section -->
+      <div style="font-size:13px;font-weight:700;color:var(--dark);margin-bottom:12px;">Your Rater List</div>
+      <div class="alert alert-blue" style="margin-bottom:12px;">
+        <span class="alert-icon">ℹ</span>
+        <div><strong>Add your raters below.</strong> For each person, enter their name, email, and their relationship to you. Minimum: 3 people listed per category so individual responses stay confidential. Supervisor and Board may be 1.</div>
+      </div>
+
+      <!-- Inline rater entry form (client-facing) -->
+      <div id="leader-rater-list" style="margin-bottom:12px;"></div>
+
+      <div class="card" style="background:var(--light);border:1.5px dashed var(--border);padding:16px;">
+        <div style="font-size:13px;font-weight:600;color:var(--dark);margin-bottom:12px;">+ Add a Rater</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label>Full Name</label>
+            <input placeholder="e.g. Mike Reyes">
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label>Email</label>
+            <input type="email" placeholder="email@company.com">
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label>Relationship to You</label>
+            <select>
+              <option value="">Select...</option>
+              <option>Direct Report</option>
+              <option>Peer</option>
+              <option>Supervisor</option>
+              <option>Internal Partner</option>
+              <option>External Partner</option>
+              <option>Board / Investor</option>
+              <option>Key Customer</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" style="margin-bottom:0;height:40px;">Add</button>
+        </div>
+        <div style="font-size:12px;color:var(--mid);margin-top:10px;">
+          Alex will review your list before invitations are sent. Aim for 10–14 total raters across at least 3 categories.
+        </div>
+      </div>
+    </div>
+
+    <!-- 90-day goal -->
+    <div class="card">
+      <div class="card-title" style="margin-bottom:10px;">Your 90-Day Focus</div>
+      <div style="background:var(--gold-light);border-left:4px solid var(--gold);padding:14px 16px;border-radius:4px;">
+        <div style="font-size:13.5px;font-weight:600;color:var(--dark);line-height:1.6;">In leadership and branch review meetings, ask "What do you recommend?" before giving my view — so leaders build the habit of owning problems and solutions before bringing them to me.</div>
+      </div>
+      <div style="margin-top:10px;font-size:12px;color:var(--mid);">This week's commitment: <strong>Run Monday team meeting without solving a single problem myself — ask questions only.</strong></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SCREEN: REPORT VIEWER
+══════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-report-view" class="screen">
+  <div style="display:flex;justify-content:space-between;align-items:center;max-width:820px;margin:0 auto 16px;">
+    <div style="font-size:13px;font-weight:600;color:var(--mid);">Report Viewer — Jordan Carter</div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-outline btn-sm">✏ Edit Draft</button>
+      <button class="btn btn-gold btn-sm">Finalize Report</button>
+      <button class="btn btn-outline btn-sm">🖨 Print / PDF</button>
+    </div>
+  </div>
+  <div class="report-wrap">
+    <div class="report-header">
+      <div style="display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:20px;">
+        <div style="background:var(--blue);color:var(--gold);font-weight:900;font-size:22px;padding:8px 14px;border-radius:6px;letter-spacing:.06em;font-style:italic;">GPS</div>
+        <div style="text-align:left;">
+          <div style="font-size:14px;font-weight:800;color:var(--blue);letter-spacing:.02em;">GPS Leadership Solutions</div>
+          <div style="font-size:11px;color:var(--mid);font-weight:500;">Executive Impact Portal</div>
+        </div>
+      </div>
+      <h1>14-Day Executive Leadership Diagnostic</h1>
+      <div class="sub"><strong>Jordan Carter</strong> · CEO, Carter Truck &amp; Equipment Group</div>
+      <div class="sub" style="margin-top:4px;">Alex D. Tremble, Founder &amp; CEO · GPS Leadership Solutions · May 2026</div>
+    </div>
+    <div class="report-section">
+      <h2>Executive Summary</h2>
+      <h3>Top 3 Strengths</h3>
+      <p><strong>1. Decisive, action-oriented operator.</strong> Your team and peers consistently describe you as decisive and willing to make hard calls. When something breaks, you move fast and remove obstacles.</p>
+      <p><strong>2. Customer-obsessed and on the floor.</strong> Leaders and frontline managers see you as deeply committed to customers. You show up in branches and will do whatever it takes to protect uptime and service.</p>
+      <p><strong>3. High standards and strong work ethic.</strong> You're known as someone personally willing to outwork most people. That sets a strong tone for accountability and pride in the work.</p>
+      <h3 style="margin-top:18px;">Top 3 Development Priorities</h3>
+      <p><strong>1. Shift from chief problem-solver to builder of problem-solvers.</strong> Leaders still bring issues to you that their level should own.</p>
+      <p><strong>2. Clarify and protect the few priorities that really matter.</strong> Too many "top priorities" and frequent changes in focus make it hard for leaders to know what to say no to.</p>
+      <p><strong>3. Model calm, predictable communication under pressure.</strong> When you're frustrated, it shows in tone and volume — creating hesitation to bring bad news early.</p>
+      <div class="score-grid" style="margin-top:20px;">
+        <div class="score-card"><div class="pillar">Trust</div><div><span class="score">3.8</span><span class="denom"> /5</span></div><div class="self-score">Self: 4.6</div></div>
+        <div class="score-card"><div class="pillar">Proactivity</div><div><span class="score">4.4</span><span class="denom"> /5</span></div><div class="self-score">Self: 4.5</div></div>
+        <div class="score-card"><div class="pillar">Productivity</div><div><span class="score">4.5</span><span class="denom"> /5</span></div><div class="self-score">Self: 4.4</div></div>
+        <div class="score-card tp3idx"><div class="pillar">TP3™ Index</div><div><span class="score">4.3</span><span class="denom"> /5</span></div><div class="self-score">Self-view: 4.7</div></div>
+      </div>
+      <div style="font-size:12px;color:var(--mid);margin-top:4px;">Others only. Overall Impact Score: 8.2 / 10.</div>
+      <h3 style="margin-top:18px;">Suggested 90-Day Focus Behavior</h3>
+      <p>In weekly leadership and branch reviews, slow the first response down: ask one or two questions, have your leaders propose options, then give your view — so they build the habit of owning solutions before coming to you.</p>
+      <div class="tool-callout">
+        <div class="tc-label">Recommended Tools — Available in Your Portal</div>
+        <p style="margin-bottom:4px;">→ <a href="#">GPS Delegation Operating System</a> — define decision rights and push authority to your exec and regional leaders.</p>
+        <p>→ <a href="#">Executive Time Leak Audit</a> — identify where your time is consumed by decisions others should own.</p>
+      </div>
+    </div>
+    <hr class="divider">
+    <div class="report-section">
+      <h2>TP3™ Leadership Outcomes</h2>
+      <table class="tp3-table">
+        <thead><tr><th>Dimension</th><th>Self</th><th>Direct Reports</th><th>Board</th><th>Customers</th></tr></thead>
+        <tbody>
+          <tr><td>Follow-Through on Commitments</td><td>4.7</td><td class="score-hi">3.9</td><td class="score-hi">4.4</td><td class="score-hi">4.6</td></tr>
+          <tr><td>Creates Safety to Raise Bad News</td><td>4.4</td><td class="score-mid">3.5</td><td class="score-mid">3.9</td><td class="score-hi">4.2</td></tr>
+          <tr><td>Clarity of Priorities &amp; Direction</td><td>4.6</td><td class="score-mid">3.6</td><td class="score-hi">4.2</td><td class="score-hi">4.3</td></tr>
+          <tr><td>Empowers Others to Solve Problems</td><td>4.1</td><td class="score-mid">3.2</td><td class="score-mid">3.6</td><td class="score-mid">3.9</td></tr>
+          <tr><td>Leads Calmly Under Pressure</td><td>4.6</td><td class="score-mid">3.8</td><td class="score-hi">4.3</td><td class="score-hi">4.5</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <hr class="divider">
+    <div class="report-section">
+      <h2>Start / Stop / Continue</h2>
+      <h3>START</h3>
+      <ul><li>Asking "What do you recommend?" before giving your view.</li><li>Opening each quarterly meeting with the 3 priorities AND what will not be done.</li></ul>
+      <h3>STOP</h3>
+      <ul><li>Taking over customer or ops issues your leaders can own.</li><li>Adding "urgent" initiatives mid-quarter without killing something else.</li></ul>
+      <h3>CONTINUE</h3>
+      <ul><li>Being visible in locations and staying close to the work.</li><li>Holding a high bar for performance and accountability.</li></ul>
+    </div>
+    <hr class="divider">
+    <div class="report-section">
+      <h2>Succession &amp; Future Self</h2>
+      <p style="font-size:12px;font-style:italic;color:var(--mid);margin-bottom:14px;">This section is based on the leader's confidential self-report responses and is included only in the leader's copy of the report.</p>
+      <h3>3-Year Picture</h3>
+      <p>Jordan envisions Carter Truck operating across 8 markets under a GM structure — with each market leader running their own P&amp;L with minimal CEO involvement. The personal vision is an evolution from daily operator to strategic leader, focused on acquisitions, team development, and organizational design.</p>
+      <h3 style="margin-top:14px;">Capabilities to Build</h3>
+      <p>The top self-identified development areas: (1) delegation of real decision authority — not just tasks; (2) coaching and growing direct reports rather than holding them accountable; (3) carving out strategic thinking time rather than firefighting.</p>
+      <h3 style="margin-top:14px;">Bench Strength: Self-View vs. Rater View</h3>
+      <table class="tp3-table">
+        <thead><tr><th>Dimension</th><th>Self-Report</th><th>Rater Avg (F1/F2)</th><th>Gap</th></tr></thead>
+        <tbody>
+          <tr><td>Team would operate if leader stepped away</td><td class="score-mid">Disagree</td><td class="score-mid">1.9 / 5</td><td style="color:var(--red);font-weight:700;">Aligned — critical gap</td></tr>
+          <tr><td>Leader actively develops successors</td><td class="score-mid">Mixed</td><td class="score-mid">3.1 / 5</td><td style="color:var(--amber);font-weight:700;">Some progress visible</td></tr>
+          <tr><td>Building leaders for day-to-day (G1)</td><td>—</td><td class="score-mid">3.2 / 5</td><td style="color:var(--amber);font-weight:700;">Below threshold</td></tr>
+        </tbody>
+      </table>
+      <h3 style="margin-top:14px;">Identified Successors</h3>
+      <p><strong>Mike Reyes (COO)</strong> — Most ready for a GM/CEO role in a larger market. Primary gaps: board-level communication, driving the quarterly operating plan without prompting.</p>
+      <p><strong>Denise Ortega (VP Operations)</strong> — Strong executor, ready for a Regional GM role. Needs P&amp;L ownership experience and tolerance for ambiguity without escalating.</p>
+      <h3 style="margin-top:14px;">What Raters Are Saying</h3>
+      <p>The most common rater theme: Jordan's presence in every room is the bottleneck to team readiness. Several raters specifically noted that if Jordan stepped back from ops reviews, it would force the team to own the agenda rather than waiting for direction.</p>
+      <div class="tool-callout">
+        <div class="tc-label">Recommended Next Step</div>
+        <p>→ <a href="#">GPS Delegation Operating System</a> — define decision rights and push authority to your exec and regional leaders. Start with Mike Reyes owning one high-stakes deliverable without you in the room.</p>
+      </div>
+    </div>
+    <hr class="divider">
+    <div class="report-section">
+      <h2>90-Day Leadership Impact Plan</h2>
+      <p><strong>Priority Behavior:</strong> In leadership and regional review meetings, make your leaders bring options and recommendations first, then decide — so the organization builds problem-solving muscle without you driving every solution.</p>
+      <p><strong>Sample Metric:</strong> % of weekly escalations that arrive with a recommendation. Baseline now. Goal: 80% within 90 days.</p>
+      <div class="tool-callout"><div class="tc-label">Track This in Your Portal</div><p>→ <a href="#">Go to Your 90-Day Plan →</a></p></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     MODALS
+══════════════════════════════════════════════════════════════════════════ -->
+
+<!-- New Diagnostic -->
+<div id="new-diag-modal" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header"><h3>New Diagnostic</h3><button class="close-btn" onclick="closeModal('new-diag-modal')">×</button></div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Client</label>
+        <div class="radio-group" style="margin-bottom:10px;">
+          <div class="radio-btn selected" onclick="toggleRadio(this,'client-mode');toggleClientMode('existing')">Existing Client</div>
+          <div class="radio-btn" onclick="toggleRadio(this,'client-mode');toggleClientMode('new')">New Client</div>
+        </div>
+        <div id="existing-client-fields">
+          <select><option>Jordan Carter — Carter Truck &amp; Equipment Group</option><option>Maria Chen — Apex Logistics Group</option><option>Derek Walsh — Walsh Industrial Services</option></select>
+        </div>
+        <div id="new-client-fields" style="display:none;">
+          <div class="two-col">
+            <div class="form-group" style="margin-bottom:10px;"><label>First Name</label><input placeholder="First"></div>
+            <div class="form-group" style="margin-bottom:10px;"><label>Last Name</label><input placeholder="Last"></div>
+          </div>
+          <div class="form-group" style="margin-bottom:10px;"><label>Title &amp; Organization</label><input placeholder="CEO, Acme Industrial Group"></div>
+          <div class="form-group" style="margin-bottom:0;"><label>Email</label><input type="email" placeholder="ceo@company.com"><div class="hint">Portal invite will be sent automatically once the diagnostic is created.</div></div>
+        </div>
+      </div>
+      <div class="two-col">
+        <div class="form-group">
+          <label>Tier</label>
+          <select><option>Standard — $5,000</option><option selected>Pro — $10,000 (adds 1:1 interviews)</option></select>
+        </div>
+        <div class="form-group">
+          <label>Survey Start Date</label>
+          <input type="date" id="start-date" value="2026-05-30" onchange="updateCloseDate()">
+          <div class="hint">Survey closes automatically 7 days later</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Computed Close Date</label>
+        <div class="computed-val" id="close-date-display">Jun 6, 2026 (auto-calculated)</div>
+      </div>
+      <div class="form-group">
+        <label>Email Delivery Mode</label>
+        <div class="radio-group">
+          <div class="radio-btn selected" onclick="toggleRadio(this,'delivery')">GPS Sends Invites</div>
+          <div class="radio-btn" onclick="toggleRadio(this,'delivery')">Client Sends (we provide templates)</div>
+        </div>
+        <div class="hint">GPS Sends: portal auto-delivers tokenized links to each rater. Client Sends: portal generates pre-filled email templates for Alex or the client to send manually.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('new-diag-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal('new-diag-modal');showScreen('diag-detail');">Create &amp; Open →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Close + Generate -->
+<div id="close-diag-modal" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header"><h3>Close Diagnostic &amp; Generate Report</h3><button class="close-btn" onclick="closeModal('close-diag-modal')">×</button></div>
+    <div class="modal-body">
+      <div class="alert alert-green"><span class="alert-icon">✓</span><div><strong>10 completions</strong> — above the 7-response minimum.</div></div>
+      <p style="font-size:13.5px;color:var(--dark);line-height:1.7;">Closing the diagnostic will:<br>• Lock the survey — no new responses<br>• Aggregate all scores and verbatims<br>• Send payload to Claude to generate the report draft<br>• Email you when the draft is ready (~2 minutes)</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('close-diag-modal')">Cancel</button>
+      <button class="btn btn-gold" onclick="closeModal('close-diag-modal');simulateGenerate()">Close &amp; Generate →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Generating Modal -->
+<div id="generating-modal" class="modal-overlay">
+  <div class="modal" style="text-align:center;padding:40px 32px;">
+    <div style="font-size:40px;margin-bottom:12px;">⚙️</div>
+    <div style="font-size:17px;font-weight:700;color:var(--blue);margin-bottom:8px;">Generating Report Draft...</div>
+    <div style="font-size:13px;color:var(--mid);margin-bottom:20px;">Aggregating scores · Compiling verbatims · Sending to Claude API</div>
+    <div class="progress-bar" style="height:8px;max-width:320px;margin:0 auto;"><div class="progress-fill" id="gen-bar" style="width:0%;transition:width .3s;"></div></div>
+    <div id="gen-status" style="font-size:12px;color:var(--mid);margin-top:10px;">Starting...</div>
+  </div>
+</div>
+
+<!-- Global Bank Modal -->
+<div id="global-bank-modal" class="modal-overlay">
+  <div class="modal modal-lg">
+    <div class="modal-header"><h3>Global Question Bank Editor</h3><button class="close-btn" onclick="closeModal('global-bank-modal')">×</button></div>
+    <div class="modal-body">
+      <div class="alert alert-amber"><span class="alert-icon">⚠</span><div><strong>These changes affect all future diagnostics.</strong> Diagnostics already in progress use their own question snapshot and will not be affected.</div></div>
+      <div style="font-size:11px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;">Section A — Trust</div>
+      <div class="q-edit-row"><div class="q-meta">A1 · Rated (1–5)</div><textarea style="min-height:52px;">This leader follows through on commitments and does what they say they will do.</textarea></div>
+      <div class="q-edit-row"><div class="q-meta">A2 · Rated (1–5)</div><textarea style="min-height:52px;">This leader creates an environment where people feel safe raising problems and bad news early.</textarea></div>
+      <div class="q-edit-row"><div class="q-meta">A3 · Open Ended</div><textarea style="min-height:52px;">What is one thing this leader could START doing to build greater trust?</textarea></div>
+      <div style="font-size:11px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.05em;margin:16px 0 10px;">Section B — Proactivity</div>
+      <div class="q-edit-row"><div class="q-meta">B1 · Rated (1–5)</div><textarea style="min-height:52px;">This leader anticipates problems and addresses them before they become crises.</textarea></div>
+      <div class="q-edit-row"><div class="q-meta">B2 · Rated (1–5)</div><textarea style="min-height:52px;">This leader creates clarity on priorities so the team can make decisions without escalating.</textarea></div>
+      <div style="font-size:11px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.05em;margin:16px 0 10px;">Section C — Productivity (etc.)</div>
+      <div style="font-size:12px;color:var(--mid);font-style:italic;">C1–C6 and D1 follow the same pattern. All editable here.</div>
+      <div style="font-size:11px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.05em;margin:20px 0 10px;">Section F — Succession &amp; Bench Strength</div>
+      <div class="q-edit-row"><div class="q-meta">F1 · Agreement Scale</div><textarea style="min-height:52px;">If this leader had to step away from their role for the next 6–12 months, our team/function would continue to operate effectively.</textarea></div>
+      <div class="q-edit-row"><div class="q-meta">F2 · Agreement Scale</div><textarea style="min-height:52px;">This leader actively develops people on the team so they can take on bigger responsibilities over the next 1–3 years.</textarea></div>
+      <div class="q-edit-row"><div class="q-meta">F3 · Open Ended (optional)</div><textarea style="min-height:52px;">What is one thing this leader could do over the next 12–18 months to better prepare the team to succeed if they were not in this role?</textarea></div>
+      <div style="font-size:12px;color:var(--mid);margin-top:4px;padding:0 4px;">Section G (Vision Alignment) is auto-generated per diagnostic from the leader's self-report — it does not live in the global bank.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('global-bank-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal('global-bank-modal')">Save Global Changes</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── DATA ──────────────────────────────────────────────────────────────────────
+const RATERS = [
+  {name:'Jordan Carter', rel:'Self',           invited:'Self',   done:false, self:true},
+  {name:'Mike Reyes',    rel:'Direct Report',  invited:'May 17', done:true,  self:false},
+  {name:'Sandra Boyle',  rel:'Board/Investor', invited:'May 17', done:true,  self:false},
+  {name:'Chris Vance',   rel:'Direct Report',  invited:'May 17', done:true,  self:false},
+  {name:'Tanya Liu',     rel:'Key Customer',   invited:'May 17', done:true,  self:false},
+  {name:'Paul Garrett',  rel:'Board/Investor', invited:'May 17', done:true,  self:false},
+  {name:'Denise Ortega', rel:'Direct Report',  invited:'May 17', done:true,  self:false},
+  {name:'Frank Kelso',   rel:'Peer',           invited:'May 17', done:true,  self:false},
+  {name:'Amira Hassan',  rel:'Key Customer',   invited:'May 17', done:true,  self:false},
+  {name:'Brian Stokes',  rel:'Direct Report',  invited:'May 17', done:false, self:false},
+  {name:'Rachel Wong',   rel:'Board/Investor', invited:'May 17', done:true,  self:false},
+  {name:'Tom Phelps',    rel:'Peer',           invited:'May 17', done:true,  self:false},
+  {name:'Caitlin Burke', rel:'Direct Report',  invited:'May 17', done:false, self:false},
+  {name:'Omar Diallo',   rel:'Key Customer',   invited:'May 17', done:false, self:false},
+  {name:'Gwen Moss',     rel:'Peer',           invited:'May 17', done:false, self:false},
+];
+const CATS = [
+  {cat:'Direct Reports', listed:5, done:3, min:3},
+  {cat:'Board/Investor', listed:3, done:3, min:1},
+  {cat:'Key Customers',  listed:3, done:2, min:3},
+  {cat:'Peers',          listed:3, done:2, min:3},
+];
+
+// ── NAVIGATION ──────────────────────────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.top-nav button').forEach(b => b.classList.remove('active'));
+  const map = {
+    'coach-home':    {screen:'screen-coach-home',    btn:'nav-coach-home',    role:"Alex's View",   badge:'role-coach'},
+    'coach-clients': {screen:'screen-coach-clients', btn:'nav-coach-clients', role:"Alex's View",   badge:'role-coach'},
+    'coach-diag':    {screen:'screen-coach-diag',    btn:'nav-coach-diag',    role:"Alex's View",   badge:'role-coach'},
+    'diag-detail':   {screen:'screen-diag-detail',   btn:'nav-diag-detail',   role:"Alex's View",   badge:'role-coach'},
+    'rater-survey':  {screen:'screen-rater-survey',  btn:'nav-rater-survey',  role:"Rater's View",  badge:'role-rater'},
+    'leader-portal': {screen:'screen-leader-portal', btn:'nav-leader-portal', role:"Jordan's View", badge:'role-leader'},
+    'report-view':   {screen:'screen-report-view',   btn:'nav-report-view',   role:"Report View",   badge:'role-coach'},
+  };
+  const c = map[id]; if (!c) return;
+  document.getElementById(c.screen).classList.add('active');
+  const btn = document.getElementById(c.btn);
+  if (btn) btn.classList.add('active');
+  const badge = document.getElementById('role-badge');
+  badge.textContent = c.role;
+  badge.className = 'role-badge ' + c.badge;
+  window.scrollTo(0,0);
+}
+
+// ── TABS ────────────────────────────────────────────────────────────────────
+function switchTab(e, prefix, tab) {
+  document.querySelectorAll(`[id^="${prefix}-"]`).forEach(p => p.classList.remove('active'));
+  e.currentTarget.closest('.tabs').querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(`${prefix}-${tab}`).classList.add('active');
+  e.currentTarget.classList.add('active');
+}
+
+// ── MODALS ──────────────────────────────────────────────────────────────────
+function openModal(id)  {document.getElementById(id).classList.add('open');}
+function closeModal(id) {document.getElementById(id).classList.remove('open');}
+
+// ── DATE CALC ───────────────────────────────────────────────────────────────
+function updateCloseDate() {
+  const sd = document.getElementById('start-date').value;
+  const el = document.getElementById('close-date-display');
+  if (!sd) { el.textContent = '— '; return; }
+  const d = new Date(sd + 'T12:00:00');
+  d.setDate(d.getDate() + 7);
+  const opts = {year:'numeric',month:'short',day:'numeric'};
+  el.textContent = d.toLocaleDateString('en-US', opts) + ' (auto-calculated)';
+}
+
+// ── RADIO ───────────────────────────────────────────────────────────────────
+function toggleRadio(el, group) {
+  el.closest('.radio-group').querySelectorAll('.radio-btn').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+}
+function toggleClientMode(mode) {
+  document.getElementById('existing-client-fields').style.display = mode==='existing' ? 'block' : 'none';
+  document.getElementById('new-client-fields').style.display       = mode==='new'      ? 'block' : 'none';
+}
+
+// ── RENDER RATER TABLE (coach) ───────────────────────────────────────────────
+function renderRaterTable() {
+  const tb = document.getElementById('rater-table'); if (!tb) return;
+  tb.innerHTML = RATERS.map(r => {
+    const dot  = r.self ? 'dot-self' : (r.done ? 'dot-complete' : 'dot-pending');
+    const stat = r.self ? '<span style="color:var(--blue);font-size:12px;">Self-survey</span>'
+                        : (r.done ? '<span style="color:var(--green);font-size:12px;">✓ Completed</span>'
+                                  : '<span style="color:var(--mid);font-size:12px;">Pending</span>');
+    const act  = r.self||r.done ? '—' : '<button class="btn btn-outline btn-sm">Send Reminder</button>';
+    return `<tr><td><span class="status-dot ${dot}"></span><strong>${r.name}</strong></td><td>${r.rel}</td><td style="font-size:12px;color:var(--mid);">${r.invited}</td><td>${stat}</td><td>${act}</td></tr>`;
+  }).join('');
+}
+
+// ── RENDER STATUS TABLE (coach) ──────────────────────────────────────────────
+function renderStatusTable() {
+  const tb = document.getElementById('status-table'); if (!tb) return;
+  tb.innerHTML = RATERS.filter(r=>!r.self).map(r => {
+    const dot  = r.done ? 'dot-complete' : 'dot-pending';
+    const stat = r.done ? '<span style="color:var(--green);font-size:12px;">✓</span>' : '<span style="color:var(--mid);font-size:12px;">Pending</span>';
+    const rem  = r.done ? '—' : '<button class="btn btn-outline btn-sm">Remind</button>';
+    return `<tr><td><span class="status-dot ${dot}"></span><strong>${r.name}</strong></td><td style="font-size:12px;">${r.rel}</td><td style="font-size:12px;color:var(--mid);">May 17</td><td>${stat}</td><td style="font-size:12px;color:var(--mid);">${r.done?'0':'1'}</td><td>${rem}</td></tr>`;
+  }).join('');
+}
+
+// ── CATEGORY BREAKDOWN ───────────────────────────────────────────────────────
+function renderCats(id) {
+  const el = document.getElementById(id); if (!el) return;
+  el.innerHTML = CATS.map(c => {
+    const pct = Math.round(c.done/c.listed*100);
+    const ok  = c.done >= Math.min(c.min, c.listed);
+    const col = ok ? 'var(--green)' : 'var(--amber)';
+    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
+      <div style="width:110px;font-size:11px;color:var(--mid);">${c.cat}</div>
+      <div class="progress-bar" style="flex:1;height:7px;"><div class="progress-fill" style="width:${pct}%;background:${col};"></div></div>
+      <div style="font-size:11px;font-weight:700;color:${col};">${c.done}/${c.listed}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── LEADER RATER LIST ────────────────────────────────────────────────────────
+function renderLeaderRaterList() {
+  const el = document.getElementById('leader-rater-list'); if (!el) return;
+  // NOTE: No individual completion status shown — preserves anonymity.
+  // Leader sees names and relationships only. Overall count shown via progress bar above.
+  el.innerHTML = RATERS.filter(r=>!r.self).map(r => {
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+      <span style="font-size:13px;font-weight:600;flex:1;">${r.name}</span>
+      <span style="font-size:12px;color:var(--mid);">${r.rel}</span>
+      <span style="font-size:11px;color:var(--mid);margin-left:10px;">Invited ${r.invited}</span>
+    </div>`;
+  }).join('');
+}
+
+// ── LIKERT ───────────────────────────────────────────────────────────────────
+function selL(el) {
+  el.closest('.likert').querySelectorAll('.likert-opt').forEach(o => o.classList.remove('sel'));
+  el.classList.add('sel');
+}
+
+// ── SURVEY SUBMIT ────────────────────────────────────────────────────────────
+function simulateSurveySubmit() {
+  document.getElementById('survey-content').style.display = 'none';
+  document.getElementById('survey-thankyou').style.display = 'block';
+  window.scrollTo(0,0);
+}
+
+// ── TRANSCRIPT EXTRACT ───────────────────────────────────────────────────────
+function simulateExtract() {
+  const btn = document.getElementById('extract-btn-area');
+  const spin = document.getElementById('extracting-state');
+  btn.style.display = 'none'; spin.style.display = 'block';
+  setTimeout(() => {
+    spin.style.display = 'none';
+    btn.style.display = 'block';
+    btn.innerHTML = `<div class="alert alert-green" style="margin-bottom:10px;"><span class="alert-icon">✓</span><div><strong>Extraction complete.</strong> 90-day behavior, top challenge, and success definition updated. Review and edit as needed.</div></div><button class="btn btn-outline btn-sm" onclick="simulateExtract()">Re-extract</button>`;
+    document.getElementById('field-90day').value    = 'Ask "What do you recommend?" before giving my view in every leadership meeting or escalation conversation.';
+    document.getElementById('field-challenge').value = 'The business runs through Jordan — every major customer or ops problem escalates to the CEO. Leaders have stopped trying to solve things themselves because Jordan answers faster.';
+    document.getElementById('field-success').value  = 'Direct reports and VPs bring problems with 2-3 options and a recommendation, not just a blank question. Jordan stops being the first person to give the answer in every room.';
+  }, 2200);
+}
+function simulateUpload() {
+  // Just toggle state for demo
+}
+
+// ── QUESTION OVERRIDES ───────────────────────────────────────────────────────
+function markOverride(fieldId, btn) {
+  const row = btn.closest('.q-edit-row');
+  const meta = row.querySelector('.q-meta');
+  meta.innerHTML = meta.innerHTML.replace('Rated','Rated') + ' <span class="override-badge">Client Override</span>';
+  row.style.borderColor = 'var(--gold)';
+  btn.textContent = 'Reset to Default';
+  btn.onclick = function(){ resetSingleQ(fieldId, row.id, btn); };
+  row.querySelector('textarea').style.background = '#FFFDF5';
+  const note = row.querySelector('.q-actions span');
+  note.textContent = 'Modified for this client only';
+  note.style.color = 'var(--amber)';
+}
+function resetSingleQ(fieldId, rowId, btn) {
+  alert('Reset to global default — override removed.');
+}
+function resetOverrides() {
+  alert('All per-client overrides reset to global defaults.');
+}
+
+// ── GENERATE REPORT ──────────────────────────────────────────────────────────
+function simulateGenerate() {
+  openModal('generating-modal');
+  const bar = document.getElementById('gen-bar');
+  const status = document.getElementById('gen-status');
+  const steps = [
+    [15,'Aggregating scores by pillar and rater group...'],
+    [35,'Compiling verbatim comments...'],
+    [55,'Building structured report payload...'],
+    [72,'Sending to Claude API...'],
+    [90,'Claude generating report draft...'],
+    [100,'Draft ready — notifying Alex by email...'],
+  ];
+  let i = 0;
+  const tick = setInterval(() => {
+    if (i >= steps.length) {
+      clearInterval(tick);
+      setTimeout(() => { closeModal('generating-modal'); showScreen('report-view'); }, 800);
+      return;
+    }
+    bar.style.width = steps[i][0] + '%';
+    status.textContent = steps[i][1];
+    i++;
+  }, 700);
+}
+
+// ── SUCCESSION SAVE + CUSTOM ITEM GENERATION ─────────────────────────────────
+function simulateSaveSuccession() {
+  const vision = document.getElementById('self-three-year-vision');
+  const btn = event.currentTarget;
+  if (!vision || !vision.value.trim()) {
+    alert('Please complete the 3-year vision field before saving — that answer is used to generate your custom rater question.');
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = '⚙️ Sending to Claude...';
+  setTimeout(() => {
+    btn.textContent = '⚙️ Generating custom rater item...';
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.textContent = '✓ Saved — Custom Rater Item Generated';
+      btn.style.background = 'var(--green)';
+      // Show confirmation alert above the card
+      const card = btn.closest('.card');
+      const notice = document.createElement('div');
+      notice.className = 'alert alert-green';
+      notice.style.marginTop = '16px';
+      notice.innerHTML = `<span class="alert-icon">✓</span><div><strong>Succession responses saved.</strong> Claude generated one custom rater question from your 3-year vision and added it to your survey as <strong>Question G1</strong>: <em>"This leader is building leaders who can run day-to-day operations effectively without their constant involvement."</em> Alex has been notified to review it.</div>`;
+      card.appendChild(notice);
+    }, 1800);
+  }, 1400);
+}
+
+
+// ── SURVEY SECTION NAVIGATION + PROGRESS ────────────────────────────────────
+let surveySec = 0;
+let isSelfReport = false;
+const SURVEY_SECS_RATER = ['survey-sec-a','survey-sec-b','survey-sec-c','survey-sec-d','survey-sec-f'];
+const SURVEY_NAMES_RATER = ['Trust','Proactivity','Productivity','Overall Impact','Succession & Bench'];
+const SURVEY_SECS_SELF  = ['survey-sec-a','survey-sec-b','survey-sec-c','survey-sec-d','survey-sec-succession'];
+const SURVEY_NAMES_SELF  = ['Trust','Proactivity','Productivity','Overall Impact','Succession & Future Self'];
+let SURVEY_SECS  = [...SURVEY_SECS_RATER];
+let SURVEY_NAMES = [...SURVEY_NAMES_RATER];
+
+function startSelfReportSurvey() {
+  isSelfReport = true;
+  SURVEY_SECS  = [...SURVEY_SECS_SELF];
+  SURVEY_NAMES = [...SURVEY_NAMES_SELF];
+  surveySec = 0;
+  // Update header card to self-report mode
+  const hdr = document.getElementById('survey-who');
+  if (hdr) hdr.innerHTML = 'You are completing your own <strong>self-assessment</strong>. Your responses are kept separate from rater data and shown only as your self-view in the report.';
+  // Update role badge
+  const badge = document.getElementById('role-badge');
+  if (badge) { badge.textContent = "Jordan's View"; badge.className = 'role-badge role-leader'; }
+  // Update nav active state
+  document.querySelectorAll('.top-nav button').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('nav-rater-survey');
+  if (btn) btn.classList.add('active');
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-rater-survey').classList.add('active');
+  surveyGo(0);
+  window.scrollTo(0,0);
+}
+
+function surveyGo(n) {
+  SURVEY_SECS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  const target = document.getElementById(SURVEY_SECS[n]);
+  if (target) target.style.display = 'block';
+  surveySec = n;
+  const pct = Math.max(Math.round((n / SURVEY_SECS.length) * 100), 3);
+  const fill  = document.getElementById('survey-prog-fill');
+  const label = document.getElementById('survey-prog-label');
+  const step  = document.getElementById('survey-prog-step');
+  if (fill)  fill.style.width  = pct + '%';
+  if (label) label.textContent = 'Section ' + (n+1) + ' of ' + SURVEY_SECS.length + ': ' + SURVEY_NAMES[n] + ' — About ' + pct + '% complete';
+  if (step)  step.textContent  = (n+1);
+  window.scrollTo(0,0);
+}
+function surveyNext() { if (surveySec < SURVEY_SECS.length-1) surveyGo(surveySec+1); }
+function surveyBack() { if (surveySec > 0) surveyGo(surveySec-1); }
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+updateCloseDate();
+renderRaterTable();
+renderStatusTable();
+renderCats('cat-breakdown');
+renderCats('leader-cat-breakdown');
+renderLeaderRaterList();
+</script>
+</body>
+</html>

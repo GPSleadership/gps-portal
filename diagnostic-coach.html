@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPS — Diagnostic Management</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --blue:#1A3D6E; --gold:#C09A2A; --dark:#1C1C1C; --mid:#555;
+  --light:#F4F6F9; --white:#fff; --border:#DDE2EA;
+  --green:#1A7A3A; --amber:#BF6A00; --red:#CC2200;
+  --blue-light:#EAF0FA; --gold-light:#FDF8EE;
+  --radius:8px; --shadow:0 2px 12px rgba(0,0,0,.08);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--light);color:var(--dark);font-size:14px;}
+
+/* NAV */
+.top-nav{background:var(--blue);display:flex;align-items:center;padding:0 24px;min-height:48px;position:sticky;top:0;z-index:100;}
+.top-nav .logo{color:var(--gold);font-weight:900;font-size:15px;font-style:italic;padding:0 16px 0 0;border-right:1px solid rgba(255,255,255,.15);margin-right:12px;}
+.nav-btn{background:none;border:none;color:rgba(255,255,255,.7);cursor:pointer;padding:14px 12px;font-size:13px;font-weight:500;border-bottom:3px solid transparent;white-space:nowrap;}
+.nav-btn:hover{color:#fff;}
+.nav-btn.active{color:#fff;border-bottom-color:var(--gold);}
+.nav-right{margin-left:auto;display:flex;align-items:center;gap:10px;}
+.nav-tag{font-size:11px;color:rgba(255,255,255,.5);font-weight:600;}
+
+/* LAYOUT */
+.page{max-width:1100px;margin:0 auto;padding:28px 24px 60px;}
+.two-col{display:grid;grid-template-columns:320px 1fr;gap:20px;align-items:start;}
+.left-panel{position:sticky;top:64px;}
+
+/* CARDS */
+.card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:20px 22px;box-shadow:var(--shadow);margin-bottom:16px;}
+.card-title{font-size:15px;font-weight:700;color:var(--blue);margin-bottom:4px;}
+.card-sub{font-size:12px;color:var(--mid);}
+
+/* BUTTONS */
+.btn{padding:8px 16px;border-radius:6px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:.15s;display:inline-flex;align-items:center;gap:6px;}
+.btn-primary{background:var(--blue);color:#fff;}
+.btn-primary:hover{background:#0F2D5A;}
+.btn-gold{background:var(--gold);color:var(--dark);}
+.btn-gold:hover{background:#A88520;}
+.btn-outline{background:none;border:1.5px solid var(--border);color:var(--mid);}
+.btn-outline:hover{border-color:var(--blue);color:var(--blue);}
+.btn-green{background:var(--green);color:#fff;}
+.btn-red{background:var(--red);color:#fff;}
+.btn-sm{padding:5px 12px;font-size:12px;}
+.btn[disabled]{opacity:.4;cursor:not-allowed;}
+
+/* BADGES */
+.badge{display:inline-flex;align-items:center;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;}
+.badge-setup{background:#EEF2FF;color:#4355B9;}
+.badge-open{background:#E7F7EE;color:var(--green);}
+.badge-amber{background:#FFF4E5;color:var(--amber);}
+.badge-closed{background:#F3F4F6;color:var(--mid);}
+.badge-final{background:var(--blue);color:#fff;}
+.badge-standard{background:var(--blue-light);color:var(--blue);}
+.badge-pro{background:var(--gold-light);color:var(--amber);}
+
+/* DIAGNOSTIC LIST */
+.diag-item{padding:14px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:.12s;}
+.diag-item:last-child{border-bottom:none;}
+.diag-item:hover{background:var(--light);}
+.diag-item.selected{background:var(--blue-light);border-left:3px solid var(--blue);}
+.diag-item-name{font-size:13px;font-weight:700;}
+.diag-item-sub{font-size:11px;color:var(--mid);margin-top:2px;}
+.diag-item-meta{display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap;}
+
+/* TABS */
+.tabs{display:flex;border-bottom:2px solid var(--border);margin-bottom:20px;}
+.tab{padding:10px 18px;cursor:pointer;font-size:13px;font-weight:600;color:var(--mid);border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap;}
+.tab:hover{color:var(--blue);}
+.tab.active{color:var(--blue);border-bottom-color:var(--blue);}
+.tab-pane{display:none;}
+.tab-pane.active{display:block;}
+
+/* TABLE */
+table{width:100%;border-collapse:collapse;}
+th{background:var(--light);color:var(--mid);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:9px 12px;text-align:left;border-bottom:2px solid var(--border);}
+td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:#FAFBFC;}
+.td-name{font-weight:600;}
+.td-sub{font-size:11px;color:var(--mid);}
+
+/* FORMS */
+.form-group{margin-bottom:14px;}
+label{display:block;font-size:11px;font-weight:700;color:var(--dark);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;}
+input,select,textarea{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:6px;font-size:13.5px;color:var(--dark);background:#fff;}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--blue);}
+textarea{resize:vertical;min-height:80px;font-family:inherit;}
+.hint{font-size:12px;color:var(--mid);margin-top:4px;}
+.computed{background:var(--light);border:1.5px solid var(--border);border-radius:6px;padding:9px 12px;font-size:13px;color:var(--mid);}
+
+/* ALERTS */
+.alert{padding:12px 16px;border-radius:var(--radius);margin-bottom:14px;display:flex;gap:10px;font-size:13px;line-height:1.5;}
+.alert-amber{background:#FFF8E7;border:1.5px solid #F5C842;color:#7A4F00;}
+.alert-red{background:#FFF0EE;border:1.5px solid #F5B3AC;color:#7A1500;}
+.alert-green{background:#EDF7F1;border:1.5px solid #7EC89A;color:#0D5226;}
+.alert-blue{background:var(--blue-light);border:1.5px solid #9AB8E0;color:#0D2B5E;}
+.alert-icon{font-size:18px;flex-shrink:0;}
+
+/* PROGRESS */
+.progress-bar{background:#E5E9F0;border-radius:20px;height:8px;overflow:hidden;}
+.progress-fill{height:100%;border-radius:20px;background:var(--green);transition:.4s;}
+
+/* QUESTION EDITOR */
+.q-edit{background:var(--white);border:1px solid var(--border);border-radius:6px;padding:14px 16px;margin-bottom:10px;}
+.q-edit-code{font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;}
+.q-edit textarea{min-height:56px;font-size:13px;}
+.override-badge{background:var(--gold-light);border:1px solid var(--gold);color:var(--amber);font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;text-transform:uppercase;}
+.ai-badge{background:#F3F0FF;border:1px solid #A78BFA;color:#5B21B6;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;text-transform:uppercase;}
+
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;align-items:center;justify-content:center;}
+.modal-overlay.open{display:flex;}
+.modal{background:#fff;border-radius:var(--radius);width:560px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.2);}
+.modal-header{padding:18px 22px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.modal-header h3{font-size:16px;font-weight:700;color:var(--blue);}
+.modal-body{padding:22px;}
+.modal-footer{padding:14px 22px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;}
+.close-btn{background:none;border:none;cursor:pointer;color:var(--mid);font-size:20px;line-height:1;}
+
+/* EMPTY STATE */
+.empty-state{text-align:center;padding:48px 24px;color:var(--mid);}
+.empty-icon{font-size:40px;margin-bottom:12px;}
+
+/* SPINNER */
+.spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* STATUS DOTS */
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px;}
+.dot-green{background:var(--green);}
+.dot-grey{background:#C5CAD3;}
+.dot-amber{background:var(--amber);}
+
+@media(max-width:900px){.two-col{grid-template-columns:1fr;}.left-panel{position:static;}}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="top-nav">
+  <div class="logo">GPS</div>
+  <button class="nav-btn active" onclick="showView('list')">Diagnostics</button>
+  <button class="nav-btn" onclick="window.location='coach.html'">← Coaching Portal</button>
+  <div class="nav-right">
+    <span class="nav-tag">Alex D. Tremble · GPS Leadership Solutions</span>
+    <button class="btn btn-gold btn-sm" onclick="openModal('new-diag-modal')">+ New Diagnostic</button>
+  </div>
+</nav>
+
+<!-- ══ LIST VIEW ══════════════════════════════════════════════════════════════ -->
+<div id="view-list" class="page">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;">
+    <div>
+      <div style="font-size:22px;font-weight:800;color:var(--blue);">Diagnostics</div>
+      <div style="font-size:13px;color:var(--mid);">14-Day Executive Leadership Diagnostic — all engagements</div>
+    </div>
+    <button class="btn btn-primary" onclick="openModal('new-diag-modal')">+ New Diagnostic</button>
+  </div>
+
+  <!-- Summary stats -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;" id="list-stats"></div>
+
+  <!-- Alerts -->
+  <div id="list-alerts"></div>
+
+  <!-- Table -->
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div id="diag-table-wrap">
+      <div class="empty-state"><div class="spinner"></div><div style="margin-top:12px;font-size:13px;">Loading diagnostics…</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ DETAIL VIEW ════════════════════════════════════════════════════════════ -->
+<div id="view-detail" class="page" style="display:none;">
+
+  <!-- Breadcrumb -->
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;">
+    <button class="btn btn-outline btn-sm" onclick="showView('list')">← All Diagnostics</button>
+    <span style="font-size:13px;color:var(--mid);">›</span>
+    <span id="detail-breadcrumb" style="font-size:13px;font-weight:600;color:var(--dark);"></span>
+  </div>
+
+  <!-- Detail header -->
+  <div class="card" style="margin-bottom:20px;">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+      <div>
+        <div style="font-size:20px;font-weight:800;color:var(--blue);" id="detail-name"></div>
+        <div style="font-size:13px;color:var(--mid);margin-top:2px;" id="detail-sub"></div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:10px;" id="detail-badges"></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;" id="detail-actions"></div>
+    </div>
+    <!-- Key dates row -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:16px;padding-top:16px;border-top:1px solid var(--border);" id="detail-dates"></div>
+    <!-- Leader portal link -->
+    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-size:12px;color:var(--mid);" id="detail-links"></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(event,'dtab','overview')">Overview</div>
+    <div class="tab" onclick="switchTab(event,'dtab','raters')">Raters <span id="tab-rater-count" style="font-size:11px;background:var(--light);border:1px solid var(--border);padding:1px 7px;border-radius:10px;margin-left:4px;"></span></div>
+    <div class="tab" onclick="switchTab(event,'dtab','survey')">Survey Status</div>
+    <div class="tab" onclick="switchTab(event,'dtab','questions')">Questions</div>
+    <div class="tab" onclick="switchTab(event,'dtab','report')">Report</div>
+  </div>
+
+  <!-- TAB: Overview -->
+  <div id="dtab-overview" class="tab-pane active">
+    <div id="overview-content"></div>
+  </div>
+
+  <!-- TAB: Raters -->
+  <div id="dtab-raters" class="tab-pane">
+    <div id="raters-content"></div>
+  </div>
+
+  <!-- TAB: Survey Status -->
+  <div id="dtab-survey" class="tab-pane">
+    <div id="survey-content"></div>
+  </div>
+
+  <!-- TAB: Questions -->
+  <div id="dtab-questions" class="tab-pane">
+    <div id="questions-content"></div>
+  </div>
+
+  <!-- TAB: Report -->
+  <div id="dtab-report" class="tab-pane">
+    <div id="report-content"></div>
+  </div>
+</div>
+
+<!-- ══ MODAL: NEW DIAGNOSTIC ═════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="new-diag-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>New Diagnostic</h3>
+      <button class="close-btn" onclick="closeModal('new-diag-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div class="form-group" style="grid-column:1/-1;">
+          <label>Full Name *</label>
+          <input id="nd-name" placeholder="Jordan Carter">
+        </div>
+        <div class="form-group" style="grid-column:1/-1;">
+          <label>Email *</label>
+          <input id="nd-email" type="email" placeholder="jordan@company.com">
+        </div>
+        <div class="form-group">
+          <label>Title</label>
+          <input id="nd-title" placeholder="CEO">
+        </div>
+        <div class="form-group">
+          <label>Organization</label>
+          <input id="nd-org" placeholder="Carter Truck & Equipment">
+        </div>
+        <div class="form-group">
+          <label>Tier *</label>
+          <select id="nd-tier">
+            <option value="standard">Standard ($5K)</option>
+            <option value="pro">Pro ($10K)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Email Delivery</label>
+          <select id="nd-delivery">
+            <option value="gps_sends">GPS sends (auto)</option>
+            <option value="client_sends">Client sends (manual templates)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Survey Start Date</label>
+          <input id="nd-start" type="date" oninput="calcCloseDate()">
+        </div>
+        <div class="form-group">
+          <label>Survey Close Date (auto)</label>
+          <div class="computed" id="nd-close">— set start date</div>
+        </div>
+        <div class="form-group" style="grid-column:1/-1;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="nd-link-client" style="width:auto;margin:0;">
+            <label style="display:inline;text-transform:none;letter-spacing:0;font-size:13px;margin-bottom:0;">Link to existing coaching client</label>
+          </div>
+          <div id="nd-client-wrap" style="display:none;margin-top:8px;">
+            <select id="nd-client-id">
+              <option value="">Loading…</option>
+            </select>
+            <div class="hint">Links this diagnostic to their existing coaching profile.</div>
+          </div>
+        </div>
+      </div>
+      <div id="nd-error" style="color:var(--red);font-size:12px;margin-top:8px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('new-diag-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="createDiagnostic()">Create Diagnostic</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: SEND INVITES CONFIRM ═══════════════════════════════════════════ -->
+<div class="modal-overlay" id="send-invites-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Send Rater Invitations</h3>
+      <button class="close-btn" onclick="closeModal('send-invites-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="send-invites-body"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('send-invites-modal')">Cancel</button>
+      <button class="btn btn-green" onclick="confirmSendInvites()">Send Invitations</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+//  CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
+const SUPABASE_URL  = 'https://pbnkefuqpoztcxfagiod.supabase.co';
+const SUPABASE_ANON = 'sb_publishable_nu9GXGeoqDXcxVocodQ4UA_ke7Yrzyw';
+const BASE_URL      = window.location.origin; // e.g. https://gps-portal.vercel.app
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  STATE
+// ─────────────────────────────────────────────────────────────────────────────
+let ALL_DIAGS     = [];
+let SELECTED      = null;   // selected diagnostic object
+let SEL_RATERS    = [];     // raters for selected diagnostic
+let SEL_OVERRIDES = {};     // { code: override_text }
+let CLIENTS       = [];     // coaching clients for linkage dropdown
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  BOOT
+// ─────────────────────────────────────────────────────────────────────────────
+async function boot() {
+  await loadDiagnostics();
+  loadClients(); // non-blocking — for new-diagnostic modal
+}
+
+async function loadDiagnostics() {
+  const { data, error } = await db
+    .from('diagnostics')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) { console.error(error); return; }
+  ALL_DIAGS = data || [];
+  renderList();
+}
+
+async function loadClients() {
+  const { data } = await db.from('clients').select('id,name,email,org,title').order('name');
+  if (data) {
+    CLIENTS = data;
+    const sel = document.getElementById('nd-client-id');
+    sel.innerHTML = '<option value="">— Select client —</option>' +
+      data.map(c => `<option value="${c.id}">${c.name}${c.org ? ' · '+c.org : ''}</option>`).join('');
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  LIST VIEW
+// ─────────────────────────────────────────────────────────────────────────────
+function renderList() {
+  renderListStats();
+  renderListAlerts();
+  renderDiagTable();
+}
+
+function renderListStats() {
+  const active    = ALL_DIAGS.filter(d => ['survey_open','self_assessment_pending','self_assessment_complete','intake_complete'].includes(d.status)).length;
+  const closing   = ALL_DIAGS.filter(d => d.status === 'survey_open' && d.close_date && daysUntil(d.close_date) <= 3).length;
+  const needReport= ALL_DIAGS.filter(d => d.status === 'survey_closed').length;
+  const complete  = ALL_DIAGS.filter(d => d.status === 'plan_active').length;
+
+  document.getElementById('list-stats').innerHTML = `
+    ${statCard(active,   'Active',        'var(--blue)')}
+    ${statCard(closing,  'Closing ≤3 Days', closing > 0 ? 'var(--red)' : 'var(--mid)')}
+    ${statCard(needReport,'Need Report',  needReport > 0 ? 'var(--amber)' : 'var(--mid)')}
+    ${statCard(complete, 'Complete',      'var(--green)')}`;
+}
+
+function statCard(n, label, color) {
+  return `<div class="card" style="padding:16px;text-align:center;margin-bottom:0;">
+    <div style="font-size:26px;font-weight:800;color:${color};">${n}</div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--mid);margin-top:4px;">${label}</div>
+  </div>`;
+}
+
+function renderListAlerts() {
+  const el = document.getElementById('list-alerts');
+  const alerts = [];
+
+  ALL_DIAGS.forEach(d => {
+    if (d.status === 'survey_open' && d.close_date) {
+      const days = daysUntil(d.close_date);
+      if (days <= 2) alerts.push(`<div class="alert alert-red"><span class="alert-icon">⏰</span>
+        <div><strong>${d.client_name}</strong> — survey closes in ${days} day${days!==1?'s':''}.
+        <button class="btn btn-outline btn-sm" onclick="openDiag('${d.id}')" style="margin-left:8px;">Review →</button></div></div>`);
+    }
+    if (d.status === 'survey_closed' && !d.report_generated_at) {
+      alerts.push(`<div class="alert alert-amber"><span class="alert-icon">📄</span>
+        <div><strong>${d.client_name}</strong> — survey closed. Data is locked. Ready to generate report.
+        <button class="btn btn-outline btn-sm" onclick="openDiag('${d.id}')" style="margin-left:8px;">Generate →</button></div></div>`);
+    }
+    if (d.status === 'self_assessment_pending' || d.status === 'intake_complete') {
+      alerts.push(`<div class="alert alert-blue"><span class="alert-icon">⏳</span>
+        <div><strong>${d.client_name}</strong> — waiting on self-assessment before invites can go out.</div></div>`);
+    }
+  });
+
+  el.innerHTML = alerts.join('');
+}
+
+function renderDiagTable() {
+  if (ALL_DIAGS.length === 0) {
+    document.getElementById('diag-table-wrap').innerHTML =
+      `<div class="empty-state"><div class="empty-icon">📋</div>
+       <div style="font-size:14px;font-weight:600;margin-bottom:8px;">No diagnostics yet</div>
+       <div style="font-size:13px;">Click "+ New Diagnostic" to create your first one.</div></div>`;
+    return;
+  }
+
+  const rows = ALL_DIAGS.map(d => `
+  <tr onclick="openDiag('${d.id}')" style="cursor:pointer;">
+    <td><div class="td-name">${d.client_name}</div>
+        <div class="td-sub">${[d.client_title,d.client_org].filter(Boolean).join(' · ')}</div></td>
+    <td>${statusBadge(d.status)}</td>
+    <td><span class="badge ${d.tier === 'pro' ? 'badge-pro' : 'badge-standard'}">${d.tier==='pro'?'Pro':'Standard'}</span></td>
+    <td style="font-size:12px;color:var(--mid);">${d.close_date ? formatDate(d.close_date) : '—'}</td>
+    <td style="font-size:12px;">${d.status==='survey_open' ? `<span style="color:${daysUntil(d.close_date)<=2?'var(--red)':'var(--amber)'};">${daysUntil(d.close_date)}d left</span>` : '—'}</td>
+    <td><button class="btn btn-outline btn-sm">Open →</button></td>
+  </tr>`).join('');
+
+  document.getElementById('diag-table-wrap').innerHTML = `
+  <table>
+    <thead><tr>
+      <th>Client</th><th>Status</th><th>Tier</th><th>Closes</th><th>Countdown</th><th></th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  OPEN DIAGNOSTIC DETAIL
+// ─────────────────────────────────────────────────────────────────────────────
+async function openDiag(id) {
+  SELECTED = ALL_DIAGS.find(d => d.id === id);
+  if (!SELECTED) return;
+
+  // Load raters
+  const { data: raterData } = await db
+    .from('diagnostic_raters')
+    .select('*')
+    .eq('diagnostic_id', id)
+    .order('created_at', { ascending: true });
+  SEL_RATERS = raterData || [];
+
+  // Load overrides
+  const { data: ovData } = await db
+    .from('diagnostic_question_overrides')
+    .select('question_code, override_text, override_note')
+    .eq('diagnostic_id', id);
+  SEL_OVERRIDES = {};
+  (ovData || []).forEach(o => { SEL_OVERRIDES[o.question_code] = { text: o.override_text, note: o.override_note }; });
+
+  renderDetailHeader();
+  renderOverviewTab();
+  renderRatersTab();
+  renderSurveyTab();
+  renderQuestionsTab();
+  renderReportTab();
+
+  showView('detail');
+
+  // Reset to overview tab
+  document.querySelectorAll('#view-detail .tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#view-detail .tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelector('#view-detail .tabs .tab').classList.add('active');
+  document.getElementById('dtab-overview').classList.add('active');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  DETAIL HEADER
+// ─────────────────────────────────────────────────────────────────────────────
+function renderDetailHeader() {
+  const d = SELECTED;
+  document.getElementById('detail-breadcrumb').textContent = d.client_name;
+  document.getElementById('detail-name').textContent = d.client_name;
+  document.getElementById('detail-sub').textContent  = [d.client_title, d.client_org].filter(Boolean).join(' · ');
+
+  document.getElementById('detail-badges').innerHTML =
+    `${statusBadge(d.status)}
+     <span class="badge ${d.tier==='pro'?'badge-pro':'badge-standard'}">${d.tier==='pro'?'Pro':'Standard'}</span>
+     <span class="badge" style="background:var(--light);color:var(--mid);">${d.email_delivery_mode==='gps_sends'?'GPS Sends':'Client Sends'}</span>`;
+
+  // Key dates
+  const dates = [
+    { label:'Intake', val: d.intake_completed_at ? formatDate(d.intake_completed_at) : 'Pending' },
+    { label:'Self-Assessment', val: d.self_assessment_completed_at ? formatDate(d.self_assessment_completed_at) : 'Pending' },
+    { label:'Survey Opens',  val: d.start_date  ? formatDate(d.start_date)  : '—' },
+    { label:'Survey Closes', val: d.close_date  ? formatDate(d.close_date)  : '—' },
+  ];
+  document.getElementById('detail-dates').innerHTML = dates.map(dt =>
+    `<div><div style="font-size:11px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px;">${dt.label}</div>
+     <div style="font-size:13px;font-weight:600;">${dt.val}</div></div>`
+  ).join('');
+
+  // Quick actions
+  const actions = [];
+  if (d.status === 'intake_complete') {
+    actions.push(`<button class="btn btn-primary btn-sm" onclick="markSelfAssessmentPending()">Mark Self-Assessment Sent →</button>`);
+  }
+  if (d.status === 'self_assessment_complete' && SEL_RATERS.filter(r=>!r.is_self).length > 0) {
+    actions.push(`<button class="btn btn-green btn-sm" onclick="openSendInvitesModal()">Send Rater Invites →</button>`);
+  }
+  if (d.status === 'survey_open') {
+    actions.push(`<button class="btn btn-outline btn-sm" onclick="closeSurveyNow()">Close Survey Early</button>`);
+  }
+  if (d.status === 'survey_closed' || d.status === 'report_draft') {
+    actions.push(`<button class="btn btn-primary btn-sm" onclick="switchTabById('dtab-report')">Generate Report →</button>`);
+  }
+  document.getElementById('detail-actions').innerHTML = actions.join('');
+
+  // Links
+  const leaderLink = `${BASE_URL}/diagnostic-leader.html?token=${d.leader_token}`;
+  document.getElementById('detail-links').innerHTML =
+    `<strong>Leader portal:</strong>
+     <a href="${leaderLink}" target="_blank" style="color:var(--blue);word-break:break-all;">${leaderLink}</a>
+     <button class="btn btn-outline btn-sm" style="margin-left:8px;" onclick="copyText('${leaderLink}')">Copy</button>`;
+
+  // Rater tab count
+  const nonSelf = SEL_RATERS.filter(r => !r.is_self);
+  document.getElementById('tab-rater-count').textContent = nonSelf.length;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  TAB: OVERVIEW
+// ─────────────────────────────────────────────────────────────────────────────
+function renderOverviewTab() {
+  const d = SELECTED;
+  const STATUS_STEPS = {
+    setup:                    1, intake_complete: 1,
+    self_assessment_pending:  2, self_assessment_complete: 3,
+    survey_open: 4, survey_closed: 5,
+    report_draft: 6, report_final: 6,
+    debrief_complete: 7, plan_active: 8,
+  };
+  const cur = STATUS_STEPS[d.status] || 1;
+
+  const steps = [
+    { n:1, label:'Discovery & Intake Call',         done: !!d.intake_completed_at },
+    { n:2, label:'Leader Self-Assessment',           done: !!d.self_assessment_completed_at },
+    { n:3, label:'Stakeholder list & invites sent',  done: !!d.invites_sent_at },
+    { n:4, label:'Rater surveys in progress',        done: d.status === 'survey_closed' || cur > 4 },
+    { n:5, label:'Survey closed & data locked',      done: !!d.survey_closed_at },
+    { n:6, label:'Report finalized',                 done: !!d.report_finalized_at },
+    { n:7, label:'Debrief session',                  done: !!d.debrief_completed_at },
+    { n:8, label:'90-Day plan active',               done: d.status === 'plan_active' },
+  ];
+
+  const stepsHtml = steps.map((s, i) => {
+    const isDone = s.done;
+    const isCur  = s.n === cur && !isDone;
+    const circle = isDone ? '✓' : s.n;
+    const color  = isDone ? 'var(--green)' : isCur ? 'var(--blue)' : 'var(--mid)';
+    return `
+    <div style="display:flex;gap:12px;margin-bottom:8px;align-items:flex-start;opacity:${isDone||isCur?1:.45};">
+      <div style="width:24px;height:24px;border-radius:50%;background:${color};color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0;">${circle}</div>
+      <div style="padding-top:3px;font-size:13px;font-weight:${isCur?700:600};color:${isCur?'var(--blue)':isDone?'var(--dark)':'var(--mid)'};">${s.label}</div>
+    </div>`;
+  }).join('');
+
+  // Succession responses
+  const hasSuccession = !!(d.self_three_year_vision);
+  const succHtml = hasSuccession ? `
+  <div class="card" style="margin-bottom:16px;">
+    <div class="card-title" style="margin-bottom:10px;">Self-Report — Succession Responses</div>
+    ${succRow('3-Year Vision', d.self_three_year_vision)}
+    ${succRow('Future Self Capabilities', d.self_future_self_capabilities)}
+    ${succRow('Immediate Successor View', d.self_immediate_successor_view)}
+    ${succRow('Successor Candidates', d.self_successor_candidates)}
+    ${succRow('Successor Development Actions', d.self_successor_development_actions)}
+    ${d.custom_g1_question ? `
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+      <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">AI-Generated Rater Question (G1)</div>
+      <div style="font-size:13px;border:1.5px solid #A78BFA;background:#F3F0FF;padding:10px 14px;border-radius:6px;">"${d.custom_g1_question}"</div>
+      <div style="font-size:11px;color:var(--mid);margin-top:4px;">Generated ${formatDate(d.custom_g1_generated_at)} · Included in all rater surveys</div>
+    </div>` : `
+    <div class="alert alert-amber" style="margin-top:12px;">
+      <span class="alert-icon">⚡</span>
+      <div>3-year vision response is available. <button class="btn btn-outline btn-sm" onclick="generateG1()">Generate Custom Rater Question →</button></div>
+    </div>`}
+  </div>` : '';
+
+  document.getElementById('overview-content').innerHTML = `
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+    <div class="card" style="margin-bottom:0;">
+      <div class="card-title" style="margin-bottom:14px;">Pipeline</div>
+      ${stepsHtml}
+    </div>
+    <div class="card" style="margin-bottom:0;">
+      <div class="card-title" style="margin-bottom:10px;">Intake Notes</div>
+      <textarea id="intake-notes-field" style="min-height:120px;" onblur="saveIntakeNotes(this.value)">${d.intake_notes || ''}</textarea>
+      <div class="hint">Auto-saves when you click away.</div>
+      ${d.intake_transcript_url
+        ? `<div style="margin-top:10px;font-size:12px;">📎 <a href="${d.intake_transcript_url}" target="_blank" style="color:var(--blue);">View Intake Transcript</a></div>`
+        : `<div style="margin-top:10px;"><div class="form-group" style="margin-bottom:0;">
+             <label>Transcript URL</label>
+             <input id="transcript-url-field" placeholder="Paste Google Drive or PDF link" value="${d.intake_transcript_url||''}">
+             <button class="btn btn-outline btn-sm" style="margin-top:6px;" onclick="saveTranscriptUrl()">Save</button>
+           </div></div>`}
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+        ${d.status === 'intake_complete' || d.status === 'setup'
+          ? `<button class="btn btn-primary btn-sm" onclick="markIntakeComplete()">✓ Mark Intake Complete</button>`
+          : `<div style="font-size:12px;color:var(--green);">✓ Intake complete ${d.intake_completed_at ? formatDate(d.intake_completed_at) : ''}</div>`}
+      </div>
+    </div>
+  </div>
+  ${succHtml}`;
+}
+
+function succRow(label, val) {
+  if (!val) return '';
+  return `<div style="margin-bottom:10px;">
+    <div style="font-size:11px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px;">${label}</div>
+    <div style="font-size:13px;color:var(--dark);line-height:1.55;">${val}</div>
+  </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  TAB: RATERS
+// ─────────────────────────────────────────────────────────────────────────────
+function renderRatersTab() {
+  const nonSelf = SEL_RATERS.filter(r => !r.is_self);
+  const selfRow = SEL_RATERS.find(r => r.is_self);
+  const d = SELECTED;
+
+  // Category counts
+  const cats = {};
+  nonSelf.forEach(r => {
+    if (!cats[r.relationship]) cats[r.relationship] = 0;
+    cats[r.relationship]++;
+  });
+
+  const catBadges = Object.entries(cats).map(([rel, n]) =>
+    `<span style="font-size:12px;background:var(--light);border:1px solid var(--border);padding:3px 10px;border-radius:20px;">${rel}: ${n}</span>`
+  ).join(' ');
+
+  const rows = nonSelf.map(r => `
+  <tr>
+    <td><div class="td-name">${r.name}</div><div class="td-sub">${r.email}</div></td>
+    <td style="font-size:12px;">${r.relationship}</td>
+    <td style="font-size:12px;color:var(--mid);">${r.invited_at ? formatDate(r.invited_at) : '—'}</td>
+    <td><span class="dot ${r.completed_at?'dot-green':'dot-grey'}"></span>${r.completed_at?'Completed':'Pending'}</td>
+    <td><button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red);" onclick="removeRater('${r.id}')">Remove</button></td>
+  </tr>`).join('');
+
+  const canSendInvites = d.status === 'self_assessment_complete' && nonSelf.length >= 3 && !d.invites_sent_at;
+  const invitesSent    = !!d.invites_sent_at;
+
+  document.getElementById('raters-content').innerHTML = `
+  ${selfRow ? `<div class="alert alert-blue"><span class="alert-icon">ℹ</span>
+    <div>Self-assessment token created. Leader accesses their survey at:
+    <code style="font-size:11px;background:var(--blue-light);padding:2px 6px;border-radius:3px;">/diagnostic-survey.html?token=${selfRow.token}</code>
+    ${selfRow.completed_at ? `<strong style="color:var(--green);">  ✓ Completed ${formatDate(selfRow.completed_at)}</strong>` : '<span style="color:var(--amber);">  ⏳ Not yet completed</span>'}</div></div>` : ''}
+
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+    <div style="display:flex;gap:6px;flex-wrap:wrap;">${catBadges || '<span style="font-size:12px;color:var(--mid);">No raters added yet</span>'}</div>
+    <div style="display:flex;gap:8px;">
+      ${canSendInvites ? `<button class="btn btn-green btn-sm" onclick="openSendInvitesModal()">✉ Send ${nonSelf.length} Invitations →</button>` : ''}
+      ${invitesSent ? `<span style="font-size:12px;color:var(--green);">✓ Invites sent ${formatDate(d.invites_sent_at)}</span>` : ''}
+    </div>
+  </div>
+
+  ${!d.self_assessment_completed_at ? `<div class="alert alert-amber"><span class="alert-icon">🔒</span>
+    <div>Invites locked until leader completes self-assessment.</div></div>` : ''}
+
+  <div class="card" style="padding:0;overflow:hidden;margin-bottom:16px;">
+    <table>
+      <thead><tr><th>Rater</th><th>Relationship</th><th>Invited</th><th>Status</th><th></th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="5" style="text-align:center;color:var(--mid);padding:24px;">No raters added yet.</td></tr>'}</tbody>
+    </table>
+  </div>
+
+  ${!invitesSent ? `
+  <div class="card" style="background:var(--light);border:1.5px dashed var(--border);padding:16px;box-shadow:none;">
+    <div style="font-size:13px;font-weight:600;margin-bottom:12px;">+ Add Rater</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end;">
+      <div class="form-group" style="margin-bottom:0;"><label>Name</label><input id="ar-name" placeholder="Full name"></div>
+      <div class="form-group" style="margin-bottom:0;"><label>Email</label><input id="ar-email" type="email" placeholder="email@co.com"></div>
+      <div class="form-group" style="margin-bottom:0;"><label>Relationship</label>
+        <select id="ar-rel"><option value="">Select…</option>
+          <option>Direct Report</option><option>Peer</option><option>Supervisor</option>
+          <option>Internal Partner</option><option>External Partner</option>
+          <option>Board / Investor</option><option>Key Customer</option></select></div>
+      <button class="btn btn-primary" style="height:42px;" onclick="coachAddRater()">Add</button>
+    </div>
+    <div id="ar-msg" style="font-size:12px;color:var(--red);margin-top:8px;"></div>
+  </div>` : ''}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  TAB: SURVEY STATUS
+// ─────────────────────────────────────────────────────────────────────────────
+function renderSurveyTab() {
+  const nonSelf   = SEL_RATERS.filter(r => !r.is_self);
+  const completed = nonSelf.filter(r => r.completed_at);
+  const pct       = nonSelf.length > 0 ? Math.round(completed.length / nonSelf.length * 100) : 0;
+  const d = SELECTED;
+
+  // Category breakdown
+  const cats = {};
+  nonSelf.forEach(r => {
+    if (!cats[r.relationship]) cats[r.relationship] = { invited:0, done:0 };
+    cats[r.relationship].invited++;
+    if (r.completed_at) cats[r.relationship].done++;
+  });
+
+  const catRows = Object.entries(cats).map(([rel, c]) =>
+    `<tr><td>${rel}</td><td style="text-align:center;">${c.invited}</td>
+     <td style="text-align:center;"><span style="color:${c.done===c.invited?'var(--green)':'var(--amber)'};">${c.done}</span></td>
+     <td style="text-align:center;">${Math.round(c.done/c.invited*100)}%</td></tr>`
+  ).join('');
+
+  // Individual rater completion (coach-only view)
+  const raterRows = nonSelf.map(r =>
+    `<tr>
+      <td><div class="td-name">${r.name}</div><div class="td-sub">${r.email}</div></td>
+      <td style="font-size:12px;">${r.relationship}</td>
+      <td><span class="dot ${r.completed_at?'dot-green':'dot-grey'}"></span>${r.completed_at ? `Completed ${formatDate(r.completed_at)}` : 'Pending'}</td>
+      <td style="font-size:12px;color:var(--mid);">
+        ${r.reminder_1_sent_at ? `R1: ${formatDate(r.reminder_1_sent_at)}` : '—'}
+        ${r.reminder_2_sent_at ? ` · R2: ${formatDate(r.reminder_2_sent_at)}` : ''}
+      </td>
+    </tr>`
+  ).join('');
+
+  document.getElementById('survey-content').innerHTML = `
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+    <div class="card" style="margin-bottom:0;">
+      <div class="card-title" style="margin-bottom:8px;">Response Rate</div>
+      <div style="font-size:32px;font-weight:800;color:${pct>=50?'var(--green)':'var(--amber)'};">${completed.length}<span style="font-size:18px;font-weight:400;color:var(--mid);"> / ${nonSelf.length}</span></div>
+      <div class="progress-bar" style="margin:10px 0 4px;"><div class="progress-fill" style="width:${pct}%;"></div></div>
+      <div style="font-size:12px;color:var(--mid);">${pct}% · Minimum 7 responses for valid report</div>
+      ${d.close_date ? `<div style="font-size:12px;color:var(--mid);margin-top:6px;">Closes ${formatDate(d.close_date)} · ${daysUntil(d.close_date)} days left</div>` : ''}
+    </div>
+    <div class="card" style="margin-bottom:0;">
+      <div class="card-title" style="margin-bottom:10px;">By Category</div>
+      <table style="font-size:12px;">
+        <thead><tr><th>Category</th><th style="text-align:center;">Invited</th><th style="text-align:center;">Done</th><th style="text-align:center;">Rate</th></tr></thead>
+        <tbody>${catRows || '<tr><td colspan="4" style="color:var(--mid);">No data yet</td></tr>'}</tbody>
+      </table>
+    </div>
+  </div>
+
+  ${d.alert_t2_sent_at ? `<div class="alert alert-amber"><span class="alert-icon">⚠</span>
+    <div>T-2 alert sent ${formatDate(d.alert_t2_sent_at)} — response count was below 7 with 2 days to close.</div></div>` : ''}
+
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border);font-size:13px;font-weight:700;color:var(--blue);">
+      Individual Completion — Coach View Only
+      <span style="font-size:11px;font-weight:400;color:var(--mid);margin-left:8px;">This is never shown to the leader.</span>
+    </div>
+    <table>
+      <thead><tr><th>Rater</th><th>Relationship</th><th>Status</th><th>Reminders</th></tr></thead>
+      <tbody>${raterRows || '<tr><td colspan="4" style="text-align:center;color:var(--mid);padding:20px;">No raters yet</td></tr>'}</tbody>
+    </table>
+  </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  TAB: QUESTIONS
+// ─────────────────────────────────────────────────────────────────────────────
+const GLOBAL_QUESTIONS = [
+  {code:'A1',sec:'A',label:'Trust',text:'[Name] follows through on commitments and does what they say they will do.'},
+  {code:'A2',sec:'A',label:'Trust',text:'[Name] communicates decisions and direction clearly — people know what to expect.'},
+  {code:'A3',sec:'A',label:'Trust',text:'[Name] addresses conflict and difficult conversations directly rather than avoiding them.'},
+  {code:'A4',sec:'A',label:'Trust',text:'[Name] invests time in developing the people on their team.'},
+  {code:'A5',sec:'A',label:'Trust',text:'[Name] builds trust and collaboration across teams and functions, not just within their own.'},
+  {code:'A6',sec:'A',label:'Trust',text:'[Name] holds people accountable without creating fear or shutting down communication.'},
+  {code:'A7',sec:'A',label:'Trust',text:'[Name] sets clear expectations so people can make decisions without constantly checking in.'},
+  {code:'B1',sec:'B',label:'Proactivity',text:'[Name] anticipates problems and addresses them before they become crises.'},
+  {code:'B2',sec:'B',label:'Proactivity',text:'[Name] proactively influences positive change in the organization rather than waiting for direction.'},
+  {code:'B3',sec:'B',label:'Proactivity',text:'[Name] inspires others to take initiative and raise the standard — not just follow instructions.'},
+  {code:'B4',sec:'B',label:'Proactivity',text:'[Name] takes the initiative to identify and address emerging issues before they are brought to them.'},
+  {code:'B5',sec:'B',label:'Proactivity',text:'[Name] encourages their team to bring forward solutions, not just problems.'},
+  {code:'B6',sec:'B',label:'Proactivity',text:'[Name] actively invests in their own leadership growth and development.'},
+  {code:'C1',sec:'C',label:'Productivity',text:'[Name] creates the conditions for high team productivity — clear priorities, right resources, minimal blockers.'},
+  {code:'C2',sec:'C',label:'Productivity',text:'[Name] balances short-term execution demands with longer-term strategic investment.'},
+  {code:'C3',sec:'C',label:'Productivity',text:'[Name] leads effectively under pressure without creating chaos or reactive energy in the team.'},
+  {code:'C4',sec:'C',label:'Productivity',text:'[Name] prioritizes and focuses the team on the highest-impact work consistently.'},
+  {code:'C5',sec:'C',label:'Productivity',text:'[Name]\'s team can operate effectively and make good decisions without needing their direct involvement.'},
+  {code:'C6',sec:'C',label:'Productivity',text:'[Name] runs meetings efficiently — they start on time, stay focused, and end with clear next steps.'},
+  {code:'D1',sec:'D',label:'Overall Impact',text:'On a scale of 1–10, how would you rate [Name]\'s overall impact on the organization?'},
+  {code:'F1',sec:'F',label:'Succession',text:'If [Name] had to step away for the next 6–12 months, our team/function would continue to operate effectively.'},
+  {code:'F2',sec:'F',label:'Succession',text:'[Name] actively develops people on the team so they can take on bigger responsibilities over the next 1–3 years.'},
+];
+
+function renderQuestionsTab() {
+  const firstName = SELECTED.client_name.split(' ')[0];
+  const g1 = SELECTED.custom_g1_question;
+
+  const secColors = {A:'#1A3D6E',B:'#2E6B3E',C:'#7B3F00',D:'#1A3D6E',F:'#3B2070'};
+  let lastSec = '';
+  let html = '';
+
+  GLOBAL_QUESTIONS.forEach(q => {
+    const ov = SEL_OVERRIDES[q.code];
+    const displayText = ov ? ov.text : q.text.replace(/\[Name\]/g, firstName);
+
+    if (q.sec !== lastSec) {
+      html += `<div style="font-size:11px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.05em;margin:${lastSec?'20px':0} 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border);">Section ${q.sec} — ${q.label}</div>`;
+      lastSec = q.sec;
+    }
+
+    html += `
+    <div class="q-edit" id="qedit-${q.code}">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <div class="q-edit-code">${q.code}</div>
+        ${ov ? '<span class="override-badge">Overridden</span>' : ''}
+      </div>
+      <textarea id="qtext-${q.code}" style="min-height:58px;font-size:13px;">${displayText}</textarea>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="btn btn-outline btn-sm" onclick="saveOverride('${q.code}')">Save Override</button>
+        ${ov ? `<button class="btn btn-outline btn-sm" style="color:var(--red);" onclick="removeOverride('${q.code}')">Restore Default</button>` : ''}
+      </div>
+    </div>`;
+  });
+
+  // G1 section
+  html += `<div style="font-size:11px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.05em;margin:20px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border);">Section G — Custom Vision Alignment</div>
+  <div class="q-edit" style="border-color:#A78BFA;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <div class="q-edit-code">G1</div>
+      <span class="ai-badge">AI-Generated</span>
+    </div>
+    ${g1
+      ? `<div style="font-size:13px;font-style:italic;color:var(--dark);padding:10px 12px;background:#F3F0FF;border:1px solid #A78BFA;border-radius:6px;">"${g1}"</div>
+         <div style="font-size:11px;color:var(--mid);margin-top:6px;">Generated ${formatDate(SELECTED.custom_g1_generated_at)} from leader's 3-year vision</div>`
+      : `<div class="alert alert-amber" style="margin-bottom:0;"><span class="alert-icon">⚡</span>
+         <div>Not yet generated. Complete when leader finishes self-assessment.
+         ${SELECTED.self_three_year_vision ? `<button class="btn btn-outline btn-sm" onclick="generateG1()" style="margin-left:8px;">Generate Now →</button>` : 'Leader must complete self-assessment first.'}</div></div>`}
+  </div>`;
+
+  document.getElementById('questions-content').innerHTML = html;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  TAB: REPORT
+// ─────────────────────────────────────────────────────────────────────────────
+function renderReportTab() {
+  const d = SELECTED;
+  const nonSelf = SEL_RATERS.filter(r => !r.is_self);
+  const done    = nonSelf.filter(r => r.completed_at).length;
+  const canGenerate = ['survey_closed','report_draft','report_final'].includes(d.status) && done >= 7;
+
+  document.getElementById('report-content').innerHTML = `
+  <div class="card">
+    <div class="card-title" style="margin-bottom:4px;">Report Generation</div>
+    <div class="card-sub" style="margin-bottom:16px;">${done} of ${nonSelf.length} raters completed · ${done >= 7 ? 'Meets minimum for report' : 'Below 7-rater minimum'}</div>
+
+    ${!canGenerate && d.status !== 'survey_closed' ? `<div class="alert alert-amber">
+      <span class="alert-icon">⏳</span>
+      <div>Report generation is available once the survey closes and at least 7 raters have responded.</div>
+    </div>` : ''}
+
+    ${d.report_finalized_at ? `<div class="alert alert-green">
+      <span class="alert-icon">✓</span>
+      <div><strong>Report finalized</strong> ${formatDate(d.report_finalized_at)}. Ready to deliver to client at debrief.</div>
+    </div>` : ''}
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn btn-primary" ${canGenerate?'':'disabled'} onclick="generateReport()">
+        ⚙ Generate Draft Report (Claude)
+      </button>
+      ${d.report_generated_at && !d.report_finalized_at ? `
+      <button class="btn btn-gold" onclick="finalizeReport()">✓ Finalize Report</button>` : ''}
+      ${d.debrief_completed_at ? '' : d.report_finalized_at ? `
+      <button class="btn btn-outline" onclick="markDebriefComplete()">Mark Debrief Complete →</button>` : ''}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title" style="margin-bottom:12px;">90-Day Plan</div>
+    <div class="form-group">
+      <label>Plan Content</label>
+      <textarea id="plan-content-field" style="min-height:120px;" placeholder="Enter the leader's 90-day focus after the debrief session…">${d.plan_draft_content||''}</textarea>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-outline btn-sm" onclick="savePlanContent()">Save Plan</button>
+      ${d.debrief_completed_at && d.plan_status !== 'locked'
+        ? `<button class="btn btn-gold btn-sm" onclick="lockPlan()">Lock Plan (Manual)</button>` : ''}
+      ${d.plan_status === 'locked' ? `<span style="font-size:12px;color:var(--green);">✓ Plan locked ${formatDate(d.plan_locked_at)}</span>` : ''}
+    </div>
+    <div class="hint" style="margin-top:6px;">Plan auto-locks 24 hours after debrief is marked complete. You can also lock it manually here.</div>
+  </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  ACTIONS
+// ─────────────────────────────────────────────────────────────────────────────
+async function markIntakeComplete() {
+  await updateDiag({ status: 'self_assessment_pending', intake_completed_at: new Date().toISOString() });
+  // Create self-assessment rater row if not exists
+  const existing = SEL_RATERS.find(r => r.is_self);
+  if (!existing) {
+    const { data } = await db.from('diagnostic_raters').insert({
+      diagnostic_id: SELECTED.id, name: SELECTED.client_name,
+      email: SELECTED.client_email, relationship: 'Self', is_self: true,
+    }).select().single();
+    if (data) SEL_RATERS.push(data);
+  }
+  await refreshSelected();
+}
+
+async function markSelfAssessmentPending() {
+  await updateDiag({ status: 'self_assessment_pending' });
+  await refreshSelected();
+}
+
+function openSendInvitesModal() {
+  const nonSelf = SEL_RATERS.filter(r => !r.is_self);
+  document.getElementById('send-invites-body').innerHTML = `
+    <p style="font-size:13px;margin-bottom:14px;">You are about to send survey invitations to <strong>${nonSelf.length} raters</strong> for <strong>${SELECTED.client_name}</strong>.</p>
+    <div style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:12px;">
+      ${nonSelf.map(r => `<div style="font-size:13px;padding:4px 0;">${r.name} — <span style="color:var(--mid);">${r.email}</span></div>`).join('')}
+    </div>
+    <p style="font-size:12px;color:var(--mid);margin-top:12px;">Each rater will receive a unique survey link. This cannot be undone.</p>`;
+  openModal('send-invites-modal');
+}
+
+async function confirmSendInvites() {
+  closeModal('send-invites-modal');
+  // Call serverless function to send emails + update status
+  try {
+    const resp = await fetch('/api/send-diagnostic-invites', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ diagnostic_id: SELECTED.id }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    await updateDiag({ status: 'survey_open', invites_sent_at: new Date().toISOString() });
+    await refreshSelected();
+    alert('Invitations sent successfully.');
+  } catch(e) {
+    alert('Error sending invites: ' + e.message + '\n\nCheck that api/send-diagnostic-invites.js is deployed.');
+  }
+}
+
+async function closeSurveyNow() {
+  if (!confirm('Close the survey now? This will lock all data immediately.')) return;
+  await updateDiag({ status: 'survey_closed', survey_closed_at: new Date().toISOString() });
+  await refreshSelected();
+}
+
+async function generateG1() {
+  const vision = SELECTED.self_three_year_vision;
+  if (!vision) { alert('Self-report succession response not found.'); return; }
+  try {
+    const resp = await fetch('/api/generate-custom-question', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ diagnostic_id: SELECTED.id, vision_text: vision }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    const { question } = await resp.json();
+    await updateDiag({ custom_g1_question: question, custom_g1_generated_at: new Date().toISOString() });
+    await refreshSelected();
+  } catch(e) {
+    alert('Error generating question: ' + e.message + '\n\nCheck that api/generate-custom-question.js is deployed.');
+  }
+}
+
+async function generateReport() {
+  const btn = event.currentTarget;
+  btn.disabled = true; btn.textContent = '⚙ Generating…';
+  try {
+    const resp = await fetch('/api/generate-diagnostic-report', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ diagnostic_id: SELECTED.id }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    await updateDiag({ status: 'report_draft', report_generated_at: new Date().toISOString() });
+    await refreshSelected();
+  } catch(e) {
+    btn.disabled = false; btn.textContent = '⚙ Generate Draft Report (Claude)';
+    alert('Error generating report: ' + e.message + '\n\nCheck that api/generate-diagnostic-report.js is deployed.');
+  }
+}
+
+async function finalizeReport() {
+  if (!confirm('Finalize this report? You can still edit before the debrief.')) return;
+  await updateDiag({ status: 'report_final', report_finalized_at: new Date().toISOString() });
+  await refreshSelected();
+}
+
+async function markDebriefComplete() {
+  if (!confirm('Mark debrief as complete? This starts the 24-hour plan auto-lock countdown.')) return;
+  await updateDiag({ status: 'debrief_complete', debrief_completed_at: new Date().toISOString() });
+  await refreshSelected();
+}
+
+async function lockPlan() {
+  if (!confirm('Lock the plan now? This cannot be undone.')) return;
+  await updateDiag({ plan_status: 'locked', plan_locked_at: new Date().toISOString(), plan_lock_source: 'manual', status: 'plan_active' });
+  await refreshSelected();
+}
+
+async function savePlanContent() {
+  const val = document.getElementById('plan-content-field').value;
+  await updateDiag({ plan_draft_content: val });
+}
+
+async function saveIntakeNotes(val) {
+  await updateDiag({ intake_notes: val });
+}
+
+async function saveTranscriptUrl() {
+  const val = document.getElementById('transcript-url-field').value.trim();
+  await updateDiag({ intake_transcript_url: val });
+  await refreshSelected();
+}
+
+async function coachAddRater() {
+  const name  = document.getElementById('ar-name').value.trim();
+  const email = document.getElementById('ar-email').value.trim();
+  const rel   = document.getElementById('ar-rel').value;
+  const msg   = document.getElementById('ar-msg');
+  if (!name||!email||!rel) { msg.textContent='Fill in all fields.'; return; }
+  if (SEL_RATERS.find(r=>r.email.toLowerCase()===email.toLowerCase())) { msg.textContent='Already on list.'; return; }
+  const { data, error } = await db.from('diagnostic_raters').insert({
+    diagnostic_id: SELECTED.id, name, email, relationship: rel, is_self: false
+  }).select().single();
+  if (error) { msg.textContent='Error: '+error.message; return; }
+  SEL_RATERS.push(data);
+  document.getElementById('ar-name').value='';
+  document.getElementById('ar-email').value='';
+  document.getElementById('ar-rel').value='';
+  msg.textContent='';
+  renderRatersTab();
+  document.getElementById('tab-rater-count').textContent = SEL_RATERS.filter(r=>!r.is_self).length;
+}
+
+async function removeRater(id) {
+  if (!confirm('Remove this rater?')) return;
+  await db.from('diagnostic_raters').delete().eq('id', id);
+  SEL_RATERS = SEL_RATERS.filter(r => r.id !== id);
+  renderRatersTab();
+  document.getElementById('tab-rater-count').textContent = SEL_RATERS.filter(r=>!r.is_self).length;
+}
+
+async function saveOverride(code) {
+  const newText = document.getElementById('qtext-' + code).value.trim();
+  const orig    = GLOBAL_QUESTIONS.find(q => q.code === code)?.text || '';
+  if (newText === orig.replace(/\[Name\]/g, SELECTED.client_name.split(' ')[0])) {
+    await removeOverride(code); return;
+  }
+  await db.from('diagnostic_question_overrides').upsert({
+    diagnostic_id: SELECTED.id, question_code: code,
+    original_text: orig, override_text: newText,
+  }, { onConflict: 'diagnostic_id,question_code' });
+  SEL_OVERRIDES[code] = { text: newText };
+  renderQuestionsTab();
+}
+
+async function removeOverride(code) {
+  await db.from('diagnostic_question_overrides')
+    .delete().eq('diagnostic_id', SELECTED.id).eq('question_code', code);
+  delete SEL_OVERRIDES[code];
+  renderQuestionsTab();
+}
+
+async function createDiagnostic() {
+  const name  = document.getElementById('nd-name').value.trim();
+  const email = document.getElementById('nd-email').value.trim();
+  const errEl = document.getElementById('nd-error');
+  if (!name||!email) { errEl.textContent='Name and email are required.'; return; }
+  const start   = document.getElementById('nd-start').value;
+  const close   = start ? fmtDateAdd7(start) : null;
+  const linked  = document.getElementById('nd-link-client').checked;
+  const clientId= linked ? document.getElementById('nd-client-id').value || null : null;
+
+  const { data, error } = await db.from('diagnostics').insert({
+    client_name: name, client_email: email,
+    client_title: document.getElementById('nd-title').value.trim() || null,
+    client_org:   document.getElementById('nd-org').value.trim()   || null,
+    tier:         document.getElementById('nd-tier').value,
+    email_delivery_mode: document.getElementById('nd-delivery').value,
+    start_date:   start || null, close_date: close,
+    client_id:    clientId,
+    status: 'setup',
+  }).select().single();
+
+  if (error) { errEl.textContent='Error: '+error.message; return; }
+
+  closeModal('new-diag-modal');
+  ALL_DIAGS.unshift(data);
+  renderList();
+  openDiag(data.id);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+async function updateDiag(fields) {
+  const { data, error } = await db.from('diagnostics').update(fields).eq('id', SELECTED.id).select().single();
+  if (!error && data) {
+    SELECTED = data;
+    ALL_DIAGS = ALL_DIAGS.map(d => d.id === SELECTED.id ? SELECTED : d);
+  }
+}
+
+async function refreshSelected() {
+  const { data: raterData } = await db.from('diagnostic_raters').select('*').eq('diagnostic_id', SELECTED.id).order('created_at', { ascending:true });
+  SEL_RATERS = raterData || [];
+  renderDetailHeader();
+  renderOverviewTab();
+  renderRatersTab();
+  renderSurveyTab();
+  renderQuestionsTab();
+  renderReportTab();
+}
+
+function showView(v) {
+  document.getElementById('view-list').style.display   = v === 'list'   ? 'block' : 'none';
+  document.getElementById('view-detail').style.display = v === 'detail' ? 'block' : 'none';
+  if (v === 'list') loadDiagnostics();
+  window.scrollTo(0, 0);
+}
+
+function switchTab(e, prefix, tab) {
+  document.querySelectorAll(`[id^="${prefix}-"]`).forEach(p => p.classList.remove('active'));
+  e.currentTarget.closest('.tabs').querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(`${prefix}-${tab}`).classList.add('active');
+  e.currentTarget.classList.add('active');
+}
+
+function switchTabById(id) {
+  document.querySelectorAll('#view-detail .tab-pane').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('#view-detail .tab').forEach(t => {
+    const map = { 'dtab-overview':'Overview','dtab-raters':'Raters','dtab-survey':'Survey Status','dtab-questions':'Questions','dtab-report':'Report' };
+    t.classList.toggle('active', map[id] === t.textContent.trim().replace(/\s*\d+$/,''));
+  });
+}
+
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function calcCloseDate() {
+  const start = document.getElementById('nd-start').value;
+  document.getElementById('nd-close').textContent = start
+    ? fmtDateAdd7(start) + ' (auto)' : '— set start date';
+}
+
+function fmtDateAdd7(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setDate(d.getDate() + 7);
+  return d.toISOString().split('T')[0];
+}
+
+function daysUntil(dateStr) {
+  return Math.ceil((new Date(dateStr) - new Date()) / 86400000);
+}
+
+function formatDate(str) {
+  if (!str) return '';
+  return new Date(str).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+}
+
+function statusBadge(status) {
+  const map = {
+    setup: ['badge-setup','Setup'],
+    intake_complete: ['badge-setup','Intake Done'],
+    self_assessment_pending: ['badge-amber','Self-Assess Pending'],
+    self_assessment_complete: ['badge-amber','Invites Ready'],
+    survey_open: ['badge-open','Survey Open'],
+    survey_closed: ['badge-closed','Survey Closed'],
+    report_draft: ['badge-amber','Report Draft'],
+    report_final: ['badge-final','Report Final'],
+    debrief_complete: ['badge-final','Debrief Done'],
+    plan_active: ['badge-open','Complete'],
+  };
+  const [cls, label] = map[status] || ['badge-setup', status];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(() => alert('Link copied to clipboard.'));
+}
+
+// Show/hide client link toggle
+document.getElementById('nd-link-client').addEventListener('change', function() {
+  document.getElementById('nd-client-wrap').style.display = this.checked ? 'block' : 'none';
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  BOOT
+// ─────────────────────────────────────────────────────────────────────────────
+boot();
+</script>
+</body>
+</html>
