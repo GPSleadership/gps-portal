@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPS Leadership — Executive Leadership Diagnostic</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --blue:#1A3D6E; --gold:#C09A2A; --dark:#1C1C1C; --mid:#555;
+  --light:#F4F6F9; --white:#fff; --border:#DDE2EA;
+  --green:#1A7A3A; --amber:#BF6A00; --red:#CC2200;
+  --blue-light:#EAF0FA; --gold-light:#FDF8EE;
+  --radius:8px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--light);color:var(--dark);font-size:15px;line-height:1.5;}
+
+/* HEADER */
+.header{background:var(--blue);padding:14px 20px;display:flex;align-items:center;gap:12px;}
+.header-logo{color:var(--gold);font-weight:900;font-size:18px;font-style:italic;background:rgba(255,255,255,.1);padding:4px 10px;border-radius:4px;}
+.header-title{color:rgba(255,255,255,.85);font-size:13px;font-weight:500;}
+
+/* STICKY PROGRESS BAR */
+.progress-wrap{position:sticky;top:0;z-index:50;background:var(--white);border-bottom:1px solid var(--border);padding:10px 20px;}
+.progress-label{font-size:12px;color:var(--mid);margin-bottom:6px;display:flex;justify-content:space-between;}
+.progress-bar{background:#E5E9F0;border-radius:20px;height:8px;overflow:hidden;}
+.progress-fill{height:100%;border-radius:20px;background:var(--blue);transition:.4s;}
+
+/* SCREENS */
+.screen{display:none;max-width:680px;margin:0 auto;padding:28px 20px 60px;}
+.screen.active{display:block;}
+
+/* CARDS */
+.card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,.06);}
+
+/* SECTION HEADERS */
+.section-label{background:var(--blue);color:var(--white);padding:10px 16px;border-radius:var(--radius);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px;}
+.section-label.gold{background:var(--gold);color:var(--dark);}
+.section-label.purple{background:#3B2070;}
+
+/* SCALE LABELS */
+.scale-hint{display:flex;justify-content:space-between;font-size:11px;color:var(--mid);margin-top:4px;padding:0 2px;}
+
+/* QUESTIONS */
+.q-block{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;margin-bottom:14px;}
+.q-block.required-missing{border-color:var(--red);background:#FFF8F8;}
+.q-num{font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;}
+.q-text{font-size:14px;font-weight:600;color:var(--dark);margin-bottom:12px;line-height:1.55;}
+.q-note{font-size:12px;color:var(--amber);background:#FFF8E7;border:1px solid #F5C842;border-radius:4px;padding:8px 12px;margin-bottom:10px;line-height:1.4;}
+.q-optional{font-size:11px;color:var(--mid);font-style:italic;margin-bottom:8px;}
+
+/* LIKERT 1-5 */
+.likert{display:flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;margin-top:8px;}
+.likert-opt{flex:1;text-align:center;padding:12px 6px;cursor:pointer;border-right:1px solid var(--border);font-size:14px;font-weight:600;color:var(--mid);transition:.15s;user-select:none;}
+.likert-opt:last-child{border-right:none;}
+.likert-opt:hover{background:var(--blue-light);color:var(--blue);}
+.likert-opt.sel{background:var(--blue);color:var(--white);}
+
+/* 1-10 SCALE */
+.scale-10{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+.scale-10-opt{width:calc(10% - 6px);min-width:40px;flex:1;text-align:center;padding:12px 4px;border:1.5px solid var(--border);border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;color:var(--mid);transition:.15s;user-select:none;}
+.scale-10-opt:hover{border-color:var(--blue);color:var(--blue);}
+.scale-10-opt.sel{background:var(--blue);color:var(--white);border-color:var(--blue);}
+
+/* OPEN TEXT */
+textarea{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:6px;font-size:13.5px;color:var(--dark);resize:vertical;min-height:90px;font-family:inherit;line-height:1.5;}
+textarea:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(26,61,110,.1);}
+textarea.tall{min-height:130px;}
+
+/* BUTTONS */
+.btn{padding:11px 22px;border-radius:6px;border:none;cursor:pointer;font-size:14px;font-weight:600;transition:.15s;display:inline-flex;align-items:center;gap:6px;}
+.btn-primary{background:var(--blue);color:var(--white);}
+.btn-primary:hover{background:#0F2D5A;}
+.btn-outline{background:none;border:1.5px solid var(--border);color:var(--mid);}
+.btn-outline:hover{border-color:var(--blue);color:var(--blue);}
+.btn-gold{background:var(--gold);color:var(--dark);}
+.btn[disabled]{opacity:.4;cursor:not-allowed;}
+.nav-row{display:flex;justify-content:space-between;gap:12px;margin-top:24px;}
+
+/* ALERTS */
+.alert{padding:14px 18px;border-radius:var(--radius);margin-bottom:16px;display:flex;align-items:flex-start;gap:12px;font-size:13.5px;}
+.alert-amber{background:#FFF8E7;border:1.5px solid #F5C842;color:#7A4F00;}
+.alert-red{background:#FFF0EE;border:1.5px solid #F5B3AC;color:#7A1500;}
+.alert-green{background:#EDF7F1;border:1.5px solid #7EC89A;color:#0D5226;}
+.alert-blue{background:var(--blue-light);border:1.5px solid #9AB8E0;color:#0D2B5E;}
+.alert-icon{font-size:20px;flex-shrink:0;}
+
+/* ERROR / LOADING / DONE SCREENS */
+.state-screen{max-width:520px;margin:60px auto;padding:40px 28px;background:var(--white);border-radius:var(--radius);box-shadow:0 4px 20px rgba(0,0,0,.1);text-align:center;}
+.state-icon{font-size:48px;margin-bottom:16px;}
+.state-title{font-size:20px;font-weight:800;color:var(--blue);margin-bottom:10px;}
+.state-sub{font-size:14px;color:var(--mid);line-height:1.6;}
+
+/* WELCOME CARD */
+.welcome-leader{font-size:22px;font-weight:800;color:var(--blue);margin-bottom:4px;}
+.welcome-sub{font-size:14px;color:var(--mid);margin-bottom:20px;}
+.welcome-points{list-style:none;padding:0;}
+.welcome-points li{padding:8px 0;border-bottom:1px solid var(--border);font-size:13.5px;display:flex;gap:10px;}
+.welcome-points li:last-child{border-bottom:none;}
+
+/* SPINNER */
+.spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 16px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* AI BADGE */
+.ai-badge{background:var(--gold-light);border:1px solid var(--gold);color:var(--amber);font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;text-transform:uppercase;letter-spacing:.04em;display:inline-block;margin-bottom:8px;}
+
+@media(max-width:540px){
+  .scale-10-opt{min-width:32px;padding:10px 2px;font-size:13px;}
+  .likert-opt{padding:10px 4px;font-size:13px;}
+  .screen{padding:20px 14px 50px;}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-logo">GPS</div>
+  <div class="header-title">14-Day Executive Leadership Diagnostic</div>
+</div>
+
+<div class="progress-wrap" id="progress-wrap" style="display:none;">
+  <div class="progress-label">
+    <span id="prog-section-label">Section 1 of 5</span>
+    <span id="prog-pct-label">0%</span>
+  </div>
+  <div class="progress-bar">
+    <div class="progress-fill" id="prog-fill" style="width:3%;"></div>
+  </div>
+</div>
+
+<!-- ── LOADING ── -->
+<div class="state-screen" id="screen-loading">
+  <div class="spinner"></div>
+  <div class="state-title">Loading your survey…</div>
+  <div class="state-sub">This will only take a moment.</div>
+</div>
+
+<!-- ── ERROR: TOKEN NOT FOUND ── -->
+<div class="state-screen" id="screen-error" style="display:none;">
+  <div class="state-icon">🔗</div>
+  <div class="state-title">Link not recognized</div>
+  <div class="state-sub">This survey link doesn't match any active diagnostic. Please use the exact link from the invitation email, or contact Alex at alex@gpsleadership.org if you believe this is an error.</div>
+</div>
+
+<!-- ── ERROR: ALREADY SUBMITTED ── -->
+<div class="state-screen" id="screen-done-already" style="display:none;">
+  <div class="state-icon">✅</div>
+  <div class="state-title">Already submitted</div>
+  <div class="state-sub">Your responses for this diagnostic have already been recorded. Thank you — your feedback makes a real difference in this leader's development.</div>
+</div>
+
+<!-- ── ERROR: SURVEY CLOSED ── -->
+<div class="state-screen" id="screen-closed" style="display:none;">
+  <div class="state-icon">🔒</div>
+  <div class="state-title">Survey window has closed</div>
+  <div class="state-sub">The feedback window for this diagnostic has ended. If you believe this is an error, contact Alex at alex@gpsleadership.org.</div>
+</div>
+
+<!-- ── ERROR: SURVEY NOT YET OPEN ── -->
+<div class="state-screen" id="screen-not-open" style="display:none;">
+  <div class="state-icon">⏳</div>
+  <div class="state-title">Survey not yet open</div>
+  <div class="state-sub">This diagnostic survey hasn't launched yet. You'll receive an email when it's ready. If you have questions, contact Alex at alex@gpsleadership.org.</div>
+</div>
+
+<!-- ── SURVEY SCREENS (rendered dynamically) ── -->
+<div id="survey-container"></div>
+
+<!-- ── THANK YOU ── -->
+<div class="state-screen" id="screen-thankyou" style="display:none;">
+  <div class="state-icon">🙏</div>
+  <div class="state-title">Thank you for your feedback.</div>
+  <div class="state-sub" id="thankyou-msg">Your responses have been submitted. They are confidential and will be aggregated with other raters' feedback before being shared. Your perspective matters — thank you for taking the time.</div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+//  CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
+const SUPABASE_URL  = 'https://pbnkefuqpoztcxfagiod.supabase.co';
+const SUPABASE_ANON = 'sb_publishable_nu9GXGeoqDXcxVocodQ4UA_ke7Yrzyw';
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  QUESTION BANK
+//  text_rater: wording when rater answers about the leader ("[First Name]" placeholder)
+//  text_self:  wording when leader answers about themselves
+//  type: 'rated_5' | 'rated_10' | 'open' | 'open_long'
+//  optional: true → not required for Next
+//  note_rater: amber notice shown above question (rater mode only)
+// ─────────────────────────────────────────────────────────────────────────────
+const QUESTION_BANK = [
+
+  // ── SECTION A: TRUST ──────────────────────────────────────────────────────
+  { sec:'A', code:'A1', type:'rated_5',
+    text_rater:'[First Name] follows through on commitments and does what they say they will do.',
+    text_self: 'I follow through on commitments and do what I say I will do.' },
+  { sec:'A', code:'A2', type:'rated_5',
+    text_rater:'[First Name] communicates decisions and direction clearly — people know what to expect.',
+    text_self: 'I communicate decisions and direction clearly — people know what to expect from me.' },
+  { sec:'A', code:'A3', type:'rated_5',
+    text_rater:'[First Name] addresses conflict and difficult conversations directly rather than avoiding them.',
+    text_self: 'I address conflict and difficult conversations directly rather than avoiding them.' },
+  { sec:'A', code:'A4', type:'rated_5',
+    text_rater:'[First Name] invests time in developing the people on their team.',
+    text_self: 'I invest time in developing the people on my team.' },
+  { sec:'A', code:'A5', type:'rated_5',
+    text_rater:'[First Name] builds trust and collaboration across teams and functions, not just within their own.',
+    text_self: 'I build trust and collaboration across teams and functions, not just within my own.' },
+  { sec:'A', code:'A6', type:'rated_5',
+    text_rater:'[First Name] holds people accountable without creating fear or shutting down communication.',
+    text_self: 'I hold people accountable without creating fear or shutting down communication.' },
+  { sec:'A', code:'A7', type:'rated_5',
+    text_rater:'[First Name] sets clear expectations so people can make decisions without constantly checking in.',
+    text_self: 'I set clear expectations so people can make decisions without constantly checking in.' },
+  { sec:'A', code:'A8', type:'open',
+    text_rater:'What is one thing [First Name] could START doing to build greater trust across the team or organization?',
+    text_self: 'What is one trust-building behavior I need to START to be more effective as a leader?' },
+  { sec:'A', code:'A9', type:'open',
+    text_rater:'What is one communication or direction-setting habit you would ask [First Name] to STOP or reduce?',
+    text_self: 'What is one communication habit I should STOP that may be undermining trust or clarity?' },
+  { sec:'A', code:'A10', type:'open',
+    text_rater:'What is one trust-building behavior [First Name] is already doing well that you want them to CONTINUE?',
+    text_self: 'What is one trust-building behavior I should CONTINUE — something I\'m doing well that I shouldn\'t lose?' },
+
+  // ── SECTION B: PROACTIVITY ────────────────────────────────────────────────
+  { sec:'B', code:'B1', type:'rated_5',
+    text_rater:'[First Name] anticipates problems and addresses them before they become crises.',
+    text_self: 'I anticipate problems and address them before they become crises.' },
+  { sec:'B', code:'B2', type:'rated_5',
+    text_rater:'[First Name] proactively influences positive change in the organization rather than waiting for direction.',
+    text_self: 'I proactively influence positive change in the organization rather than waiting for direction.' },
+  { sec:'B', code:'B3', type:'rated_5',
+    text_rater:'[First Name] inspires others to take initiative and raise the standard — not just follow instructions.',
+    text_self: 'I inspire others to take initiative and raise the standard — not just follow instructions.' },
+  { sec:'B', code:'B4', type:'rated_5',
+    text_rater:'[First Name] takes the initiative to identify and address emerging issues before they are brought to them.',
+    text_self: 'I take the initiative to identify and address emerging issues before they are brought to me.' },
+  { sec:'B', code:'B5', type:'rated_5',
+    text_rater:'[First Name] encourages their team to bring forward solutions, not just problems.',
+    text_self: 'I encourage my team to bring forward solutions, not just problems.' },
+  { sec:'B', code:'B6', type:'rated_5',
+    text_rater:'[First Name] actively invests in their own leadership growth and development.',
+    text_self: 'I actively invest in my own leadership growth and development.' },
+  { sec:'B', code:'B7', type:'open',
+    text_rater:'What is one thing [First Name] could START doing to be more proactive in their leadership?',
+    text_self: 'What is one thing I should START doing to be more proactive as a leader?' },
+  { sec:'B', code:'B8', type:'open',
+    text_rater:'What is one reactive habit or pattern you would ask [First Name] to STOP?',
+    text_self: 'What is one reactive habit or pattern I should STOP?' },
+  { sec:'B', code:'B9', type:'open',
+    text_rater:'What does [First Name] already do proactively that you want them to CONTINUE?',
+    text_self: 'What proactive behavior am I already doing well that I should CONTINUE?' },
+  { sec:'B', code:'B10', type:'open', optional:true,
+    text_rater:'(Optional) Any additional comments on [First Name]\'s ability to anticipate, adapt, and drive change?',
+    text_self: '(Optional) Any additional reflections on your proactivity as a leader?' },
+
+  // ── SECTION C: PRODUCTIVITY ───────────────────────────────────────────────
+  { sec:'C', code:'C1', type:'rated_5',
+    text_rater:'[First Name] creates the conditions for high team productivity — clear priorities, right resources, minimal blockers.',
+    text_self: 'I create the conditions for high team productivity — clear priorities, right resources, minimal blockers.' },
+  { sec:'C', code:'C2', type:'rated_5',
+    text_rater:'[First Name] balances short-term execution demands with longer-term strategic investment.',
+    text_self: 'I balance short-term execution demands with longer-term strategic investment.' },
+  { sec:'C', code:'C3', type:'rated_5',
+    text_rater:'[First Name] leads effectively under pressure without creating chaos or reactive energy in the team.',
+    text_self: 'I lead effectively under pressure without creating chaos or reactive energy in my team.' },
+  { sec:'C', code:'C4', type:'rated_5',
+    text_rater:'[First Name] prioritizes and focuses the team on the highest-impact work consistently.',
+    text_self: 'I prioritize and focus my team on the highest-impact work consistently.' },
+  { sec:'C', code:'C5', type:'rated_5',
+    note_rater:'Note: A low score here is important data — it may indicate the team has become dependent on this leader to function. Please answer honestly.',
+    text_rater:'[First Name]\'s team can operate effectively and make good decisions without needing their direct involvement.',
+    text_self: 'My team can operate effectively and make good decisions without needing my direct involvement.' },
+  { sec:'C', code:'C6', type:'rated_5',
+    text_rater:'[First Name] runs meetings efficiently — they start on time, stay focused, and end with clear next steps.',
+    text_self: 'I run meetings efficiently — they start on time, stay focused, and end with clear next steps.' },
+  { sec:'C', code:'C7', type:'open',
+    text_rater:'What is one thing [First Name] could START doing to increase team productivity and execution?',
+    text_self: 'What is one thing I should START doing to increase my team\'s productivity and execution?' },
+  { sec:'C', code:'C8', type:'open',
+    text_rater:'What is one habit or pattern you would ask [First Name] to STOP that slows the team down?',
+    text_self: 'What is one habit or pattern I should STOP that slows my team down?' },
+  { sec:'C', code:'C9', type:'open',
+    text_rater:'What does [First Name] already do to drive productivity that you want them to CONTINUE?',
+    text_self: 'What do I already do to drive productivity that I should CONTINUE?' },
+
+  // ── SECTION D: OVERALL IMPACT ─────────────────────────────────────────────
+  { sec:'D', code:'D1', type:'rated_10',
+    text_rater:'On a scale of 1–10, how would you rate [First Name]\'s overall impact on the organization?',
+    text_self: 'On a scale of 1–10, how would you honestly rate your own overall impact on the organization?' },
+  { sec:'D', code:'D2', type:'open',
+    text_rater:'In 3–5 words or a short phrase, how would you describe [First Name]\'s leadership style and presence?',
+    text_self: 'In 3–5 words or a short phrase, how would you honestly describe your own leadership style and presence?' },
+
+  // ── SECTION E: SUCCESSION & FUTURE SELF (self-report only) ────────────────
+  { sec:'E', code:'E1', type:'open_long', selfOnly:true,
+    text_self: 'Where do you want your role and this business to be in 3 years? If things go really well, what does "winning" look like — for the business and for your role?' },
+  { sec:'E', code:'E2', type:'open_long', selfOnly:true,
+    text_self: 'Who do you need to become to lead that future? List your top 3 skills or behaviors you need to upgrade in yourself.' },
+  { sec:'E', code:'E3', type:'open_long', selfOnly:true,
+    text_self: 'If you had to step away from your role tomorrow, who could step in? If no one is ready yet, say so.' },
+  { sec:'E', code:'E4', type:'open_long', selfOnly:true,
+    text_self: 'Who is most ready to succeed you, and what would they need in the next 12–18 months to be truly ready?' },
+  { sec:'E', code:'E5', type:'open_long', selfOnly:true,
+    text_self: 'What are you actually doing to develop those potential successors? Be specific — last 12 months and next 90 days.' },
+
+  // ── SECTION F: SUCCESSION & BENCH (rater only) ────────────────────────────
+  { sec:'F', code:'F1', type:'rated_5', raterOnly:true,
+    text_rater:'If [First Name] had to step away from their role for the next 6–12 months, our team/function would continue to operate effectively.' },
+  { sec:'F', code:'F2', type:'rated_5', raterOnly:true,
+    text_rater:'[First Name] actively develops people on the team so they can take on bigger responsibilities over the next 1–3 years.' },
+  { sec:'F', code:'F3', type:'open', raterOnly:true, optional:true,
+    text_rater:'(Optional) What is one thing [First Name] could do over the next 12–18 months to better prepare the team to succeed if they were not in this role?' },
+
+  // ── SECTION G: CUSTOM VISION ALIGNMENT (rater only, AI-generated) ─────────
+  // G1 text is dynamically injected from diagnostics.custom_g1_question
+  { sec:'G', code:'G1', type:'rated_5', raterOnly:true, aiGenerated:true,
+    text_rater:'[G1_QUESTION]' },
+
+];
+
+// Section metadata
+const SECTION_META = {
+  A: { label:'Trust',                     color:'blue'   },
+  B: { label:'Proactivity',               color:'blue'   },
+  C: { label:'Productivity',              color:'blue'   },
+  D: { label:'Overall Impact',            color:'blue'   },
+  E: { label:'Succession & Future Self',  color:'gold'   },
+  F: { label:'Succession & Bench',        color:'purple' },
+  G: { label:'Vision Alignment',          color:'gold'   },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  STATE
+// ─────────────────────────────────────────────────────────────────────────────
+let RATER       = null;   // diagnostic_raters row
+let DIAGNOSTIC  = null;   // diagnostics row
+let OVERRIDES   = {};     // { 'B2': 'new question text', ... }
+let IS_SELF     = false;
+let LEADER_FIRST = '';
+let SECTIONS    = [];     // ordered list of section codes for this mode
+let CUR_SEC     = 0;      // index into SECTIONS
+let ANSWERS     = {};     // { 'A1': { score: 4 }, 'A8': { text: '...' }, ... }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  INIT — runs on page load
+// ─────────────────────────────────────────────────────────────────────────────
+async function init() {
+  const token = new URLSearchParams(window.location.search).get('token');
+  if (!token) { showState('screen-error'); return; }
+
+  // 1. Load rater by token
+  const { data: raterRows, error: raterErr } = await db
+    .from('diagnostic_raters')
+    .select('*')
+    .eq('token', token)
+    .limit(1);
+
+  if (raterErr || !raterRows || raterRows.length === 0) {
+    showState('screen-error'); return;
+  }
+
+  RATER   = raterRows[0];
+  IS_SELF = RATER.is_self;
+
+  // Already submitted?
+  if (RATER.completed_at) { showState('screen-done-already'); return; }
+
+  // 2. Load diagnostic
+  const { data: diagRows, error: diagErr } = await db
+    .from('diagnostics')
+    .select('*')
+    .eq('id', RATER.diagnostic_id)
+    .limit(1);
+
+  if (diagErr || !diagRows || diagRows.length === 0) {
+    showState('screen-error'); return;
+  }
+
+  DIAGNOSTIC = diagRows[0];
+
+  // Check survey is open
+  const validStatuses = ['self_assessment_complete', 'survey_open'];
+  if (IS_SELF) {
+    // Self-assessment: valid when status is 'intake_complete' or 'self_assessment_pending'
+    const selfValidStatuses = ['intake_complete', 'self_assessment_pending', 'self_assessment_complete', 'survey_open'];
+    if (!selfValidStatuses.includes(DIAGNOSTIC.status)) {
+      showState('screen-not-open'); return;
+    }
+  } else {
+    if (!validStatuses.includes(DIAGNOSTIC.status)) {
+      showState(DIAGNOSTIC.status === 'setup' || DIAGNOSTIC.status === 'intake_complete' || DIAGNOSTIC.status === 'self_assessment_pending'
+        ? 'screen-not-open' : 'screen-closed');
+      return;
+    }
+    // Check close date
+    if (DIAGNOSTIC.close_date) {
+      const closeDate = new Date(DIAGNOSTIC.close_date + 'T23:59:59');
+      if (closeDate < new Date()) { showState('screen-closed'); return; }
+    }
+  }
+
+  // 3. Load question overrides
+  const { data: overrideRows } = await db
+    .from('diagnostic_question_overrides')
+    .select('question_code, override_text')
+    .eq('diagnostic_id', DIAGNOSTIC.id);
+
+  if (overrideRows) {
+    overrideRows.forEach(r => { OVERRIDES[r.question_code] = r.override_text; });
+  }
+
+  // 4. Set up
+  LEADER_FIRST = (DIAGNOSTIC.client_name || '').split(' ')[0];
+
+  // Build section list for this mode
+  if (IS_SELF) {
+    SECTIONS = ['A','B','C','D','E'];
+  } else {
+    // Only include G if custom question exists
+    SECTIONS = DIAGNOSTIC.custom_g1_question ? ['A','B','C','D','F','G'] : ['A','B','C','D','F'];
+  }
+
+  // 5. Render and show survey
+  renderWelcome();
+  hideLoading();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  RENDER
+// ─────────────────────────────────────────────────────────────────────────────
+function renderWelcome() {
+  const container = document.getElementById('survey-container');
+  const selfNote = IS_SELF
+    ? `<p style="font-size:13.5px;color:var(--dark);line-height:1.6;">You'll rate yourself on each item using a 1–5 scale, then answer several open-ended questions. The final section asks about succession — where you're going and who could succeed you. Your responses stay confidential and appear only in your copy of the report.</p>`
+    : `<p style="font-size:13.5px;color:var(--dark);line-height:1.6;">You'll rate <strong>${LEADER_FIRST}</strong> on each item using a 1–5 scale, then answer several open-ended questions. Your numeric scores will be averaged with other raters' feedback. Your written responses are used verbatim in the report but are not attributed to you individually.</p>`;
+
+  container.innerHTML = `
+  <div class="screen active" id="screen-welcome">
+    <div class="card" style="border-top:4px solid var(--blue);">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+        <div style="background:var(--blue);color:var(--gold);font-weight:900;font-size:18px;padding:6px 12px;border-radius:4px;font-style:italic;">GPS</div>
+        <div><div style="font-size:11px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.05em;">GPS Leadership Solutions</div>
+        <div style="font-size:12px;color:var(--mid);">14-Day Executive Leadership Diagnostic</div></div>
+      </div>
+      ${IS_SELF
+        ? `<div class="welcome-leader">Your Self-Assessment</div>
+           <div class="welcome-sub">This is your own view — how you see your leadership.</div>`
+        : `<div class="welcome-leader">Feedback for ${LEADER_FIRST} ${DIAGNOSTIC.client_name.split(' ').slice(1).join(' ')}</div>
+           <div class="welcome-sub">${DIAGNOSTIC.client_title ? DIAGNOSTIC.client_title + ' · ' : ''}${DIAGNOSTIC.client_org || ''}</div>`
+      }
+      ${selfNote}
+      <ul class="welcome-points" style="margin-top:16px;">
+        <li><span>⏱</span><span>Takes approximately <strong>15–20 minutes</strong></span></li>
+        <li><span>🔒</span><span>${IS_SELF ? 'Your responses appear only in your private copy of the report' : 'Your identity is never shown. Scores are averaged across all raters before being shared.'}</span></li>
+        <li><span>📊</span><span>Scale: <strong>1 = Strongly Disagree, 5 = Strongly Agree</strong> for all rated items</span></li>
+        <li><span>✍️</span><span>Open-ended questions require a brief response. Take your time — this is the most useful part.</span></li>
+      </ul>
+      <div style="margin-top:20px;">
+        <button class="btn btn-gold" style="width:100%;justify-content:center;font-size:15px;padding:14px;" onclick="startSurvey()">Begin →</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function startSurvey() {
+  document.getElementById('screen-welcome').style.display = 'none';
+  document.getElementById('progress-wrap').style.display = 'block';
+  renderSection(0);
+}
+
+function renderSection(idx) {
+  CUR_SEC = idx;
+  const secCode = SECTIONS[idx];
+  const meta    = SECTION_META[secCode];
+
+  // Filter questions for this section + mode
+  let questions = QUESTION_BANK.filter(q => {
+    if (q.sec !== secCode) return false;
+    if (q.selfOnly  && !IS_SELF)  return false;
+    if (q.raterOnly &&  IS_SELF)  return false;
+    // For G1, only include if custom question exists
+    if (q.aiGenerated && !DIAGNOSTIC.custom_g1_question) return false;
+    return true;
+  });
+
+  // Build question HTML
+  const qHtml = questions.map(q => buildQuestionHtml(q)).join('');
+
+  // Nav buttons
+  const isFirst = idx === 0;
+  const isLast  = idx === SECTIONS.length - 1;
+
+  const container = document.getElementById('survey-container');
+  container.innerHTML = `
+  <div class="screen active" id="screen-sec-${secCode}">
+    <div class="section-label ${meta.color === 'gold' ? 'gold' : meta.color === 'purple' ? 'purple' : ''}">
+      Section ${idx + 1} of ${SECTIONS.length} — ${meta.label}
+    </div>
+    <div style="font-size:12px;color:var(--mid);margin-bottom:16px;">
+      ${(secCode === 'A' || secCode === 'B' || secCode === 'C' || secCode === 'F')
+        ? '1 = Strongly Disagree &nbsp;·&nbsp; 5 = Strongly Agree'
+        : secCode === 'D' ? '1–10 scale for the first question'
+        : secCode === 'E' ? 'Your responses are confidential and appear only in your copy of the report.'
+        : ''}
+    </div>
+    <div id="questions-container">${qHtml}</div>
+    <div id="validation-msg"></div>
+    <div class="nav-row">
+      ${isFirst
+        ? '<button class="btn btn-outline" onclick="backToWelcome()">← Back</button>'
+        : '<button class="btn btn-outline" onclick="navBack()">← Back</button>'
+      }
+      ${isLast
+        ? '<button class="btn btn-gold" onclick="submitSurvey()" style="min-width:140px;">Submit →</button>'
+        : '<button class="btn btn-primary" onclick="navNext()" style="min-width:140px;">Next →</button>'
+      }
+    </div>
+  </div>`;
+
+  // Restore saved answers for this section
+  restoreAnswers(questions);
+  updateProgress();
+  window.scrollTo(0, 0);
+}
+
+function buildQuestionHtml(q) {
+  // Determine display text
+  let text = IS_SELF ? (q.text_self || q.text_rater) : q.text_rater;
+
+  // Apply override if exists
+  if (OVERRIDES[q.code]) text = OVERRIDES[q.code];
+
+  // Replace [First Name] placeholder
+  text = text.replace(/\[First Name\]/g, LEADER_FIRST);
+
+  // Replace G1 custom question placeholder
+  if (q.code === 'G1' && DIAGNOSTIC.custom_g1_question) {
+    text = DIAGNOSTIC.custom_g1_question;
+  }
+
+  const noteHtml = (!IS_SELF && q.note_rater)
+    ? `<div class="q-note">${q.note_rater}</div>`
+    : '';
+
+  const optionalHtml = q.optional
+    ? `<div class="q-optional">Optional — skip if you prefer not to answer.</div>`
+    : '';
+
+  const aiBadgeHtml = q.aiGenerated
+    ? `<div class="ai-badge">AI-Generated for this diagnostic</div><br>`
+    : '';
+
+  let inputHtml = '';
+
+  if (q.type === 'rated_5') {
+    inputHtml = `
+      <div class="likert" id="likert-${q.code}" role="group" aria-label="Rating 1 to 5">
+        ${[1,2,3,4,5].map(n => `<div class="likert-opt" data-code="${q.code}" data-val="${n}" onclick="selectScore('${q.code}',${n})">${n}</div>`).join('')}
+      </div>
+      <div class="scale-hint"><span>Strongly Disagree</span><span>Strongly Agree</span></div>`;
+  } else if (q.type === 'rated_10') {
+    inputHtml = `
+      <div class="scale-10" id="scale10-${q.code}" role="group" aria-label="Rating 1 to 10">
+        ${[1,2,3,4,5,6,7,8,9,10].map(n => `<div class="scale-10-opt" data-code="${q.code}" data-val="${n}" onclick="selectScore10('${q.code}',${n})">${n}</div>`).join('')}
+      </div>
+      <div class="scale-hint"><span>Minimal impact</span><span>Exceptional impact</span></div>`;
+  } else if (q.type === 'open_long') {
+    inputHtml = `<textarea class="tall" id="ta-${q.code}" placeholder="Your response…" oninput="saveText('${q.code}',this.value)" rows="5"></textarea>`;
+  } else {
+    inputHtml = `<textarea id="ta-${q.code}" placeholder="Your response…" oninput="saveText('${q.code}',this.value)"></textarea>`;
+  }
+
+  return `
+  <div class="q-block" id="qblock-${q.code}">
+    <div class="q-num">${q.code}</div>
+    ${aiBadgeHtml}
+    ${noteHtml}
+    ${optionalHtml}
+    <div class="q-text">${text}</div>
+    ${inputHtml}
+  </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  ANSWER CAPTURE
+// ─────────────────────────────────────────────────────────────────────────────
+function selectScore(code, val) {
+  ANSWERS[code] = { score: val };
+  document.querySelectorAll(`[data-code="${code}"]`).forEach(el => {
+    el.classList.toggle('sel', parseInt(el.dataset.val) === val);
+  });
+  clearValidation(code);
+}
+
+function selectScore10(code, val) {
+  ANSWERS[code] = { score: val };
+  document.querySelectorAll(`[data-code="${code}"]`).forEach(el => {
+    el.classList.toggle('sel', parseInt(el.dataset.val) === val);
+  });
+  clearValidation(code);
+}
+
+function saveText(code, val) {
+  ANSWERS[code] = { text: val.trim() };
+  clearValidation(code);
+}
+
+function clearValidation(code) {
+  const block = document.getElementById('qblock-' + code);
+  if (block) block.classList.remove('required-missing');
+}
+
+function restoreAnswers(questions) {
+  questions.forEach(q => {
+    const ans = ANSWERS[q.code];
+    if (!ans) return;
+    if (ans.score !== undefined) {
+      if (q.type === 'rated_10') {
+        document.querySelectorAll(`[data-code="${q.code}"]`).forEach(el => {
+          el.classList.toggle('sel', parseInt(el.dataset.val) === ans.score);
+        });
+      } else {
+        document.querySelectorAll(`[data-code="${q.code}"]`).forEach(el => {
+          el.classList.toggle('sel', parseInt(el.dataset.val) === ans.score);
+        });
+      }
+    }
+    if (ans.text !== undefined) {
+      const ta = document.getElementById('ta-' + q.code);
+      if (ta) ta.value = ans.text;
+    }
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  NAVIGATION
+// ─────────────────────────────────────────────────────────────────────────────
+function navNext() {
+  if (!validateSection()) return;
+  renderSection(CUR_SEC + 1);
+}
+
+function navBack() {
+  renderSection(CUR_SEC - 1);
+}
+
+function backToWelcome() {
+  document.getElementById('survey-container').innerHTML = '';
+  document.getElementById('progress-wrap').style.display = 'none';
+  renderWelcome();
+}
+
+function validateSection() {
+  const secCode   = SECTIONS[CUR_SEC];
+  const questions = QUESTION_BANK.filter(q => {
+    if (q.sec !== secCode) return false;
+    if (q.selfOnly  && !IS_SELF)  return false;
+    if (q.raterOnly &&  IS_SELF)  return false;
+    if (q.optional) return false; // optional → skip validation
+    if (q.aiGenerated && !DIAGNOSTIC.custom_g1_question) return false;
+    return true;
+  });
+
+  let allValid = true;
+  questions.forEach(q => {
+    const ans = ANSWERS[q.code];
+    let answered = false;
+    if (q.type === 'rated_5' || q.type === 'rated_10') {
+      answered = ans && ans.score !== undefined;
+    } else {
+      answered = ans && ans.text && ans.text.length > 0;
+    }
+    if (!answered) {
+      allValid = false;
+      const block = document.getElementById('qblock-' + q.code);
+      if (block) block.classList.add('required-missing');
+    }
+  });
+
+  if (!allValid) {
+    const msg = document.getElementById('validation-msg');
+    msg.innerHTML = `<div class="alert alert-red" style="margin-top:16px;"><span class="alert-icon">⚠</span><div>Please answer all required questions above before continuing.</div></div>`;
+    // Scroll to first missing
+    const first = document.querySelector('.required-missing');
+    if (first) first.scrollIntoView({ behavior:'smooth', block:'center' });
+  }
+
+  return allValid;
+}
+
+function updateProgress() {
+  const pct = Math.max(Math.round((CUR_SEC / SECTIONS.length) * 100), 3);
+  document.getElementById('prog-fill').style.width = pct + '%';
+  document.getElementById('prog-section-label').textContent =
+    `Section ${CUR_SEC + 1} of ${SECTIONS.length}: ${SECTION_META[SECTIONS[CUR_SEC]].label}`;
+  document.getElementById('prog-pct-label').textContent = pct + '% complete';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  SUBMIT
+// ─────────────────────────────────────────────────────────────────────────────
+async function submitSurvey() {
+  if (!validateSection()) return;
+
+  // Disable submit button
+  const btn = document.querySelector('.btn-gold');
+  if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
+
+  try {
+    // Build response rows
+    const rows = Object.entries(ANSWERS)
+      .filter(([, ans]) => (ans.score !== undefined) || (ans.text && ans.text.length > 0))
+      .map(([code, ans]) => ({
+        diagnostic_id: DIAGNOSTIC.id,
+        rater_id:      RATER.id,
+        question_code: code,
+        score:         ans.score ?? null,
+        text_response: ans.text  ?? null,
+      }));
+
+    // Insert all responses
+    const { error: insertErr } = await db
+      .from('diagnostic_responses')
+      .insert(rows);
+
+    if (insertErr) throw insertErr;
+
+    // Mark rater complete
+    const { error: raterErr } = await db
+      .from('diagnostic_raters')
+      .update({ completed_at: new Date().toISOString() })
+      .eq('id', RATER.id);
+
+    if (raterErr) throw raterErr;
+
+    // If self-report: update diagnostics table with succession answers + status
+    if (IS_SELF) {
+      const succUpdate = {
+        self_assessment_completed_at: new Date().toISOString(),
+        status: 'self_assessment_complete',
+      };
+
+      // Denormalize Section E to diagnostics table for Claude API access
+      const eMap = { E1:'self_three_year_vision', E2:'self_future_self_capabilities',
+                     E3:'self_immediate_successor_view', E4:'self_successor_candidates',
+                     E5:'self_successor_development_actions' };
+      Object.entries(eMap).forEach(([code, col]) => {
+        if (ANSWERS[code] && ANSWERS[code].text) succUpdate[col] = ANSWERS[code].text;
+      });
+
+      await db.from('diagnostics').update(succUpdate).eq('id', DIAGNOSTIC.id);
+    }
+
+    // Show thank you
+    document.getElementById('progress-wrap').style.display = 'none';
+    document.getElementById('survey-container').innerHTML = '';
+
+    const tyMsg = IS_SELF
+      ? 'Your self-assessment is complete. Alex will now finalize your rater list and send survey invitations. You\'ll receive an email when they go out.'
+      : 'Your responses have been submitted. They are confidential and will be aggregated with other raters\' feedback before being shared with the leader. Your perspective matters — thank you.';
+
+    document.getElementById('thankyou-msg').textContent = tyMsg;
+    showState('screen-thankyou');
+
+  } catch (err) {
+    console.error('Submit error:', err);
+    const btn = document.querySelector('.btn-gold');
+    if (btn) { btn.disabled = false; btn.textContent = 'Submit →'; }
+    const msg = document.getElementById('validation-msg');
+    if (msg) msg.innerHTML = `<div class="alert alert-red" style="margin-top:16px;"><span class="alert-icon">⚠</span><div>Something went wrong submitting your responses. Please try again. If the problem continues, contact alex@gpsleadership.org.</div></div>`;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  UTILITIES
+// ─────────────────────────────────────────────────────────────────────────────
+function showState(id) {
+  document.getElementById('screen-loading').style.display = 'none';
+  document.getElementById(id).style.display = 'block';
+}
+
+function hideLoading() {
+  document.getElementById('screen-loading').style.display = 'none';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  BOOT
+// ─────────────────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
