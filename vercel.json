@@ -1,8 +1,12 @@
 {
   "rewrites": [
-    { "source": "/client", "destination": "/client.html" },
-    { "source": "/coach",  "destination": "/coach.html"  },
-    { "source": "/survey", "destination": "/survey.html" }
+    { "source": "/client",             "destination": "/client.html"             },
+    { "source": "/coach",              "destination": "/coach.html"              },
+    { "source": "/survey",             "destination": "/survey.html"             },
+    { "source": "/diagnostic-leader",  "destination": "/diagnostic-leader.html"  },
+    { "source": "/diagnostic-coach",   "destination": "/diagnostic-coach.html"   },
+    { "source": "/diagnostic-survey",  "destination": "/diagnostic-survey.html"  },
+    { "source": "/diagnostic-sandbox", "destination": "/diagnostic-sandbox.html" }
   ],
   "crons": [
     {
@@ -11,6 +15,10 @@
     },
     {
       "path": "/api/survey-reminders",
+      "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/diagnostic-reminders",
       "schedule": "0 14 * * *"
     }
   ],
