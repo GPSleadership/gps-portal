@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPS Leadership — Your Diagnostic</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --blue:#1A3D6E; --gold:#C09A2A; --dark:#1C1C1C; --mid:#555;
+  --light:#F4F6F9; --white:#fff; --border:#DDE2EA;
+  --green:#1A7A3A; --amber:#BF6A00; --red:#CC2200;
+  --blue-light:#EAF0FA; --gold-light:#FDF8EE;
+  --radius:8px; --shadow:0 2px 12px rgba(0,0,0,.08);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--light);color:var(--dark);font-size:14px;}
+
+.header{background:var(--blue);padding:0 24px;display:flex;align-items:center;min-height:52px;gap:14px;}
+.header-logo{color:var(--gold);font-weight:900;font-size:17px;font-style:italic;padding:6px 10px;background:rgba(255,255,255,.08);border-radius:4px;white-space:nowrap;}
+.header-name{color:rgba(255,255,255,.9);font-size:13px;font-weight:600;}
+.header-sub{color:rgba(255,255,255,.55);font-size:12px;}
+
+.page{max-width:740px;margin:0 auto;padding:28px 20px 60px;}
+
+.card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:22px 24px;box-shadow:var(--shadow);margin-bottom:18px;}
+.card-title{font-size:15px;font-weight:700;color:var(--blue);margin-bottom:4px;}
+.card-sub{font-size:12px;color:var(--mid);}
+
+.btn{padding:9px 18px;border-radius:6px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:.15s;display:inline-flex;align-items:center;gap:6px;}
+.btn-primary{background:var(--blue);color:var(--white);}
+.btn-primary:hover{background:#0F2D5A;}
+.btn-gold{background:var(--gold);color:var(--dark);}
+.btn-gold:hover{background:#A88520;}
+.btn-outline{background:none;border:1.5px solid var(--border);color:var(--mid);}
+.btn-outline:hover{border-color:var(--blue);color:var(--blue);}
+.btn-sm{padding:6px 14px;font-size:12px;}
+.btn[disabled]{opacity:.4;cursor:not-allowed;}
+
+.badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;}
+.badge-open{background:#E7F7EE;color:var(--green);}
+.badge-amber{background:#FFF4E5;color:var(--amber);}
+.badge-blue{background:var(--blue-light);color:var(--blue);}
+
+.alert{padding:13px 16px;border-radius:var(--radius);margin-bottom:16px;display:flex;align-items:flex-start;gap:10px;font-size:13px;line-height:1.5;}
+.alert-amber{background:#FFF8E7;border:1.5px solid #F5C842;color:#7A4F00;}
+.alert-blue{background:var(--blue-light);border:1.5px solid #9AB8E0;color:#0D2B5E;}
+.alert-green{background:#EDF7F1;border:1.5px solid #7EC89A;color:#0D5226;}
+.alert-icon{font-size:18px;flex-shrink:0;margin-top:-1px;}
+
+.progress-bar{background:#E5E9F0;border-radius:20px;height:10px;overflow:hidden;}
+.progress-fill{height:100%;border-radius:20px;background:var(--green);transition:.4s;}
+
+/* PIPELINE */
+.pipeline-step{display:flex;gap:14px;margin-bottom:10px;align-items:flex-start;}
+.step-circle{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex-shrink:0;margin-top:1px;}
+.step-line{width:2px;height:14px;margin:2px 0 0 13px;}
+.step-done   .step-circle{background:var(--green);color:white;}
+.step-done   .step-line{background:var(--green);}
+.step-current .step-circle{background:var(--blue);color:white;}
+.step-current .step-line{background:var(--border);}
+.step-locked .step-circle{background:var(--mid);color:white;opacity:.6;}
+.step-locked .step-line{background:var(--border);}
+.step-action .step-circle{background:var(--amber);color:white;}
+.step-action .step-line{background:var(--border);}
+.step-future{opacity:.4;}
+.step-future .step-circle{border:2px solid var(--border);background:var(--white);color:var(--mid);}
+.step-future .step-line{background:var(--border);}
+.step-content{flex:1;padding-top:4px;}
+.step-title{font-size:13px;font-weight:700;}
+.step-detail{font-size:11px;color:var(--mid);margin-top:2px;}
+
+/* RATER LIST */
+.rater-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);}
+.rater-row:last-child{border-bottom:none;}
+
+/* FORMS */
+.form-group{margin-bottom:14px;}
+label{display:block;font-size:11px;font-weight:700;color:var(--dark);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;}
+input,select{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:6px;font-size:13.5px;color:var(--dark);}
+input:focus,select:focus{outline:none;border-color:var(--blue);}
+.add-rater-grid{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end;}
+
+/* PLAN */
+.plan-box{background:var(--gold-light);border-left:4px solid var(--gold);padding:14px 16px;border-radius:4px;font-size:13.5px;font-weight:600;line-height:1.6;color:var(--dark);}
+
+/* STATE SCREENS */
+.state-screen{max-width:500px;margin:80px auto;padding:40px 28px;background:var(--white);border-radius:var(--radius);box-shadow:0 4px 20px rgba(0,0,0,.1);text-align:center;}
+.state-icon{font-size:44px;margin-bottom:14px;}
+.state-title{font-size:20px;font-weight:800;color:var(--blue);margin-bottom:8px;}
+.state-sub{font-size:14px;color:var(--mid);line-height:1.6;}
+.spinner{width:34px;height:34px;border:3px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 14px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+@media(max-width:600px){
+  .add-rater-grid{grid-template-columns:1fr 1fr; }
+  .page{padding:20px 14px 50px;}
+  .header{padding:0 16px;}
+}
+</style>
+</head>
+<body>
+
+<div class="header" id="page-header">
+  <div class="header-logo">GPS</div>
+  <div>
+    <div class="header-name" id="header-name">Executive Leadership Diagnostic</div>
+    <div class="header-sub" id="header-sub">GPS Leadership Solutions</div>
+  </div>
+</div>
+
+<!-- ── LOADING ── -->
+<div class="state-screen" id="screen-loading">
+  <div class="spinner"></div>
+  <div class="state-title">Loading your portal…</div>
+  <div class="state-sub">One moment.</div>
+</div>
+
+<!-- ── ERROR ── -->
+<div class="state-screen" id="screen-error" style="display:none;">
+  <div class="state-icon">🔗</div>
+  <div class="state-title">Link not recognized</div>
+  <div class="state-sub">This portal link doesn't match an active diagnostic. Use the exact link from your invitation email, or contact Alex at alex@gpsleadership.org.</div>
+</div>
+
+<!-- ── MAIN PORTAL ── -->
+<div class="page" id="screen-portal" style="display:none;">
+
+  <!-- Welcome -->
+  <div style="margin-bottom:22px;">
+    <div style="font-size:13px;color:var(--mid);" id="portal-date"></div>
+    <div style="font-size:24px;font-weight:800;color:var(--blue);" id="portal-greeting">Welcome back.</div>
+    <div style="font-size:13px;color:var(--mid);" id="portal-title-org"></div>
+  </div>
+
+  <!-- Top alert (context-sensitive) -->
+  <div id="top-alert"></div>
+
+  <!-- ── 8-MILESTONE PIPELINE ── -->
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+      <div class="card-title">Your Diagnostic Journey</div>
+      <span id="pipeline-badge" class="badge badge-blue">In Progress</span>
+    </div>
+    <div class="card-sub" id="pipeline-sub" style="margin-bottom:18px;"></div>
+    <div id="pipeline-steps"></div>
+  </div>
+
+  <!-- ── STATUS-SPECIFIC CARDS (rendered dynamically) ── -->
+  <div id="status-cards"></div>
+
+  <!-- ── RATER LIST (shown when survey_open or later) ── -->
+  <div class="card" id="rater-list-card" style="display:none;">
+    <div class="card-title" style="margin-bottom:4px;">Your Rater List</div>
+    <div class="card-sub" style="margin-bottom:14px;">The people invited to provide feedback on your leadership.</div>
+    <div class="alert alert-blue" style="margin-bottom:14px;">
+      <span class="alert-icon">ℹ</span>
+      <div>Individual completion status is not shown here to protect the anonymity of your raters. You can see the overall response count above.</div>
+    </div>
+    <div id="rater-list-rows"></div>
+  </div>
+
+  <!-- ── ADD RATER FORM (shown before invites sent) ── -->
+  <div class="card" id="add-rater-card" style="display:none;">
+    <div class="card-title" style="margin-bottom:4px;">Build Your Rater List</div>
+    <div class="card-sub" style="margin-bottom:16px;">Add the people you want Alex to invite. Aim for 10–14 total across at least 3 relationship types. Minimum 3 per category for anonymity (Supervisor and Board/Investor may be 1).</div>
+    <div class="alert alert-amber" style="margin-bottom:16px;">
+      <span class="alert-icon">⚠</span>
+      <div>Alex will review and approve your list before any invitations are sent. Nothing goes out automatically.</div>
+    </div>
+    <div id="pending-rater-rows" style="margin-bottom:16px;"></div>
+    <div class="card" style="background:var(--light);border:1.5px dashed var(--border);padding:16px;box-shadow:none;">
+      <div style="font-size:13px;font-weight:600;margin-bottom:12px;">+ Add a Rater</div>
+      <div class="add-rater-grid">
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Full Name</label>
+          <input id="add-name" placeholder="e.g. Mike Reyes">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Email</label>
+          <input id="add-email" type="email" placeholder="email@company.com">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Relationship</label>
+          <select id="add-rel">
+            <option value="">Select…</option>
+            <option>Direct Report</option>
+            <option>Peer</option>
+            <option>Supervisor</option>
+            <option>Internal Partner</option>
+            <option>External Partner</option>
+            <option>Board / Investor</option>
+            <option>Key Customer</option>
+          </select>
+        </div>
+        <div style="padding-bottom:0;">
+          <button class="btn btn-primary" style="height:42px;white-space:nowrap;" onclick="addRater()">Add</button>
+        </div>
+      </div>
+      <div id="add-rater-msg" style="margin-top:10px;font-size:12px;color:var(--red);"></div>
+    </div>
+    <div style="font-size:12px;color:var(--mid);margin-top:12px;">Once you've added everyone, Alex will review the list and send invitations. You'll receive an email confirmation when surveys go out.</div>
+  </div>
+
+  <!-- ── 90-DAY PLAN (shown after debrief) ── -->
+  <div class="card" id="plan-card" style="display:none;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div><div class="card-title">Your 90-Day Focus</div><div class="card-sub" id="plan-lock-note"></div></div>
+      <span id="plan-status-badge" class="badge badge-blue">Active</span>
+    </div>
+    <div class="plan-box" id="plan-content"></div>
+  </div>
+
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+//  CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
+const SUPABASE_URL  = 'https://pbnkefuqpoztcxfagiod.supabase.co';
+const SUPABASE_ANON = 'sb_publishable_nu9GXGeoqDXcxVocodQ4UA_ke7Yrzyw';
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  STATE
+// ─────────────────────────────────────────────────────────────────────────────
+let DIAGNOSTIC  = null;
+let RATERS      = [];    // all non-self raters
+let SELF_TOKEN  = null;  // token for the leader's own self-assessment
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  INIT
+// ─────────────────────────────────────────────────────────────────────────────
+async function init() {
+  const token = new URLSearchParams(window.location.search).get('token');
+  if (!token) { showError(); return; }
+
+  // Load diagnostic by leader_token
+  const { data, error } = await db
+    .from('diagnostics')
+    .select('*')
+    .eq('leader_token', token)
+    .limit(1);
+
+  if (error || !data || data.length === 0) { showError(); return; }
+  DIAGNOSTIC = data[0];
+
+  // Update last-used timestamp (fire and forget)
+  db.from('diagnostics')
+    .update({ leader_token_last_used_at: new Date().toISOString() })
+    .eq('id', DIAGNOSTIC.id);
+
+  // Load raters
+  const { data: raterData } = await db
+    .from('diagnostic_raters')
+    .select('id, name, email, relationship, invited_at, completed_at, is_self, token')
+    .eq('diagnostic_id', DIAGNOSTIC.id)
+    .order('created_at', { ascending: true });
+
+  if (raterData) {
+    RATERS = raterData.filter(r => !r.is_self);
+    const selfRow = raterData.find(r => r.is_self);
+    if (selfRow) SELF_TOKEN = selfRow.token;
+  }
+
+  renderPortal();
+  document.getElementById('screen-loading').style.display = 'none';
+  document.getElementById('screen-portal').style.display  = 'block';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  RENDER PORTAL
+// ─────────────────────────────────────────────────────────────────────────────
+function renderPortal() {
+  const d = DIAGNOSTIC;
+  const firstName = d.client_name.split(' ')[0];
+
+  // Header
+  document.getElementById('header-name').textContent = d.client_name;
+  document.getElementById('header-sub').textContent  =
+    [d.client_title, d.client_org].filter(Boolean).join(' · ') || 'GPS Leadership Diagnostic';
+
+  // Welcome
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric', year:'numeric'});
+  document.getElementById('portal-date').textContent = dateStr;
+  document.getElementById('portal-greeting').textContent = `Welcome back, ${firstName}.`;
+  document.getElementById('portal-title-org').textContent =
+    [d.client_title, d.client_org].filter(Boolean).join(' · ');
+
+  renderTopAlert();
+  renderPipeline();
+  renderStatusCards();
+  renderRaterSection();
+  renderPlanCard();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  TOP ALERT
+// ─────────────────────────────────────────────────────────────────────────────
+function renderTopAlert() {
+  const s = DIAGNOSTIC.status;
+  const el = document.getElementById('top-alert');
+
+  if (s === 'self_assessment_pending' || s === 'intake_complete') {
+    el.innerHTML = `<div class="alert alert-amber">
+      <span class="alert-icon">⚠</span>
+      <div><strong>Action needed: Complete your self-assessment.</strong>
+      Your rater survey invitations cannot go out until you finish your own self-view. It takes about 15 minutes.</div>
+    </div>`;
+  } else if (s === 'survey_open' && DIAGNOSTIC.close_date) {
+    const daysLeft = Math.ceil((new Date(DIAGNOSTIC.close_date) - new Date()) / 86400000);
+    const completed = RATERS.filter(r => r.completed_at).length;
+    const total     = RATERS.length;
+    if (daysLeft <= 2 && total > 0) {
+      el.innerHTML = `<div class="alert alert-amber">
+        <span class="alert-icon">⏰</span>
+        <div><strong>Survey closes in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}.</strong>
+        ${completed} of ${total} raters have responded. You're ${completed >= 7 ? 'above the minimum' : 'below the 7-response minimum'}. Consider following up with those who haven't responded yet.</div>
+      </div>`;
+    } else if (total > 0) {
+      el.innerHTML = `<div class="alert alert-blue">
+        <span class="alert-icon">📊</span>
+        <div><strong>${completed} of ${total} raters have responded.</strong>
+        Survey closes ${formatDate(DIAGNOSTIC.close_date)}. ${daysLeft} day${daysLeft !== 1 ? 's' : ''} remaining.</div>
+      </div>`;
+    }
+  } else if (s === 'report_final') {
+    el.innerHTML = `<div class="alert alert-green">
+      <span class="alert-icon">✓</span>
+      <div><strong>Your diagnostic report is ready.</strong> Alex will reach out to schedule your debrief session.</div>
+    </div>`;
+  } else if (s === 'plan_active') {
+    el.innerHTML = `<div class="alert alert-green">
+      <span class="alert-icon">✓</span>
+      <div><strong>Your 90-day plan is locked and active.</strong> Check in with Alex each week to track progress.</div>
+    </div>`;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  PIPELINE
+// ─────────────────────────────────────────────────────────────────────────────
+const PIPELINE_STEPS = [
+  { n:1, label:'Discovery & Intake Call',
+    detail: d => d.intake_completed_at
+      ? `Completed ${formatDate(d.intake_completed_at)}`
+      : 'Scheduled · Completed by Alex' },
+  { n:2, label:'Your Self-Assessment',
+    detail: d => d.self_assessment_completed_at
+      ? `Completed ${formatDate(d.self_assessment_completed_at)}`
+      : 'Your self-view is needed before rater invites go out (~15 min)' },
+  { n:3, label:'Stakeholder list & rater invitations',
+    detail: d => d.invites_sent_at
+      ? `${d.raters_finalized_at ? 'List finalized · ' : ''}Invites sent ${formatDate(d.invites_sent_at)}`
+      : 'Locked until self-assessment is complete' },
+  { n:4, label:'Rater surveys in progress',
+    detail: d => {
+      const done  = RATERS.filter(r => r.completed_at).length;
+      const total = RATERS.length;
+      return total > 0
+        ? `${done} of ${total} invited raters have responded${d.close_date ? ' · Closes ' + formatDate(d.close_date) : ''}`
+        : d.close_date ? `Survey closes ${formatDate(d.close_date)}` : 'Survey window active';
+    }},
+  { n:5, label:'Survey window closed & data locked',
+    detail: d => d.survey_closed_at ? `Closed ${formatDate(d.survey_closed_at)}` : 'Follows automatically when the survey window ends' },
+  { n:6, label:'Diagnostic report finalized',
+    detail: d => d.report_finalized_at ? `Report available ${formatDate(d.report_finalized_at)}` : 'Alex reviews and finalizes your report' },
+  { n:7, label:'Debrief session',
+    detail: d => d.debrief_completed_at ? `Completed ${formatDate(d.debrief_completed_at)}` : 'Alex will reach out to schedule once the report is ready' },
+  { n:8, label:'90-Day implementation plan locked & active',
+    detail: () => 'You\'ll have 24 hours after the debrief to finalize — then it locks automatically.' },
+];
+
+function currentStep(status) {
+  const map = {
+    'setup': 1, 'intake_complete': 1,
+    'self_assessment_pending': 2,
+    'self_assessment_complete': 3,
+    'survey_open': 4,
+    'survey_closed': 5,
+    'report_draft': 6, 'report_final': 6,
+    'debrief_complete': 7,
+    'plan_active': 8,
+  };
+  return map[status] || 1;
+}
+
+function stepState(stepN, curStep, status) {
+  if (stepN < curStep)  return 'done';
+  if (stepN === curStep) {
+    // Step 3 is locked until step 2 is done
+    if (stepN === 3 && !DIAGNOSTIC.self_assessment_completed_at) return 'locked';
+    // Step 2 needs action
+    if (stepN === 2 && !DIAGNOSTIC.self_assessment_completed_at) return 'action';
+    return 'current';
+  }
+  return 'future';
+}
+
+function renderPipeline() {
+  const d      = DIAGNOSTIC;
+  const curStep = currentStep(d.status);
+
+  // Badge
+  const badgeEl = document.getElementById('pipeline-badge');
+  if (d.status === 'plan_active') {
+    badgeEl.className = 'badge badge-open'; badgeEl.textContent = 'Complete';
+  } else if (['survey_open','self_assessment_pending','self_assessment_complete','intake_complete'].includes(d.status)) {
+    badgeEl.className = 'badge badge-blue'; badgeEl.textContent = 'In Progress';
+  }
+
+  // Sub
+  const subMap = {
+    'setup':                    'Your diagnostic is being set up. Alex will be in touch.',
+    'intake_complete':          'Intake complete. Your self-assessment is the next step.',
+    'self_assessment_pending':  'Complete your self-assessment to unlock rater invitations.',
+    'self_assessment_complete': 'Self-assessment done. Alex is finalizing your rater list.',
+    'survey_open':              `Step 4 of 8 — Rater surveys in progress.`,
+    'survey_closed':            'Survey window closed. Data is locked. Report in progress.',
+    'report_draft':             'Your report is being finalized by Alex.',
+    'report_final':             'Your report is ready. Debrief session coming soon.',
+    'debrief_complete':         'Debrief complete. Your 90-day plan is next.',
+    'plan_active':              'Your 90-day plan is active. Check in weekly with Alex.',
+  };
+  document.getElementById('pipeline-sub').textContent = subMap[d.status] || '';
+
+  // Steps
+  let html = '';
+  PIPELINE_STEPS.forEach((step, idx) => {
+    const state    = stepState(step.n, curStep, d.status);
+    const isLast   = idx === PIPELINE_STEPS.length - 1;
+    const detail   = step.detail(d);
+
+    let circleContent = '';
+    let wrapClass = '';
+
+    if (state === 'done') {
+      circleContent = '✓'; wrapClass = 'step-done';
+    } else if (state === 'action') {
+      circleContent = step.n; wrapClass = 'step-action';
+    } else if (state === 'locked') {
+      circleContent = '🔒'; wrapClass = 'step-locked';
+    } else if (state === 'current') {
+      circleContent = step.n; wrapClass = 'step-current';
+    } else {
+      circleContent = step.n; wrapClass = 'step-future';
+    }
+
+    // Inline highlight for action/current steps
+    const highlight = (state === 'action' || state === 'current')
+      ? 'background:var(--blue-light);padding:10px 12px;border-radius:var(--radius);border:1.5px solid #9AB8E0;margin-left:-12px;margin-right:-12px;'
+      : state === 'action'
+        ? 'background:#FFF8E7;padding:10px 12px;border-radius:var(--radius);border:1.5px solid #F5C842;margin-left:-12px;margin-right:-12px;'
+        : '';
+
+    const actionBtn = (state === 'action' && SELF_TOKEN)
+      ? `<div style="margin-top:8px;"><a href="diagnostic-survey.html?token=${SELF_TOKEN}" class="btn btn-primary btn-sm">Complete Self-Assessment →</a></div>`
+      : '';
+
+    const titleColor = state === 'action' ? 'color:var(--amber);'
+      : state === 'current' ? 'color:var(--blue);'
+      : state === 'done' ? 'color:var(--dark);'
+      : 'color:var(--mid);';
+
+    html += `
+    <div class="pipeline-step ${wrapClass}" style="${highlight}">
+      <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:28px;">
+        <div class="step-circle">${circleContent}</div>
+        ${!isLast ? '<div class="step-line"></div>' : ''}
+      </div>
+      <div class="step-content">
+        <div class="step-title" style="${titleColor}">${step.label}</div>
+        <div class="step-detail">${detail}</div>
+        ${actionBtn}
+      </div>
+    </div>`;
+  });
+
+  document.getElementById('pipeline-steps').innerHTML = html;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  STATUS CARDS
+// ─────────────────────────────────────────────────────────────────────────────
+function renderStatusCards() {
+  const s   = DIAGNOSTIC.status;
+  const el  = document.getElementById('status-cards');
+  let html  = '';
+
+  if (s === 'survey_open') {
+    const done  = RATERS.filter(r => r.completed_at).length;
+    const total = RATERS.length;
+    const pct   = total > 0 ? Math.round((done / total) * 100) : 0;
+
+    // Category breakdown (aggregate — no individual completion shown)
+    const cats = {};
+    RATERS.forEach(r => {
+      if (!cats[r.relationship]) cats[r.relationship] = { invited:0, done:0 };
+      cats[r.relationship].invited++;
+      if (r.completed_at) cats[r.relationship].done++;
+    });
+    const catRows = Object.entries(cats).map(([cat, c]) =>
+      `<div style="display:flex;justify-content:space-between;font-size:12px;margin-top:6px;">
+        <span style="color:var(--mid);">${cat}</span>
+        <span style="font-weight:600;">${c.done}/${c.invited}</span>
+      </div>`
+    ).join('');
+
+    html = `
+    <div class="card">
+      <div class="card-title" style="margin-bottom:4px;">Rater Response Progress</div>
+      <div class="card-sub" style="margin-bottom:14px;">14-Day Executive Leadership Diagnostic · ${formatDate(DIAGNOSTIC.start_date)} → ${formatDate(DIAGNOSTIC.close_date)}</div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+        <span style="font-size:13px;font-weight:600;">Responses received</span>
+        <span style="font-size:13px;font-weight:700;color:${done >= 7 ? 'var(--green)' : 'var(--amber)'};">${done} of ${total}</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;"></div></div>
+      <div style="font-size:11px;color:var(--mid);margin-top:4px;">${pct}% response rate · Minimum 7 responses needed for the report</div>
+      ${catRows ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">${catRows}</div>` : ''}
+    </div>`;
+  }
+
+  if (s === 'report_final' || s === 'debrief_complete' || s === 'plan_active') {
+    html += `
+    <div class="card" style="border-top:3px solid var(--gold);">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div><div class="card-title">Your Diagnostic Report</div>
+        <div class="card-sub">${DIAGNOSTIC.report_finalized_at ? 'Finalized ' + formatDate(DIAGNOSTIC.report_finalized_at) : 'Report finalized'}</div></div>
+        <span class="badge badge-open">Ready</span>
+      </div>
+      <div style="margin-top:14px;font-size:13px;color:var(--mid);line-height:1.6;">Alex will share your report directly in your debrief session. If you have questions before then, reach out at <a href="mailto:alex@gpsleadership.org" style="color:var(--blue);">alex@gpsleadership.org</a>.</div>
+    </div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  RATER SECTION
+// ─────────────────────────────────────────────────────────────────────────────
+function renderRaterSection() {
+  const s = DIAGNOSTIC.status;
+  const surveyActiveOrLater = ['survey_open','survey_closed','report_draft','report_final','debrief_complete','plan_active'];
+
+  // Add-rater form: before invites sent
+  const preInvite = ['self_assessment_pending','intake_complete','self_assessment_complete'];
+  if (preInvite.includes(s)) {
+    document.getElementById('add-rater-card').style.display = 'block';
+    renderPendingRaters();
+  }
+
+  // Rater list view: survey open or later
+  if (surveyActiveOrLater.includes(s) && RATERS.length > 0) {
+    document.getElementById('rater-list-card').style.display = 'block';
+    const rows = RATERS.map(r => `
+      <div class="rater-row">
+        <div style="flex:1;font-size:13px;font-weight:600;">${r.name}</div>
+        <div style="font-size:12px;color:var(--mid);width:130px;">${r.relationship}</div>
+        <div style="font-size:11px;color:var(--mid);">Invited ${formatDate(r.invited_at)}</div>
+      </div>`).join('');
+    document.getElementById('rater-list-rows').innerHTML = rows;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  PENDING RATERS (add-rater form list)
+// ─────────────────────────────────────────────────────────────────────────────
+function renderPendingRaters() {
+  const el = document.getElementById('pending-rater-rows');
+  if (RATERS.length === 0) {
+    el.innerHTML = `<div style="font-size:12px;color:var(--mid);margin-bottom:8px;">No raters added yet. Add the people you want to receive feedback from below.</div>`;
+    return;
+  }
+
+  // Group by relationship
+  const groups = {};
+  RATERS.forEach(r => {
+    if (!groups[r.relationship]) groups[r.relationship] = [];
+    groups[r.relationship].push(r);
+  });
+
+  let html = `<div style="font-size:12px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;">${RATERS.length} rater${RATERS.length !== 1 ? 's' : ''} added</div>`;
+  Object.entries(groups).forEach(([rel, raters]) => {
+    html += `<div style="font-size:11px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">${rel} (${raters.length})</div>`;
+    raters.forEach(r => {
+      html += `<div class="rater-row">
+        <div style="flex:1;font-size:13px;font-weight:600;">${r.name}</div>
+        <div style="font-size:12px;color:var(--mid);">${r.email}</div>
+      </div>`;
+    });
+  });
+
+  el.innerHTML = html;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  ADD RATER
+// ─────────────────────────────────────────────────────────────────────────────
+async function addRater() {
+  const name  = document.getElementById('add-name').value.trim();
+  const email = document.getElementById('add-email').value.trim();
+  const rel   = document.getElementById('add-rel').value;
+  const msgEl = document.getElementById('add-rater-msg');
+
+  if (!name || !email || !rel) { msgEl.textContent = 'Please fill in all fields.'; return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { msgEl.textContent = 'Please enter a valid email address.'; return; }
+  if (RATERS.find(r => r.email.toLowerCase() === email.toLowerCase())) {
+    msgEl.textContent = 'That email is already on your rater list.'; return;
+  }
+
+  msgEl.textContent = '';
+  const btn = event.currentTarget;
+  btn.disabled = true; btn.textContent = 'Adding…';
+
+  const { data, error } = await db.from('diagnostic_raters').insert({
+    diagnostic_id: DIAGNOSTIC.id,
+    name,
+    email,
+    relationship: rel,
+    is_self: false,
+  }).select().single();
+
+  btn.disabled = false; btn.textContent = 'Add';
+
+  if (error) { msgEl.textContent = 'Something went wrong. Please try again.'; return; }
+
+  RATERS.push(data);
+  document.getElementById('add-name').value  = '';
+  document.getElementById('add-email').value = '';
+  document.getElementById('add-rel').value   = '';
+  renderPendingRaters();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  90-DAY PLAN CARD
+// ─────────────────────────────────────────────────────────────────────────────
+function renderPlanCard() {
+  const s = DIAGNOSTIC.status;
+  if (!['debrief_complete','plan_active'].includes(s)) return;
+
+  const card = document.getElementById('plan-card');
+  card.style.display = 'block';
+
+  const content = document.getElementById('plan-content');
+  content.textContent = DIAGNOSTIC.plan_draft_content || 'Your 90-day plan will appear here after your debrief session with Alex.';
+
+  const lockNote = document.getElementById('plan-lock-note');
+  const badge    = document.getElementById('plan-status-badge');
+
+  if (s === 'plan_active') {
+    lockNote.textContent = DIAGNOSTIC.plan_locked_at
+      ? `Locked ${formatDate(DIAGNOSTIC.plan_locked_at)} · ${DIAGNOSTIC.plan_lock_source === 'auto_24h' ? 'Auto-locked 24h after debrief' : 'Locked manually'}`
+      : 'Active';
+    badge.className = 'badge badge-open'; badge.textContent = 'Locked & Active';
+  } else {
+    lockNote.textContent = 'You have 24 hours after your debrief to finalize — then it locks automatically.';
+    badge.className = 'badge badge-amber'; badge.textContent = 'Draft';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  UTILITIES
+// ─────────────────────────────────────────────────────────────────────────────
+function formatDate(str) {
+  if (!str) return '';
+  const d = new Date(str);
+  return d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+}
+
+function showError() {
+  document.getElementById('screen-loading').style.display = 'none';
+  document.getElementById('screen-error').style.display   = 'block';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  BOOT
+// ─────────────────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
