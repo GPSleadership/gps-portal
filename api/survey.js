@@ -1,0 +1,434 @@
+// GPS Leadership Solutions — Survey API (consolidated)
+// Routes send + submit through a single serverless function.
+//
+// POST /api/survey?action=send   — coach-triggered survey send
+// POST /api/survey?action=submit — stakeholder survey submission
+//
+// ENV VARS REQUIRED:
+//   SUPABASE_URL          — Supabase project URL
+//   SUPABASE_SECRET_KEY   — Supabase service role key
+//   RESEND_API_KEY        — Resend API key
+//   SITE_URL              — Portal base URL (default: https://portal.gpsleadership.org)
+
+const SUPABASE_URL    = process.env.SUPABASE_URL    || 'https://pbnkefuqpoztcxfagiod.supabase.co';
+const SUPABASE_SECRET = process.env.SUPABASE_SECRET_KEY;
+const RESEND_API_KEY  = process.env.RESEND_API_KEY;
+const SITE_URL        = process.env.SITE_URL        || 'https://portal.gpsleadership.org';
+const FROM_EMAIL      = 'alex@gpsleadership.org';
+const FROM_NAME       = 'Alex Tremble | GPS Leadership Solutions';
+const ALEX_EMAIL      = 'alex@gpsleadership.org';
+
+// ── Supabase fetch helper ────────────────────────────────────────────────────
+function sbFetch(path, method = 'GET', body = null, extraHeaders = {}) {
+  return fetch(SUPABASE_URL + path, {
+    method,
+    headers: {
+      apikey:         SUPABASE_SECRET,
+      Authorization:  `Bearer ${SUPABASE_SECRET}`,
+      'Content-Type': 'application/json',
+      ...extraHeaders
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+}
+
+// ── Main handler ─────────────────────────────────────────────────────────────
+export default async function handler(req, res) {
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    return res.status(200).end();
+  }
+
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
+  const action = req.query?.action || req.body?.action;
+
+  switch (action) {
+    case 'send':   return handleSend(req, res);
+    case 'submit': return handleSubmit(req, res);
+    default:
+      return res.status(400).json({ error: `Unknown action: "${action}". Valid: send, submit` });
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ACTION: send
+// POST /api/survey?action=send
+// Body: { client_id, checkpoint, password }
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function generateToken() {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  let t = '';
+  for (let i = 0; i < 32; i++) t += chars[Math.floor(Math.random() * chars.length)];
+  return t;
+}
+
+function buildSendSubjectLine(clientName, checkpoint) {
+  const first = clientName.split(' ')[0];
+  if (checkpoint === 'baseline') return `${first} would value your candid feedback`;
+  if (checkpoint === 'day45')   return `Quick mid-point check-in for ${first}`;
+  return `Final 90-day feedback for ${first}`;
+}
+
+function buildSendEmailHtml(stakeholderName, clientName, checkpoint, priorityBehavior, surveyLink) {
+  const clientFirst = clientName.split(' ')[0];
+  const p   = t => `<p style="color:#1B2A4A;font-size:15px;line-height:1.75;margin:0 0 14px;">${t}</p>`;
+  const li  = t => `<li style="color:#1B2A4A;font-size:15px;line-height:1.75;margin-bottom:8px;">${t}</li>`;
+
+  const behaviorBlock = `
+    <div style="background:#F5F6F8;border-left:3px solid #C9A84C;padding:11px 16px;margin:14px 0;border-radius:0 6px 6px 0;font-size:14px;color:#1B2A4A;font-style:italic;line-height:1.65;">
+      "${priorityBehavior}"
+    </div>`;
+
+  const ctaBtn = `
+    <div style="text-align:center;margin:28px 0;">
+      <a href="${surveyLink}" style="display:inline-block;background:#1B2A4A;color:#FFFFFF;text-decoration:none;padding:14px 36px;border-radius:8px;font-size:15px;font-weight:700;">
+        Complete the Survey →
+      </a>
+    </div>
+    <p style="color:#9CA3AF;font-size:12px;line-height:1.5;margin:0 0 4px;text-align:center;">
+      This link is unique to you and expires in 30 days.
+    </p>`;
+
+  const sig = `
+    <hr style="border:none;border-top:1px solid #E5E7EB;margin:24px 0 18px;" />
+    <p style="color:#4B5563;font-size:13px;line-height:1.7;margin:0;">
+      Best,<br>
+      <strong style="color:#1B2A4A;">Alex D. Tremble</strong><br>
+      CEO &amp; Executive Advisor, GPS Leadership Solutions<br>
+      On behalf of ${clientFirst}<br>
+      <a href="mailto:team@gpsleadership.org" style="color:#1B2A4A;">team@gpsleadership.org</a>
+    </p>`;
+
+  let body = '';
+
+  if (checkpoint === 'baseline') {
+    body = `
+      ${p(`Hi ${stakeholderName},`)}
+      ${p(`${clientFirst} has started a focused 90-day leadership sprint and has asked you to be one of their key stakeholders.`)}
+      ${p(`You'll find a short 2-question survey below. It should take less than 3 minutes. You'll be asked to:`)}
+      <ol style="margin:0 0 14px;padding-left:22px;">
+        ${li(`Rate, on a 1–10 scale, how consistently ${clientFirst} has <strong>${priorityBehavior}</strong> over the last 2 weeks.`)}
+        ${li(`(Optional) Share one brief example of how their current behavior around this affects you or the team.`)}
+      </ol>
+      ${ctaBtn}
+      ${p(`This process is for development, not evaluation. Your numeric rating will be visible to both ${clientFirst} and their coach. For written comments, you can choose whether to share them with both of them or with the coach only.`)}
+      ${p(`You'll notice ${clientFirst} and their coach are copied here so everyone knows this request was sent.`)}
+      ${p(`Thank you in advance for your honest input — it's a key part of helping ${clientFirst} change in ways that matter.`)}`;
+  } else if (checkpoint === 'day45') {
+    body = `
+      ${p(`Hi ${stakeholderName},`)}
+      ${p(`About 45 days ago, ${clientFirst} began a 90-day leadership sprint focused on:`)}
+      ${behaviorBlock}
+      ${p(`You previously shared baseline feedback as one of their key stakeholders.`)}
+      ${p(`We're now at the midpoint and would value a quick update from you. Please complete this very short check-in (1 question):`)}
+      ${ctaBtn}
+      ${p(`You'll be asked to rate, on a 1–10 scale, how consistently ${clientFirst} has demonstrated the behavior above over the last 2 weeks, plus an optional comment field.`)}
+      ${p(`Your numeric rating will be visible to both ${clientFirst} and their coach. For any written comments, you can again choose whether they are shared with both or only with the coach.`)}
+      ${p(`${clientFirst} and their coach are copied here so everyone knows this request was sent. Your responses are still used for development, not formal evaluation.`)}
+      ${p(`Thank you again for your support and candor.`)}`;
+  } else {
+    body = `
+      ${p(`Hi ${stakeholderName},`)}
+      ${p(`You've been part of ${clientFirst}'s 90-day leadership sprint focused on:`)}
+      ${behaviorBlock}
+      ${p(`We're now at the final checkpoint. To help ${clientFirst} see what has actually changed from your perspective, please complete this brief survey:`)}
+      ${ctaBtn}
+      ${p(`You'll be asked to:`)}
+      <ol style="margin:0 0 14px;padding-left:22px;">
+        ${li(`Rate, on a 1–10 scale, how consistently ${clientFirst} has demonstrated the behavior above over the last 2 weeks.`)}
+        ${li(`Share, in one sentence, the most noticeable change you've experienced in the last 2–4 weeks related to this behavior, with a brief example if possible.`)}
+        ${li(`(Optional) Add any additional comments, with the option to share them with both ${clientFirst} and their coach, or with the coach only.`)}
+      </ol>
+      ${p(`As before, your numeric rating is visible to both ${clientFirst} and their coach. Written comments follow the visibility setting you choose. The purpose remains development, not performance evaluation.`)}
+      ${p(`${clientFirst} and their coach are copied so they know this request has gone out. Your honest feedback is what makes this process meaningful.`)}
+      ${p(`Thank you for your time and insight.`)}`;
+  }
+
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#F5F6F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <div style="max-width:600px;margin:0 auto;padding:36px 16px;">
+    <div style="background:#1B2A4A;padding:20px 28px;border-radius:8px 8px 0 0;text-align:center;">
+      <div style="color:#C9A84C;font-size:11px;letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:4px;">GPS Leadership Solutions</div>
+      <div style="color:#FFFFFF;font-size:15px;font-weight:500;opacity:0.8;">Leadership Development Program</div>
+    </div>
+    <div style="background:#FFFFFF;padding:30px 36px;border-radius:0 0 8px 8px;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+      ${body}
+      ${sig}
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+async function verifyPassword(password) {
+  if (!password) return false;
+  const settingsRes = await sbFetch('/rest/v1/coach_settings?key=eq.coach_password&select=value&limit=1');
+  if (settingsRes.ok) {
+    const settings = await settingsRes.json();
+    if (settings && settings[0] && settings[0].value === password) return true;
+  }
+  const adminRes = await sbFetch('/rest/v1/admin_accounts?is_active=eq.true&select=password');
+  if (adminRes.ok) {
+    const admins = await adminRes.json();
+    if ((admins || []).map(a => a.password).includes(password)) return true;
+  }
+  return false;
+}
+
+async function logEmail({ client_id, recipient_email, recipient_name, email_type, subject, status, error_details, resend_id }) {
+  try {
+    await sbFetch('/rest/v1/email_log', 'POST', {
+      client_id, recipient_email, recipient_name, email_type, subject, status,
+      error_details: error_details || null,
+      resend_id:     resend_id    || null
+    }, { 'Prefer': 'return=minimal' });
+  } catch (_) {}
+}
+
+async function handleSend(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  try {
+    const { client_id, checkpoint = 'baseline', password } = req.body;
+    if (!client_id) return res.status(400).json({ error: 'client_id is required' });
+
+    const validCheckpoints = ['baseline', 'day45', 'day90'];
+    if (!validCheckpoints.includes(checkpoint)) {
+      return res.status(400).json({ error: 'checkpoint must be baseline, day45, or day90' });
+    }
+
+    const authOk = await verifyPassword(password);
+    if (!authOk) return res.status(401).json({ error: 'Invalid password' });
+
+    const clientRes = await sbFetch(`/rest/v1/clients?id=eq.${client_id}&select=id,name,email,behavior_1,start_behavior,current_sprint_number`);
+    if (!clientRes.ok) return res.status(500).json({ error: 'Failed to load client' });
+    const clients = await clientRes.json();
+    if (!clients || clients.length === 0) return res.status(404).json({ error: 'Client not found' });
+    const client = clients[0];
+
+    const priorityBehavior = (client.behavior_1 || client.start_behavior || '').trim();
+    if (!priorityBehavior) {
+      return res.status(400).json({ error: 'This client has no priority behavior on file. Have them complete their 90-day plan before sending surveys.' });
+    }
+
+    const clientFirstName = (client.name || '').split(' ')[0];
+    const sprintNumber    = client.current_sprint_number || 1;
+
+    const stakeholderRes = await sbFetch(`/rest/v1/stakeholders?client_id=eq.${client_id}&is_active=eq.true&select=*`);
+    if (!stakeholderRes.ok) return res.status(500).json({ error: 'Failed to load stakeholders' });
+    const stakeholders = await stakeholderRes.json();
+    if (!stakeholders || stakeholders.length === 0) {
+      return res.status(400).json({ error: 'No active stakeholders found for this client' });
+    }
+
+    const existingRes    = await sbFetch(`/rest/v1/survey_tokens?client_id=eq.${client_id}&checkpoint=eq.${checkpoint}&sprint_number=eq.${sprintNumber}&select=stakeholder_id`);
+    const existing       = existingRes.ok ? await existingRes.json() : [];
+    const alreadySentIds = new Set((existing || []).map(t => t.stakeholder_id));
+
+    const results = { sent: [], skipped: [], errors: [] };
+
+    for (const stakeholder of stakeholders) {
+      if (alreadySentIds.has(stakeholder.id)) {
+        results.skipped.push({ name: stakeholder.name, reason: 'Already sent for this checkpoint' });
+        continue;
+      }
+
+      const token   = generateToken();
+      const now     = new Date().toISOString();
+      const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+      const tokenInsert = await sbFetch('/rest/v1/survey_tokens', 'POST', {
+        token, client_id, stakeholder_id: stakeholder.id, checkpoint,
+        priority_behavior: priorityBehavior, client_first_name: clientFirstName,
+        sprint_number: sprintNumber, sent_at: now, expires_at: expires, is_used: false
+      }, { 'Prefer': 'return=minimal' });
+
+      if (!tokenInsert.ok) {
+        const errText = await tokenInsert.text();
+        results.errors.push({ name: stakeholder.name, error: 'Failed to create token: ' + errText.slice(0, 200) });
+        continue;
+      }
+
+      const surveyLink = `${SITE_URL}/survey?t=${token}`;
+      const ccAddresses = client.email ? [client.email] : [];
+      const emailRes = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from:    `${FROM_NAME} <${FROM_EMAIL}>`,
+          to:      [stakeholder.email],
+          cc:      ccAddresses,
+          subject: buildSendSubjectLine(client.name, checkpoint),
+          html:    buildSendEmailHtml(stakeholder.name, client.name, checkpoint, priorityBehavior, surveyLink)
+        })
+      });
+
+      if (emailRes.ok) {
+        const emailData = await emailRes.json();
+        await logEmail({ client_id, recipient_email: stakeholder.email, recipient_name: stakeholder.name, email_type: `survey_${checkpoint}`, subject: buildSendSubjectLine(client.name, checkpoint), status: 'sent', resend_id: emailData.id || null });
+        results.sent.push({ name: stakeholder.name, email: stakeholder.email });
+      } else {
+        const errText = await emailRes.text();
+        await logEmail({ client_id, recipient_email: stakeholder.email, recipient_name: stakeholder.name, email_type: `survey_${checkpoint}`, subject: buildSendSubjectLine(client.name, checkpoint), status: 'error', error_details: errText.slice(0, 500) });
+        results.errors.push({ name: stakeholder.name, error: 'Email delivery failed' });
+      }
+    }
+
+    return res.status(200).json(results);
+
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ACTION: submit
+// POST /api/survey?action=submit
+// Body: { token, client_id, stakeholder_id, checkpoint, score, open_response, comments, comments_visible_to_client }
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function sendResponseNotifications({ client_id, stakeholder_id, checkpoint, score, comments_visible_to_client, tokenRecord }) {
+  const [clientRes, stakeholderRes] = await Promise.all([
+    sbFetch(`/rest/v1/clients?id=eq.${client_id}&select=name,email`),
+    sbFetch(`/rest/v1/stakeholders?id=eq.${stakeholder_id}&select=name,role`)
+  ]);
+
+  const clients      = clientRes.ok      ? await clientRes.json()      : [];
+  const stakeholders = stakeholderRes.ok ? await stakeholderRes.json() : [];
+  const client       = clients[0];
+  const stakeholder  = stakeholders[0];
+  if (!client || !stakeholder) return;
+
+  const clientFirst     = (client.name || '').split(' ')[0];
+  const stakeholderName = stakeholder.name || 'A stakeholder';
+  const checkpointLabel = checkpoint === 'baseline' ? 'Baseline' : checkpoint === 'day45' ? 'Day 45' : 'Day 90';
+
+  if (client.email) {
+    const clientSubject = `${stakeholderName} just completed your ${checkpointLabel} survey`;
+    const clientHtml    = buildClientNotificationHtml(clientFirst, stakeholderName, checkpointLabel, score);
+    await sendNotificationEmail(client.email, clientSubject, clientHtml, client_id, client.name, 'survey_response_client');
+  }
+
+  const alexSubject = `[GPS] ${clientFirst}'s ${checkpointLabel} feedback — ${stakeholderName} | ${score}/10`;
+  const alexHtml    = buildAlexNotificationHtml(client.name, stakeholderName, checkpointLabel, score, stakeholder.role || '');
+  await sendNotificationEmail(ALEX_EMAIL, alexSubject, alexHtml, client_id, client.name, 'survey_response_alex');
+}
+
+function buildClientNotificationHtml(clientFirst, stakeholderName, checkpointLabel, score) {
+  const p = t => `<p style="color:#1B2A4A;font-size:15px;line-height:1.75;margin:0 0 14px;">${t}</p>`;
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#F5F6F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <div style="max-width:600px;margin:0 auto;padding:36px 16px;">
+    <div style="background:#1B2A4A;padding:20px 28px;border-radius:8px 8px 0 0;text-align:center;">
+      <div style="color:#C9A84C;font-size:11px;letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:4px;">GPS Leadership Solutions</div>
+      <div style="color:#FFFFFF;font-size:15px;font-weight:500;opacity:0.8;">Feedback Received</div>
+    </div>
+    <div style="background:#FFFFFF;padding:30px 36px;border-radius:0 0 8px 8px;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+      ${p(`Hi ${clientFirst},`)}
+      ${p(`<strong>${stakeholderName}</strong> just completed your ${checkpointLabel} survey.`)}
+      <div style="background:#F5F6F8;border-left:3px solid #C9A84C;padding:14px 18px;margin:14px 0;border-radius:0 6px 6px 0;">
+        <div style="font-size:13px;color:#6B7280;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Score</div>
+        <div style="font-size:28px;font-weight:700;color:#1B2A4A;">${score}<span style="font-size:16px;color:#9CA3AF;">/10</span></div>
+      </div>
+      ${p(`Log in to your portal to see the full picture once all responses are in.`)}
+      <hr style="border:none;border-top:1px solid #E5E7EB;margin:24px 0 18px;" />
+      <p style="color:#4B5563;font-size:13px;line-height:1.7;margin:0;">— Alex Tremble<br>GPS Leadership Solutions</p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+function buildAlexNotificationHtml(clientName, stakeholderName, checkpointLabel, score, stakeholderRole) {
+  const scoreColor = score >= 8 ? '#16a34a' : score >= 5 ? '#d97706' : '#dc2626';
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,sans-serif;max-width:520px;margin:24px auto;color:#1B2A4A;font-size:14px;line-height:1.7;">
+  <div style="background:#1B2A4A;padding:16px 24px;border-radius:8px 8px 0 0;">
+    <div style="color:#C9A84C;font-size:10px;letter-spacing:2px;text-transform:uppercase;font-weight:700;">GPS Portal — Survey Response</div>
+  </div>
+  <div style="border:1px solid #E5E7EB;border-top:none;padding:24px;border-radius:0 0 8px 8px;">
+    <table style="width:100%;border-collapse:collapse;">
+      <tr><td style="padding:6px 0;color:#6B7280;width:140px;">Client</td><td style="padding:6px 0;font-weight:600;">${clientName}</td></tr>
+      <tr><td style="padding:6px 0;color:#6B7280;">Stakeholder</td><td style="padding:6px 0;">${stakeholderName}${stakeholderRole ? ` <span style="color:#9CA3AF;font-size:12px;">(${stakeholderRole})</span>` : ''}</td></tr>
+      <tr><td style="padding:6px 0;color:#6B7280;">Checkpoint</td><td style="padding:6px 0;">${checkpointLabel}</td></tr>
+      <tr><td style="padding:6px 0;color:#6B7280;">Score</td><td style="padding:6px 0;font-size:20px;font-weight:700;color:${scoreColor};">${score}<span style="font-size:13px;color:#9CA3AF;">/10</span></td></tr>
+      <tr><td style="padding:6px 0;color:#6B7280;">Submitted</td><td style="padding:6px 0;">${new Date().toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })} ET</td></tr>
+    </table>
+  </div>
+</body>
+</html>`;
+}
+
+async function sendNotificationEmail(to, subject, html, client_id, clientName, emailType) {
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: `${FROM_NAME} <${FROM_EMAIL}>`, to: [to], subject, html })
+    });
+    const data = await res.json();
+    await logEmail({ client_id, recipient_email: to, recipient_name: clientName, email_type: emailType, subject, status: res.ok ? 'sent' : 'error', resend_id: res.ok ? (data.id || null) : null, error_details: res.ok ? null : JSON.stringify(data).slice(0, 500) });
+  } catch (_) {}
+}
+
+async function handleSubmit(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  try {
+    const { token, client_id, stakeholder_id, checkpoint, score, open_response, comments, comments_visible_to_client } = req.body;
+
+    if (!token || !client_id || !stakeholder_id || !checkpoint || score == null) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    if (score < 1 || score > 10 || !Number.isInteger(score)) {
+      return res.status(400).json({ error: 'Score must be an integer between 1 and 10' });
+    }
+
+    const tokenRes = await sbFetch(`/rest/v1/survey_tokens?token=eq.${encodeURIComponent(token)}&client_id=eq.${client_id}&select=*`);
+    if (!tokenRes.ok) return res.status(500).json({ error: 'Token lookup failed' });
+    const tokens = await tokenRes.json();
+    if (!tokens || tokens.length === 0) return res.status(404).json({ error: 'Invalid survey link' });
+
+    const tokenRecord = tokens[0];
+    if (tokenRecord.is_used) return res.status(409).json({ error: 'This survey has already been submitted' });
+    if (tokenRecord.expires_at && new Date(tokenRecord.expires_at) < new Date()) {
+      return res.status(410).json({ error: 'This survey link has expired' });
+    }
+
+    const insertRes = await sbFetch('/rest/v1/survey_responses', 'POST', {
+      client_id, stakeholder_id, token_id: tokenRecord.id, checkpoint, score,
+      open_response: open_response || null,
+      comments:      comments      || null,
+      comments_visible_to_client: comments_visible_to_client !== false
+    }, { 'Prefer': 'return=minimal' });
+
+    if (!insertRes.ok) {
+      const errText = await insertRes.text();
+      return res.status(500).json({ error: 'Failed to save response', detail: errText });
+    }
+
+    await sbFetch(`/rest/v1/survey_tokens?id=eq.${tokenRecord.id}`, 'PATCH',
+      { is_used: true, used_at: new Date().toISOString() },
+      { 'Prefer': 'return=minimal' }
+    );
+
+    sendResponseNotifications({ client_id, stakeholder_id, checkpoint, score, comments_visible_to_client: comments_visible_to_client !== false, tokenRecord }).catch(() => {});
+
+    return res.status(200).json({ success: true });
+
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+}

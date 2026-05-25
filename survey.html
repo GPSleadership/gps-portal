@@ -445,7 +445,7 @@ async function submitSurvey() {
   const comments      = document.getElementById('commentsField').value.trim() || null;
 
   try {
-    const res = await fetch('/api/submit-survey', {
+    const res = await fetch('/api/survey?action=submit', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

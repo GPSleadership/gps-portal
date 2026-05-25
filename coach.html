@@ -2980,10 +2980,10 @@ async function runRemindersNow() {
   const password = pwData?.value || 'GPS2026';
 
   try {
-    const res = await fetch('/api/run-reminders-now', {
+    const res = await fetch('/api/survey-reminders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ manual_trigger: true }),
     });
     const text = await res.text();
     let json;
@@ -3574,7 +3574,7 @@ async function triggerBaselineSurvey(clientId, btn) {
   const password = pwData?.value || 'GPS2026';
 
   try {
-    const res  = await fetch('/api/send-survey', {
+    const res  = await fetch('/api/survey?action=send', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ client_id: clientId, checkpoint: 'baseline', password })
@@ -4508,7 +4508,7 @@ function openSendInvitesModal() {
 async function confirmSendInvites() {
   closeDiagModal('send-invites-modal');
   try {
-    const resp = await fetch('/api/send-diagnostic-invites', {
+    const resp = await fetch('/api/diagnostic?action=send-invites', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ diagnostic_id: DIAG_SEL.id }),
     });
@@ -4531,7 +4531,7 @@ async function generateG1() {
   const vision = DIAG_SEL.self_three_year_vision;
   if (!vision) { alert('Self-report succession response not found.'); return; }
   try {
-    const resp = await fetch('/api/generate-custom-question', {
+    const resp = await fetch('/api/diagnostic?action=generate-question', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ diagnostic_id: DIAG_SEL.id, vision_text: vision }),
     });
@@ -4548,7 +4548,7 @@ async function generateReport(e) {
   const btn = e ? e.currentTarget : null;
   if (btn) { btn.disabled = true; btn.textContent = '⚙ Generating…'; }
   try {
-    const resp = await fetch('/api/generate-diagnostic-report', {
+    const resp = await fetch('/api/diagnostic?action=generate-report', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ diagnostic_id: DIAG_SEL.id }),
     });
