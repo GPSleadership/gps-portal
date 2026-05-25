@@ -991,6 +991,23 @@
   </div>
 </div>
 
+<!-- ══ DIAGNOSTIC CONFIRM MODAL (close survey / reopen step) ══════════════════ -->
+<div class="modal-overlay" id="diag-confirm-modal">
+  <div class="modal" style="max-width:460px;border-top:none;border-radius:8px;padding:0;box-shadow:0 8px 40px rgba(0,0,0,.2);">
+    <div class="diag-modal-header">
+      <h3 id="dcm-title">Confirm</h3>
+      <button class="dclose-btn" onclick="closeDiagModal('diag-confirm-modal')">✕</button>
+    </div>
+    <div class="diag-modal-body">
+      <div id="dcm-body" style="font-size:13px;line-height:1.6;color:var(--d-dark);"></div>
+    </div>
+    <div class="diag-modal-footer">
+      <button class="dbtn dbtn-outline" onclick="closeDiagModal('diag-confirm-modal')">Cancel</button>
+      <button class="dbtn dbtn-red" id="dcm-confirm-btn">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <!-- ADD ADMIN MODAL -->
 <div class="modal-overlay" id="addAdminModal">
   <div class="modal">
@@ -4455,14 +4472,23 @@ function renderOverviewTab() {
     { n:7, label:'Debrief session',                  done: !!d.debrief_completed_at },
     { n:8, label:'90-Day plan active',               done: d.status === 'plan_active' },
   ];
+  // Steps that can be reopened (only when earlier than current and not survey-in-flight)
+  const reopenableSteps = new Set([1, 2, 3, 5, 6, 7]);
+
   const stepsHtml = steps.map(s => {
-    const isDone = s.done;
-    const isCur  = s.n === cur && !isDone;
-    const circle = isDone ? '✓' : s.n;
-    const color  = isDone ? 'var(--d-green)' : isCur ? 'var(--d-blue)' : 'var(--d-mid)';
-    return `<div style="display:flex;gap:12px;margin-bottom:8px;align-items:flex-start;opacity:${isDone||isCur?1:.45};">
+    const isDone   = s.done;
+    const isCur    = s.n === cur && !isDone;
+    const circle   = isDone ? '✓' : s.n;
+    const color    = isDone ? 'var(--d-green)' : isCur ? 'var(--d-blue)' : 'var(--d-mid)';
+    // Show reopen link for completed steps that have a reopen map entry
+    const canReopen = isDone && reopenableSteps.has(s.n) && DIAG_REOPEN_MAP[s.n];
+    const reopenBtn = canReopen
+      ? `<button class="dbtn dbtn-outline dbtn-sm" style="margin-left:8px;padding:2px 8px;font-size:11px;" onclick="reopenDiagStep(${s.n})">Reopen</button>`
+      : '';
+    return `<div style="display:flex;gap:12px;margin-bottom:8px;align-items:center;opacity:${isDone||isCur?1:.45};">
       <div style="width:24px;height:24px;border-radius:50%;background:${color};color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0;">${circle}</div>
-      <div style="padding-top:3px;font-size:13px;font-weight:${isCur?700:600};color:${isCur?'var(--d-blue)':isDone?'var(--d-dark)':'var(--d-mid)'};">${s.label}</div>
+      <div style="flex:1;padding-top:2px;font-size:13px;font-weight:${isCur?700:600};color:${isCur?'var(--d-blue)':isDone?'var(--d-dark)':'var(--d-mid)'};">${s.label}</div>
+      ${reopenBtn}
     </div>`;
   }).join('');
 
@@ -4542,8 +4568,9 @@ function renderRatersTab() {
     <td><span class="dot ${r.completed_at?'dot-green':'dot-grey'}"></span>${r.completed_at?'Completed':'Pending'}</td>
     <td><button class="dbtn dbtn-outline dbtn-sm" style="color:var(--d-red2);border-color:var(--d-red2);" onclick="removeRater('${r.id}')">Remove</button></td>
   </tr>`).join('');
-  const canSendInvites = d.status === 'self_assessment_complete' && nonSelf.length >= 3 && !d.invites_sent_at;
-  const invitesSent    = !!d.invites_sent_at;
+  const canSendInvites    = d.status === 'self_assessment_complete' && nonSelf.length >= 3 && !d.invites_sent_at;
+  const invitesSent       = !!d.invites_sent_at;
+  const raterListReady    = !!d.raters_finalized_at && !invitesSent;
   const rc = document.getElementById('raters-content');
   if (!rc) return;
   rc.innerHTML = `
@@ -4551,6 +4578,9 @@ function renderRatersTab() {
     <div>Self-assessment token created. Leader portal:
     <code style="font-size:11px;background:var(--d-blue-light);padding:2px 6px;border-radius:3px;">/diagnostic-survey.html?token=${selfRow.token}</code>
     ${selfRow.completed_at ? `<strong style="color:var(--d-green);">  ✓ Completed ${diagFormatDate(selfRow.completed_at)}</strong>` : '<span style="color:var(--d-amber);">  ⏳ Not yet completed</span>'}</div></div>` : ''}
+  ${raterListReady ? `<div class="dalert dalert-green" style="margin-bottom:12px;"><span class="dalert-icon">✅</span>
+    <div><strong>${d.client_name} submitted their rater list on ${diagFormatDate(d.raters_finalized_at)}.</strong>
+    ${nonSelf.length} rater${nonSelf.length!==1?'s':''} added. Review the list below and send invitations when ready.</div></div>` : ''}
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
     <div style="display:flex;gap:6px;flex-wrap:wrap;">${catBadges || '<span style="font-size:12px;color:var(--d-mid);">No raters added yet</span>'}</div>
     <div style="display:flex;gap:8px;">
@@ -4559,7 +4589,7 @@ function renderRatersTab() {
     </div>
   </div>
   ${!d.self_assessment_completed_at ? `<div class="dalert dalert-amber"><span class="dalert-icon">🔒</span>
-    <div>Invites locked until leader completes self-assessment.</div></div>` : ''}
+    <div>Invites locked until leader completes self-assessment. <span style="font-size:12px;color:var(--d-mid);">You can still add raters to the list now.</span></div></div>` : ''}
   <div class="card" style="padding:0;overflow:hidden;margin-bottom:16px;">
     <table>
       <thead><tr><th>Rater</th><th>Relationship</th><th>Invited</th><th>Status</th><th></th></tr></thead>
@@ -4810,10 +4840,91 @@ async function confirmSendInvites() {
   }
 }
 
+// ── Generic confirm modal ─────────────────────────────────────────────────────
+function showDiagConfirm({ title, body, confirmLabel, confirmClass, onConfirm }) {
+  document.getElementById('dcm-title').textContent   = title;
+  document.getElementById('dcm-body').innerHTML      = body;
+  const btn = document.getElementById('dcm-confirm-btn');
+  btn.textContent  = confirmLabel || 'Confirm';
+  btn.className    = `dbtn ${confirmClass || 'dbtn-red'}`;
+  btn.onclick      = async () => { closeDiagModal('diag-confirm-modal'); await onConfirm(); };
+  openDiagModal('diag-confirm-modal');
+}
+
 async function closeSurveyNow() {
-  if (!confirm('Close the survey now? This will lock all data immediately.')) return;
-  await updateDiag({ status: 'survey_closed', survey_closed_at: new Date().toISOString() });
-  await refreshSelected();
+  const done  = DIAG_RATERS.filter(r => !r.is_self && r.completed_at).length;
+  const total = DIAG_RATERS.filter(r => !r.is_self).length;
+  showDiagConfirm({
+    title: 'Close Survey Window?',
+    body: `<div class="dalert dalert-red" style="margin-bottom:12px;">
+      <span class="dalert-icon">⚠</span>
+      <div><strong>This locks all data immediately.</strong> Raters who haven't responded will no longer be able to submit.</div>
+    </div>
+    <div style="margin-bottom:8px;"><strong>${DIAG_SEL.client_name}</strong> · ${done} of ${total} rater${total!==1?'s':''} responded (${total>0?Math.round(done/total*100):0}%)</div>
+    ${done < 7 ? `<div style="color:var(--d-red2);font-size:12px;font-weight:600;margin-bottom:8px;">⚠ Only ${done} response${done!==1?'s':''} — below the 7-response minimum for a valid report.</div>` : ''}
+    <div style="font-size:12px;color:var(--d-mid);">You can reopen the survey window afterward if needed.</div>`,
+    confirmLabel: 'Yes, Close Survey',
+    confirmClass: 'dbtn-red',
+    onConfirm: async () => {
+      await updateDiag({ status: 'survey_closed', survey_closed_at: new Date().toISOString() });
+      await refreshSelected();
+    },
+  });
+}
+
+// ── Reopen a prior step ───────────────────────────────────────────────────────
+const DIAG_REOPEN_MAP = {
+  1: {
+    newStatus: 'setup',
+    label: 'Reopen: Intake Call',
+    body: `Setting status back to <strong>Setup</strong>. The intake completion date is kept for reference, but the leader's self-assessment access will be removed until you re-mark intake complete.`,
+    confirmLabel: 'Reopen Intake',
+  },
+  2: {
+    newStatus: 'intake_complete',
+    label: 'Reopen: Self-Assessment',
+    body: `Setting status back to <strong>Intake Complete</strong>. The leader can access and redo their self-assessment. Rater invitations cannot go out until self-assessment is re-completed.`,
+    confirmLabel: 'Reopen Self-Assessment',
+  },
+  3: {
+    newStatus: 'self_assessment_complete',
+    label: 'Reopen: Rater List',
+    body: `Setting status back to <strong>Self-Assessment Complete</strong>. You or the leader can add more raters. <strong>Invitations already sent are not retracted.</strong> New raters can be invited from the Raters tab.`,
+    confirmLabel: 'Reopen Rater List',
+  },
+  5: {
+    newStatus: 'survey_open',
+    label: 'Reopen: Survey Window',
+    body: `Setting status back to <strong>Survey Open</strong>. Raters who haven't responded can complete their survey. The close date will need to be reviewed — update it in Supabase or re-send invites to extend.`,
+    confirmLabel: 'Reopen Survey',
+  },
+  6: {
+    newStatus: 'survey_closed',
+    label: 'Reopen: Report',
+    body: `Setting status back to <strong>Survey Closed</strong>. You can regenerate or revise the report draft. The existing draft is preserved until you generate a new one.`,
+    confirmLabel: 'Reopen Report',
+  },
+  7: {
+    newStatus: 'report_final',
+    label: 'Reopen: Debrief',
+    body: `Setting status back to <strong>Report Final</strong>. You can redo the debrief and update the 90-day plan draft before locking it.`,
+    confirmLabel: 'Reopen Debrief',
+  },
+};
+
+async function reopenDiagStep(stepN) {
+  const cfg = DIAG_REOPEN_MAP[stepN];
+  if (!cfg) return;
+  showDiagConfirm({
+    title: cfg.label,
+    body: `<div style="font-size:13px;line-height:1.6;">${cfg.body}</div>`,
+    confirmLabel: cfg.confirmLabel,
+    confirmClass: 'dbtn-primary',
+    onConfirm: async () => {
+      await updateDiag({ status: cfg.newStatus });
+      await refreshSelected();
+    },
+  });
 }
 
 async function generateG1() {

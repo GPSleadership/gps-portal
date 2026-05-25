@@ -148,7 +148,7 @@ function buildInviteEmail({ raterName, leaderName, leaderTitle, leaderOrg, surve
         <div style="background:#f5f7fa;border-left:4px solid #1A3D6E;padding:14px 18px;border-radius:0 6px 6px 0;margin:16px 0;">
           <strong>${leaderFull}</strong>
         </div>
-        <p>This is a short survey — most people complete it in 5–8 minutes. Your responses help build a clear, honest picture of leadership strengths and development areas.</p>
+        <p>The survey takes approximately 15–20 minutes to complete. Your responses help build a clear, honest picture of leadership strengths and development areas.</p>
         <p><strong>A few things to know:</strong></p>
         <ul style="margin:0 0 16px 0;padding-left:20px;">
           <li>Your responses are kept confidential — individual answers are never shared with the leader.</li>
@@ -683,7 +683,7 @@ function buildReminderEmail({ raterName, leaderName, surveyLink, closeDate, isSe
           <p>Hi ${firstName},</p>
           <p>A quick follow-up — you haven't yet completed the feedback survey for <strong>${leaderName}</strong>.</p>
           ${urgency}
-          <p>It takes 5–8 minutes. Your responses are confidential — individual answers are never shared.</p>
+          <p>It takes 15–20 minutes. Your responses are confidential — individual answers are never shared.</p>
           <div style="margin:28px 0;text-align:center;">
             <a href="${surveyLink}" style="background:#1A3D6E;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;display:inline-block;">Complete the Survey →</a>
           </div>

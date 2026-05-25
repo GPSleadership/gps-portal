@@ -199,7 +199,7 @@ input:focus,select:focus{outline:none;border-color:var(--blue);}
       </div>
       <div id="add-rater-msg" style="margin-top:10px;font-size:12px;color:var(--red);"></div>
     </div>
-    <div style="font-size:12px;color:var(--mid);margin-top:12px;">Once you've added everyone, Alex will review the list and send invitations. You'll receive an email confirmation when surveys go out.</div>
+    <div id="rater-submit-section" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);"></div>
   </div>
 
   <!-- ── 90-DAY PLAN (shown after debrief) ── -->
@@ -592,6 +592,7 @@ function renderPendingRaters() {
   const el = document.getElementById('pending-rater-rows');
   if (RATERS.length === 0) {
     el.innerHTML = `<div style="font-size:12px;color:var(--mid);margin-bottom:8px;">No raters added yet. Add the people you want to receive feedback from below.</div>`;
+    renderRaterSubmitSection();
     return;
   }
 
@@ -614,6 +615,66 @@ function renderPendingRaters() {
   });
 
   el.innerHTML = html;
+  renderRaterSubmitSection();
+}
+
+function renderRaterSubmitSection() {
+  const el = document.getElementById('rater-submit-section');
+  if (!el) return;
+
+  // Already submitted
+  if (DIAGNOSTIC.raters_finalized_at) {
+    el.innerHTML = `
+      <div class="alert alert-green">
+        <span class="alert-icon">✓</span>
+        <div><strong>List submitted ${formatDate(DIAGNOSTIC.raters_finalized_at)}.</strong>
+        Alex has been notified and will review your list before sending invitations. You can still add more raters above if needed.</div>
+      </div>`;
+    return;
+  }
+
+  // Not yet submitted
+  if (RATERS.length === 0) {
+    el.innerHTML = `<div style="font-size:12px;color:var(--mid);">Once you've added everyone, use the button below to notify Alex that your list is ready.</div>`;
+    return;
+  }
+
+  const readyToSubmit = RATERS.length >= 3;
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+      <div style="font-size:13px;color:var(--mid);">
+        ${readyToSubmit
+          ? `${RATERS.length} rater${RATERS.length!==1?'s':''} added. When you're done, let Alex know your list is ready.`
+          : `Add at least 3 raters before submitting (${RATERS.length} added so far).`}
+      </div>
+      <button class="btn btn-primary" onclick="submitRaterList()" ${readyToSubmit ? '' : 'disabled'}>
+        ✓ My List Is Ready — Notify Alex
+      </button>
+    </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  SUBMIT RATER LIST
+// ─────────────────────────────────────────────────────────────────────────────
+async function submitRaterList() {
+  const btn = event.currentTarget;
+  btn.disabled = true; btn.textContent = 'Submitting…';
+
+  const now = new Date().toISOString();
+  const { error } = await db.from('diagnostics')
+    .update({ raters_finalized_at: now, updated_at: now })
+    .eq('id', DIAGNOSTIC.id);
+
+  if (error) {
+    btn.disabled = false; btn.textContent = '✓ My List Is Ready — Notify Alex';
+    alert('Something went wrong. Please try again or email alex@gpsleadership.org.');
+    return;
+  }
+
+  DIAGNOSTIC.raters_finalized_at = now;
+  renderRaterSubmitSection();
+  // Also refresh the pipeline sub text
+  renderPortal();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
