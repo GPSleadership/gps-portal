@@ -163,10 +163,10 @@ input:focus,select:focus{outline:none;border-color:var(--blue);}
   <!-- ── ADD RATER FORM (shown before invites sent) ── -->
   <div class="card" id="add-rater-card" style="display:none;">
     <div class="card-title" style="margin-bottom:4px;">Build Your Rater List</div>
-    <div class="card-sub" style="margin-bottom:16px;">Add the people you want Alex to invite. Aim for 10–14 total across at least 3 relationship types. Minimum 3 per category for anonymity (Supervisor and Board/Investor may be 1).</div>
-    <div class="alert alert-amber" style="margin-bottom:16px;">
-      <span class="alert-icon">⚠</span>
-      <div>Alex will review and approve your list before any invitations are sent. Nothing goes out automatically.</div>
+    <div class="card-sub" style="margin-bottom:16px;">These are the people who will complete your leadership survey. Aim for 10–14 total across at least 3 relationship types. Minimum 3 per category for anonymity (Supervisor and Board/Investor may be 1).</div>
+    <div class="alert alert-blue" style="margin-bottom:16px;">
+      <span class="alert-icon">ℹ</span>
+      <div>Alex will review your list before sending any invitations. <strong>Nothing goes out automatically.</strong> Add everyone now — you can continue updating the list until invites are sent.</div>
     </div>
     <div id="pending-rater-rows" style="margin-bottom:16px;"></div>
     <div class="card" style="background:var(--light);border:1.5px dashed var(--border);padding:16px;box-shadow:none;">
@@ -303,11 +303,29 @@ function renderTopAlert() {
   const s = DIAGNOSTIC.status;
   const el = document.getElementById('top-alert');
 
-  if (s === 'self_assessment_pending' || s === 'intake_complete') {
+  if (s === 'setup') {
+    el.innerHTML = `<div class="alert alert-blue">
+      <span class="alert-icon">👋</span>
+      <div><strong>Welcome.</strong> Your diagnostic is being set up. You can start adding your raters below — we'll use this list when your survey window opens.</div>
+    </div>`;
+  } else if (s === 'intake_complete') {
+    el.innerHTML = `<div class="alert alert-amber">
+      <span class="alert-icon">✅</span>
+      <div><strong>Two things to complete before surveys go out:</strong>
+      <ol style="margin:6px 0 0 16px;font-size:13px;line-height:1.8;">
+        <li>Add your raters below (aim for 10–14 people across at least 3 relationship types)</li>
+        <li>Complete your self-assessment — takes about 15 minutes</li>
+      </ol>
+      Alex will review your rater list and send invitations once both are done.</div>
+    </div>`;
+  } else if (s === 'self_assessment_pending') {
     el.innerHTML = `<div class="alert alert-amber">
       <span class="alert-icon">⚠</span>
       <div><strong>Action needed: Complete your self-assessment.</strong>
-      Your rater survey invitations cannot go out until you finish your own self-view. It takes about 15 minutes.</div>
+      ${RATERS.length > 0
+        ? `You have ${RATERS.length} rater${RATERS.length!==1?'s':''} on your list. `
+        : 'You can also continue adding raters below. '}
+      Your self-assessment takes about 15 minutes and must be done before invites go out.</div>
     </div>`;
   } else if (s === 'survey_open' && DIAGNOSTIC.close_date) {
     const daysLeft = Math.ceil((new Date(DIAGNOSTIC.close_date) - new Date()) / 86400000);
@@ -353,8 +371,10 @@ const PIPELINE_STEPS = [
       : 'Your self-view is needed before rater invites go out (~15 min)' },
   { n:3, label:'Stakeholder list & rater invitations',
     detail: d => d.invites_sent_at
-      ? `${d.raters_finalized_at ? 'List finalized · ' : ''}Invites sent ${formatDate(d.invites_sent_at)}`
-      : 'Locked until self-assessment is complete' },
+      ? `${RATERS.length} raters invited · Surveys sent ${formatDate(d.invites_sent_at)}`
+      : RATERS.length > 0
+        ? `${RATERS.length} rater${RATERS.length !== 1 ? 's' : ''} added — Alex will review and send invitations`
+        : 'Identify the people you want feedback from in the section below' },
   { n:4, label:'Rater surveys in progress',
     detail: d => {
       const done  = RATERS.filter(r => r.completed_at).length;
@@ -375,7 +395,8 @@ const PIPELINE_STEPS = [
 
 function currentStep(status) {
   const map = {
-    'setup': 1, 'intake_complete': 1,
+    'setup': 1,
+    'intake_complete': 2,          // intake done → self-assessment is next
     'self_assessment_pending': 2,
     'self_assessment_complete': 3,
     'survey_open': 4,
@@ -390,9 +411,7 @@ function currentStep(status) {
 function stepState(stepN, curStep, status) {
   if (stepN < curStep)  return 'done';
   if (stepN === curStep) {
-    // Step 3 is locked until step 2 is done
-    if (stepN === 3 && !DIAGNOSTIC.self_assessment_completed_at) return 'locked';
-    // Step 2 needs action
+    // Step 2: action if self-assessment not yet done
     if (stepN === 2 && !DIAGNOSTIC.self_assessment_completed_at) return 'action';
     return 'current';
   }
@@ -413,11 +432,13 @@ function renderPipeline() {
 
   // Sub
   const subMap = {
-    'setup':                    'Your diagnostic is being set up. Alex will be in touch.',
-    'intake_complete':          'Intake complete. Your self-assessment is the next step.',
-    'self_assessment_pending':  'Complete your self-assessment to unlock rater invitations.',
-    'self_assessment_complete': 'Self-assessment done. Alex is finalizing your rater list.',
-    'survey_open':              `Step 4 of 8 — Rater surveys in progress.`,
+    'setup':                    'Your diagnostic is being set up. You can begin adding your raters below.',
+    'intake_complete':          `Kickoff call complete. Add your raters below${RATERS.length > 0 ? ` (${RATERS.length} added so far)` : ''}, then complete your self-assessment.`,
+    'self_assessment_pending':  `Complete your self-assessment below${RATERS.length > 0 ? ` — ${RATERS.length} rater${RATERS.length!==1?'s':''} already added` : '. You can also continue adding raters'}.`,
+    'self_assessment_complete': RATERS.length > 0
+      ? `Self-assessment complete. ${RATERS.length} rater${RATERS.length!==1?'s':''} on your list — Alex will review and send invitations.`
+      : 'Self-assessment complete. Please add your raters below — Alex will review and send invitations.',
+    'survey_open':              `Rater surveys in progress — ${RATERS.filter(r=>r.completed_at).length} of ${RATERS.length} raters responded.`,
     'survey_closed':            'Survey window closed. Data is locked. Report in progress.',
     'report_draft':             'Your report is being finalized by Alex.',
     'report_final':             'Your report is ready. Debrief session coming soon.',
@@ -544,8 +565,8 @@ function renderRaterSection() {
   const s = DIAGNOSTIC.status;
   const surveyActiveOrLater = ['survey_open','survey_closed','report_draft','report_final','debrief_complete','plan_active'];
 
-  // Add-rater form: before invites sent
-  const preInvite = ['self_assessment_pending','intake_complete','self_assessment_complete'];
+  // Add-rater form: available from day 1, before invites sent
+  const preInvite = ['setup','intake_complete','self_assessment_pending','self_assessment_complete'];
   if (preInvite.includes(s)) {
     document.getElementById('add-rater-card').style.display = 'block';
     renderPendingRaters();

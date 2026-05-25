@@ -4779,12 +4779,18 @@ async function markSelfAssessmentPending() {
 
 function openSendInvitesModal() {
   const nonSelf = DIAG_RATERS.filter(r => !r.is_self);
+  const closeDate = new Date();
+  closeDate.setDate(closeDate.getDate() + 14);
+  const closeDateStr = closeDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   document.getElementById('send-invites-body').innerHTML = `
     <p style="font-size:13px;margin-bottom:14px;">You are about to send survey invitations to <strong>${nonSelf.length} raters</strong> for <strong>${DIAG_SEL.client_name}</strong>.</p>
+    <div class="dalert dalert-blue" style="margin-bottom:14px;"><span class="dalert-icon">📅</span>
+      <div>Survey window opens <strong>today</strong> and closes automatically on <strong>${closeDateStr}</strong> (14 days).</div>
+    </div>
     <div style="max-height:200px;overflow-y:auto;border:1px solid var(--d-border);border-radius:6px;padding:12px;">
       ${nonSelf.map(r => `<div style="font-size:13px;padding:4px 0;">${r.name} — <span style="color:var(--d-mid);">${r.email}</span></div>`).join('')}
     </div>
-    <p style="font-size:12px;color:var(--d-mid);margin-top:12px;">Each rater will receive a unique survey link. This cannot be undone.</p>`;
+    <p style="font-size:12px;color:var(--d-mid);margin-top:12px;">Each rater receives a unique survey link. This cannot be undone.</p>`;
   openDiagModal('send-invites-modal');
 }
 

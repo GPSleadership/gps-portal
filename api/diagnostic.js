@@ -203,7 +203,14 @@ async function handleSendInvites(req, res) {
     let sent = 0;
     const errors = [];
     const sentList = [];
-    const now = new Date().toISOString();
+    const now = new Date();
+    const nowISO = now.toISOString();
+
+    // Close date = exactly 14 days from invite send (overrides any manual close_date)
+    const closeDate = new Date(now);
+    closeDate.setDate(closeDate.getDate() + 14);
+    const closeDateISO  = closeDate.toISOString().split('T')[0]; // YYYY-MM-DD
+    const closeDateDisp = closeDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
     for (const rater of raters) {
       const surveyLink = `${PORTAL_BASE}/diagnostic-survey?token=${rater.token}`;
@@ -214,12 +221,12 @@ async function handleSendInvites(req, res) {
         leaderTitle: diag.client_title,
         leaderOrg:   diag.client_org,
         surveyLink,
-        closeDate:   diag.close_date,
+        closeDate:   closeDateDisp,
       });
 
       try {
         await sendEmail({ to: rater.email, subject, html, emailType: 'diagnostic_invite', recipientName: rater.name });
-        await sb(`/rest/v1/diagnostic_raters?id=eq.${rater.id}`, 'PATCH', { invited_at: now }, { Prefer: 'return=minimal' });
+        await sb(`/rest/v1/diagnostic_raters?id=eq.${rater.id}`, 'PATCH', { invited_at: nowISO }, { Prefer: 'return=minimal' });
         sent++;
         sentList.push({ name: rater.name, email: rater.email });
       } catch (err) {
@@ -228,7 +235,12 @@ async function handleSendInvites(req, res) {
     }
 
     if (sent > 0) {
-      const updates = { invites_sent_at: now, updated_at: now };
+      const updates = {
+        invites_sent_at: nowISO,
+        start_date:  nowISO.split('T')[0],   // survey opens today
+        close_date:  closeDateISO,            // closes 14 days from today
+        updated_at:  nowISO,
+      };
       if (diag.status !== 'survey_open') updates.status = 'survey_open';
       await sb(`/rest/v1/diagnostics?id=eq.${diagnostic_id}`, 'PATCH', updates, { Prefer: 'return=minimal' });
     }
