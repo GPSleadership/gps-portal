@@ -666,11 +666,12 @@
   </div>
   <div class="profile-body">
     <div class="profile-sidenav">
-      <div class="profile-nav-item active" id="profNav-overview"  onclick="switchProfileNav('overview')">📊 Overview</div>
-      <div class="profile-nav-item"        id="profNav-plan"      onclick="switchProfileNav('plan')">🎯 Plan</div>
-      <div class="profile-nav-item"        id="profNav-checkins"  onclick="switchProfileNav('checkins')">✅ Check-ins</div>
-      <div class="profile-nav-item"        id="profNav-surveys"   onclick="switchProfileNav('surveys')">👥 Surveys &amp; Stakeholders</div>
-      <div class="profile-nav-item"        id="profNav-settings"  onclick="switchProfileNav('settings')">⚙️ Settings</div>
+      <div class="profile-nav-item active" id="profNav-overview"     onclick="switchProfileNav('overview')">📊 Overview</div>
+      <div class="profile-nav-item"        id="profNav-plan"         onclick="switchProfileNav('plan')">🎯 Plan</div>
+      <div class="profile-nav-item"        id="profNav-checkins"     onclick="switchProfileNav('checkins')">✅ Check-ins</div>
+      <div class="profile-nav-item"        id="profNav-surveys"      onclick="switchProfileNav('surveys')">👥 Surveys &amp; Stakeholders</div>
+      <div class="profile-nav-item"        id="profNav-diagnostics"  onclick="switchProfileNav('diagnostics')">🔬 Diagnostics</div>
+      <div class="profile-nav-item"        id="profNav-settings"     onclick="switchProfileNav('settings')">⚙️ Settings</div>
     </div>
     <div class="profile-content" id="profileContent">
     </div>
@@ -866,7 +867,7 @@
             <div style="font-size:24px;font-weight:800;color:var(--d-blue);" id="diag-home-greeting">GPS Dashboard</div>
             <div style="font-size:13px;color:var(--d-mid);" id="diag-home-sub">Loading…</div>
           </div>
-          <button class="dbtn dbtn-primary" onclick="openDiagModal('new-diag-modal')">+ New Diagnostic</button>
+          <!-- New diagnostics are started from a client profile -->
         </div>
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;" id="diag-list-stats"></div>
         <div id="diag-list-alerts"></div>
@@ -1000,27 +1001,24 @@
 <div class="modal-overlay" id="new-diag-modal">
   <div class="modal">
     <div class="diag-modal-header">
-      <h3>New Diagnostic</h3>
-      <button class="dclose-btn" onclick="closeDiagModal('new-diag-modal')">✕</button>
+      <h3 id="nd-modal-title">Start Diagnostic</h3>
+      <button class="dclose-btn" onclick="closeDiagModal('new-diag-modal');resetDiagModal()">✕</button>
     </div>
     <div class="diag-modal-body">
+      <!-- Client info banner — shown when launched from a client profile -->
+      <div id="nd-client-banner" style="display:none;background:#EEF3FA;border:1px solid #C0D0EA;border-radius:6px;padding:12px 16px;margin-bottom:16px;">
+        <div style="font-size:11px;font-weight:700;color:var(--d-blue);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">Linked to Client</div>
+        <div style="font-size:14px;font-weight:700;color:var(--d-dark);" id="nd-banner-name"></div>
+        <div style="font-size:12px;color:var(--d-mid);" id="nd-banner-meta"></div>
+      </div>
+      <!-- Hidden fields carry client data through submission -->
+      <input type="hidden" id="nd-name">
+      <input type="hidden" id="nd-email">
+      <input type="hidden" id="nd-title">
+      <input type="hidden" id="nd-org">
+      <input type="hidden" id="nd-client-id">
+      <!-- Diagnostic options -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-        <div class="dform-group" style="grid-column:1/-1;">
-          <label>Full Name *</label>
-          <input id="nd-name" placeholder="Jordan Carter">
-        </div>
-        <div class="dform-group" style="grid-column:1/-1;">
-          <label>Email *</label>
-          <input id="nd-email" type="email" placeholder="jordan@company.com">
-        </div>
-        <div class="dform-group">
-          <label>Title</label>
-          <input id="nd-title" placeholder="CEO">
-        </div>
-        <div class="dform-group">
-          <label>Organization</label>
-          <input id="nd-org" placeholder="Carter Truck &amp; Equipment">
-        </div>
         <div class="dform-group">
           <label>Tier *</label>
           <select id="nd-tier">
@@ -1035,31 +1033,14 @@
             <option value="client_sends">Client sends (manual templates)</option>
           </select>
         </div>
-        <div class="dform-group">
-          <label>Survey Start Date</label>
-          <input id="nd-start" type="date" oninput="calcCloseDate()">
-        </div>
-        <div class="dform-group">
-          <label>Survey Close Date (auto)</label>
-          <div class="dcomputed" id="nd-close">— set start date</div>
-        </div>
-        <div class="dform-group" style="grid-column:1/-1;">
-          <div style="display:flex;align-items:center;gap:8px;">
-            <input type="checkbox" id="nd-link-client" style="width:auto;margin:0;">
-            <label style="display:inline;text-transform:none;letter-spacing:0;font-size:13px;margin-bottom:0;">Link to existing coaching client</label>
-          </div>
-          <div id="nd-client-wrap" style="display:none;margin-top:8px;">
-            <select id="nd-client-id">
-              <option value="">Loading…</option>
-            </select>
-            <div class="dhint">Links this diagnostic to their existing coaching profile.</div>
-          </div>
-        </div>
       </div>
-      <div id="nd-error" style="color:var(--d-red2);font-size:12px;margin-top:8px;"></div>
+      <div style="font-size:12px;color:var(--d-mid);margin-top:4px;">
+        Survey start and close dates are set automatically when you send rater invites.
+      </div>
+      <div id="nd-error" style="color:var(--d-red2);font-size:12px;margin-top:10px;"></div>
     </div>
     <div class="diag-modal-footer">
-      <button class="dbtn dbtn-outline" onclick="closeDiagModal('new-diag-modal')">Cancel</button>
+      <button class="dbtn dbtn-outline" onclick="closeDiagModal('new-diag-modal');resetDiagModal()">Cancel</button>
       <button class="dbtn dbtn-primary" onclick="createDiagnostic()">Create Diagnostic</button>
     </div>
   </div>
@@ -1981,6 +1962,37 @@ function renderProfileSection(section, client, checkins) {
     loadCloseoutData(client.id);
     loadSprintData(client.id);
     loadAskAlexStats(client.id);
+  } else if (section === 'diagnostics') {
+    const linkedDiags = ALL_DIAGS.filter(d => d.client_id === client.id);
+    const diagRows = linkedDiags.length > 0
+      ? linkedDiags.map(d => `
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border:1px solid var(--gray-200);border-radius:8px;margin-bottom:8px;background:#fff;">
+          <div style="flex:1;">
+            <div style="font-size:13px;font-weight:700;color:var(--navy);">${d.client_name}</div>
+            <div style="font-size:11px;color:var(--gray-600);margin-top:2px;">
+              ${diagStatusBadge(d.status)}
+              <span style="margin-left:8px;">${d.tier === 'pro' ? 'Pro' : 'Standard'}</span>
+              ${d.close_date ? ' · Closes ' + diagFormatDate(d.close_date) : ''}
+            </div>
+          </div>
+          <button onclick="closeClientProfile();diagBoot().then(()=>openDiag('${d.id}'))"
+            style="font-size:12px;padding:6px 14px;border:1px solid var(--teal);color:var(--teal);background:none;border-radius:6px;cursor:pointer;font-weight:700;white-space:nowrap;">
+            Open →
+          </button>
+        </div>`).join('')
+      : `<p style="color:var(--gray-600);font-size:13px;font-style:italic;">No diagnostics linked to this client yet.</p>`;
+
+    el.innerHTML = `
+      <div class="profile-section-title">Diagnostics</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <div style="font-size:13px;color:var(--gray-600);">${linkedDiags.length} diagnostic${linkedDiags.length !== 1 ? 's' : ''} linked to this client.</div>
+        <button onclick="openDiagFromClient('${client.id}')"
+          style="padding:8px 18px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">
+          + Start Diagnostic
+        </button>
+      </div>
+      ${diagRows}
+    `;
   } else if (section === 'settings') {
     // Render settings HTML first, then load async stats
     el.innerHTML = `
@@ -5161,29 +5173,82 @@ async function removeOverride(code) {
   renderQuestionsTab();
 }
 
+// ── Client → Diagnostic link ──────────────────────────────────────────────────
+let DIAG_PENDING_CLIENT_ID = null;
+
+function openDiagFromClient(clientId) {
+  const client = allClients.find(c => c.id === clientId);
+  if (!client) return;
+  DIAG_PENDING_CLIENT_ID = clientId;
+
+  // Set hidden fields
+  document.getElementById('nd-name').value  = client.name  || '';
+  document.getElementById('nd-email').value = client.email || '';
+  document.getElementById('nd-title').value = client.title || '';
+  document.getElementById('nd-org').value   = client.organization || '';
+  document.getElementById('nd-client-id').value = clientId;
+
+  // Show client banner
+  document.getElementById('nd-modal-title').textContent = 'Start Diagnostic';
+  document.getElementById('nd-banner-name').textContent = client.name || '';
+  document.getElementById('nd-banner-meta').textContent =
+    [client.title, client.organization, client.email].filter(Boolean).join(' · ');
+  document.getElementById('nd-client-banner').style.display = 'block';
+
+  // Reset tier/delivery
+  document.getElementById('nd-tier').value     = 'standard';
+  document.getElementById('nd-delivery').value = 'gps_sends';
+  document.getElementById('nd-error').textContent = '';
+
+  // Open modal from within the Diagnostics tab — need to switch to diag scope
+  openDiagModal('new-diag-modal');
+}
+
+function resetDiagModal() {
+  DIAG_PENDING_CLIENT_ID = null;
+  document.getElementById('nd-name').value  = '';
+  document.getElementById('nd-email').value = '';
+  document.getElementById('nd-title').value = '';
+  document.getElementById('nd-org').value   = '';
+  document.getElementById('nd-client-id').value = '';
+  document.getElementById('nd-client-banner').style.display = 'none';
+  document.getElementById('nd-modal-title').textContent = 'Start Diagnostic';
+  document.getElementById('nd-error').textContent = '';
+}
+
 async function createDiagnostic() {
-  const name  = document.getElementById('nd-name').value.trim();
-  const email = document.getElementById('nd-email').value.trim();
-  const errEl = document.getElementById('nd-error');
-  if (!name||!email) { errEl.textContent='Name and email are required.'; return; }
-  const start    = document.getElementById('nd-start').value;
-  const close    = start ? fmtDateAdd7(start) : null;
-  const linked   = document.getElementById('nd-link-client').checked;
-  const clientId = linked ? document.getElementById('nd-client-id').value || null : null;
+  const errEl    = document.getElementById('nd-error');
+  const name     = document.getElementById('nd-name').value.trim();
+  const email    = document.getElementById('nd-email').value.trim();
+  const clientId = document.getElementById('nd-client-id').value || null;
+
+  if (!name || !email) { errEl.textContent = 'Client data is missing. Please start the diagnostic from a client profile.'; return; }
+  if (!clientId)       { errEl.textContent = 'This diagnostic must be linked to a client. Open a client profile and use Start Diagnostic.'; return; }
+
+  const btn = document.querySelector('#new-diag-modal .dbtn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Creating…'; }
+
   const { data, error } = await db.from('diagnostics').insert({
-    client_name: name, client_email: email,
-    client_title: document.getElementById('nd-title').value.trim() || null,
-    client_org:   document.getElementById('nd-org').value.trim()   || null,
-    tier:         document.getElementById('nd-tier').value,
+    client_name:         name,
+    client_email:        email,
+    client_title:        document.getElementById('nd-title').value || null,
+    client_org:          document.getElementById('nd-org').value   || null,
+    tier:                document.getElementById('nd-tier').value,
     email_delivery_mode: document.getElementById('nd-delivery').value,
-    start_date: start || null, close_date: close,
-    client_id:  clientId,
-    status: 'setup',
+    client_id:           clientId,
+    status:              'setup',
   }).select().single();
-  if (error) { errEl.textContent='Error: '+error.message; return; }
+
+  if (btn) { btn.disabled = false; btn.textContent = 'Create Diagnostic'; }
+  if (error) { errEl.textContent = 'Error: ' + error.message; return; }
+
   closeDiagModal('new-diag-modal');
+  resetDiagModal();
   ALL_DIAGS.unshift(data);
-  renderDiagList();
+
+  // Navigate to the new diagnostic in the Diagnostics tab
+  showSection('section-diagnostics');
+  await diagBoot();
   openDiag(data.id);
 }
 
