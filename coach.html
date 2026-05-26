@@ -600,6 +600,14 @@
     .diag-scope .dstat-top-amber{border-top:3px solid var(--d-amber) !important;}
     .diag-scope .dstat-top-red{border-top:3px solid var(--d-red2) !important;}
     @media(max-width:700px){.diag-scope .dtwo-col{grid-template-columns:1fr;}}
+    /* Diagnostics tab filter bar */
+    .diag-scope .diag-filter-btn{padding:5px 13px;border-radius:20px;border:1.5px solid var(--d-border);background:none;font-size:12px;font-weight:700;font-family:'Montserrat',sans-serif;cursor:pointer;color:var(--d-mid);white-space:nowrap;}
+    .diag-scope .diag-filter-btn:hover{border-color:var(--d-blue);color:var(--d-blue);}
+    .diag-scope .diag-filter-btn.active{background:var(--d-blue);border-color:var(--d-blue);color:#fff;}
+    .diag-scope th.sortable{cursor:pointer;user-select:none;}
+    .diag-scope th.sortable:hover{color:var(--d-blue);}
+    .diag-scope th.sort-asc::after{content:' ↑';}
+    .diag-scope th.sort-desc::after{content:' ↓';}
   </style>
 </head>
 <body>
@@ -705,7 +713,7 @@
     </div>
 
     <!-- ═══ DASHBOARD SECTION ═══ -->
-    <div id="section-dashboard">
+    <div id="section-dashboard" class="diag-scope">
       <div id="dashboardContent">
         <div class="spinner"></div>
       </div>
@@ -859,22 +867,24 @@
     <div id="section-diagnostics" style="display:none;">
     <div class="diag-scope">
 
-      <!-- LIST VIEW -->
+      <!-- LIST VIEW — filterable table only; rich command-center lives on Dashboard tab -->
       <div id="view-diag-list">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;">
-          <div>
-            <div style="font-size:13px;color:var(--d-mid);" id="diag-home-date"></div>
-            <div style="font-size:24px;font-weight:800;color:var(--d-blue);" id="diag-home-greeting">GPS Dashboard</div>
-            <div style="font-size:13px;color:var(--d-mid);" id="diag-home-sub">Loading…</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+          <div style="font-family:'Montserrat',sans-serif;font-size:18px;font-weight:800;color:var(--d-blue);">All Diagnostics</div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <input id="diag-search" type="text" placeholder="Search name, org…" oninput="renderDiagTable()"
+              style="padding:7px 12px;border:1.5px solid var(--d-border);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;min-width:180px;outline:none;"
+              onfocus="this.style.borderColor='var(--d-blue)'" onblur="this.style.borderColor='var(--d-border)'" />
+            <div style="display:flex;gap:4px;">
+              <button class="diag-filter-btn active" id="dfilter-all"    onclick="setDiagFilter('all',this)">All</button>
+              <button class="diag-filter-btn"        id="dfilter-active" onclick="setDiagFilter('active',this)">Active</button>
+              <button class="diag-filter-btn"        id="dfilter-setup"  onclick="setDiagFilter('setup',this)">Setup</button>
+              <button class="diag-filter-btn"        id="dfilter-closed" onclick="setDiagFilter('closed',this)">Report Ready</button>
+              <button class="diag-filter-btn"        id="dfilter-done"   onclick="setDiagFilter('done',this)">Done</button>
+            </div>
           </div>
-          <!-- New diagnostics are started from a client profile -->
         </div>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;" id="diag-list-stats"></div>
-        <div id="diag-list-alerts"></div>
-        <div class="card" style="padding:0;overflow:hidden;" id="diag-all-card">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px 0;">
-            <div class="card-title" style="margin-bottom:0;">All Diagnostics</div>
-          </div>
+        <div style="background:var(--white);border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);" id="diag-all-card">
           <div id="diag-table-wrap">
             <div class="dempty-state"><div class="spinner"></div><div style="margin-top:12px;font-size:13px;">Loading diagnostics…</div></div>
           </div>
@@ -1446,7 +1456,7 @@ async function loadDashboard() {
 
   renderStats();
   renderClients();
-  renderDashboardSection();
+  diagBoot(); // loads diagnostic data and renders merged dashboard
 }
 
 function renderStats() {
@@ -2905,8 +2915,8 @@ function showSection(name) {
   if (name === 'emails')      loadEmailLog();
   if (name === 'admins')      loadAdminAccounts();
   if (name === 'templates')   loadEmailTemplates();
-  if (name === 'dashboard')   renderDashboardSection();
-  if (name === 'diagnostics') diagBoot();
+  if (name === 'dashboard')   renderDiagHome();
+  if (name === 'diagnostics') { diagBoot(); renderDiagTable(); }
 }
 
 // ─────────────────────────────────────────────
@@ -3862,131 +3872,7 @@ async function sendWelcomeEmail(clientId) {
 // ─────────────────────────────────────────────
 // DASHBOARD SECTION
 // ─────────────────────────────────────────────
-function renderDashboardSection() {
-  const el = document.getElementById('dashboardContent');
-  if (!el) return;
-
-  const now = new Date();
-
-  // Quick stats
-  const activeClients    = allClients.filter(c => c.is_active && !c.is_archived).length;
-  const noPlanYet        = allClients.filter(c => c.is_active && !c.is_archived && !c.plan_submitted_at).length;
-  const coachingEnrolled = allClients.filter(c => c.is_active && !c.is_archived && c.coaching_sessions_enabled).length;
-
-  // Check-ins this week (Mon–Sun)
-  const dayOfWeek = now.getDay(); // 0=Sun
-  const startOfWeek = new Date(now);
-  startOfWeek.setDate(now.getDate() - ((dayOfWeek + 6) % 7)); // Monday
-  startOfWeek.setHours(0, 0, 0, 0);
-  const checkinsThisWeek = allCheckins.filter(c => c.submitted_at && new Date(c.submitted_at) >= startOfWeek).length;
-
-  // Attention categories
-  const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
-
-  const invitedNotOpened = allClients.filter(c =>
-    !c.is_archived && c.welcome_sent_at && !c.portal_first_active_at
-  );
-
-  const haventSetUpPlan = allClients.filter(c =>
-    c.is_active && !c.is_archived && !c.plan_submitted_at
-  );
-
-  const daysSinceFirstActive = (c) => {
-    if (!c.portal_first_active_at) return null;
-    return Math.floor((now - new Date(c.portal_first_active_at)) / (1000 * 60 * 60 * 24));
-  };
-
-  const expiringIn5 = allClients.filter(c => {
-    if (c.is_archived || !c.portal_first_active_at) return false;
-    const days = daysSinceFirstActive(c);
-    return days !== null && days >= 85;
-  });
-
-  const expiringIn21 = allClients.filter(c => {
-    if (c.is_archived || !c.portal_first_active_at) return false;
-    const days = daysSinceFirstActive(c);
-    return days !== null && days >= 69 && days < 85;
-  });
-
-  const noCheckinThisWeek = allClients.filter(c => {
-    if (!c.is_active || c.is_archived || !c.plan_submitted_at) return false;
-    const hasCheckin = allCheckins.some(ch =>
-      ch.client_id === c.id && ch.submitted_at && new Date(ch.submitted_at) >= sevenDaysAgo
-    );
-    return !hasCheckin;
-  });
-
-  const attentionCategories = [
-    { label: 'Invited, not opened',    clients: invitedNotOpened, badgeClass: 'ab-amber' },
-    { label: "Haven't set up plan",    clients: haventSetUpPlan,  badgeClass: 'ab-amber' },
-    { label: 'Expiring in 5 days or less',  clients: expiringIn5,       badgeClass: 'ab-red' },
-    { label: 'Expiring in 21 days or less', clients: expiringIn21,      badgeClass: 'ab-amber' },
-    { label: 'No check-in this week',  clients: noCheckinThisWeek, badgeClass: 'ab-teal' },
-  ];
-
-  const attentionHTML = attentionCategories.map(cat => {
-    const count = cat.clients.length;
-    const badgeClass = count === 0 ? 'ab-gray' : cat.badgeClass;
-    const chipsHTML = count === 0 ? '' : `
-      <div class="attention-chips">
-        ${cat.clients.slice(0, 5).map(c =>
-          `<span class="client-chip" onclick="openClientProfile('${c.id}')">${c.name || 'Unnamed'}</span>`
-        ).join('')}
-        ${count > 5 ? `<span style="font-size:12px;color:var(--gray-600);padding:5px 4px;">+${count - 5} more</span>` : ''}
-      </div>`;
-    return `
-      <div class="attention-card">
-        <div class="attention-header">
-          <span class="attention-badge ${badgeClass}">${count}</span>
-          <span style="${count === 0 ? 'color:var(--gray-600);font-weight:600;' : ''}">${cat.label}</span>
-        </div>
-        ${chipsHTML}
-      </div>`;
-  }).join('');
-
-  // Recent submissions feed — last 7
-  const recentCheckins = [...allCheckins]
-    .filter(c => c.submitted_at)
-    .sort((a, b) => new Date(b.submitted_at) - new Date(a.submitted_at))
-    .slice(0, 7);
-
-  const feedHTML = recentCheckins.length === 0
-    ? `<div style="padding:20px;text-align:center;color:var(--gray-600);font-size:13px;">No check-ins yet.</div>`
-    : recentCheckins.map(c => {
-        const client = allClients.find(cl => cl.id === c.client_id);
-        const name   = client ? (client.name || 'Unknown') : 'Unknown';
-        const date   = new Date(c.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        return `
-          <div class="feed-row" onclick="${client ? `openClientProfile('${c.client_id}')` : ''}">
-            <div>
-              <div style="font-weight:600;color:var(--navy);">${name}</div>
-              <div style="font-size:12px;color:var(--gray-600);">Week ${c.week_number} check-in</div>
-            </div>
-            <div style="font-size:12px;color:var(--gray-600);">${date}</div>
-          </div>`;
-      }).join('');
-
-  el.innerHTML = `
-    <div class="dash-stats">
-      <div class="dash-stat-card"><div class="dsn">${activeClients}</div><div class="dsl">Active Clients</div></div>
-      <div class="dash-stat-card"><div class="dsn">${noPlanYet}</div><div class="dsl">No Plan Yet</div></div>
-      <div class="dash-stat-card"><div class="dsn">${coachingEnrolled}</div><div class="dsl">Coaching Enrolled</div></div>
-      <div class="dash-stat-card"><div class="dsn">${checkinsThisWeek}</div><div class="dsl">Check-ins This Week</div></div>
-    </div>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;">
-      <div>
-        <div style="font-family:'Montserrat',sans-serif;font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">Needs Attention</div>
-        ${attentionHTML}
-      </div>
-      <div>
-        <div style="font-family:'Montserrat',sans-serif;font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">Recent Submissions</div>
-        <div class="recent-feed">${feedHTML}</div>
-      </div>
-    </div>
-  `;
-}
-
+function renderDashboardSection() { renderDiagHome(); }
 // ─────────────────────────────────────────────
 // EDIT CLIENT INFO
 // ─────────────────────────────────────────────
@@ -4078,6 +3964,8 @@ async function saveClientInfo(clientId) {
 
 // ── State ────────────────────────────────────────────────────────────────────
 let ALL_DIAGS     = [];
+let _diagFilter   = 'all';
+let _diagSort     = { col: 'created_at', dir: 'desc' };
 let DIAG_SEL      = null;
 let DIAG_RATERS   = [];
 let DIAG_OVERRIDES= {};
@@ -4183,7 +4071,8 @@ async function diagLoadClients() {
 
 // ── List View ─────────────────────────────────────────────────────────────────
 function renderDiagList() {
-  renderDiagHome();
+  renderDiagHome();   // update merged dashboard
+  renderDiagTable();  // update diagnostics tab table
 }
 
 function diagStatCard(n, label, numColor, topBorderClass) {
@@ -4195,51 +4084,35 @@ function diagStatCard(n, label, numColor, topBorderClass) {
 }
 
 function renderDiagHome() {
+  const el = document.getElementById('dashboardContent');
+  if (!el) return;
+
   const now   = new Date();
   const hour  = now.getHours();
   const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const dateStr = now.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' });
 
-  const greetEl = document.getElementById('diag-home-greeting');
-  const dateEl  = document.getElementById('diag-home-date');
-  const subEl   = document.getElementById('diag-home-sub');
-  if (greetEl) greetEl.textContent = `${greet}, Alex.`;
-  if (dateEl)  dateEl.textContent  = dateStr;
-
-  // ── Attention items ─────────────────────────────────────────────────────────
-  const closingUrgent = ALL_DIAGS.filter(d =>
-    d.status === 'survey_open' && d.close_date && diagDaysUntil(d.close_date) <= 2);
-  const needReport   = ALL_DIAGS.filter(d => d.status === 'survey_closed' && !d.report_generated_at);
-  const lowResponse  = ALL_DIAGS.filter(d => {
-    if (d.status !== 'survey_open') return false;
-    if (closingUrgent.find(c => c.id === d.id)) return false; // don't double-flag
-    const s = DIAG_RATER_STATS[d.id];
-    return s && s.total >= 4 && s.pct < 50 && d.close_date && diagDaysUntil(d.close_date) <= 6;
-  });
-  const missingCIs   = DIAG_COACHING_CLIENTS.filter(c => c.checkinStatus === 'overdue');
-  const attention    = closingUrgent.length + needReport.length + lowResponse.length + missingCIs.length;
-
-  if (subEl) subEl.textContent = attention > 0
-    ? `${attention} thing${attention !== 1 ? 's' : ''} need your attention today.`
-    : 'Everything looks good today.';
-
-  // ── Stat cards ──────────────────────────────────────────────────────────────
+  // ── Stat counts ──────────────────────────────────────────────────────────────
   const activeCoaching = DIAG_COACHING_CLIENTS.length;
   const activeDiags    = ALL_DIAGS.filter(d =>
     ['survey_open','self_assessment_pending','self_assessment_complete','intake_complete'].includes(d.status)).length;
   const closingWeek    = ALL_DIAGS.filter(d =>
     d.status === 'survey_open' && d.close_date && diagDaysUntil(d.close_date) <= 7).length;
 
-  const statsEl = document.getElementById('diag-list-stats');
-  if (statsEl) {
-    statsEl.innerHTML =
-      diagStatCard(activeCoaching, 'Active Coaching',   'var(--d-blue)',  null) +
-      diagStatCard(activeDiags,    'Active Diagnostics', 'var(--d-blue)', null) +
-      diagStatCard(attention,      'Need Attention',    attention  > 0 ? 'var(--d-amber)' : 'var(--d-blue)', attention  > 0 ? 'dstat-top-amber' : null) +
-      diagStatCard(closingWeek,    'Closing This Week', closingWeek > 0 ? 'var(--d-red2)' : 'var(--d-blue)', closingWeek > 0 ? 'dstat-top-red'   : null);
-  }
+  // ── Attention items ──────────────────────────────────────────────────────────
+  const closingUrgent = ALL_DIAGS.filter(d =>
+    d.status === 'survey_open' && d.close_date && diagDaysUntil(d.close_date) <= 2);
+  const needReport   = ALL_DIAGS.filter(d => d.status === 'survey_closed' && !d.report_generated_at);
+  const lowResponse  = ALL_DIAGS.filter(d => {
+    if (d.status !== 'survey_open') return false;
+    if (closingUrgent.find(c => c.id === d.id)) return false;
+    const s = DIAG_RATER_STATS[d.id];
+    return s && s.total >= 4 && s.pct < 50 && d.close_date && diagDaysUntil(d.close_date) <= 6;
+  });
+  const missingCIs   = DIAG_COACHING_CLIENTS.filter(c => c.checkinStatus === 'overdue');
+  const attention    = closingUrgent.length + needReport.length + lowResponse.length + missingCIs.length;
 
-  // ── Needs Attention flags ───────────────────────────────────────────────────
+  // ── Needs Attention flags ────────────────────────────────────────────────────
   let flagsHtml = '';
 
   closingUrgent.forEach(d => {
@@ -4247,16 +4120,14 @@ function renderDiagHome() {
     const stats = DIAG_RATER_STATS[d.id] || { total:0, responded:0, pct:0 };
     const label = days <= 0 ? 'closes today' : `closes in ${days} day${days!==1?'s':''}`;
     const detail = stats.total > 0
-      ? `${stats.responded} of ${stats.total} raters responded (${stats.pct}%). ${stats.responded >= 7 ? 'Above the 7-rater minimum. ' : ''}${days <= 0 ? 'Data locks tonight.' : 'Reach out if response rate is low.'}`
+      ? `${stats.responded} of ${stats.total} raters responded (${stats.pct}%). ${days <= 0 ? 'Data locks tonight.' : 'Reach out if response rate is low.'}`
       : days <= 0 ? 'Data locks tonight.' : 'No raters invited yet.';
     flagsHtml += `<div class="dflag dflag-amber">
       <div style="font-size:22px;flex-shrink:0;margin-top:-2px;">⏰</div>
       <div style="flex:1;">
         <div style="font-size:13px;font-weight:700;color:var(--d-amber);">${d.client_name}'s diagnostic ${label}</div>
         <div style="font-size:12px;color:var(--d-mid);margin-top:3px;">${detail}</div>
-        <div style="margin-top:10px;">
-          <button class="dbtn dbtn-outline dbtn-sm" onclick="openDiag('${d.id}')">View Diagnostic →</button>
-        </div>
+        <div style="margin-top:10px;"><button class="dbtn dbtn-outline dbtn-sm" onclick="showSection('diagnostics');openDiag('${d.id}')">View Diagnostic →</button></div>
       </div>
       <span class="dbadge ${d.tier==='pro'?'dbadge-pro':'dbadge-standard'}" style="flex-shrink:0;align-self:flex-start;">${d.tier==='pro'?'Pro':'Standard'}</span>
     </div>`;
@@ -4267,10 +4138,8 @@ function renderDiagHome() {
       <div style="font-size:22px;flex-shrink:0;margin-top:-2px;">📄</div>
       <div style="flex:1;">
         <div style="font-size:13px;font-weight:700;color:var(--d-dark);">${d.client_name} — survey closed. Ready to generate report.</div>
-        <div style="font-size:12px;color:var(--d-mid);margin-top:3px;">Generate the diagnostic report from the detail screen → Report tab.</div>
-        <div style="margin-top:10px;">
-          <button class="dbtn dbtn-outline dbtn-sm" onclick="openDiag('${d.id}')">Generate Report →</button>
-        </div>
+        <div style="font-size:12px;color:var(--d-mid);margin-top:3px;">Open the diagnostic → Report tab to generate the draft.</div>
+        <div style="margin-top:10px;"><button class="dbtn dbtn-outline dbtn-sm" onclick="showSection('diagnostics');openDiag('${d.id}')">Generate Report →</button></div>
       </div>
     </div>`;
   });
@@ -4282,10 +4151,8 @@ function renderDiagHome() {
       <div style="font-size:22px;flex-shrink:0;margin-top:-2px;">📊</div>
       <div style="flex:1;">
         <div style="font-size:13px;font-weight:700;color:var(--d-dark);">${d.client_name}'s response rate is low — ${stats.responded} of ${stats.total} (${stats.pct}%)</div>
-        <div style="font-size:12px;color:var(--d-mid);margin-top:3px;">Closes ${diagFormatDate(d.close_date)} · ${days} days left. Consider following up with non-responders now.</div>
-        <div style="margin-top:10px;">
-          <button class="dbtn dbtn-outline dbtn-sm" onclick="openDiag('${d.id}')">View Diagnostic →</button>
-        </div>
+        <div style="font-size:12px;color:var(--d-mid);margin-top:3px;">Closes ${diagFormatDate(d.close_date)} · ${days} days left. Consider following up with non-responders.</div>
+        <div style="margin-top:10px;"><button class="dbtn dbtn-outline dbtn-sm" onclick="showSection('diagnostics');openDiag('${d.id}')">View Diagnostic →</button></div>
       </div>
       <span class="dbadge ${d.tier==='pro'?'dbadge-pro':'dbadge-standard'}" style="flex-shrink:0;align-self:flex-start;">${d.tier==='pro'?'Pro':'Standard'}</span>
     </div>`;
@@ -4315,24 +4182,24 @@ function renderDiagHome() {
           <span style="font-size:20px;">✅</span>
           <div>
             <div style="font-size:14px;font-weight:700;color:var(--d-green);">You're all caught up</div>
-            <div style="font-size:12px;color:var(--d-mid);margin-top:2px;">No diagnostics or clients need immediate attention today.</div>
+            <div style="font-size:12px;color:var(--d-mid);margin-top:2px;">No diagnostics or clients need attention today.</div>
           </div>
         </div>
       </div>`;
 
-  // ── Active Diagnostics quick panel ─────────────────────────────────────────
-  const openDiags = ALL_DIAGS.filter(d => d.status === 'survey_open').slice(0, 4);
-  const setupDiags= ALL_DIAGS.filter(d =>
+  // ── Active Diagnostics quick panel ──────────────────────────────────────────
+  const openDiags  = ALL_DIAGS.filter(d => d.status === 'survey_open').slice(0, 4);
+  const setupDiags = ALL_DIAGS.filter(d =>
     ['self_assessment_pending','self_assessment_complete','intake_complete'].includes(d.status)).slice(0, 2);
 
   let diagsQuick = openDiags.length > 0
     ? openDiags.map(d => {
         const stats = DIAG_RATER_STATS[d.id] || { total:0, responded:0, pct:0 };
         const days  = d.close_date ? diagDaysUntil(d.close_date) : null;
-        const pctColor  = stats.pct >= 60 ? 'var(--d-green)' : stats.pct >= 40 ? 'var(--d-amber)' : 'var(--d-red2)';
-        const dayColor  = days === null ? 'var(--d-mid)' : days <= 1 ? 'var(--d-red2)' : days <= 4 ? 'var(--d-amber)' : 'var(--d-mid)';
-        const dayLabel  = days === null ? '—' : days <= 0 ? 'Closes today' : `${days} day${days!==1?'s':''} left`;
-        return `<div class="dquick-row" onclick="openDiag('${d.id}')">
+        const pctColor = stats.pct >= 60 ? 'var(--d-green)' : stats.pct >= 40 ? 'var(--d-amber)' : 'var(--d-red2)';
+        const dayColor = days === null ? 'var(--d-mid)' : days <= 1 ? 'var(--d-red2)' : days <= 4 ? 'var(--d-amber)' : 'var(--d-mid)';
+        const dayLabel = days === null ? '—' : days <= 0 ? 'Closes today' : `${days} day${days!==1?'s':''} left`;
+        return `<div class="dquick-row" onclick="showSection('diagnostics');openDiag('${d.id}')">
           <div>
             <div style="font-size:13px;font-weight:700;">${d.client_name}</div>
             <div style="font-size:11px;color:var(--d-mid);">${d.close_date?`Closes ${diagFormatDate(d.close_date)}`:'No close date'} · ${stats.total>0?`${stats.responded}/${stats.total} raters`:'No raters yet'}</div>
@@ -4347,7 +4214,7 @@ function renderDiagHome() {
 
   if (setupDiags.length > 0) {
     diagsQuick += setupDiags.map(d => `
-      <div class="dquick-row" onclick="openDiag('${d.id}')" style="margin-top:8px;">
+      <div class="dquick-row" onclick="showSection('diagnostics');openDiag('${d.id}')" style="margin-top:8px;">
         <div>
           <div style="font-size:13px;font-weight:700;">${d.client_name}</div>
           <div style="font-size:11px;color:var(--d-mid);">Setup in progress</div>
@@ -4356,15 +4223,15 @@ function renderDiagHome() {
       </div>`).join('');
   }
 
-  // ── Coaching quick panel ────────────────────────────────────────────────────
+  // ── Coaching quick panel ─────────────────────────────────────────────────────
   let coachQuick;
   if (DIAG_COACHING_CLIENTS.length > 0) {
     coachQuick = DIAG_COACHING_CLIENTS.slice(0, 5).map(c => {
       const isWarn = c.checkinStatus === 'overdue';
-      return `<div class="dquick-row ${isWarn ? 'dquick-row-warn' : ''}">
+      return `<div class="dquick-row ${isWarn?'dquick-row-warn':''}">
         <div>
           <div style="font-size:13px;font-weight:700;">${c.name}</div>
-          <div style="font-size:11px;color:var(--d-mid);">${c.currentWeek ? `Sprint ${c.current_sprint_number||1}, Wk ${c.currentWeek}` : 'No active plan'}${c.org ? ' · '+c.org : ''}</div>
+          <div style="font-size:11px;color:var(--d-mid);">${c.currentWeek?`Sprint ${c.current_sprint_number||1}, Wk ${c.currentWeek}`:'No active plan'}${c.org?' · '+c.org:''}</div>
         </div>
         <div style="text-align:right;flex-shrink:0;">
           ${c.checkinStatus==='submitted'
@@ -4372,28 +4239,28 @@ function renderDiagHome() {
             : c.checkinStatus==='overdue'
               ? `<div style="font-size:12px;color:var(--d-amber);font-weight:600;">⚠ Not submitted</div>`
               : `<div style="font-size:12px;color:var(--d-mid);">No plan yet</div>`}
-          ${c.lastCIDate ? `<div style="font-size:11px;color:var(--d-mid);">Last: ${c.lastCIDate}</div>` : ''}
+          ${c.lastCIDate?`<div style="font-size:11px;color:var(--d-mid);">Last: ${c.lastCIDate}</div>`:''}
         </div>
       </div>`;
     }).join('');
   } else {
     coachQuick = `<div style="font-size:13px;color:var(--d-mid);padding:8px 0;">
-      ${_diagBooted ? 'No active coaching clients.' : '<span class="spinner" style="display:inline-block;margin-right:6px;"></span>Loading…'}</div>`;
+      ${_diagBooted?'No active coaching clients.':'<span class="spinner" style="display:inline-block;margin-right:6px;"></span>Loading…'}</div>`;
   }
 
-  // ── Reports & Deliverables ──────────────────────────────────────────────────
+  // ── Reports & Deliverables ───────────────────────────────────────────────────
   const reportsReady   = ALL_DIAGS.filter(d => d.report_generated_at && d.status !== 'plan_active');
   const reportsPending = ALL_DIAGS.filter(d => d.status === 'survey_closed' && !d.report_generated_at);
   let reportsHtml = '';
 
-  reportsReady.slice(0, 3).forEach(d => {
+  reportsReady.slice(0, 4).forEach(d => {
     reportsHtml += `<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid var(--d-border);border-radius:6px;background:var(--d-light);margin-bottom:8px;">
       <div style="font-size:18px;">📄</div>
       <div style="flex:1;">
         <div style="font-size:13px;font-weight:700;">${d.client_name} — Report ready</div>
         <div style="font-size:11px;color:var(--d-mid);">Generated ${diagFormatDate(d.report_generated_at)}</div>
       </div>
-      <button class="dbtn dbtn-outline dbtn-sm" onclick="openDiag('${d.id}')">Review →</button>
+      <button class="dbtn dbtn-outline dbtn-sm" onclick="showSection('diagnostics');openDiag('${d.id}')">Review →</button>
     </div>`;
   });
 
@@ -4402,9 +4269,9 @@ function renderDiagHome() {
       <div style="font-size:18px;">📄</div>
       <div style="flex:1;">
         <div style="font-size:13px;font-weight:700;color:var(--d-mid);">${d.client_name} — Ready to generate</div>
-        <div style="font-size:11px;color:var(--d-mid);">Survey closed · Open Diagnostic Detail → Report tab</div>
+        <div style="font-size:11px;color:var(--d-mid);">Survey closed · Open Diagnostic → Report tab</div>
       </div>
-      <button class="dbtn dbtn-outline dbtn-sm" onclick="openDiag('${d.id}')">Generate →</button>
+      <button class="dbtn dbtn-outline dbtn-sm" onclick="showSection('diagnostics');openDiag('${d.id}')">Generate →</button>
     </div>`;
   });
 
@@ -4412,62 +4279,148 @@ function renderDiagHome() {
     reportsHtml = `<div style="font-size:13px;color:var(--d-mid);">No reports ready yet. Reports appear here once a diagnostic closes and you generate the draft.</div>`;
   }
 
-  // ── Assemble alerts area ────────────────────────────────────────────────────
-  const alertsEl = document.getElementById('diag-list-alerts');
-  if (alertsEl) {
-    alertsEl.innerHTML = needsSection + `
-    <div class="dtwo-col" style="margin-bottom:20px;">
-      <div class="card" style="margin-bottom:0;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-          <div class="card-title" style="margin-bottom:0;">Active Diagnostics</div>
-          <button class="dbtn dbtn-outline dbtn-sm" onclick="document.getElementById('diag-all-card').scrollIntoView({behavior:'smooth'})">View All ↓</button>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:8px;">${diagsQuick}</div>
-      </div>
-      <div class="card" style="margin-bottom:0;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-          <div class="card-title" style="margin-bottom:0;">Coaching Clients</div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:8px;">${coachQuick}</div>
-      </div>
-    </div>
-    <div class="card" style="margin-bottom:20px;">
-      <div class="card-title" style="margin-bottom:14px;">Reports &amp; Deliverables</div>
-      ${reportsHtml}
-    </div>
-    ${renderTeamReportsCard()}`;
-  }
+  // ── Assemble full dashboard ──────────────────────────────────────────────────
+  el.innerHTML = `
+  <div style="margin-bottom:22px;">
+    <div style="font-size:12px;color:var(--d-mid);">${dateStr}</div>
+    <div style="font-size:24px;font-weight:800;color:var(--d-blue);margin:2px 0;">${greet}, Alex.</div>
+    <div style="font-size:13px;color:var(--d-mid);">${attention > 0 ? `${attention} thing${attention!==1?'s':''} need your attention today.` : 'Everything looks good today.'}</div>
+  </div>
 
-  // Render full table below
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px;">
+    ${diagStatCard(activeCoaching,'Active Coaching','var(--d-blue)',null)}
+    ${diagStatCard(activeDiags,'Active Diagnostics','var(--d-blue)',null)}
+    ${diagStatCard(attention,'Need Attention',attention>0?'var(--d-amber)':'var(--d-blue)',attention>0?'dstat-top-amber':null)}
+    ${diagStatCard(closingWeek,'Closing This Week',closingWeek>0?'var(--d-red2)':'var(--d-blue)',closingWeek>0?'dstat-top-red':null)}
+  </div>
+
+  ${needsSection}
+
+  <div class="dtwo-col" style="margin-bottom:20px;">
+    <div class="card" style="margin-bottom:0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div class="card-title" style="margin-bottom:0;">Active Diagnostics</div>
+        <button class="dbtn dbtn-outline dbtn-sm" onclick="showSection('diagnostics')">View All →</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;">${diagsQuick}</div>
+    </div>
+    <div class="card" style="margin-bottom:0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div class="card-title" style="margin-bottom:0;">Coaching Clients</div>
+        <button class="dbtn dbtn-outline dbtn-sm" onclick="showSection('clients')">View All →</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;">${coachQuick}</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:20px;">
+    <div class="card-title" style="margin-bottom:14px;">Reports &amp; Deliverables</div>
+    ${reportsHtml}
+  </div>
+
+  ${renderTeamReportsCard()}`;
+}
+
+
+function setDiagFilter(f, el) {
+  _diagFilter = f;
+  document.querySelectorAll('.diag-filter-btn').forEach(b => b.classList.remove('active'));
+  if (el) el.classList.add('active');
+  renderDiagTable();
+}
+
+function toggleDiagSort(col) {
+  if (_diagSort.col === col) {
+    _diagSort.dir = _diagSort.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    _diagSort = { col, dir: col === 'close_date' ? 'asc' : 'desc' };
+  }
   renderDiagTable();
 }
 
 function renderDiagTable() {
   const el = document.getElementById('diag-table-wrap');
   if (!el) return;
+
+  const SETUP_STATUSES  = ['intake_complete','self_assessment_pending','self_assessment_complete'];
+  const CLOSED_STATUSES = ['survey_closed'];
+  const DONE_STATUSES   = ['report_draft','report_final','plan_active'];
+
+  const search = (document.getElementById('diag-search')?.value || '').toLowerCase().trim();
+
+  let filtered = ALL_DIAGS.filter(d => {
+    if (search) {
+      const hay = `${d.client_name || ''} ${d.client_org || ''} ${d.client_title || ''}`.toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    if (_diagFilter === 'active')  return d.status === 'survey_open';
+    if (_diagFilter === 'setup')   return SETUP_STATUSES.includes(d.status);
+    if (_diagFilter === 'closed')  return CLOSED_STATUSES.includes(d.status);
+    if (_diagFilter === 'done')    return DONE_STATUSES.includes(d.status);
+    return true;
+  });
+
   if (ALL_DIAGS.length === 0) {
     el.innerHTML = `<div class="dempty-state"><div style="font-size:32px;margin-bottom:8px;">📋</div>
       <div style="font-size:14px;font-weight:600;margin-bottom:8px;">No diagnostics yet</div>
-      <div style="font-size:13px;">Click "+ New Diagnostic" to create your first one.</div></div>`;
+      <div style="font-size:13px;color:var(--d-mid);">Start a diagnostic from a client profile → Diagnostics tab.</div></div>`;
     return;
   }
-  const rows = ALL_DIAGS.map(d => `
-  <tr onclick="openDiag('${d.id}')" style="cursor:pointer;">
-    <td><div style="font-weight:700;font-size:13px;">${d.client_name}</div>
-        <div style="font-size:11px;color:var(--d-mid);">${[d.client_title,d.client_org].filter(Boolean).join(' · ')}</div></td>
-    <td>${diagStatusBadge(d.status)}</td>
-    <td><span class="dbadge ${d.tier==='pro'?'dbadge-pro':'dbadge-standard'}">${d.tier==='pro'?'Pro':'Standard'}</span></td>
-    <td style="font-size:12px;color:var(--d-mid);">${d.close_date ? diagFormatDate(d.close_date) : '—'}</td>
-    <td style="font-size:12px;">${d.status==='survey_open' ? `<span style="color:${diagDaysUntil(d.close_date)<=2?'var(--d-red2)':'var(--d-amber)'};">${diagDaysUntil(d.close_date)}d left</span>` : '—'}</td>
-    <td><button class="dbtn dbtn-outline dbtn-sm">Open →</button></td>
-  </tr>`).join('');
+
+  if (filtered.length === 0) {
+    el.innerHTML = `<div class="dempty-state"><div style="font-size:32px;margin-bottom:8px;">🔍</div>
+      <div style="font-size:14px;font-weight:600;margin-bottom:8px;">No matches</div>
+      <div style="font-size:13px;color:var(--d-mid);">Try adjusting your search or filter.</div></div>`;
+    return;
+  }
+
+  // Sort
+  filtered.sort((a, b) => {
+    const av = a[_diagSort.col] || '';
+    const bv = b[_diagSort.col] || '';
+    const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+    return _diagSort.dir === 'asc' ? cmp : -cmp;
+  });
+
+  function sortTh(col, label) {
+    const active = _diagSort.col === col;
+    const cls = active ? (_diagSort.dir === 'asc' ? 'sort-asc' : 'sort-desc') : '';
+    return `<th class="sortable ${cls}" onclick="toggleDiagSort('${col}')">${label}</th>`;
+  }
+
+  const rows = filtered.map(d => {
+    const s = DIAG_RATER_STATS[d.id] || { total:0, responded:0, pct:0 };
+    const daysLeft = d.close_date ? diagDaysUntil(d.close_date) : null;
+    const dayColor = daysLeft === null ? '' : daysLeft <= 2 ? 'var(--d-red2)' : daysLeft <= 5 ? 'var(--d-amber)' : 'var(--d-mid)';
+    const pctColor = s.pct >= 60 ? 'var(--d-green)' : s.pct >= 40 ? 'var(--d-amber)' : 'var(--d-red2)';
+    return `<tr onclick="openDiag('${d.id}')" style="cursor:pointer;">
+      <td><div style="font-weight:700;font-size:13px;">${escHtml(d.client_name)}</div>
+          <div style="font-size:11px;color:var(--d-mid);">${escHtml([d.client_title,d.client_org].filter(Boolean).join(' · '))}</div></td>
+      <td>${diagStatusBadge(d.status)}</td>
+      <td><span class="dbadge ${d.tier==='pro'?'dbadge-pro':'dbadge-standard'}">${d.tier==='pro'?'Pro':'Standard'}</span></td>
+      <td style="font-size:12px;color:var(--d-mid);">${d.close_date ? diagFormatDate(d.close_date) : '—'}</td>
+      <td style="font-size:12px;">${d.status==='survey_open' && daysLeft !== null ? `<span style="color:${dayColor};font-weight:600;">${daysLeft}d</span>` : '—'}</td>
+      <td style="font-size:12px;">${d.status==='survey_open' && s.total > 0 ? `<span style="font-weight:700;color:${pctColor};">${s.pct}%</span><span style="color:var(--d-mid);font-size:11px;"> (${s.responded}/${s.total})</span>` : '—'}</td>
+      <td><button class="dbtn dbtn-outline dbtn-sm">Open →</button></td>
+    </tr>`;
+  }).join('');
+
   el.innerHTML = `
   <table>
     <thead><tr>
-      <th>Client</th><th>Status</th><th>Tier</th><th>Closes</th><th>Countdown</th><th></th>
+      ${sortTh('client_name','Leader')}
+      <th>Status</th>
+      <th>Tier</th>
+      ${sortTh('close_date','Closes')}
+      <th>Countdown</th>
+      <th>Response</th>
+      <th></th>
     </tr></thead>
     <tbody>${rows}</tbody>
-  </table>`;
+  </table>
+  <div style="padding:8px 16px;font-size:11px;color:var(--d-mid);border-top:1px solid var(--d-border);">
+    Showing ${filtered.length} of ${ALL_DIAGS.length} diagnostic${ALL_DIAGS.length !== 1 ? 's' : ''}
+  </div>`;
 }
 
 // ── Open Detail ───────────────────────────────────────────────────────────────
@@ -5410,6 +5363,7 @@ async function generateTeamReport() {
 function openTeamReport(id) {
   const report = ALL_TEAM_REPORTS.find(r => r.id === id);
   if (!report) return;
+  showSection('diagnostics');
   renderTeamReportViewer(report);
   showDiagView('team-report');
 }
