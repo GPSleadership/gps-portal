@@ -119,9 +119,10 @@ export default async function handler(req, res) {
     case 'generate-question':    return handleGenerateQuestion(req, res);
     case 'generate-report':      return handleGenerateReport(req, res);
     case 'generate-team-report': return handleGenerateTeamReport(req, res);
+    case 'finalize-report':      return handleFinalizeReport(req, res);
     case 'reminders':            return handleReminders(req, res);
     default:
-      return res.status(400).json({ error: `Unknown action: "${action}". Valid: send-invites, generate-question, generate-report, generate-team-report, reminders` });
+      return res.status(400).json({ error: `Unknown action: "${action}". Valid: send-invites, generate-question, generate-report, generate-team-report, finalize-report, reminders` });
   }
 }
 
@@ -652,6 +653,111 @@ Generate the diagnostic report JSON now.`.trim();
 
   } catch (err) {
     console.error('[diagnostic/generate-report] error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ACTION: finalize-report
+// POST /api/diagnostic?action=finalize-report
+// Body: { diagnostic_id }
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function buildReportReadyEmail({ clientName, leaderTitle, leaderOrg, portalUrl }) {
+  const firstName = (clientName || '').split(' ')[0] || 'there';
+  const orgLine   = [leaderTitle, leaderOrg].filter(Boolean).join(' — ');
+
+  return `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
+      <div style="background:#1A3D6E;padding:20px 28px;border-radius:8px 8px 0 0;">
+        <div style="color:#C09A2A;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">GPS Leadership Solutions</div>
+        <div style="color:#ffffff;font-size:20px;font-weight:700;">Your Leadership Report Is Ready</div>
+      </div>
+      <div style="background:#ffffff;padding:28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
+        <p>Hi ${firstName},</p>
+        <p>Your GPS Leadership Diagnostic report has been finalized${orgLine ? ` for <strong>${orgLine}</strong>` : ''}.</p>
+        <p>Your results — including your TP3™ breakdown, rater feedback themes, and 90-day priorities — are now available in your portal.</p>
+        <div style="margin:28px 0;text-align:center;">
+          <a href="${portalUrl}"
+             style="background:#1A3D6E;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;display:inline-block;letter-spacing:0.3px;">
+            View My Report →
+          </a>
+        </div>
+        <p style="font-size:13px;color:#666;">Or copy this link: <a href="${portalUrl}" style="color:#1A3D6E;">${portalUrl}</a></p>
+        <p style="margin-top:24px;">We'll use your next session to walk through the findings and build your action plan.</p>
+        <p>– Alex Tremble<br /><span style="color:#666;font-size:13px;">GPS Leadership Solutions</span></p>
+        <div style="margin-top:32px;padding-top:20px;border-top:1px solid #eee;font-size:11px;color:#999;">
+          You're receiving this because a GPS Leadership diagnostic was completed on your behalf.
+          Questions? Reply to this email.
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function handleFinalizeReport(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const { diagnostic_id } = req.body || {};
+  if (!diagnostic_id) return res.status(400).json({ error: 'diagnostic_id required' });
+
+  try {
+    // 1. Fetch the diagnostic
+    const diagRes = await sb(`/rest/v1/diagnostics?id=eq.${diagnostic_id}&select=*`, 'GET', null,
+      { Accept: 'application/vnd.pgrst.object+json' });
+    if (!diagRes.ok) return res.status(404).json({ error: 'Diagnostic not found' });
+    const diag = await diagRes.json();
+
+    // 2. Fetch the client (to get portal token, email, name)
+    const clientRes = await sb(`/rest/v1/clients?id=eq.${diag.client_id}&select=*`, 'GET', null,
+      { Accept: 'application/vnd.pgrst.object+json' });
+    if (!clientRes.ok) return res.status(404).json({ error: 'Client not found' });
+    const client = await clientRes.json();
+
+    // 3. Mark diagnostic as finalized
+    const now = new Date().toISOString();
+    const updateRes = await sb(`/rest/v1/diagnostics?id=eq.${diagnostic_id}`, 'PATCH',
+      { status: 'report_final', report_finalized_at: now },
+      { Prefer: 'return=minimal' });
+    if (!updateRes.ok) {
+      const errText = await updateRes.text();
+      return res.status(500).json({ error: `Failed to update diagnostic: ${errText}` });
+    }
+
+    // 4. Build portal URL
+    const portalUrl = `${PORTAL_BASE}/client?token=${client.token}`;
+
+    // 5. Send email to client
+    const emailHtml = buildReportReadyEmail({
+      clientName:  client.name,
+      leaderTitle: client.title || null,
+      leaderOrg:   client.organization || null,
+      portalUrl,
+    });
+
+    let emailId = null;
+    try {
+      emailId = await sendEmail({
+        to:            client.email,
+        subject:       'Your GPS Leadership Report Is Ready',
+        html:          emailHtml,
+        emailType:     'report_ready',
+        recipientName: client.name,
+      });
+    } catch (emailErr) {
+      // Don't fail the whole request if email errors — report is still finalized
+      console.error('[finalize-report] email error:', emailErr.message);
+    }
+
+    return res.status(200).json({
+      ok:         true,
+      portal_url: portalUrl,
+      email_sent: !!emailId,
+    });
+
+  } catch (err) {
+    console.error('[diagnostic/finalize-report] error:', err);
     return res.status(500).json({ error: err.message });
   }
 }

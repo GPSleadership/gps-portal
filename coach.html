@@ -4840,7 +4840,7 @@ function renderReportTab() {
         ⚙ Generate Draft Report (Claude)
       </button>
       ${d.report_generated_at && !d.report_finalized_at ? `
-      <button class="dbtn dbtn-gold" onclick="finalizeReport()">✓ Finalize Report</button>` : ''}
+      <button class="dbtn dbtn-gold" onclick="finalizeReport()">✓ Finalize &amp; Send to Client</button>` : ''}
       ${d.debrief_completed_at ? '' : d.report_finalized_at ? `
       <button class="dbtn dbtn-outline" onclick="markDebriefComplete()">Mark Debrief Complete →</button>` : ''}
     </div>
@@ -5035,9 +5035,23 @@ async function generateReport(e) {
 }
 
 async function finalizeReport() {
-  if (!confirm('Finalize this report? You can still edit before the debrief.')) return;
-  await updateDiag({ status: 'report_final', report_finalized_at: new Date().toISOString() });
-  await refreshSelected();
+  const d = DIAG_SELECTED;
+  if (!d) return;
+  if (!confirm('Finalize and send to client? This will email them a link to their report in the portal.')) return;
+  try {
+    const r = await fetch('/api/diagnostic?action=finalize-report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ diagnostic_id: d.id }),
+    });
+    const data = await r.json();
+    if (!r.ok) { alert('Error finalizing report: ' + (data.error || r.status)); return; }
+    const emailNote = data.email_sent ? ' Email sent to client.' : ' (Email could not be sent — check Resend config.)';
+    alert('Report finalized.' + emailNote);
+    await refreshSelected();
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
 }
 
 async function markDebriefComplete() {

@@ -650,6 +650,84 @@
       padding-bottom: 60px;
     }
     #resultsPanel.active { display: block; }
+
+    /* ── Diagnostic Panel ── */
+    #diagPanel {
+      display: none;
+      background: var(--light-sand);
+      min-height: calc(100vh - 140px);
+      padding-bottom: 60px;
+    }
+    #diagPanel.active { display: block; }
+    .ptab-diag.active { border-bottom-color: #2EA887; }
+    .diag-inner {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 32px 32px;
+    }
+    @media (max-width: 768px) { .diag-inner { padding: 20px 16px; } }
+
+    /* Step tracker */
+    .dc-steps { display: flex; gap: 0; margin-bottom: 32px; overflow: hidden; border-radius: 10px; box-shadow: 0 1px 6px rgba(0,0,0,.08); }
+    .dc-step { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 12px 8px 10px; background: #fff; border-right: 1px solid #e8ecf2; font-size: 11px; text-align: center; min-width: 0; position: relative; gap: 4px; }
+    .dc-step:last-child { border-right: none; }
+    .dc-step-num { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; background: #e8ecf2; color: #6b7280; flex-shrink: 0; }
+    .dc-step.done .dc-step-num  { background: #2EA887; color: #fff; }
+    .dc-step.current .dc-step-num { background: #1A3D6E; color: #fff; }
+    .dc-step-label { color: #6b7280; font-size: 10px; line-height: 1.3; }
+    .dc-step.done .dc-step-label { color: #2EA887; }
+    .dc-step.current .dc-step-label { color: #1A3D6E; font-weight: 600; }
+    @media (max-width: 600px) { .dc-step-label { display: none; } .dc-step { padding: 10px 4px; } }
+
+    /* Active mode cards */
+    .dc-card { background: #fff; border-radius: 10px; padding: 20px 24px; margin-bottom: 16px; box-shadow: 0 1px 6px rgba(0,0,0,.07); }
+    .dc-card h3 { font-size: 15px; font-weight: 700; color: #1A3D6E; margin: 0 0 8px; }
+    .dc-card p  { font-size: 13px; color: #444; margin: 0 0 12px; line-height: 1.6; }
+    .dc-card-done { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #2EA887; font-weight: 600; }
+    .dc-status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
+    .dc-badge-setup    { background: #EFF6FF; color: #1D4ED8; }
+    .dc-badge-active   { background: #ECFDF5; color: #059669; }
+    .dc-badge-closed   { background: #FEF9EC; color: #B45309; }
+    .dc-badge-final    { background: #F3F0FF; color: #7C3AED; }
+    .dc-badge-done     { background: #F0FDF4; color: #15803D; }
+
+    /* Rater list in portal */
+    .dc-rater-list { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+    .dc-rater-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #f5f7fa; border-radius: 8px; font-size: 13px; }
+    .dc-rater-item .ri-status { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; }
+    .ri-done   { background: #ECFDF5; color: #059669; }
+    .ri-pend   { background: #FEF9EC; color: #B45309; }
+    .ri-self   { background: #EFF6FF; color: #1D4ED8; }
+    .dc-rater-name { font-weight: 600; color: #1a1a1a; flex: 1; }
+    .dc-rater-role { color: #6b7280; font-size: 12px; }
+    .dc-rater-item.is-self { border-left: 3px solid #1A3D6E; }
+
+    /* Add rater form */
+    .dc-add-rater { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+    .dc-add-rater input, .dc-add-rater select { flex: 1; min-width: 140px; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px; }
+    .dc-add-rater button { padding: 8px 18px; background: #1A3D6E; color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .dc-add-rater button:hover { background: #14305a; }
+    .dc-submit-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+    .dc-btn { padding: 10px 22px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; border: none; }
+    .dc-btn-primary { background: #1A3D6E; color: #fff; }
+    .dc-btn-primary:hover { background: #14305a; }
+    .dc-btn-outline { background: transparent; border: 2px solid #1A3D6E; color: #1A3D6E; }
+    .dc-btn-outline:hover { background: #f0f4ff; }
+    .dc-msg { font-size: 12px; color: #6b7280; margin-top: 6px; }
+    .dc-msg.ok { color: #059669; }
+    .dc-msg.err { color: #dc2626; }
+
+    /* Report mode */
+    .dc-report-header { background: #1A3D6E; border-radius: 10px 10px 0 0; padding: 24px 28px; margin-bottom: 0; }
+    .dc-report-header h2 { color: #fff; font-size: 20px; margin: 0 0 4px; }
+    .dc-report-header .dc-rh-meta { color: rgba(255,255,255,.7); font-size: 13px; }
+    .dc-report-body { background: #fff; border-radius: 0 0 10px 10px; padding: 28px; box-shadow: 0 2px 12px rgba(0,0,0,.08); margin-bottom: 24px; line-height: 1.75; font-size: 14px; color: #1a1a1a; }
+    .dc-report-body h2 { font-size: 17px; font-weight: 700; color: #1A3D6E; margin: 28px 0 10px; border-bottom: 2px solid #e8ecf2; padding-bottom: 6px; }
+    .dc-report-body h3 { font-size: 15px; font-weight: 700; color: #1A3D6E; margin: 20px 0 8px; }
+    .dc-report-body p  { margin: 0 0 14px; }
+    .dc-report-body ul { padding-left: 20px; margin: 0 0 14px; }
+    .dc-report-body ul li { margin-bottom: 6px; }
+    .dc-report-body .report-highlight { background: #f5f7fa; border-left: 4px solid #C09A2A; padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 16px 0; }
     .results-inner {
       max-width: 760px;
       margin: 0 auto;
@@ -1754,6 +1832,7 @@
 <div id="portalTabNav" style="display:none;">
   <button class="ptab active" id="tabPlan" onclick="showPortalTab('plan')">My Plan</button>
   <button class="ptab ptab-results" id="tabResults" onclick="showPortalTab('results')">My Results</button>
+  <button class="ptab ptab-diag" id="tabDiag" onclick="showPortalTab('diagnostic')" style="display:none;">My Diagnostic</button>
   <button class="ptab ptab-ask" id="tabAsk" onclick="showPortalTab('ask')" style="display:none;">Ask Alex</button>
 </div>
 
@@ -1897,6 +1976,16 @@
   </div>
 </div>
 
+<!-- ── DIAGNOSTIC PANEL ── -->
+<div id="diagPanel">
+  <div class="diag-inner" id="diag-content">
+    <div class="no-data-state">
+      <div class="nds-icon">📋</div>
+      <h3>Loading diagnostic…</h3>
+    </div>
+  </div>
+</div>
+
 <div class="bottom-bar"></div>
 
 <script>
@@ -1942,6 +2031,9 @@ async function trackActivity(clientId) {
 }
 let clientSurveyData = [];  // stakeholder survey responses for Results tab
 let qaAttachedDoc    = null; // { name, text } — document attached to Ask Alex
+let CLIENT_DIAG        = null; // active diagnostic record
+let CLIENT_DIAG_RATERS = [];   // raters for active diagnostic
+let CLIENT_DIAG_REPORT = null; // finalized report draft
 
 window.addEventListener('DOMContentLoaded', () => {
   if (!token) {
@@ -1954,6 +2046,355 @@ window.addEventListener('DOMContentLoaded', () => {
 // ─────────────────────────────────────────────
 // LOAD CLIENT
 // ─────────────────────────────────────────────
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DIAGNOSTIC TAB — client-side portal integration
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const DIAG_STEPS = [
+  { n:1, label:'Setup & Intake'     },
+  { n:2, label:'Self-Assessment'    },
+  { n:3, label:'Raters Nominated'   },
+  { n:4, label:'Invites Sent'       },
+  { n:5, label:'Survey Open'        },
+  { n:6, label:'Survey Closed'      },
+  { n:7, label:'Report Generated'   },
+  { n:8, label:'Report Finalized'   },
+];
+
+function diagCurrentStep(d) {
+  if (!d) return 0;
+  if (d.report_finalized_at) return 8;
+  if (d.report_generated_at) return 7;
+  if (d.survey_closed_at)    return 6;
+  if (d.invites_sent_at)     return 5;
+  if (d.raters_finalized_at) return 4;
+  if (d.self_assessment_completed_at) return 3;
+  return 1;
+}
+
+function diagFormatDateClient(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function escD(t) {
+  return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function loadClientDiagnostic() {
+  if (!currentClient || !currentClient.id) return;
+  try {
+    // Fetch diagnostics for this client (most recent first)
+    const r = await db
+      .from('diagnostics')
+      .select('*')
+      .eq('client_id', currentClient.id)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (r.error || !r.data || r.data.length === 0) return;
+    CLIENT_DIAG = r.data[0];
+
+    // Fetch raters
+    const rr = await db
+      .from('diagnostic_raters')
+      .select('*')
+      .eq('diagnostic_id', CLIENT_DIAG.id)
+      .order('created_at', { ascending: true });
+    CLIENT_DIAG_RATERS = rr.data || [];
+
+    // Fetch report draft if finalized
+    if (CLIENT_DIAG.report_finalized_at) {
+      const dr = await db
+        .from('diagnostic_report_drafts')
+        .select('*')
+        .eq('diagnostic_id', CLIENT_DIAG.id)
+        .order('generated_at', { ascending: false })
+        .limit(1);
+      CLIENT_DIAG_REPORT = (dr.data && dr.data.length > 0) ? dr.data[0] : null;
+    }
+
+    // Show the Diagnostic tab
+    const tabDiag = document.getElementById('tabDiag');
+    if (tabDiag) tabDiag.style.display = '';
+
+    // Render if already on that tab
+    const diagPanel = document.getElementById('diagPanel');
+    if (diagPanel && diagPanel.classList.contains('active')) {
+      renderDiagnosticTab();
+    }
+
+  } catch (err) {
+    console.error('[loadClientDiagnostic]', err);
+  }
+}
+
+function renderDiagnosticTab() {
+  const el = document.getElementById('diag-content');
+  if (!el) return;
+  if (!CLIENT_DIAG) {
+    el.innerHTML = `<div class="dc-card" style="text-align:center;padding:40px 24px;">
+      <div style="font-size:40px;margin-bottom:12px;">📋</div>
+      <h3 style="color:#1A3D6E;margin-bottom:8px;">No diagnostic found</h3>
+      <p style="color:#6b7280;font-size:14px;">Your coach hasn\'t set up a diagnostic for you yet. Reach out to Alex if you think this is an error.</p>
+    </div>`;
+    return;
+  }
+  if (CLIENT_DIAG.report_finalized_at) {
+    renderDiagReportMode(CLIENT_DIAG, CLIENT_DIAG_REPORT);
+  } else {
+    renderDiagActiveMode(CLIENT_DIAG, CLIENT_DIAG_RATERS);
+  }
+}
+
+function renderDiagStepTracker(d) {
+  const cur = diagCurrentStep(d);
+  return `<div class="dc-steps">` +
+    DIAG_STEPS.map(s => {
+      const done    = s.n < cur;
+      const current = s.n === cur;
+      const cls     = done ? 'done' : current ? 'current' : '';
+      const icon    = done ? '✓' : s.n;
+      return `<div class="dc-step ${cls}">
+        <div class="dc-step-num">${icon}</div>
+        <div class="dc-step-label">${s.label}</div>
+      </div>`;
+    }).join('') +
+  `</div>`;
+}
+
+function renderDiagActiveMode(d, raters) {
+  const el = document.getElementById('diag-content');
+  if (!el) return;
+
+  const cur = diagCurrentStep(d);
+  const selfRater = raters.find(r => r.is_self);
+  const otherRaters = raters.filter(r => !r.is_self);
+  const hasFinalized = !!d.raters_finalized_at;
+
+  // Status badge
+  const statusMap = {
+    setup:         ['dc-badge-setup',  'Setup'],
+    self_report:   ['dc-badge-setup',  'Self-Report'],
+    rater_setup:   ['dc-badge-setup',  'Rater Setup'],
+    survey_open:   ['dc-badge-active', 'Survey Open'],
+    survey_closed: ['dc-badge-closed', 'Survey Closed'],
+    report_draft:  ['dc-badge-final',  'Report Ready'],
+    report_final:  ['dc-badge-done',   'Complete'],
+  };
+  const [badgeCls, badgeTxt] = statusMap[d.status] || ['dc-badge-setup', d.status || 'In Progress'];
+
+  // Rater list HTML
+  const raterListHtml = raters.length === 0
+    ? `<p style="color:#6b7280;font-size:13px;">No raters added yet.</p>`
+    : `<ul class="dc-rater-list">
+        ${raters.map(r => {
+          const done = !!r.completed_at;
+          const isSelf = !!r.is_self;
+          const statusIcon = isSelf ? '👤' : done ? '✓' : '○';
+          const statusCls  = isSelf ? 'ri-self' : done ? 'ri-done' : 'ri-pend';
+          return `<li class="dc-rater-item${isSelf ? ' is-self' : ''}">
+            <div class="ri-status ${statusCls}">${statusIcon}</div>
+            <div class="dc-rater-name">${escD(r.name)}</div>
+            <div class="dc-rater-role">${escD(r.relationship || '')}</div>
+            <div style="font-size:11px;color:${done?'#059669':'#6b7280'};">${done?'Completed':'Pending'}</div>
+          </li>`;
+        }).join('')}
+      </ul>`;
+
+  const completedCount = otherRaters.filter(r => r.completed_at).length;
+  const totalOther = otherRaters.length;
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:8px;">
+      <div>
+        <div style="font-size:18px;font-weight:700;color:#1A3D6E;margin-bottom:4px;">Leadership Diagnostic</div>
+        ${d.close_date ? `<div style="font-size:13px;color:#6b7280;">Survey closes ${diagFormatDateClient(d.close_date)}</div>` : ''}
+      </div>
+      <span class="dc-status-badge ${badgeCls}">${badgeTxt}</span>
+    </div>
+
+    ${renderDiagStepTracker(d)}
+
+    ${/* Step 2: Self-assessment */ selfRater && !d.self_assessment_completed_at ? `
+    <div class="dc-card" style="border-left:4px solid #1A3D6E;">
+      <h3>Your Self-Assessment</h3>
+      <p>This is your starting point. Answer honestly — this is your lens, not a test. Takes about 15–20 minutes.</p>
+      ${selfRater.token
+        ? `<a href="/survey?token=${encodeURIComponent(selfRater.token)}" class="dc-btn dc-btn-primary" style="text-decoration:none;display:inline-block;">Start Self-Assessment →</a>`
+        : `<p style="color:#6b7280;font-size:13px;">Your survey link isn\'t ready yet. Your coach will send it shortly.</p>`}
+    </div>` : d.self_assessment_completed_at ? `
+    <div class="dc-card">
+      <div class="dc-card-done">✓ Self-assessment complete</div>
+    </div>` : ''}
+
+    ${/* Step 3–4: Rater setup */ !hasFinalized && cur >= 1 && d.self_assessment_completed_at ? `
+    <div class="dc-card">
+      <h3>Your Rater List</h3>
+      <p>Add the people you want feedback from — peers, direct reports, supervisors. Aim for 6–10. Your coach will review and send the invites.</p>
+      ${raterListHtml}
+      ${!hasFinalized ? `
+      <div class="dc-add-rater" id="dc-add-row">
+        <input type="text"   id="dc-rater-name"  placeholder="Full name" />
+        <input type="email"  id="dc-rater-email" placeholder="Email address" />
+        <select id="dc-rater-rel">
+          <option value="">Relationship…</option>
+          <option value="Direct Report">Direct Report</option>
+          <option value="Peer">Peer</option>
+          <option value="Supervisor">Supervisor</option>
+          <option value="Board Member">Board Member</option>
+          <option value="Customer">Customer</option>
+          <option value="Other">Other</option>
+        </select>
+        <button onclick="addRaterFromPortal()">Add</button>
+      </div>
+      <div id="dc-rater-msg" class="dc-msg"></div>
+      <div class="dc-submit-row">
+        <button class="dc-btn dc-btn-primary" onclick="submitRaterListFromPortal()" ${otherRaters.length < 3 ? 'disabled title="Add at least 3 raters first"' : ''}>
+          Submit My Rater List →
+        </button>
+        ${otherRaters.length < 3 ? `<span class="dc-msg">Add at least 3 raters to submit.</span>` : ''}
+      </div>` : `
+      <div class="dc-card-done">✓ Rater list submitted — your coach will send invites</div>`}
+    </div>` : ''}
+
+    ${/* Step 5–6: Survey open */ d.invites_sent_at && !d.survey_closed_at ? `
+    <div class="dc-card">
+      <h3>Rater Surveys In Progress</h3>
+      <p>${completedCount} of ${totalOther} raters have completed their survey so far.</p>
+      ${raterListHtml}
+    </div>` : ''}
+
+    ${/* Waiting for report */ d.survey_closed_at && !d.report_generated_at ? `
+    <div class="dc-card" style="text-align:center;padding:32px 24px;">
+      <div style="font-size:32px;margin-bottom:12px;">⏳</div>
+      <h3>Survey Closed — Report in Progress</h3>
+      <p>Your coach is reviewing the data and generating your TP3™ report. You\'ll get an email when it\'s ready.</p>
+    </div>` : ''}
+
+    ${/* Report generated, not finalized */ d.report_generated_at && !d.report_finalized_at ? `
+    <div class="dc-card" style="text-align:center;padding:32px 24px;">
+      <div style="font-size:32px;margin-bottom:12px;">📄</div>
+      <h3>Report Generated</h3>
+      <p>Your coach is reviewing your report. You\'ll receive an email when it\'s finalized and ready to view.</p>
+    </div>` : ''}
+  `;
+}
+
+function renderDiagReportMode(d, reportDraft) {
+  const el = document.getElementById('diag-content');
+  if (!el) return;
+
+  const report = reportDraft && reportDraft.content_json ? reportDraft.content_json : null;
+  const narrative = report && report.full_narrative ? report.full_narrative : null;
+
+  const leaderName = d.leader_name || currentClient && currentClient.name || '';
+  const finDate    = diagFormatDateClient(d.report_finalized_at);
+
+  el.innerHTML = `
+    <div class="dc-report-header">
+      <h2>TP3™ Leadership Diagnostic Report</h2>
+      <div class="dc-rh-meta">${escD(leaderName)}${finDate ? ' · Finalized ' + finDate : ''}</div>
+    </div>
+    <div class="dc-report-body">
+      ${narrative
+        ? narrative
+        : report
+          ? buildReportFromJson(report)
+          : `<p style="color:#6b7280;text-align:center;padding:32px 0;">Report content is being prepared. Check back shortly.</p>`
+      }
+    </div>
+    <div style="text-align:center;padding-bottom:32px;">
+      <p style="font-size:13px;color:#6b7280;">Questions about your results? Reach out to Alex directly.</p>
+      <a href="mailto:alex@gpsleadership.org" class="dc-btn dc-btn-outline" style="text-decoration:none;display:inline-block;">Contact Alex →</a>
+    </div>
+  `;
+}
+
+function buildReportFromJson(r) {
+  // Fallback renderer if full_narrative isn't available
+  let html = '';
+  if (r.executive_summary) {
+    html += `<h2>Executive Summary</h2><div class="report-highlight">${r.executive_summary}</div>`;
+  }
+  const sections = [
+    ['trust_section',       'Trust'],
+    ['proactivity_section', 'Proactivity'],
+    ['productivity_section','Productivity'],
+    ['impact_section',      'Business Impact'],
+    ['bench_section',       'Bench Strength'],
+    ['succession_section',  'Succession & Future Self'],
+    ['custom_section',      'Custom Item Results'],
+  ];
+  for (const [key, label] of sections) {
+    if (r[key]) html += `<h2>${label}</h2>${r[key]}`;
+  }
+  if (r.priorities_90_day && r.priorities_90_day.length > 0) {
+    html += `<h2>90-Day Priorities</h2><ul>${r.priorities_90_day.map(p => `<li>${escD(p)}</li>`).join('')}</ul>`;
+  }
+  return html || '<p>Report content unavailable.</p>';
+}
+
+async function addRaterFromPortal() {
+  if (!CLIENT_DIAG) return;
+  const nameEl  = document.getElementById('dc-rater-name');
+  const emailEl = document.getElementById('dc-rater-email');
+  const relEl   = document.getElementById('dc-rater-rel');
+  const msgEl   = document.getElementById('dc-rater-msg');
+
+  const name  = (nameEl.value  || '').trim();
+  const email = (emailEl.value || '').trim().toLowerCase();
+  const rel   = relEl.value || '';
+
+  if (!name || !email) { msgEl.textContent = 'Name and email are required.'; msgEl.className = 'dc-msg err'; return; }
+  if (!/^[^@]+@[^@]+\.[^@]+$/.test(email)) { msgEl.textContent = 'Enter a valid email address.'; msgEl.className = 'dc-msg err'; return; }
+
+  msgEl.textContent = 'Adding…'; msgEl.className = 'dc-msg';
+
+  try {
+    const { error } = await db.from('diagnostic_raters').insert({
+      diagnostic_id: CLIENT_DIAG.id,
+      name,
+      email,
+      relationship: rel || null,
+      is_self: false,
+    });
+    if (error) throw error;
+
+    nameEl.value  = '';
+    emailEl.value = '';
+    relEl.value   = '';
+    msgEl.textContent = `${name} added.`; msgEl.className = 'dc-msg ok';
+
+    // Refresh rater data and re-render
+    const rr = await db.from('diagnostic_raters').select('*').eq('diagnostic_id', CLIENT_DIAG.id).order('created_at', { ascending: true });
+    CLIENT_DIAG_RATERS = rr.data || [];
+    renderDiagnosticTab();
+
+  } catch (err) {
+    msgEl.textContent = 'Error adding rater: ' + (err.message || 'unknown'); msgEl.className = 'dc-msg err';
+  }
+}
+
+async function submitRaterListFromPortal() {
+  if (!CLIENT_DIAG) return;
+  const otherRaters = CLIENT_DIAG_RATERS.filter(r => !r.is_self);
+  if (otherRaters.length < 3) { alert('Add at least 3 raters before submitting.'); return; }
+  if (!confirm('Submit your rater list? Your coach will review and send invites.')) return;
+
+  try {
+    const now = new Date().toISOString();
+    const { error } = await db.from('diagnostics').update({ raters_finalized_at: now, status: 'rater_setup' }).eq('id', CLIENT_DIAG.id);
+    if (error) throw error;
+    CLIENT_DIAG.raters_finalized_at = now;
+    CLIENT_DIAG.status = 'rater_setup';
+    renderDiagnosticTab();
+  } catch (err) {
+    alert('Error submitting rater list: ' + (err.message || 'unknown'));
+  }
+}
+
 async function loadClient() {
   try {
     // Fetch client securely via server-side API (service role key never exposed to browser)
@@ -2086,6 +2527,7 @@ async function loadClient() {
       renderPortal(client, checkins || []);
       renderResultsTab(surveyData || [], checkins || [], client, surveyTokenData || [], selfCheckData || []);
       renderClientStakeholderCard(client.id, stakeholderData || []);
+      loadClientDiagnostic();
     }
   } catch (e) {
     showError('Something went wrong.', 'Please refresh the page. If the problem continues, contact alex@gpsleadership.org.');
@@ -3575,17 +4017,21 @@ function showPortalTab(tab) {
   const mainContent   = document.getElementById('mainContent');
   const qaPanel       = document.getElementById('qaPanel');
   const resultsPanel  = document.getElementById('resultsPanel');
+  const diagPanel     = document.getElementById('diagPanel');
   const tabPlan       = document.getElementById('tabPlan');
   const tabAsk        = document.getElementById('tabAsk');
   const tabResults    = document.getElementById('tabResults');
+  const tabDiag       = document.getElementById('tabDiag');
 
   // Reset all panels
   mainContent.style.display = 'none';
   qaPanel.classList.remove('active');
   if (resultsPanel) resultsPanel.classList.remove('active');
+  if (diagPanel)    diagPanel.classList.remove('active');
   if (tabPlan)    tabPlan.classList.remove('active');
   if (tabAsk)     tabAsk.classList.remove('active');
   if (tabResults) tabResults.classList.remove('active');
+  if (tabDiag)    tabDiag.classList.remove('active');
 
   if (tab === 'plan') {
     mainContent.style.display = 'block';
@@ -3593,6 +4039,10 @@ function showPortalTab(tab) {
   } else if (tab === 'results') {
     if (resultsPanel) resultsPanel.classList.add('active');
     if (tabResults)   tabResults.classList.add('active');
+  } else if (tab === 'diagnostic') {
+    if (diagPanel) diagPanel.classList.add('active');
+    if (tabDiag)   tabDiag.classList.add('active');
+    renderDiagnosticTab();
   } else {
     // Check terms consent before showing Q&A
     const needsTerms = !currentClient ||
@@ -3610,15 +4060,19 @@ function activateQATab() {
   const mainContent  = document.getElementById('mainContent');
   const qaPanel      = document.getElementById('qaPanel');
   const resultsPanel = document.getElementById('resultsPanel');
+  const diagPanel    = document.getElementById('diagPanel');
   const tabPlan      = document.getElementById('tabPlan');
   const tabAsk       = document.getElementById('tabAsk');
   const tabResults   = document.getElementById('tabResults');
+  const tabDiag      = document.getElementById('tabDiag');
   mainContent.style.display = 'none';
   if (resultsPanel) resultsPanel.classList.remove('active');
+  if (diagPanel)    diagPanel.classList.remove('active');
   qaPanel.classList.add('active');
   if (tabAsk)     tabAsk.classList.add('active');
   if (tabPlan)    tabPlan.classList.remove('active');
   if (tabResults) tabResults.classList.remove('active');
+  if (tabDiag)    tabDiag.classList.remove('active');
   const qaQi = document.getElementById('qa-qi');
   if (qaQi) setTimeout(() => qaQi.focus(), 100);
 }
