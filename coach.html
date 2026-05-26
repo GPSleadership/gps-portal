@@ -566,7 +566,21 @@
     .diag-scope .dot-grey{background:#C5CAD3;}
     .diag-scope .dot-amber{background:var(--d-amber);}
     /* Diagnostic modals — override coach.html's .modal padding/border */
-    #new-diag-modal .modal,#send-invites-modal .modal{padding:0;max-width:580px;border-top:none;border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,.2);}
+    #new-diag-modal .modal,#send-invites-modal .modal,#team-report-modal .modal{padding:0;max-width:580px;border-top:none;border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,.2);}
+    #team-report-modal .modal{max-width:660px;}
+    /* Team report leader selector */
+    .tr-leader-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--d-border);border-radius:6px;margin-bottom:8px;cursor:pointer;transition:border-color .15s,background .15s;}
+    .tr-leader-row:hover{border-color:var(--d-blue);background:var(--d-light);}
+    .tr-leader-row.selected{border-color:var(--d-blue);background:#EEF3FA;}
+    .tr-leader-checkbox{width:16px;height:16px;accent-color:var(--d-blue);flex-shrink:0;cursor:pointer;}
+    /* Team report viewer */
+    .tr-report-body{font-size:13.5px;line-height:1.75;color:var(--d-dark);}
+    .tr-report-body .tr-h2{font-size:15px;font-weight:700;color:var(--d-blue);margin:28px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--d-border);}
+    .tr-report-body .tr-h2:first-child{margin-top:0;}
+    .tr-report-body .tr-h3{font-size:13px;font-weight:700;color:var(--d-dark);margin:16px 0 6px;text-transform:uppercase;letter-spacing:.04em;}
+    .tr-report-body .tr-ul{margin:6px 0 12px 18px;padding:0;}
+    .tr-report-body .tr-ul li{margin-bottom:5px;}
+    .tr-report-body p{margin:0 0 10px;}
     .diag-modal-header{padding:18px 22px 14px;border-bottom:1px solid var(--d-border);display:flex;align-items:center;justify-content:space-between;}
     .diag-modal-header h3{font-size:16px;font-weight:700;color:var(--d-blue);margin:0;}
     .diag-modal-body{padding:22px;}
@@ -899,9 +913,86 @@
         <div id="dtab-report"   class="dtab-pane"><div id="report-content"></div></div>
       </div>
 
+      <!-- TEAM REPORT VIEWER -->
+      <div id="view-team-report" style="display:none;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;">
+          <button class="dbtn dbtn-outline dbtn-sm" onclick="showDiagView('list')">← All Diagnostics</button>
+          <span style="font-size:13px;color:var(--d-mid);">›</span>
+          <span style="font-size:13px;color:var(--d-mid);">Team Reports</span>
+          <span style="font-size:13px;color:var(--d-mid);">›</span>
+          <span id="team-report-breadcrumb" style="font-size:13px;font-weight:600;color:var(--d-dark);"></span>
+        </div>
+        <div id="team-report-content"></div>
+      </div>
+
     </div><!-- /diag-scope -->
     </div><!-- /section-diagnostics -->
 
+  </div>
+</div>
+
+<!-- ══ DIAGNOSTIC MODAL: TEAM REPORT ═════════════════════════════════════════ -->
+<div class="modal-overlay" id="team-report-modal">
+  <div class="modal">
+    <div class="diag-modal-header">
+      <h3>Create Team Report</h3>
+      <button class="dclose-btn" onclick="closeDiagModal('team-report-modal')">✕</button>
+    </div>
+    <div class="diag-modal-body" style="max-height:78vh;overflow-y:auto;">
+
+      <!-- Step 1: Select Leaders -->
+      <div style="font-size:12px;font-weight:700;color:var(--d-blue);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;">
+        Select Leaders — choose 2 or more
+      </div>
+      <div id="tr-leader-list" style="margin-bottom:20px;">
+        <div style="font-size:13px;color:var(--d-mid);">Loading diagnostics…</div>
+      </div>
+
+      <!-- Step 2: Report Metadata -->
+      <div style="font-size:12px;font-weight:700;color:var(--d-blue);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;padding-top:16px;border-top:1px solid var(--d-border);">
+        Report Details
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div class="dform-group" style="grid-column:1/-1;">
+          <label>Team Name <span style="color:var(--d-red2);">*</span></label>
+          <input id="tr-team-name" placeholder="e.g. Senior Leadership Team, Operations Leaders" />
+        </div>
+        <div class="dform-group" style="grid-column:1/-1;">
+          <label>Organization Name</label>
+          <input id="tr-org-name" placeholder="e.g. Acme Logistics" />
+        </div>
+        <div class="dform-group">
+          <label>Prepared For — Name</label>
+          <input id="tr-prepared-for-name" placeholder="e.g. Sarah Chen" />
+        </div>
+        <div class="dform-group">
+          <label>Prepared For — Title</label>
+          <input id="tr-prepared-for-title" placeholder="e.g. CEO" />
+        </div>
+        <div class="dform-group">
+          <label>Assessment Window</label>
+          <input id="tr-date-range" placeholder="e.g. January–February 2026" />
+        </div>
+        <div class="dform-group">
+          <label>Sector Type</label>
+          <select id="tr-sector-type">
+            <option value="private">Private Sector</option>
+            <option value="government_federal">Government — Federal</option>
+            <option value="government_state_local">Government — State / Local</option>
+            <option value="nonprofit">Nonprofit</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-top:6px;padding:10px 14px;background:#FFF8E7;border:1px solid #E8C84A;border-radius:6px;font-size:12px;color:#7A5A00;">
+        ⚠️ <strong>Draft only.</strong> This report is for your review — you edit and finalize before sharing with any client.
+      </div>
+
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--d-border);">
+        <button class="dbtn dbtn-outline" onclick="closeDiagModal('team-report-modal')">Cancel</button>
+        <button class="dbtn dbtn-primary" id="tr-generate-btn" disabled onclick="generateTeamReport()">Generate Team Report</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -3988,7 +4079,7 @@ const DIAG_BASE_URL = window.location.origin;
 async function diagBoot() {
   if (_diagBooted) return;
   _diagBooted = true;
-  await loadDiagnostics();
+  await Promise.all([loadDiagnostics(), loadTeamReports()]);
   diagLoadClients();
 
   // Show/hide client link dropdown
@@ -4331,7 +4422,8 @@ function renderDiagHome() {
     <div class="card" style="margin-bottom:20px;">
       <div class="card-title" style="margin-bottom:14px;">Reports &amp; Deliverables</div>
       ${reportsHtml}
-    </div>`;
+    </div>
+    ${renderTeamReportsCard()}`;
   }
 
   // Render full table below
@@ -4522,17 +4614,33 @@ function renderOverviewTab() {
       ${stepsHtml}
     </div>
     <div class="card" style="margin-bottom:0;">
-      <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:10px;">Intake Notes</div>
-      <textarea id="intake-notes-field" style="min-height:120px;" onblur="saveIntakeNotes(this.value)">${d.intake_notes || ''}</textarea>
-      <div class="dhint">Auto-saves when you click away.</div>
-      ${d.intake_transcript_url
-        ? `<div style="margin-top:10px;font-size:12px;">📎 <a href="${d.intake_transcript_url}" target="_blank" style="color:var(--d-blue);">View Intake Transcript</a></div>`
-        : `<div style="margin-top:10px;"><div class="dform-group" style="margin-bottom:0;">
-             <label>Transcript URL</label>
-             <input id="transcript-url-field" placeholder="Paste Google Drive or PDF link" value="${d.intake_transcript_url||''}">
-             <button class="dbtn dbtn-outline dbtn-sm" style="margin-top:6px;" onclick="saveTranscriptUrl()">Save</button>
-           </div></div>`}
-      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--d-border);">
+      <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:14px;">Coach Notes</div>
+
+      <div style="margin-bottom:14px;">
+        <div style="font-size:11px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Kick-off / Intake Notes</div>
+        <textarea id="intake-notes-field" style="min-height:100px;" onblur="saveIntakeNotes(this.value)">${d.intake_notes || ''}</textarea>
+        ${d.intake_transcript_url
+          ? `<div style="margin-top:6px;font-size:12px;">📎 <a href="${d.intake_transcript_url}" target="_blank" style="color:var(--d-blue);">View Intake Transcript</a></div>`
+          : `<div style="margin-top:6px;"><div class="dform-group" style="margin-bottom:0;">
+               <label style="font-size:11px;">Transcript URL</label>
+               <input id="transcript-url-field" placeholder="Paste Google Drive or PDF link" value="${d.intake_transcript_url||''}" style="font-size:12px;">
+               <button class="dbtn dbtn-outline dbtn-sm" style="margin-top:4px;" onclick="saveTranscriptUrl()">Save</button>
+             </div></div>`}
+      </div>
+
+      <div style="margin-bottom:14px;padding-top:14px;border-top:1px solid var(--d-border);">
+        <div style="font-size:11px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Coaching Notes</div>
+        <textarea id="coaching-notes-field" style="min-height:100px;" placeholder="Ongoing observations, session themes, patterns..." onblur="saveCoachingNotes(this.value)">${d.coaching_notes || ''}</textarea>
+        <div class="dhint">Auto-saves when you click away. Included in report generation.</div>
+      </div>
+
+      <div style="margin-bottom:14px;padding-top:14px;border-top:1px solid var(--d-border);">
+        <div style="font-size:11px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Interview Notes</div>
+        <textarea id="interview-notes-field" style="min-height:100px;" placeholder="Notes from 1:1 interviews with raters or stakeholders..." onblur="saveInterviewNotes(this.value)">${d.interview_notes || ''}</textarea>
+        <div class="dhint">Auto-saves when you click away. Included in report generation.</div>
+      </div>
+
+      <div style="padding-top:14px;border-top:1px solid var(--d-border);">
         ${d.status === 'intake_complete' || d.status === 'setup'
           ? `<button class="dbtn dbtn-primary dbtn-sm" onclick="markIntakeComplete()">✓ Mark Intake Complete</button>`
           : `<div style="font-size:12px;color:var(--d-green);">✓ Intake complete ${d.intake_completed_at ? diagFormatDate(d.intake_completed_at) : ''}</div>`}
@@ -4988,6 +5096,14 @@ async function saveIntakeNotes(val) {
   await updateDiag({ intake_notes: val });
 }
 
+async function saveCoachingNotes(val) {
+  await updateDiag({ coaching_notes: val });
+}
+
+async function saveInterviewNotes(val) {
+  await updateDiag({ interview_notes: val });
+}
+
 async function saveTranscriptUrl() {
   const val = document.getElementById('transcript-url-field').value.trim();
   await updateDiag({ intake_transcript_url: val });
@@ -5091,11 +5207,210 @@ async function refreshSelected() {
   renderReportTab();
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// TEAM REPORTS
+// ══════════════════════════════════════════════════════════════════════════════
+
+let ALL_TEAM_REPORTS  = [];
+let TEAM_RPT_SELECTED = new Set();
+
+async function loadTeamReports() {
+  const { data, error } = await db
+    .from('diagnostic_team_reports')
+    .select('*')
+    .order('generated_at', { ascending: false });
+  if (!error) ALL_TEAM_REPORTS = data || [];
+}
+
+function renderTeamReportsCard() {
+  let html = '';
+  if (ALL_TEAM_REPORTS.length > 0) {
+    html = ALL_TEAM_REPORTS.slice(0, 3).map(r => `
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid var(--d-border);border-radius:6px;background:var(--d-light);margin-bottom:8px;">
+        <div style="font-size:18px;">📊</div>
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:700;">${r.team_name || 'Team Report'}</div>
+          <div style="font-size:11px;color:var(--d-mid);">${r.org_name ? r.org_name + ' · ' : ''}${r.num_leaders} leaders · ${r.total_raters} raters · ${diagFormatDate(r.generated_at)}</div>
+        </div>
+        <button class="dbtn dbtn-outline dbtn-sm" onclick="openTeamReport('${r.id}')">Review →</button>
+      </div>`).join('');
+  } else {
+    html = `<div style="font-size:13px;color:var(--d-mid);">No team reports yet. Select 2+ leaders with completed diagnostics to generate one.</div>`;
+  }
+
+  const eligible = ALL_DIAGS.filter(d => ['survey_closed','report_draft','report_final'].includes(d.status));
+  const btnHtml  = eligible.length >= 2
+    ? `<button class="dbtn dbtn-primary dbtn-sm" onclick="openTeamReportModal()">+ Create Team Report</button>`
+    : `<button class="dbtn dbtn-outline dbtn-sm" disabled title="Need 2+ completed diagnostics">+ Create Team Report</button>`;
+
+  return `<div class="card" style="margin-bottom:20px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div class="card-title" style="margin-bottom:0;">Team Reports</div>
+      ${btnHtml}
+    </div>
+    ${html}
+  </div>`;
+}
+
+function openTeamReportModal() {
+  TEAM_RPT_SELECTED = new Set();
+  // Auto-fill org from first eligible diagnostic
+  const eligible = ALL_DIAGS.filter(d => ['survey_closed','report_draft','report_final'].includes(d.status));
+  const orgEl = document.getElementById('tr-org-name');
+  if (orgEl && eligible.length > 0 && eligible[0].client_org) orgEl.value = eligible[0].client_org;
+  // Auto-fill date range
+  const dateEl = document.getElementById('tr-date-range');
+  if (dateEl && eligible.length > 0) {
+    const yr = new Date().getFullYear();
+    dateEl.value = dateEl.value || yr.toString();
+  }
+  renderTeamReportLeaderList();
+  openDiagModal('team-report-modal');
+}
+
+function renderTeamReportLeaderList() {
+  const eligible = ALL_DIAGS.filter(d => ['survey_closed','report_draft','report_final'].includes(d.status));
+  const el = document.getElementById('tr-leader-list');
+  if (!el) return;
+  if (eligible.length === 0) {
+    el.innerHTML = `<div style="font-size:13px;color:var(--d-mid);padding:8px 0;">No completed diagnostics available. At least 2 leaders with closed surveys are required.</div>`;
+    return;
+  }
+  el.innerHTML = eligible.map(d => `
+    <div class="tr-leader-row${TEAM_RPT_SELECTED.has(d.id) ? ' selected' : ''}" onclick="toggleTeamReportLeader('${d.id}', this)">
+      <input type="checkbox" class="tr-leader-checkbox" id="tr-chk-${d.id}" ${TEAM_RPT_SELECTED.has(d.id) ? 'checked' : ''} onclick="event.stopPropagation()">
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:700;">${d.client_name}</div>
+        <div style="font-size:11px;color:var(--d-mid);">${[d.client_title,d.client_org].filter(Boolean).join(' · ')}${d.close_date ? ' · Closed ' + diagFormatDate(d.close_date) : ''}</div>
+      </div>
+      ${diagStatusBadge(d.status)}
+    </div>`).join('');
+}
+
+function toggleTeamReportLeader(id, rowEl) {
+  if (TEAM_RPT_SELECTED.has(id)) {
+    TEAM_RPT_SELECTED.delete(id);
+    rowEl.classList.remove('selected');
+    const chk = rowEl.querySelector('input[type=checkbox]');
+    if (chk) chk.checked = false;
+  } else {
+    TEAM_RPT_SELECTED.add(id);
+    rowEl.classList.add('selected');
+    const chk = rowEl.querySelector('input[type=checkbox]');
+    if (chk) chk.checked = true;
+  }
+  const btn = document.getElementById('tr-generate-btn');
+  if (btn) btn.disabled = TEAM_RPT_SELECTED.size < 2;
+}
+
+async function generateTeamReport() {
+  if (TEAM_RPT_SELECTED.size < 2) { alert('Please select at least 2 leaders.'); return; }
+  const team_name            = document.getElementById('tr-team-name').value.trim();
+  const org_name             = document.getElementById('tr-org-name').value.trim();
+  const prepared_for_name    = document.getElementById('tr-prepared-for-name').value.trim();
+  const prepared_for_title   = document.getElementById('tr-prepared-for-title').value.trim();
+  const assessment_date_range= document.getElementById('tr-date-range').value.trim();
+  const sector_type          = document.getElementById('tr-sector-type').value;
+  if (!team_name) { alert('Please enter a team name.'); return; }
+
+  const btn = document.getElementById('tr-generate-btn');
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Generating… (30–60 sec)';
+
+  try {
+    const resp = await fetch('/api/diagnostic?action=generate-team-report', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        diagnostic_ids: [...TEAM_RPT_SELECTED],
+        org_name, team_name, prepared_for_name, prepared_for_title,
+        assessment_date_range, sector_type,
+      }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Unknown error');
+
+    closeDiagModal('team-report-modal');
+    await loadTeamReports();
+    renderDiagHome();
+    if (ALL_TEAM_REPORTS.length > 0) openTeamReport(ALL_TEAM_REPORTS[0].id);
+  } catch (err) {
+    alert(`Error generating team report: ${err.message}`);
+    btn.disabled = TEAM_RPT_SELECTED.size < 2;
+    btn.textContent = orig;
+  }
+}
+
+function openTeamReport(id) {
+  const report = ALL_TEAM_REPORTS.find(r => r.id === id);
+  if (!report) return;
+  renderTeamReportViewer(report);
+  showDiagView('team-report');
+}
+
+function renderTeamReportViewer(report) {
+  const el = document.getElementById('team-report-content');
+  if (!el) return;
+  const bc = document.getElementById('team-report-breadcrumb');
+  if (bc) bc.textContent = [report.team_name, report.org_name].filter(Boolean).join(' — ');
+
+  el.innerHTML = `
+    <div class="card" style="margin-bottom:16px;padding:16px 20px;">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--d-red2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">DRAFT — Internal Use Only</div>
+          <div style="font-size:18px;font-weight:800;color:var(--d-blue);">${report.team_name || 'Team Report'}</div>
+          <div style="font-size:12px;color:var(--d-mid);margin-top:4px;">
+            ${[report.org_name, `${report.num_leaders} leaders`, `${report.total_raters} raters`, diagFormatDate(report.generated_at)].filter(Boolean).join(' · ')}
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0;">
+          <button class="dbtn dbtn-outline dbtn-sm" onclick="copyTeamReportText('${report.id}')">📋 Copy Text</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tr-report-body" id="tr-report-body-inner">${teamReportMarkdownToHtml(report.content_text || '')}</div>
+    </div>`;
+}
+
+function teamReportMarkdownToHtml(text) {
+  if (!text) return '<p style="color:var(--d-mid);">No report content found.</p>';
+  // Escape HTML
+  let h = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // Bold
+  h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  // H2 and H3
+  h = h.replace(/^## (.+)$/gm, '</p><h2 class="tr-h2">$1</h2><p>');
+  h = h.replace(/^### (.+)$/gm, '</p><h3 class="tr-h3">$1</h3><p>');
+  // Bullets — collect into ul blocks
+  h = h.replace(/^- (.+)$/gm, '<__LI__>$1</__LI__>');
+  h = h.replace(/(<__LI__>[\s\S]*?<\/__LI__>)(\n<__LI__>[\s\S]*?<\/__LI__>)*/g, m =>
+    `</p><ul class="tr-ul">${m.replace(/<__LI__>/g,'<li>').replace(/<\/__LI__>/g,'</li>')}</ul><p>`);
+  // Wrap in paragraph
+  h = `<p>${h}</p>`;
+  // Clean up empty/redundant p tags
+  h = h.replace(/<p>\s*<\/p>/g, '').replace(/<p>(<h[23])/g,'$1').replace(/(<\/h[23]>)<\/p>/g,'$1')
+       .replace(/<p>(<ul)/g,'$1').replace(/(<\/ul>)<\/p>/g,'$1');
+  return h;
+}
+
+function copyTeamReportText(id) {
+  const report = ALL_TEAM_REPORTS.find(r => r.id === id);
+  if (!report?.content_text) return;
+  navigator.clipboard.writeText(report.content_text)
+    .then(() => alert('Report text copied to clipboard.'))
+    .catch(() => alert('Copy failed — try selecting the text manually.'));
+}
+
 function showDiagView(v) {
-  const list   = document.getElementById('view-diag-list');
-  const detail = document.getElementById('view-diag-detail');
-  if (list)   list.style.display   = v === 'list'   ? 'block' : 'none';
-  if (detail) detail.style.display = v === 'detail' ? 'block' : 'none';
+  const list       = document.getElementById('view-diag-list');
+  const detail     = document.getElementById('view-diag-detail');
+  const teamReport = document.getElementById('view-team-report');
+  if (list)       list.style.display       = v === 'list'        ? 'block' : 'none';
+  if (detail)     detail.style.display     = v === 'detail'      ? 'block' : 'none';
+  if (teamReport) teamReport.style.display = v === 'team-report' ? 'block' : 'none';
   if (v === 'list') loadDiagnostics();
   window.scrollTo(0, 0);
 }

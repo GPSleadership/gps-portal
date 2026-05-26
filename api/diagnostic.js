@@ -83,12 +83,14 @@ async function logEmail({ recipientEmail, recipientName, emailType, subject, sta
 }
 
 // ── Send email via Resend ────────────────────────────────────────────────────
-async function sendEmail({ to, subject, html, emailType, recipientName }) {
+async function sendEmail({ to, subject, html, emailType, recipientName, cc }) {
   if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY not configured');
+  const payload = { from: `Alex Tremble – GPS Leadership <${RESEND_FROM}>`, to: [to], subject, html };
+  if (cc && cc.length > 0) payload.cc = cc;
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: `Alex Tremble – GPS Leadership <${RESEND_FROM}>`, to: [to], subject, html }),
+    body: JSON.stringify(payload),
   });
   const result = await res.json();
   if (!res.ok) {
@@ -113,12 +115,13 @@ export default async function handler(req, res) {
   const action = req.query?.action || req.body?.action;
 
   switch (action) {
-    case 'send-invites':    return handleSendInvites(req, res);
-    case 'generate-question': return handleGenerateQuestion(req, res);
-    case 'generate-report': return handleGenerateReport(req, res);
-    case 'reminders':       return handleReminders(req, res);
+    case 'send-invites':         return handleSendInvites(req, res);
+    case 'generate-question':    return handleGenerateQuestion(req, res);
+    case 'generate-report':      return handleGenerateReport(req, res);
+    case 'generate-team-report': return handleGenerateTeamReport(req, res);
+    case 'reminders':            return handleReminders(req, res);
     default:
-      return res.status(400).json({ error: `Unknown action: "${action}". Valid: send-invites, generate-question, generate-report, reminders` });
+      return res.status(400).json({ error: `Unknown action: "${action}". Valid: send-invites, generate-question, generate-report, generate-team-report, reminders` });
   }
 }
 
@@ -181,7 +184,7 @@ async function handleSendInvites(req, res) {
 
   try {
     const diagRes = await sb(
-      `/rest/v1/diagnostics?id=eq.${diagnostic_id}&select=id,client_name,client_title,client_org,close_date,status,self_assessment_completed_at&limit=1`
+      `/rest/v1/diagnostics?id=eq.${diagnostic_id}&select=id,client_name,client_title,client_org,client_email,close_date,status,self_assessment_completed_at&limit=1`
     );
     const diags = await diagRes.json();
     if (!Array.isArray(diags) || diags.length === 0) return res.status(404).json({ error: 'Diagnostic not found' });
@@ -224,8 +227,9 @@ async function handleSendInvites(req, res) {
         closeDate:   closeDateDisp,
       });
 
+      const inviteCc = [diag.client_email, 'team@gpsleadership.org'].filter(Boolean);
       try {
-        await sendEmail({ to: rater.email, subject, html, emailType: 'diagnostic_invite', recipientName: rater.name });
+        await sendEmail({ to: rater.email, subject, html, emailType: 'diagnostic_invite', recipientName: rater.name, cc: inviteCc });
         await sb(`/rest/v1/diagnostic_raters?id=eq.${rater.id}`, 'PATCH', { invited_at: nowISO }, { Prefer: 'return=minimal' });
         sent++;
         sentList.push({ name: rater.name, email: rater.email });
@@ -526,7 +530,7 @@ async function handleGenerateReport(req, res) {
 
   try {
     const diagRes = await sb(
-      `/rest/v1/diagnostics?id=eq.${diagnostic_id}&select=id,client_name,client_title,client_org,close_date,tier,custom_g1_question,self_three_year_vision,self_future_self_capabilities,self_immediate_successor_view,self_successor_candidates,self_successor_development_actions&limit=1`
+      `/rest/v1/diagnostics?id=eq.${diagnostic_id}&select=id,client_name,client_title,client_org,close_date,tier,custom_g1_question,self_three_year_vision,self_future_self_capabilities,self_immediate_successor_view,self_successor_candidates,self_successor_development_actions,intake_notes,coaching_notes,interview_notes&limit=1`
     );
     const diags = await diagRes.json();
     if (!Array.isArray(diags) || diags.length === 0) return res.status(404).json({ error: 'Diagnostic not found' });
@@ -569,6 +573,11 @@ async function handleGenerateReport(req, res) {
       ? `\nNote — question overrides in effect: ${Object.entries(overrideMap).map(([k,v]) => `${k}: "${v}"`).join('; ')}`
       : '';
 
+    const coachNotesSection = (diag.intake_notes || diag.coaching_notes || diag.interview_notes)
+      ? `\n=== COACH NOTES (CONFIDENTIAL — FOR REPORT CONTEXT ONLY) ===
+${diag.intake_notes      ? `Kick-off / Intake Notes:\n${diag.intake_notes}\n`      : ''}${diag.coaching_notes    ? `Coaching Notes:\n${diag.coaching_notes}\n`          : ''}${diag.interview_notes   ? `Interview Notes:\n${diag.interview_notes}\n`        : ''}`.trimEnd()
+      : '';
+
     const userPrompt = `
 LEADER: ${diag.client_name}${diag.client_title ? `, ${diag.client_title}` : ''}${diag.client_org ? ` — ${diag.client_org}` : ''}
 DIAGNOSTIC TIER: ${diag.tier || 'standard'}
@@ -585,7 +594,7 @@ Future self / capabilities: ${diag.self_future_self_capabilities || 'Not provide
 Immediate successor view: ${diag.self_immediate_successor_view || 'Not provided'}
 Successor candidates: ${diag.self_successor_candidates || 'Not provided'}
 Successor development actions: ${diag.self_successor_development_actions || 'Not provided'}
-${diag.custom_g1_question ? `\nCustom G1 Question (used in survey): "${diag.custom_g1_question}"` : ''}
+${diag.custom_g1_question ? `\nCustom G1 Question (used in survey): "${diag.custom_g1_question}"` : ''}${coachNotesSection}
 
 Generate the diagnostic report JSON now.`.trim();
 
@@ -767,7 +776,7 @@ async function handleReminders(req, res) {
 
   try {
     // ── Section 1: Rater Reminders (R1 + R2) ────────────────────────────────
-    const openDiagsRes = await sb(`/rest/v1/diagnostics?status=eq.survey_open&select=id,client_name,close_date`);
+    const openDiagsRes = await sb(`/rest/v1/diagnostics?status=eq.survey_open&select=id,client_name,client_email,close_date`);
     const openDiags    = await openDiagsRes.json() || [];
 
     for (const diag of openDiags) {
@@ -781,10 +790,12 @@ async function handleReminders(req, res) {
         const daysSinceInvite = daysBetween(new Date(rater.invited_at), now);
         const surveyLink = `${PORTAL_BASE}/diagnostic-survey?token=${rater.token}`;
 
+        const reminderCc = [diag.client_email, 'team@gpsleadership.org'].filter(Boolean);
+
         if (daysSinceInvite >= 2 && !rater.reminder_1_sent_at) {
           const email = buildReminderEmail({ raterName: rater.name, leaderName: diag.client_name, surveyLink, closeDate: diag.close_date, isSecond: false });
           try {
-            await sendEmail({ to: rater.email, ...email, emailType: 'diagnostic_reminder_1', recipientName: rater.name });
+            await sendEmail({ to: rater.email, ...email, emailType: 'diagnostic_reminder_1', recipientName: rater.name, cc: reminderCc });
             await sb(`/rest/v1/diagnostic_raters?id=eq.${rater.id}`, 'PATCH', { reminder_1_sent_at: now.toISOString() }, { Prefer: 'return=minimal' });
             log.r1_sent.push({ name: rater.name, diag: diag.client_name });
           } catch (err) {
@@ -796,7 +807,7 @@ async function handleReminders(req, res) {
         if (daysSinceInvite >= 5 && rater.reminder_1_sent_at && !rater.reminder_2_sent_at) {
           const email = buildReminderEmail({ raterName: rater.name, leaderName: diag.client_name, surveyLink, closeDate: diag.close_date, isSecond: true });
           try {
-            await sendEmail({ to: rater.email, ...email, emailType: 'diagnostic_reminder_2', recipientName: rater.name });
+            await sendEmail({ to: rater.email, ...email, emailType: 'diagnostic_reminder_2', recipientName: rater.name, cc: reminderCc });
             await sb(`/rest/v1/diagnostic_raters?id=eq.${rater.id}`, 'PATCH', { reminder_2_sent_at: now.toISOString() }, { Prefer: 'return=minimal' });
             log.r2_sent.push({ name: rater.name, diag: diag.client_name });
           } catch (err) {
@@ -863,8 +874,387 @@ async function handleReminders(req, res) {
       details:      log,
     });
 
+
   } catch (err) {
     console.error('[diagnostic/reminders] fatal error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ACTION: generate-team-report
+// POST /api/diagnostic?action=generate-team-report
+// Body: { diagnostic_ids[], org_name, team_name, prepared_for_name,
+//         prepared_for_title, assessment_date_range, sector_type }
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const TEAM_REPORT_SYSTEM_PROMPT = `You are the GPS Leadership Solutions Team Report Generator. You produce DRAFT composite leadership reports for internal consultant review ONLY. A human consultant (Alex D. Tremble) will review, edit, and finalize before any client sees the report.
+
+CRITICAL: Every report must begin with this exact header block:
+STATUS: DRAFT – INTERNAL USE ONLY (FOR CONSULTANT REVIEW, NOT FOR DIRECT CLIENT DISTRIBUTION)
+Prepared for: [REPLACE with prepared_for_name and prepared_for_title from input]
+Organization: [REPLACE with org_name]
+Team: [REPLACE with team_name]
+Prepared by: Alex D. Tremble, Founder & CEO, GPS Leadership Solutions
+Assessment window: [REPLACE with assessment_date_range]
+
+SECTOR / LANGUAGE MODE
+If sector_type is "government_federal" or "government_state_local":
+  - Use: "agency head," "director," "secretary," "mission outcomes," "public trust," "communities served," "taxpayers," "oversight bodies," "service quality," "stewardship"
+  - Avoid: "CEO," "customers," "profit," "shareholders," "margin"
+  - Frame outcomes as: mission execution, compliance, service quality, public impact
+If sector_type is anything else (private sector default):
+  - Use: "CEO," "executive team," "customers," "profitability," "margin," "board," "owners"
+  - Frame outcomes as: growth, execution speed, customer impact, profitability
+
+TONE & PRIVACY RULES
+- Audience: C-suite executives or senior agency officials — intelligent, time-limited, skeptical of fluff
+- Tone: concise, direct, calm, behavior-focused. No filler sentences.
+- Never reproduce verbatim quotes. Paraphrase as: "Several raters noted that…" or "Across multiple assessments, raters observed…"
+- Never shame or negatively name a specific leader. Use "some leaders," "a subset of the team," or "the team" for sensitive patterns
+- Treat this as developmental, not punitive
+- Write in flowing prose with clear section breaks. Use markdown headers (## and ###) and bullet points (-) where appropriate.
+
+REQUIRED SECTION ORDER:
+
+## 1. Cover & Context
+Restate: organization, team, assessment window, number of leaders, total raters. Clarify this is a composite view based on the 14-Day Executive Leadership Diagnostic. Note that this is perception data — most useful for identifying patterns and driving conversations, not grades.
+
+## 2. Executive Summary — If You Read One Page, Read This
+
+### A. Key Team Strengths
+3 bullets: biggest, most consistent team strengths expressed as concrete, observable behaviors.
+
+### B. Key Risk Areas / Bottlenecks
+3 bullets: most important team-level risk patterns. Be direct.
+
+### C. High-Leverage 90-Day Team Moves
+3 bullets: the three highest-impact actions the team could take in 90 days.
+
+### D. Key Decisions This Report Is Asking You to Make (Next 90 Days)
+3 bullets phrased as decisions. Examples (adapt to sector/data):
+- "Will we standardize how our leadership meetings run and what 'decision-ready' looks like?"
+- "Will we clarify and enforce a shared definition of ownership for direct reports?"
+Keep this entire section under 350 words and highly scannable.
+
+## 3. Team Heat Analysis — Strengths & Risk Areas
+Where do average others scores cluster high across the team? Where are scores weak, uneven, or volatile?
+- Flag dimensions with consistently lower others scores
+- Flag dimensions with large self vs others gaps across multiple leaders (indicates blind spots)
+- Flag dimensions with high volatility (some leaders much higher/lower than peers)
+- Link to behavior: e.g., "High trust, low delegation: leaders are well-liked but still holding too many decisions."
+
+## 4. Operating Consequences — What This Likely Looks Like Day-to-Day
+Translate score patterns into what senior leaders probably observe in:
+- Meetings (status vs decisions, conflict avoidance, uneven participation)
+- Decision-making (escalation, slow approvals, re-litigation)
+- Execution (unclear ownership, slow follow-through, cross-functional friction)
+Use sector-appropriate language throughout.
+
+## 5. Team Behavior Themes
+Common positive behavioral themes across many leaders (e.g., approachable, technically strong, mission-driven).
+Common developmental themes (e.g., avoids hard conversations, delegates tasks instead of outcomes, over-explains rather than decides).
+Always speak at the team level — never single out an individual.
+
+## 6. 90-Day Team Playbook — 3 to 5 Concrete Moves
+For each move:
+- Short title (imperative phrase, e.g., "Install a decision-centric leadership meeting cadence")
+- Expected observable behavior changes
+- Typical owner (e.g., CEO, COO, CHRO, full leadership team)
+- 90-day success signal: "In 90 days, you would see…"
+All moves must tie directly to patterns in the data and be achievable within 90 days.
+
+## 7. Twelve-to-Twenty-Four-Month Trajectory: If We Change vs If We Don't
+Two short paragraphs:
+- "If current patterns mostly continue…": one paragraph on likely impact on execution, people, and outcomes
+- "If the 90-day plays are executed consistently…": one paragraph on what would be noticeably different for staff, stakeholders, and the senior leader's calendar
+
+## 8. Leadership Team Conversation Guide
+5 to 7 tailored discussion questions for the team. Questions must:
+- Start from strengths
+- Surface ownership ("Where do you see yourself in these themes?")
+- Focus on 1–2 priorities, not everything at once
+- Use sector-appropriate language
+
+[COACHING RECOMMENDATION SECTION — see rules below — insert here if warranted]
+
+## 9. Appendix — Reading the Scores
+Brief reference: define Trust, Proactivity, Productivity, TP3 Index, Overall Impact, and Bench Score. Explain the 1–5 scale and what each range means in behavioral terms. Use sector-appropriate language.
+
+────────────────────────────────────────────────────────────────────────────────
+COACHING & SUPPORT RECOMMENDATION LAYER
+After generating sections 1–9, review the patterns you identified:
+- Low or uneven scores across multiple core dimensions
+- Large self vs others gaps (blind spots) across multiple leaders
+- Recurring themes: avoidance of difficult conversations, delegation/ownership breakdowns, trust issues, cross-functional friction, slow execution
+- 90-day plays that require sustained behavior change, not just process tweaks
+
+If you judge that targeted coaching or team coaching would materially:
+(a) accelerate progress on the 90-day plays, AND/OR
+(b) reduce the risk of this report becoming "shelfware" —
+THEN insert a section between sections 8 and 9 titled:
+  - For non-government: "## Where Targeted Coaching Could Accelerate Results"
+  - For government: "## Where Targeted Leadership Support Could Accelerate Mission Results"
+
+SECTION CONTENT:
+1. Open with 1–2 sentences: acknowledge that some themes require behavior change, not just new processes. Frame coaching as support for the leader(s), not as criticism.
+2. Include 3–5 bullets: each connecting a specific report pattern to a type of coaching support. Examples:
+   - "Executive coaching focused on delegation and ownership for leaders who are still centralizing key decisions."
+   - "Team coaching to raise the quality of senior-level conversations and decision-making in recurring leadership meetings."
+   - "Targeted 1:1 coaching for leaders with significant self vs others gaps, to translate feedback into concrete behavior shifts."
+3. Close with a single, low-pressure next step sentence.
+
+GUARDRAILS for this section:
+- Do NOT make it a sales pitch. No pricing, packages, or performance guarantees.
+- Do NOT say "you must" or "you should hire GPS Leadership Solutions."
+- Every bullet must connect directly to a specific pattern from the report.
+- Keep this section to 120–200 words maximum.
+────────────────────────────────────────────────────────────────────────────────`;
+
+function buildTeamReportPrompt({ org_name, team_name, prepared_for_name, prepared_for_title, assessment_date_range, sector_type, leaders, total_raters, verbatims }) {
+  const fmt  = (n) => n != null ? n.toFixed(2) : 'n/a';
+  const gap  = (self, others) => {
+    if (self == null || others == null) return 'n/a';
+    const d = others - self;
+    return `${d >= 0 ? '+' : ''}${d.toFixed(2)}`;
+  };
+
+  const lines = [
+    `ORGANIZATION: ${org_name || 'Not specified'}`,
+    `TEAM: ${team_name || 'Not specified'}`,
+    `PREPARED FOR: ${prepared_for_name || 'Not specified'}${prepared_for_title ? `, ${prepared_for_title}` : ''}`,
+    `ASSESSMENT WINDOW: ${assessment_date_range || 'Not specified'}`,
+    `SECTOR TYPE: ${sector_type || 'private'}`,
+    '',
+    '=== TEAM COMPOSITION ===',
+    `Leaders assessed: ${leaders.length}`,
+    `Total raters (others only, completed): ${total_raters}`,
+    '',
+    '=== INDIVIDUAL LEADER SCORES ===',
+  ];
+
+  for (const l of leaders) {
+    lines.push('');
+    lines.push(`Leader: ${l.name}${l.title ? `, ${l.title}` : ''}${l.org ? ` (${l.org})` : ''}`);
+    lines.push(`  Others who completed survey: ${l.raterCount}`);
+    lines.push(`  TRUST (A1–A7, 1–5 scale):       Self ${fmt(l.selfScores.trust)}  | Others ${fmt(l.othersScores.trust)}  | Gap ${gap(l.selfScores.trust, l.othersScores.trust)}`);
+    lines.push(`  PROACTIVITY (B1–B6, 1–5):        Self ${fmt(l.selfScores.proactivity)}  | Others ${fmt(l.othersScores.proactivity)}  | Gap ${gap(l.selfScores.proactivity, l.othersScores.proactivity)}`);
+    lines.push(`  PRODUCTIVITY (C1–C6, 1–5):       Self ${fmt(l.selfScores.productivity)}  | Others ${fmt(l.othersScores.productivity)}  | Gap ${gap(l.selfScores.productivity, l.othersScores.productivity)}`);
+    lines.push(`  TP3 Index (others avg, 1–5):     ${fmt(l.othersScores.tp3)} — ${label(l.othersScores.tp3)}`);
+    lines.push(`  Overall Impact D1 (1–10 scale):  Self ${l.selfScores.impact != null ? l.selfScores.impact.toFixed(1) : 'n/a'} | Others ${l.othersScores.impact != null ? l.othersScores.impact.toFixed(2) : 'n/a'}`);
+    lines.push(`  Bench / Succession (F1–F2, 1–5): Others ${fmt(l.othersScores.bench)}`);
+  }
+
+  // Team aggregate
+  const validT  = leaders.map(l => l.othersScores.trust).filter(s => s != null);
+  const validPr = leaders.map(l => l.othersScores.proactivity).filter(s => s != null);
+  const validPd = leaders.map(l => l.othersScores.productivity).filter(s => s != null);
+  const validTP = leaders.map(l => l.othersScores.tp3).filter(s => s != null);
+  const validIm = leaders.map(l => l.othersScores.impact).filter(s => s != null);
+  const validBn = leaders.map(l => l.othersScores.bench).filter(s => s != null);
+  const teamT  = avg(validT);
+  const teamPr = avg(validPr);
+  const teamPd = avg(validPd);
+  const teamTP = avg(validTP);
+  const teamIm = avg(validIm);
+  const teamBn = avg(validBn);
+
+  lines.push('', '=== TEAM AGGREGATE (OTHERS SCORES) ===');
+  lines.push(`  Trust avg:          ${fmt(teamT)}/5.0 — ${label(teamT)}`);
+  lines.push(`  Proactivity avg:    ${fmt(teamPr)}/5.0 — ${label(teamPr)}`);
+  lines.push(`  Productivity avg:   ${fmt(teamPd)}/5.0 — ${label(teamPd)}`);
+  lines.push(`  TP3 Index avg:      ${fmt(teamTP)}/5.0 — ${label(teamTP)}`);
+  lines.push(`  Impact D1 avg:      ${fmt(teamIm)}/10.0`);
+  lines.push(`  Bench avg:          ${fmt(teamBn)}/5.0 — ${label(teamBn)}`);
+
+  // Self vs others gap flags
+  const gapRows = leaders.filter(l =>
+    (l.selfScores.trust != null && l.othersScores.trust != null && Math.abs(l.othersScores.trust - l.selfScores.trust) >= 0.5) ||
+    (l.selfScores.proactivity != null && l.othersScores.proactivity != null && Math.abs(l.othersScores.proactivity - l.selfScores.proactivity) >= 0.5) ||
+    (l.selfScores.productivity != null && l.othersScores.productivity != null && Math.abs(l.othersScores.productivity - l.selfScores.productivity) >= 0.5)
+  );
+  if (gapRows.length > 0) {
+    lines.push('', '  Significant self–others gaps (±0.5 or more):');
+    for (const l of gapRows) {
+      const parts = [];
+      if (l.selfScores.trust != null && l.othersScores.trust != null && Math.abs(l.othersScores.trust - l.selfScores.trust) >= 0.5)
+        parts.push(`Trust ${gap(l.selfScores.trust, l.othersScores.trust)}`);
+      if (l.selfScores.proactivity != null && l.othersScores.proactivity != null && Math.abs(l.othersScores.proactivity - l.selfScores.proactivity) >= 0.5)
+        parts.push(`Proactivity ${gap(l.selfScores.proactivity, l.othersScores.proactivity)}`);
+      if (l.selfScores.productivity != null && l.othersScores.productivity != null && Math.abs(l.othersScores.productivity - l.selfScores.productivity) >= 0.5)
+        parts.push(`Productivity ${gap(l.selfScores.productivity, l.othersScores.productivity)}`);
+      lines.push(`    ${l.name}: ${parts.join(' | ')}`);
+    }
+  }
+
+  // Verbatim themes
+  if (verbatims.length > 0) {
+    const sections = [
+      { label: 'Trust open-ended (A8–A10)',          codes: ['A8','A9','A10'] },
+      { label: 'Proactivity open-ended (B7–B10)',    codes: ['B7','B8','B9','B10'] },
+      { label: 'Productivity open-ended (C7–C9)',    codes: ['C7','C8','C9'] },
+      { label: 'Overall impact comments (D2)',        codes: ['D2'] },
+      { label: 'Bench / succession comments (F3)',   codes: ['F3'] },
+    ];
+    lines.push('', '=== OPEN-ENDED VERBATIM THEMES ===');
+    lines.push('(Paraphrase in the report — do not quote directly)');
+    for (const sec of sections) {
+      const relevant = verbatims.filter(v => sec.codes.includes(v.code));
+      if (relevant.length === 0) continue;
+      lines.push('', `${sec.label}:`);
+      for (const v of relevant) {
+        lines.push(`  [${v.leader}]:`);
+        v.texts.slice(0, 3).forEach(t => lines.push(`    - ${t}`));
+      }
+    }
+  }
+
+  lines.push('', 'Generate the full team diagnostic report following the section format above.');
+  return lines.join('\n');
+}
+
+async function handleGenerateTeamReport(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
+
+  const { diagnostic_ids, org_name, team_name, prepared_for_name, prepared_for_title, assessment_date_range, sector_type } = req.body || {};
+
+  if (!Array.isArray(diagnostic_ids) || diagnostic_ids.length < 2) {
+    return res.status(400).json({ error: 'At least 2 diagnostic_ids are required for a team report.' });
+  }
+  if (!team_name) {
+    return res.status(400).json({ error: 'team_name is required.' });
+  }
+
+  try {
+    // ── 1. Fetch all selected diagnostics ──────────────────────────────────────
+    const idFilter = diagnostic_ids.map(id => `"${id}"`).join(',');
+    const diagsRes = await sb(
+      `/rest/v1/diagnostics?id=in.(${idFilter})&select=id,client_name,client_title,client_org`
+    );
+    const diags = await diagsRes.json();
+    if (!Array.isArray(diags) || diags.length < 2) {
+      return res.status(400).json({ error: 'Could not find at least 2 valid diagnostics for the provided IDs.' });
+    }
+
+    // ── 2. For each diagnostic, compute self + others scores ──────────────────
+    const leaders      = [];
+    let   totalRaters  = 0;
+    const allVerbatims = [];
+
+    for (const diag of diags) {
+      // Self rater
+      const selfRaterRes = await sb(
+        `/rest/v1/diagnostic_raters?diagnostic_id=eq.${diag.id}&is_self=eq.true&limit=1&select=id`
+      );
+      const selfRaters = await selfRaterRes.json();
+
+      // Others raters (completed)
+      const othersRatersRes = await sb(
+        `/rest/v1/diagnostic_raters?diagnostic_id=eq.${diag.id}&is_self=eq.false&completed_at=not.is.null&select=id`
+      );
+      const othersRaters = await othersRatersRes.json();
+      totalRaters += (othersRaters || []).length;
+
+      // Self responses
+      const selfScoreMap = {};
+      if (selfRaters?.length > 0) {
+        const selfId = selfRaters[0].id;
+        const selfRespRes = await sb(
+          `/rest/v1/diagnostic_responses?rater_id=eq.${selfId}&diagnostic_id=eq.${diag.id}&select=question_code,score`
+        );
+        const selfResps = await selfRespRes.json();
+        (selfResps || []).forEach(r => {
+          if (r.score != null) selfScoreMap[r.question_code] = Number(r.score);
+        });
+      }
+
+      // Others responses (scores + open-ended text)
+      let othersResponses = [];
+      if (othersRaters?.length > 0) {
+        const otherIds = othersRaters.map(r => `"${r.id}"`).join(',');
+        const othersRespRes = await sb(
+          `/rest/v1/diagnostic_responses?rater_id=in.(${otherIds})&diagnostic_id=eq.${diag.id}&select=rater_id,question_code,score,text_response`
+        );
+        othersResponses = await othersRespRes.json() || [];
+      }
+
+      // Compute others scores via existing helpers
+      const scores = buildScoreSummary(othersResponses);
+
+      // Compute self dimension averages
+      const selfTrust        = avg(['A1','A2','A3','A4','A5','A6','A7'].map(c => selfScoreMap[c]).filter(s => s != null && !isNaN(s)));
+      const selfProactivity  = avg(['B1','B2','B3','B4','B5','B6'].map(c => selfScoreMap[c]).filter(s => s != null && !isNaN(s)));
+      const selfProductivity = avg(['C1','C2','C3','C4','C5','C6'].map(c => selfScoreMap[c]).filter(s => s != null && !isNaN(s)));
+      const selfImpact       = selfScoreMap['D1'] != null ? Number(selfScoreMap['D1']) : null;
+
+      // Collect verbatims for theme section
+      const verbatims = collectVerbatims(othersResponses);
+      for (const [code, texts] of Object.entries(verbatims)) {
+        allVerbatims.push({ leader: diag.client_name, code, texts });
+      }
+
+      leaders.push({
+        name:  diag.client_name,
+        title: diag.client_title || '',
+        org:   diag.client_org   || '',
+        raterCount: (othersRaters || []).length,
+        selfScores: {
+          trust:        selfTrust,
+          proactivity:  selfProactivity,
+          productivity: selfProductivity,
+          impact:       selfImpact,
+        },
+        othersScores: {
+          trust:        scores.trustScore,
+          proactivity:  scores.proactivityScore,
+          productivity: scores.productivityScore,
+          tp3:          scores.tp3Index,
+          impact:       scores.impactScore,
+          bench:        scores.benchScore,
+        },
+      });
+    }
+
+    // ── 3. Build prompt & call Claude ──────────────────────────────────────────
+    const userPrompt = buildTeamReportPrompt({
+      org_name, team_name, prepared_for_name, prepared_for_title,
+      assessment_date_range, sector_type,
+      leaders,
+      total_raters: totalRaters,
+      verbatims:    allVerbatims,
+    });
+
+    const reportText = await callClaude(TEAM_REPORT_SYSTEM_PROMPT, userPrompt, 8192);
+    if (!reportText) return res.status(500).json({ error: 'Claude returned an empty response.' });
+
+    // ── 4. Store in Supabase ───────────────────────────────────────────────────
+    const now = new Date().toISOString();
+    await sb('/rest/v1/diagnostic_team_reports', 'POST', {
+      org_name:              org_name   || '',
+      team_name:             team_name  || '',
+      prepared_for_name:     prepared_for_name  || '',
+      prepared_for_title:    prepared_for_title || '',
+      assessment_date_range: assessment_date_range || '',
+      sector_type:           sector_type || 'private',
+      diagnostic_ids:        JSON.stringify(diagnostic_ids),
+      num_leaders:           leaders.length,
+      total_raters:          totalRaters,
+      content_text:          reportText,
+      generated_at:          now,
+      updated_at:            now,
+    }, { Prefer: 'return=minimal' });
+
+    return res.status(200).json({
+      report:       reportText,
+      num_leaders:  leaders.length,
+      total_raters: totalRaters,
+      generated_at: now,
+    });
+
+  } catch (err) {
+    console.error('[diagnostic/generate-team-report] error:', err);
     return res.status(500).json({ error: err.message });
   }
 }
