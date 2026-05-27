@@ -4910,22 +4910,39 @@ function renderReportTab() {
   const canGenerate = ['survey_closed','report_draft','report_final'].includes(d.status) && done >= 7;
   const rpt = document.getElementById('report-content');
   if (!rpt) return;
+  const surveyUnlocked = ['survey_closed','report_draft','report_final'].includes(d.status);
+  const canOverride    = surveyUnlocked && done >= 3 && done < 7;
   rpt.innerHTML = `
   <div class="card">
     <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:4px;">Report Generation</div>
-    <div style="font-size:12px;color:var(--d-mid);margin-bottom:16px;">${done} of ${nonSelf.length} raters completed · ${done >= 7 ? 'Meets minimum for report' : 'Below 7-rater minimum'}</div>
-    ${!canGenerate && d.status !== 'survey_closed' ? `<div class="dalert dalert-amber">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+      <div style="font-size:22px;font-weight:800;color:${done>=7?'var(--d-green)':done>=3?'var(--d-amber)':'var(--d-red)'};">${done}</div>
+      <div style="font-size:12px;color:var(--d-mid);line-height:1.4;">of ${nonSelf.length} raters completed<br>
+        <span style="font-weight:700;color:${done>=7?'var(--d-green)':done>=3?'var(--d-amber)':'var(--d-red)'};">
+          ${done >= 7 ? '✓ Meets 7-rater minimum' : done >= 3 ? '⚠ Below 7-rater minimum' : '✗ Insufficient responses'}
+        </span>
+      </div>
+    </div>
+    ${!surveyUnlocked ? `<div class="dalert dalert-amber">
       <span class="dalert-icon">⏳</span>
-      <div>Report generation available once survey closes and at least 7 raters have responded.</div>
+      <div>Report generation available once the survey is closed.</div>
+    </div>` : !canGenerate ? `<div class="dalert dalert-amber">
+      <span class="dalert-icon">⚠</span>
+      <div><strong>Below minimum threshold.</strong> You need at least 7 completed rater surveys to generate a reliable report.
+      ${canOverride ? ' You can override below, but the report quality will be limited.' : ' Fewer than 3 responses — override is not available.'}</div>
     </div>` : ''}
     ${d.report_finalized_at ? `<div class="dalert dalert-green">
       <span class="dalert-icon">✓</span>
       <div><strong>Report finalized</strong> ${diagFormatDate(d.report_finalized_at)}. Ready to deliver at debrief.</div>
     </div>` : ''}
-    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
       <button class="dbtn dbtn-primary" ${canGenerate?'':'disabled'} onclick="generateReport(event)">
         ⚙ Generate Draft Report (Claude)
       </button>
+      ${canOverride && !d.report_generated_at ? `
+      <button class="dbtn dbtn-outline" style="border-color:var(--d-amber);color:var(--d-amber);" onclick="generateReportOverride()">
+        ⚠ Generate with ${done} Responses (Override)
+      </button>` : ''}
       ${d.report_generated_at && !d.report_finalized_at ? `
       <button class="dbtn dbtn-gold" onclick="openReportPreview()">👁 Preview &amp; Finalize Report</button>` : ''}
       ${d.debrief_completed_at ? '' : d.report_finalized_at ? `
@@ -5119,6 +5136,27 @@ async function generateReport(e) {
     if (btn) { btn.disabled = false; btn.textContent = '⚙ Generate Draft Report (Claude)'; }
     alert('Error generating report: ' + ex.message);
   }
+}
+
+
+async function generateReportOverride() {
+  const d = DIAG_SEL;
+  if (!d) return;
+  const nonSelf = DIAG_RATERS.filter(r => !r.is_self);
+  const done    = nonSelf.filter(r => r.completed_at).length;
+
+  const typed = prompt(
+    `WARNING: You are generating a report with only ${done} completed rater responses.\n\n` +
+    `Reports below 7 responses have limited reliability and may not accurately represent this leader's strengths and gaps.\n\n` +
+    `This report will be labeled as generated from limited data.\n\n` +
+    `Type CONFIRM to proceed anyway:`
+  );
+  if ((typed || '').trim().toUpperCase() !== 'CONFIRM') {
+    alert('Override cancelled. No report was generated.');
+    return;
+  }
+  // Proceed — generateReport expects an event; pass null and call directly
+  await generateReport(null);
 }
 
 // ── Report preview + three-layer finalize gate ───────────────────────────
