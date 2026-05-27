@@ -704,8 +704,20 @@ function updateProgress() {
 // ─────────────────────────────────────────────────────────────────────────────
 //  SUBMIT
 // ─────────────────────────────────────────────────────────────────────────────
+let _surveySubmitting = false;
+
 async function submitSurvey() {
   if (!validateSection()) return;
+
+  // Guard: already submitted in a previous session
+  if (RATER && RATER.completed_at) {
+    showState('screen-done-already');
+    return;
+  }
+
+  // Guard: prevent double-click / in-flight duplicate
+  if (_surveySubmitting) return;
+  _surveySubmitting = true;
 
   // Disable submit button
   const btn = document.querySelector('.btn-gold');
@@ -769,6 +781,7 @@ async function submitSurvey() {
 
   } catch (err) {
     console.error('Submit error:', err);
+    _surveySubmitting = false;
     const btn = document.querySelector('.btn-gold');
     if (btn) { btn.disabled = false; btn.textContent = 'Submit →'; }
     const msg = document.getElementById('validation-msg');

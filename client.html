@@ -2194,11 +2194,13 @@ function renderDiagActiveMode(d, raters) {
           const isSelf = !!r.is_self;
           const statusIcon = isSelf ? '👤' : done ? '✓' : '○';
           const statusCls  = isSelf ? 'ri-self' : done ? 'ri-done' : 'ri-pend';
+          const canRemove = !isSelf && !CLIENT_DIAG.raters_finalized_at && !done;
           return `<li class="dc-rater-item${isSelf ? ' is-self' : ''}">
             <div class="ri-status ${statusCls}">${statusIcon}</div>
             <div class="dc-rater-name">${escD(r.name)}</div>
             <div class="dc-rater-role">${escD(r.relationship || '')}</div>
-            <div style="font-size:11px;color:${done?'#059669':'#6b7280'};">${done?'Completed':'Pending'}</div>
+            <div style="font-size:11px;color:${done?'#059669':'#6b7280'};flex:1;">${done?'Completed':'Pending'}</div>
+            ${canRemove ? `<button onclick="removeRaterFromPortal('${r.id}')" title="Remove" style="background:none;border:none;cursor:pointer;color:#d1d5db;font-size:18px;line-height:1;padding:0 2px;" onmouseover="this.style.color='#dc2626'" onmouseout="this.style.color='#d1d5db'">×</button>` : ''}
           </li>`;
         }).join('')}
       </ul>`;
@@ -2374,6 +2376,24 @@ async function addRaterFromPortal() {
 
   } catch (err) {
     msgEl.textContent = 'Error adding rater: ' + (err.message || 'unknown'); msgEl.className = 'dc-msg err';
+  }
+}
+
+
+async function removeRaterFromPortal(raterId) {
+  if (!CLIENT_DIAG || CLIENT_DIAG.raters_finalized_at) return;
+  const rater = CLIENT_DIAG_RATERS.find(r => r.id === raterId);
+  if (!rater) return;
+  if (rater.completed_at) { alert('This rater has already completed their survey and cannot be removed.'); return; }
+  if (!confirm(`Remove ${rater.name} from your rater list?`)) return;
+
+  try {
+    const { error } = await db.from('diagnostic_raters').delete().eq('id', raterId);
+    if (error) throw error;
+    CLIENT_DIAG_RATERS = CLIENT_DIAG_RATERS.filter(r => r.id !== raterId);
+    renderDiagnosticTab();
+  } catch (err) {
+    alert('Error removing rater: ' + (err.message || 'unknown'));
   }
 }
 

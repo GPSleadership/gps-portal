@@ -40,28 +40,47 @@ function sb(path, method = 'GET', body = null, extra = {}) {
   });
 }
 
-// ── Call Claude API ──────────────────────────────────────────────────────────
-async function callClaude(systemPrompt, userPrompt, maxTokens = 512) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key':         ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-      'Content-Type':      'application/json',
-    },
-    body: JSON.stringify({
-      model:      CLAUDE_MODEL,
-      max_tokens: maxTokens,
-      system:     systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }],
-    }),
-  });
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Claude API error ${res.status}: ${errText.slice(0, 300)}`);
+// ── Call Claude API (with retry) ─────────────────────────────────────────────
+async function callClaude(systemPrompt, userPrompt, maxTokens = 512, { retries = 2, retryDelayMs = 3000 } = {}) {
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    if (attempt > 0) {
+      console.log(`[callClaude] retry attempt ${attempt} after ${retryDelayMs}ms…`);
+      await new Promise(r => setTimeout(r, retryDelayMs));
+    }
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key':         ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01',
+          'Content-Type':      'application/json',
+        },
+        body: JSON.stringify({
+          model:      CLAUDE_MODEL,
+          max_tokens: maxTokens,
+          system:     systemPrompt,
+          messages: [{ role: 'user', content: userPrompt }],
+        }),
+      });
+      // Retry on 529 (overloaded) or 500; surface other errors immediately
+      if (res.status === 529 || res.status === 500) {
+        const errText = await res.text();
+        lastErr = new Error(`Claude API error ${res.status}: ${errText.slice(0, 300)}`);
+        continue; // retry
+      }
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Claude API error ${res.status}: ${errText.slice(0, 300)}`);
+      }
+      const data = await res.json();
+      return data.content?.[0]?.text?.trim() || '';
+    } catch (err) {
+      lastErr = err;
+      if (attempt === retries) break;
+    }
   }
-  const data = await res.json();
-  return data.content?.[0]?.text?.trim() || '';
+  throw lastErr;
 }
 
 // ── Log email ────────────────────────────────────────────────────────────────
@@ -568,7 +587,17 @@ async function handleGenerateReport(req, res) {
       `/rest/v1/diagnostic_report_drafts?diagnostic_id=eq.${diagnostic_id}&select=version&order=version.desc&limit=1`
     );
     const versions    = await versionsRes.json();
-    const nextVersion = (versions?.[0]?.version || 0) + 1;
+    const latestVersion = versions?.[0]?.version || 0;
+    const nextVersion   = latestVersion + 1;
+
+    // ── Cost ceiling: max 5 report generations per diagnostic ────────────
+    const MAX_REPORT_DRAFTS = 5;
+    if (latestVersion >= MAX_REPORT_DRAFTS) {
+      return res.status(429).json({
+        error: `Report generation limit reached (${MAX_REPORT_DRAFTS} drafts maximum). Contact support if you need to regenerate.`,
+        draft_count: latestVersion,
+      });
+    }
 
     const overrideNotes = Object.keys(overrideMap).length > 0
       ? `\nNote — question overrides in effect: ${Object.entries(overrideMap).map(([k,v]) => `${k}: "${v}"`).join('; ')}`
