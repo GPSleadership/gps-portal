@@ -2037,7 +2037,7 @@ let CLIENT_DIAG_REPORT = null; // finalized report draft
 
 window.addEventListener('DOMContentLoaded', () => {
   if (!token) {
-    showError('No access link found.', 'Please use the unique link sent to you by your GPS coach. If you\'ve lost it, email alex@gpsleadership.org to request a new one.');
+    showRecoveryForm();
     return;
   }
   loadClient();
@@ -4003,6 +4003,64 @@ function showError(title, message) {
       <p>${message}</p>
     </div>
   `;
+}
+
+function showRecoveryForm() {
+  document.getElementById('mainContent').innerHTML = `
+    <div class="state-screen" style="max-width:440px;">
+      <div style="font-size:40px;margin-bottom:16px;">🔑</div>
+      <h2>Find Your Portal Link</h2>
+      <p style="margin-bottom:24px;">Enter the email address your coach has on file and we'll send your access link.</p>
+      <div style="display:flex;flex-direction:column;gap:10px;width:100%;">
+        <input type="email" id="recovery-email"
+               placeholder="your@email.com"
+               style="padding:12px 16px;border:1px solid #d1d5db;border-radius:8px;font-size:15px;width:100%;box-sizing:border-box;" />
+        <button onclick="sendRecoveryLink()"
+                style="padding:12px;background:#1A3D6E;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">
+          Send My Link →
+        </button>
+        <div id="recovery-msg" style="font-size:13px;color:#6b7280;text-align:center;min-height:20px;"></div>
+      </div>
+      <p style="margin-top:28px;font-size:12px;color:#9ca3af;">
+        Don't have an account? <a href="mailto:alex@gpsleadership.org" style="color:#1A3D6E;">Contact Alex →</a>
+      </p>
+    </div>
+  `;
+  // Auto-focus the email field
+  setTimeout(() => {
+    const el = document.getElementById('recovery-email');
+    if (el) el.focus();
+  }, 50);
+}
+
+async function sendRecoveryLink() {
+  const emailEl = document.getElementById('recovery-email');
+  const msgEl   = document.getElementById('recovery-msg');
+  const email   = (emailEl ? emailEl.value : '').trim().toLowerCase();
+
+  if (!email || !/^[^@]+@[^@]+\.[^@]+$/.test(email)) {
+    msgEl.textContent = 'Please enter a valid email address.';
+    msgEl.style.color = '#dc2626';
+    return;
+  }
+
+  msgEl.textContent = 'Sending…';
+  msgEl.style.color = '#6b7280';
+
+  try {
+    const r = await fetch('/api/get-client', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    // Always show success — never reveal whether email exists
+    msgEl.textContent = 'If that email is in our system, your link is on its way. Check your inbox (and spam folder).';
+    msgEl.style.color = '#059669';
+    if (emailEl) emailEl.disabled = true;
+  } catch (err) {
+    msgEl.textContent = 'Something went wrong. Please try again or email alex@gpsleadership.org.';
+    msgEl.style.color = '#dc2626';
+  }
 }
 
 

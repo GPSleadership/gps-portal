@@ -2104,6 +2104,7 @@ function renderProfileSection(section, client, checkins) {
         <p style="font-size:11px;color:var(--gray-600);margin-top:6px;">Send this link to ${client.name ? client.name.split(' ')[0] : 'the client'}. They should bookmark it — it's their permanent portal access.</p>
         <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
           <button onclick="sendWelcomeEmail('${client.id}')" id="welcomeEmailBtn-${client.id}" style="padding:7px 16px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">Send Welcome Email</button>
+          <button onclick="resendPortalLink('${client.id}')" id="resendLinkBtn-${client.id}" style="padding:7px 16px;background:var(--navy);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">↩ Resend Portal Link</button>
           <button onclick="regenerateToken('${client.id}')" id="regenBtn-${client.id}" style="padding:7px 14px;background:none;border:1px solid #e65100;color:#e65100;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Regenerate Link</button>
         </div>
         <div id="regenMsg-${client.id}" style="margin-top:8px;"></div>
@@ -3910,6 +3911,44 @@ async function sendNewLink(clientId, newToken) {
     if (msg) msg.innerHTML = `<span style="color:#2e7d32;font-size:12px;">✓ New link sent to ${client.email}</span>`;
   } catch (err) {
     alert('Error sending new link: ' + err.message);
+  }
+}
+
+async function resendPortalLink(clientId) {
+  const client = allClients.find(c => c.id === clientId);
+  if (!client) return;
+  if (!client.email) { alert('No email address on file for this client.'); return; }
+
+  const firstName = (client.name || 'this client').split(' ')[0];
+  if (!confirm(`Resend portal access link to ${client.email}?\n\nThis sends ${firstName} their existing link — it does NOT generate a new one.`)) return;
+
+  const btn = document.getElementById('resendLinkBtn-' + clientId);
+  btn.textContent = 'Sending…'; btn.disabled = true;
+
+  try {
+    const r = await fetch('/api/get-client', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: client.email }),
+    });
+    if (!r.ok) throw new Error('Request failed');
+
+    btn.textContent = '✓ Link Sent';
+    btn.style.background = '#2e7d32';
+    setTimeout(() => {
+      btn.textContent = '↩ Resend Portal Link';
+      btn.style.background = '';
+      btn.disabled = false;
+    }, 4000);
+
+    const msgEl = document.getElementById('regenMsg-' + clientId);
+    if (msgEl) {
+      msgEl.innerHTML = `<span style="font-size:12px;color:#2e7d32;">✓ Portal link resent to ${client.email}</span>`;
+      setTimeout(() => { msgEl.innerHTML = ''; }, 6000);
+    }
+  } catch (err) {
+    alert('Error resending link: ' + err.message);
+    btn.textContent = '↩ Resend Portal Link'; btn.disabled = false;
   }
 }
 
