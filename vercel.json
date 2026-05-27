@@ -1,12 +1,33 @@
 {
   "rewrites": [
-    { "source": "/client",             "destination": "/client.html"             },
-    { "source": "/coach",              "destination": "/coach.html"              },
-    { "source": "/survey",             "destination": "/survey.html"             },
-    { "source": "/diagnostic-leader",  "destination": "/diagnostic-leader.html"  },
-    { "source": "/diagnostic-coach",   "destination": "/diagnostic-coach.html"   },
-    { "source": "/diagnostic-survey",  "destination": "/diagnostic-survey.html"  },
-    { "source": "/diagnostic-sandbox", "destination": "/diagnostic-sandbox.html" }
+    {
+      "source": "/client",
+      "destination": "/client.html"
+    },
+    {
+      "source": "/coach",
+      "destination": "/coach.html"
+    },
+    {
+      "source": "/survey",
+      "destination": "/survey.html"
+    },
+    {
+      "source": "/diagnostic-leader",
+      "destination": "/diagnostic-leader.html"
+    },
+    {
+      "source": "/diagnostic-coach",
+      "destination": "/diagnostic-coach.html"
+    },
+    {
+      "source": "/diagnostic-survey",
+      "destination": "/diagnostic-survey.html"
+    },
+    {
+      "source": "/diagnostic-sandbox",
+      "destination": "/diagnostic-sandbox.html"
+    }
   ],
   "crons": [
     {
@@ -26,34 +47,108 @@
     {
       "source": "/api/(.*)",
       "headers": [
-        { "key": "Access-Control-Allow-Origin",  "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "POST, OPTIONS, GET" },
-        { "key": "Access-Control-Allow-Headers", "value": "Content-Type" }
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "POST, OPTIONS, GET"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type"
+        }
       ]
     },
     {
       "source": "/(.*\\.html)",
       "headers": [
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
-        { "key": "Pragma",        "value": "no-cache" },
-        { "key": "Expires",       "value": "0" }
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        },
+        {
+          "key": "Pragma",
+          "value": "no-cache"
+        },
+        {
+          "key": "Expires",
+          "value": "0"
+        }
       ]
     },
     {
       "source": "/client",
       "headers": [
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
-        { "key": "Pragma",        "value": "no-cache" },
-        { "key": "Expires",       "value": "0" }
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        },
+        {
+          "key": "Pragma",
+          "value": "no-cache"
+        },
+        {
+          "key": "Expires",
+          "value": "0"
+        }
       ]
     },
     {
       "source": "/coach",
       "headers": [
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
-        { "key": "Pragma",        "value": "no-cache" },
-        { "key": "Expires",       "value": "0" }
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        },
+        {
+          "key": "Pragma",
+          "value": "no-cache"
+        },
+        {
+          "key": "Expires",
+          "value": "0"
+        }
       ]
     }
-  ]
+  ],
+  "functions": {
+    "api/diagnostic.js": {
+      "maxDuration": 60
+    },
+    "api/ask.js": {
+      "maxDuration": 60
+    },
+    "api/notify.js": {
+      "maxDuration": 30
+    },
+    "api/get-client.js": {
+      "maxDuration": 15
+    },
+    "api/send-reminders.js": {
+      "maxDuration": 30
+    },
+    "api/survey-reminders.js": {
+      "maxDuration": 30
+    },
+    "api/survey.js": {
+      "maxDuration": 15
+    },
+    "api/accept-terms.js": {
+      "maxDuration": 15
+    },
+    "api/start-sprint.js": {
+      "maxDuration": 15
+    },
+    "api/submit-closeout.js": {
+      "maxDuration": 15
+    },
+    "api/import-clients.js": {
+      "maxDuration": 30
+    },
+    "api/email-templates.js": {
+      "maxDuration": 15
+    }
+  }
 }
