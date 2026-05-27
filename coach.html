@@ -4092,9 +4092,10 @@ async function saveClientInfo(clientId) {
 let ALL_DIAGS     = [];
 let _diagFilter   = 'all';
 let _diagSort     = { col: 'created_at', dir: 'desc' };
-let DIAG_SEL      = null;
-let DIAG_RATERS   = [];
-let DIAG_OVERRIDES= {};
+let DIAG_SEL           = null;
+let DIAG_RATERS        = [];
+let DIAG_OVERRIDES     = {};
+let DIAG_LINKED_CLIENT = null; // client record for the currently-open diagnostic
 let DIAG_CLIENTS         = [];
 let DIAG_COACHING_CLIENTS= []; // active clients with check-in status
 let DIAG_RATER_STATS     = {}; // { diagId: { total, responded, pct } }
@@ -4153,7 +4154,7 @@ async function loadDiagnostics() {
 async function diagLoadClients() {
   const { data } = await db
     .from('clients')
-    .select('id,name,email,org,title,current_sprint_number,is_active,is_archived,plan_submitted_at')
+    .select('id,name,email,org,title,token,current_sprint_number,is_active,is_archived,plan_submitted_at')
     .order('name');
   if (!data) return;
   DIAG_CLIENTS = data;
@@ -4553,6 +4554,9 @@ function renderDiagTable() {
 async function openDiag(id) {
   DIAG_SEL = ALL_DIAGS.find(d => d.id === id);
   if (!DIAG_SEL) return;
+  DIAG_LINKED_CLIENT = DIAG_SEL.client_id
+    ? (DIAG_CLIENTS.find(c => c.id === DIAG_SEL.client_id) || null)
+    : null;
 
   const { data: raterData } = await db
     .from('diagnostic_raters').select('*').eq('diagnostic_id', id).order('created_at', { ascending: true });
@@ -4973,6 +4977,12 @@ function renderReportTab() {
     ${d.report_finalized_at ? `<div class="dalert dalert-green">
       <span class="dalert-icon">✓</span>
       <div><strong>Report finalized</strong> ${diagFormatDate(d.report_finalized_at)}. Ready to deliver at debrief.</div>
+    </div>` : ''}
+    ${d.client_id && DIAG_LINKED_CLIENT && !DIAG_LINKED_CLIENT.token ? `
+    <div class="dalert" style="background:#fff3cd;border-color:#ffc107;margin-bottom:12px;">
+      <span class="dalert-icon">⚠</span>
+      <div><strong>No portal link on file.</strong> This client doesn't have a portal access token yet. 
+      The finalize step will fail until you generate one. Open the client profile → scroll to Portal Access → generate a link.</div>
     </div>` : ''}
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
       <button class="dbtn dbtn-primary" ${canGenerate?'':'disabled'} onclick="generateReport(event)">

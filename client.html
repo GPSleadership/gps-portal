@@ -652,7 +652,36 @@
     #resultsPanel.active { display: block; }
 
     /* ── Diagnostic Panel ── */
-    #diagPanel {
+    /* Report-ready notification banner */
+#reportReadyBanner {
+  display: none;
+  margin: 0;
+  padding: 12px 20px;
+  background: #1A3D6E;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  text-align: center;
+}
+#reportReadyBanner.visible { display: flex; }
+#reportReadyBanner .rrb-btn {
+  background: #C09A2A;
+  color: #fff;
+  border: none;
+  padding: 7px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+#reportReadyBanner .rrb-btn:hover { background: #a07f20; }
+
+#diagPanel {
       display: none;
       background: var(--light-sand);
       min-height: calc(100vh - 140px);
@@ -1836,6 +1865,12 @@
   <button class="ptab ptab-ask" id="tabAsk" onclick="showPortalTab('ask')" style="display:none;">Ask Alex</button>
 </div>
 
+<!-- ── REPORT READY BANNER (shows when diagnostic report is finalized, user not on diagnostic tab) ── -->
+<div id="reportReadyBanner" role="alert">
+  <span>📊 Your GPS Leadership diagnostic report is ready.</span>
+  <button class="rrb-btn" onclick="showPortalTab('diagnostic')">View Report →</button>
+</div>
+
 <!-- ── COACHING CTA BANNER (non-coaching clients only, shown throughout access) ── -->
 <div id="accessExpiryBanner">
   <div class="expiry-banner-content">
@@ -2082,6 +2117,14 @@ function escD(t) {
   return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+function updateReportReadyBanner(activeTab) {
+  const banner = document.getElementById('reportReadyBanner');
+  if (!banner) return;
+  const showBanner = CLIENT_DIAG && CLIENT_DIAG.report_finalized_at && activeTab !== 'diagnostic';
+  if (showBanner) banner.classList.add('visible');
+  else            banner.classList.remove('visible');
+}
+
 async function loadClientDiagnostic() {
   if (!currentClient || !currentClient.id) return;
   try {
@@ -2118,6 +2161,7 @@ async function loadClientDiagnostic() {
     // Show the Diagnostic tab
     const tabDiag = document.getElementById('tabDiag');
     if (tabDiag) tabDiag.style.display = '';
+    updateReportReadyBanner('plan'); // default tab on load
 
     // Render if already on that tab
     const diagPanel = document.getElementById('diagPanel');
@@ -4132,6 +4176,7 @@ function showPortalTab(tab) {
     }
     activateQATab();
   }
+  updateReportReadyBanner(tab);
 }
 
 function activateQATab() {

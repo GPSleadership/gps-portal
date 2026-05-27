@@ -744,6 +744,14 @@ async function handleFinalizeReport(req, res) {
     if (!clientRes.ok) return res.status(404).json({ error: 'Client not found' });
     const client = await clientRes.json();
 
+    // 2b. Validate client has a portal token — required for the report-ready email link
+    if (!client.token) {
+      return res.status(422).json({
+        error: 'This client does not have a portal access link yet. Generate one from the client profile in the coach portal before finalizing.',
+        code:  'NO_PORTAL_TOKEN',
+      });
+    }
+
     // 3. Mark diagnostic as finalized
     const now = new Date().toISOString();
     const updateRes = await sb(`/rest/v1/diagnostics?id=eq.${diagnostic_id}`, 'PATCH',
@@ -894,6 +902,29 @@ function buildPlanLockedEmail({ leaderName, lockedAt }) {
   };
 }
 
+function buildDeliveryAlertEmail({ errorCount, totalCount, errSummary }) {
+  return {
+    subject: `⚠ Email delivery alert — ${errorCount} failures in last 2h`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
+        <div style="background:#8B1A1A;padding:20px 28px;border-radius:8px 8px 0 0;">
+          <div style="color:#ffcccc;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">GPS Leadership Solutions — System Alert</div>
+          <div style="color:#ffffff;font-size:20px;font-weight:700;">Email Delivery Spike Detected</div>
+        </div>
+        <div style="background:#ffffff;padding:28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
+          <p><strong>${errorCount} of ${totalCount} emails</strong> sent in the last 2 hours failed.</p>
+          <p>This may indicate a Resend API issue or domain authentication problem. Check your Resend dashboard immediately.</p>
+          <pre style="background:#f5f5f5;padding:14px;border-radius:6px;font-size:12px;line-height:1.6;overflow-x:auto;">${errSummary}</pre>
+          <div style="margin:24px 0;">
+            <a href="https://resend.com/emails" style="background:#8B1A1A;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:700;display:inline-block;">Open Resend Dashboard →</a>
+          </div>
+          <p style="font-size:13px;color:#666;">This alert will not repeat for 4 hours. – GPS Leadership Portal (automated)</p>
+        </div>
+      </div>
+    `,
+  };
+}
+
 async function handleReminders(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -906,7 +937,7 @@ async function handleReminders(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const log = { r1_sent: [], r2_sent: [], t2_alerts: [], plans_locked: [], errors: [] };
+  const log = { r1_sent: [], r2_sent: [], t2_alerts: [], plans_locked: [], delivery_alert: null, errors: [] };
   const now = new Date();
 
   try {
@@ -1000,13 +1031,45 @@ async function handleReminders(req, res) {
       }
     }
 
+    // ── Section 4: Email Delivery Health Check ──────────────────────────────────
+    try {
+      const twoHoursAgo  = new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString();
+      const fourHoursAgo = new Date(now.getTime() - 4 * 60 * 60 * 1000).toISOString();
+
+      // Don't alert if we already sent one in the last 4 hours
+      const alertCheckRes = await sb(`/rest/v1/email_log?email_type=eq.email_delivery_alert&sent_at=gte.${fourHoursAgo}&select=id`);
+      const recentAlerts  = await alertCheckRes.json() || [];
+
+      if (recentAlerts.length === 0) {
+        const recentLogsRes = await sb(`/rest/v1/email_log?sent_at=gte.${twoHoursAgo}&select=status,email_type,error_details,recipient_email`);
+        const recentLogs    = await recentLogsRes.json() || [];
+
+        if (recentLogs.length >= 3) {
+          const errors    = recentLogs.filter(l => l.status === 'error');
+          const successes = recentLogs.filter(l => l.status === 'sent');
+
+          if (errors.length >= 3 && errors.length > successes.length) {
+            const errSummary = errors.slice(0, 5)
+              .map(e => `• ${e.email_type} → ${e.recipient_email}: ${e.error_details ? JSON.parse(e.error_details)?.message || e.error_details : 'unknown'}`)
+              .join('\n');
+            const alertEmail = buildDeliveryAlertEmail({ errorCount: errors.length, totalCount: recentLogs.length, errSummary });
+            await sendEmail({ to: COACH_EMAIL, ...alertEmail, emailType: 'email_delivery_alert' });
+            log.delivery_alert = { errors: errors.length, total: recentLogs.length };
+          }
+        }
+      }
+    } catch (alertErr) {
+      log.errors.push({ type: 'DELIVERY_HEALTH_CHECK', error: alertErr.message });
+    }
+
     return res.status(200).json({
-      ran_at:       now.toISOString(),
-      r1_sent:      log.r1_sent.length,
-      r2_sent:      log.r2_sent.length,
-      t2_alerts:    log.t2_alerts.length,
-      plans_locked: log.plans_locked.length,
-      details:      log,
+      ran_at:         now.toISOString(),
+      r1_sent:        log.r1_sent.length,
+      r2_sent:        log.r2_sent.length,
+      t2_alerts:      log.t2_alerts.length,
+      plans_locked:   log.plans_locked.length,
+      delivery_alert: log.delivery_alert,
+      details:        log,
     });
 
 
