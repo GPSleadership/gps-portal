@@ -902,6 +902,32 @@ function buildPlanLockedEmail({ leaderName, lockedAt }) {
   };
 }
 
+function buildPortalNudgeEmail({ clientName, leaderOrg, portalUrl, daysSince }) {
+  const firstName = (clientName || '').split(' ')[0] || 'there';
+  const orgLine   = leaderOrg ? ` at ${leaderOrg}` : '';
+  return {
+    subject: `Your GPS Leadership portal — a quick check-in`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
+        <div style="background:#1A3D6E;padding:20px 28px;border-radius:8px 8px 0 0;">
+          <div style="color:#C09A2A;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">GPS Leadership Solutions</div>
+          <div style="color:#ffffff;font-size:20px;font-weight:700;">Your portal is waiting for you.</div>
+        </div>
+        <div style="background:#ffffff;padding:28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
+          <p>Hey ${firstName},</p>
+          <p>It's been a few days since you logged into your leadership portal${orgLine}. The tools are there when you need them — and the leaders who get the most out of this process are the ones who make it a quick weekly habit.</p>
+          <p><strong>Two minutes is enough.</strong> Check your 90-day plan, ask a leadership question, or just see where things stand.</p>
+          <div style="margin:28px 0;text-align:center;">
+            <a href="${portalUrl}" style="background:#1A3D6E;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;display:inline-block;">Open My Portal →</a>
+          </div>
+          <p style="font-size:14px;color:#555;">If you have questions or something isn't working, reply to this email and I'll sort it out.</p>
+          <p>– Alex<br><span style="font-size:13px;color:#888;">GPS Leadership Solutions</span></p>
+        </div>
+      </div>
+    `,
+  };
+}
+
 function buildDeliveryAlertEmail({ errorCount, totalCount, errSummary }) {
   return {
     subject: `⚠ Email delivery alert — ${errorCount} failures in last 2h`,
@@ -1062,14 +1088,72 @@ async function handleReminders(req, res) {
       log.errors.push({ type: 'DELIVERY_HEALTH_CHECK', error: alertErr.message });
     }
 
+    // ── Section 5: Portal Engagement Nudge ─────────────────────────────────────
+    // Find active diagnostic clients who haven't logged in for 7+ days
+    try {
+      const sevenDaysAgo     = new Date(now.getTime() - 7  * 24 * 60 * 60 * 1000).toISOString();
+      const fourteenDaysAgo  = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
+
+      // Get client_ids from diagnostics that are still active (not done, not archived)
+      const activeDiagRes = await sb(
+        `/rest/v1/diagnostics?status=not.in.(debrief_complete,plan_active,cancelled)&client_id=not.is.null&select=client_id`
+      );
+      const activeDiags   = await activeDiagRes.json() || [];
+      const activeCids    = [...new Set(activeDiags.map(d => d.client_id))];
+
+      if (activeCids.length > 0) {
+        // Fetch those clients who haven't been active in 7+ days
+        const cidFilter = activeCids.map(id => `"${id}"`).join(',');
+        const staleRes  = await sb(
+          `/rest/v1/clients?id=in.(${cidFilter})&is_archived=eq.false&last_active_at=lt.${encodeURIComponent(sevenDaysAgo)}&select=id,name,email,org,token,last_active_at`
+        );
+        const staleClients = await staleRes.json() || [];
+
+        for (const client of staleClients) {
+          if (!client.token) continue; // no portal link — can't send
+
+          // Check for recent nudge (last 14 days) to avoid spam
+          const nudgeCheckRes = await sb(
+            `/rest/v1/email_log?email_type=eq.portal_engagement_nudge&recipient_email=eq.${encodeURIComponent(client.email)}&sent_at=gte.${encodeURIComponent(fourteenDaysAgo)}&select=id`
+          );
+          const recentNudges = await nudgeCheckRes.json() || [];
+          if (recentNudges.length > 0) continue;
+
+          const daysSince  = Math.round((now - new Date(client.last_active_at)) / (1000 * 60 * 60 * 24));
+          const portalUrl  = `${PORTAL_BASE}/client?token=${client.token}`;
+          const nudgeEmail = buildPortalNudgeEmail({
+            clientName: client.name,
+            leaderOrg:  client.org || null,
+            portalUrl,
+            daysSince,
+          });
+
+          try {
+            await sendEmail({
+              to:            client.email,
+              ...nudgeEmail,
+              emailType:     'portal_engagement_nudge',
+              recipientName: client.name,
+            });
+            log.portal_nudges = (log.portal_nudges || 0) + 1;
+          } catch (nudgeErr) {
+            log.errors.push({ type: 'PORTAL_NUDGE', client: client.name, error: nudgeErr.message });
+          }
+        }
+      }
+    } catch (nudgeErr) {
+      log.errors.push({ type: 'PORTAL_NUDGE_SECTION', error: nudgeErr.message });
+    }
+
     return res.status(200).json({
-      ran_at:         now.toISOString(),
-      r1_sent:        log.r1_sent.length,
-      r2_sent:        log.r2_sent.length,
-      t2_alerts:      log.t2_alerts.length,
-      plans_locked:   log.plans_locked.length,
-      delivery_alert: log.delivery_alert,
-      details:        log,
+      ran_at:          now.toISOString(),
+      r1_sent:         log.r1_sent.length,
+      r2_sent:         log.r2_sent.length,
+      t2_alerts:       log.t2_alerts.length,
+      plans_locked:    log.plans_locked.length,
+      portal_nudges:   log.portal_nudges || 0,
+      delivery_alert:  log.delivery_alert,
+      details:         log,
     });
 
 

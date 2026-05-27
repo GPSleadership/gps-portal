@@ -652,7 +652,110 @@
     #resultsPanel.active { display: block; }
 
     /* ── Diagnostic Panel ── */
-    /* Report-ready notification banner */
+    
+/* ── Weekly Leadership Prompt Modal ── */
+#qaNudgeOverlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  z-index: 1800;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+#qaNudgeOverlay.open { display: flex; }
+#qaNudgeCard {
+  background: #fff;
+  border-radius: 14px;
+  max-width: 520px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0,0,0,.25);
+  overflow: hidden;
+}
+.qnc-header {
+  background: #1A3D6E;
+  padding: 20px 24px 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+.qnc-week-badge {
+  background: #C09A2A;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  padding: 4px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.qnc-headline {
+  color: #fff;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.qnc-body {
+  padding: 22px 24px;
+}
+.qnc-sub {
+  font-size: 13px;
+  color: #555;
+  margin-bottom: 14px;
+  line-height: 1.55;
+}
+#qaNudgeInput {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1.5px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  min-height: 80px;
+  resize: vertical;
+  outline: none;
+  transition: border-color .15s;
+}
+#qaNudgeInput:focus { border-color: #1A3D6E; }
+.qnc-footer {
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #f0f0f0;
+  gap: 12px;
+}
+#qaNudgeSubmit {
+  background: #1A3D6E;
+  color: #fff;
+  border: none;
+  padding: 11px 22px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .15s;
+}
+#qaNudgeSubmit:hover { background: #15325a; }
+#qaNudgeSubmit:disabled { opacity: .5; cursor: not-allowed; }
+.qnc-skip {
+  font-size: 13px;
+  color: #888;
+  cursor: pointer;
+  text-decoration: underline;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+}
+.qnc-skip:hover { color: #555; }
+
+/* Report-ready notification banner */
 #reportReadyBanner {
   display: none;
   margin: 0;
@@ -1865,6 +1968,24 @@
   <button class="ptab ptab-ask" id="tabAsk" onclick="showPortalTab('ask')" style="display:none;">Ask Alex</button>
 </div>
 
+<!-- ── WEEKLY LEADERSHIP PROMPT MODAL ── -->
+<div id="qaNudgeOverlay" role="dialog" aria-modal="true" aria-labelledby="qaNudgeHeadline">
+  <div id="qaNudgeCard">
+    <div class="qnc-header">
+      <span class="qnc-week-badge" id="qaNudgeWeekBadge">Week 1</span>
+      <div class="qnc-headline" id="qaNudgeHeadline">What's your biggest leadership challenge right now?</div>
+    </div>
+    <div class="qnc-body">
+      <p class="qnc-sub">Type it in and Ask Alex will give you a direct, practical answer — grounded in what you're actually building.</p>
+      <textarea id="qaNudgeInput" placeholder="Describe what's on your mind…" rows="3"></textarea>
+    </div>
+    <div class="qnc-footer">
+      <button class="qnc-skip" onclick="dismissQaNudge()">Skip for now</button>
+      <button id="qaNudgeSubmit" onclick="submitQaNudge()" disabled>Get My Answer →</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── REPORT READY BANNER (shows when diagnostic report is finalized, user not on diagnostic tab) ── -->
 <div id="reportReadyBanner" role="alert">
   <span>📊 Your GPS Leadership diagnostic report is ready.</span>
@@ -2125,6 +2246,105 @@ function updateReportReadyBanner(activeTab) {
   else            banner.classList.remove('visible');
 }
 
+
+// ── Weekly Leadership Prompt (weeks 1–3) ─────────────────────────────────────
+const QA_NUDGE_PROMPTS = [
+  "What's your biggest leadership challenge right now?",
+  "What's one decision you've been putting off this week?",
+  "Where are you most dependent on yourself instead of your team right now?",
+];
+
+function checkQaNudge() {
+  if (!currentClient || !currentClient.portal_first_active_at) return;
+  if (!currentClient.ai_terms_accepted) return; // need terms first
+
+  const firstActive = new Date(currentClient.portal_first_active_at);
+  const now         = new Date();
+  const daysSince   = Math.floor((now - firstActive) / (1000 * 60 * 60 * 24));
+  const week        = Math.floor(daysSince / 7) + 1; // 1, 2, or 3
+  if (week < 1 || week > 3) return;
+
+  const storageKey = `gps_qa_nudge_w${week}_${currentClient.id}`;
+  if (localStorage.getItem(storageKey)) return; // already shown this week
+
+  const promptText = QA_NUDGE_PROMPTS[week - 1];
+  const badge      = document.getElementById('qaNudgeWeekBadge');
+  const headline   = document.getElementById('qaNudgeHeadline');
+  if (badge)    badge.textContent   = `Week ${week} Check-In`;
+  if (headline) headline.textContent = promptText;
+
+  // Stagger display to let portal render fully
+  setTimeout(() => {
+    const overlay = document.getElementById('qaNudgeOverlay');
+    if (overlay) overlay.classList.add('open');
+    const input = document.getElementById('qaNudgeInput');
+    if (input) {
+      input.value = '';
+      input.addEventListener('input', () => {
+        const btn = document.getElementById('qaNudgeSubmit');
+        if (btn) btn.disabled = input.value.trim().length < 5;
+      });
+    }
+  }, 1800);
+}
+
+function dismissQaNudge(markShown) {
+  const overlay = document.getElementById('qaNudgeOverlay');
+  if (overlay) overlay.classList.remove('open');
+  if (markShown === false) return; // skip = don't mark shown
+  // Mark shown for this week so it doesn't reappear on next login
+  if (!currentClient) return;
+  const firstActive = new Date(currentClient.portal_first_active_at);
+  const daysSince   = Math.floor((new Date() - firstActive) / (1000 * 60 * 60 * 24));
+  const week        = Math.floor(daysSince / 7) + 1;
+  if (week >= 1 && week <= 3) {
+    localStorage.setItem(`gps_qa_nudge_w${week}_${currentClient.id}`, '1');
+  }
+}
+
+function submitQaNudge() {
+  const input = document.getElementById('qaNudgeInput');
+  if (!input) return;
+  const question = input.value.trim();
+  if (question.length < 5) return;
+
+  dismissQaNudge(true); // mark shown for this week
+
+  // Check terms consent
+  const needsTerms = !currentClient ||
+    !currentClient.ai_terms_accepted ||
+    currentClient.ai_terms_version !== CURRENT_TERMS_VERSION;
+  if (needsTerms) {
+    // Store question to auto-fill after terms accepted
+    window._pendingNudgeQuestion = question;
+    openTermsModal(false);
+    return;
+  }
+
+  _routeToAskAlex(question);
+}
+
+function _routeToAskAlex(question) {
+  // Switch to Ask Alex tab
+  activateQATab();
+  const tabAsk = document.getElementById('tabAsk');
+  const tabPlan = document.getElementById('tabPlan');
+  if (tabAsk)  tabAsk.classList.add('active');
+  if (tabPlan) tabPlan.classList.remove('active');
+  updateReportReadyBanner('ask');
+
+  // Pre-fill input and auto-send
+  const qi = document.getElementById('qa-qi');
+  if (!qi) return;
+  qi.value = question;
+  qi.style.height = 'auto';
+  qi.style.height = Math.min(qi.scrollHeight, 140) + 'px';
+  const sb = document.getElementById('qa-sb');
+  if (sb) sb.disabled = false;
+  // Small delay so tab transition renders before send fires
+  setTimeout(() => qaSend(), 120);
+}
+
 async function loadClientDiagnostic() {
   if (!currentClient || !currentClient.id) return;
   try {
@@ -2162,6 +2382,7 @@ async function loadClientDiagnostic() {
     const tabDiag = document.getElementById('tabDiag');
     if (tabDiag) tabDiag.style.display = '';
     updateReportReadyBanner('plan'); // default tab on load
+    checkQaNudge(); // weekly leadership prompt for weeks 1–3
 
     // Render if already on that tab
     const diagPanel = document.getElementById('diagPanel');
@@ -4175,6 +4396,12 @@ function showPortalTab(tab) {
       return; // don't switch tabs yet — modal handles it
     }
     activateQATab();
+    // If a nudge question was queued (user accepted terms after prompt), send it
+    if (window._pendingNudgeQuestion) {
+      const q = window._pendingNudgeQuestion;
+      window._pendingNudgeQuestion = null;
+      setTimeout(() => _routeToAskAlex(q), 200);
+    }
   }
   updateReportReadyBanner(tab);
 }
