@@ -565,6 +565,66 @@
     .diag-scope .dot-green{background:var(--d-green);}
     .diag-scope .dot-grey{background:#C5CAD3;}
     .diag-scope .dot-amber{background:var(--d-amber);}
+    /* Report preview modal — full-width review gate */
+    #report-preview-modal .modal {
+      max-width: 820px;
+      width: 95vw;
+      max-height: 92vh;
+      display: flex;
+      flex-direction: column;
+      padding: 0;
+      border-top: 4px solid var(--d-blue);
+    }
+    .rp-header {
+      padding: 18px 24px 14px;
+      border-bottom: 1px solid var(--d-border);
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    .rp-header-left h3 { font-size: 16px; font-weight: 700; color: var(--d-blue); margin: 0 0 2px; }
+    .rp-header-left .rp-meta { font-size: 12px; color: var(--d-mid); }
+    .rp-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 28px;
+      font-size: 14px;
+      line-height: 1.75;
+      color: #1a1a1a;
+    }
+    .rp-body h2 { font-size: 16px; font-weight: 700; color: var(--d-blue); margin: 24px 0 8px; border-bottom: 2px solid var(--d-border); padding-bottom: 6px; }
+    .rp-body h3 { font-size: 14px; font-weight: 700; color: var(--d-blue); margin: 16px 0 6px; }
+    .rp-body p  { margin: 0 0 12px; }
+    .rp-body ul { padding-left: 20px; margin: 0 0 12px; }
+    .rp-body ul li { margin-bottom: 5px; }
+    .rp-body .rp-highlight { background: #f5f7fa; border-left: 4px solid var(--d-gold); padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 12px 0; }
+    .rp-footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--d-border);
+      background: #f8f9fb;
+      flex-shrink: 0;
+    }
+    .rp-check-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 14px;
+      padding: 12px 16px;
+      background: #fff;
+      border: 1px solid var(--d-border);
+      border-radius: 8px;
+    }
+    .rp-check-row input[type="checkbox"] { margin-top: 2px; width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; accent-color: var(--d-blue); }
+    .rp-check-row label { font-size: 13px; color: #1a1a1a; line-height: 1.5; cursor: pointer; }
+    .rp-check-row label strong { color: var(--d-blue); }
+    .rp-actions { display: flex; gap: 10px; justify-content: flex-end; }
+    .rp-send-btn { padding: 10px 24px; background: var(--d-gold); color: var(--d-dark); border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: background .15s; }
+    .rp-send-btn:disabled { opacity: .45; cursor: not-allowed; }
+    .rp-send-btn:not(:disabled):hover { background: #A88520; }
+    .rp-loading { text-align: center; padding: 48px 24px; color: var(--d-mid); font-size: 14px; }
+
     /* Diagnostic modals — override coach.html's .modal padding/border */
     #new-diag-modal .modal,#send-invites-modal .modal,#team-report-modal .modal{padding:0;max-width:580px;border-top:none;border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,.2);}
     #team-report-modal .modal{max-width:660px;}
@@ -1253,6 +1313,33 @@
 
 
 <!-- CONFIRM MODAL (archive / delete) -->
+<div class="modal-overlay" id="report-preview-modal">
+  <div class="modal" style="padding:0;">
+    <div class="rp-header">
+      <div class="rp-header-left">
+        <h3>Report Review</h3>
+        <div class="rp-meta" id="rp-meta-line">Loading report…</div>
+      </div>
+      <button class="dclose-btn" onclick="closeDiagModal('report-preview-modal')">✕</button>
+    </div>
+    <div class="rp-body" id="rp-body">
+      <div class="rp-loading">Loading report draft…</div>
+    </div>
+    <div class="rp-footer">
+      <div class="rp-check-row">
+        <input type="checkbox" id="rp-review-check" onchange="toggleFinalizeBtn()" />
+        <label for="rp-review-check">I have read this report in full. It is accurate and ready to send to <strong id="rp-client-name-label">this client</strong>.</label>
+      </div>
+      <div class="rp-actions">
+        <button class="dbtn dbtn-outline" onclick="closeDiagModal('report-preview-modal')">Back</button>
+        <button class="rp-send-btn" id="rp-send-btn" disabled onclick="confirmAndFinalize()">
+          Send to <span id="rp-send-name">Client</span> →
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="confirmModal">
   <div class="modal" id="confirmModalInner" style="border-top-color:var(--red);">
     <h2 id="confirmTitle"></h2>
@@ -4840,7 +4927,7 @@ function renderReportTab() {
         ⚙ Generate Draft Report (Claude)
       </button>
       ${d.report_generated_at && !d.report_finalized_at ? `
-      <button class="dbtn dbtn-gold" onclick="finalizeReport()">✓ Finalize &amp; Send to Client</button>` : ''}
+      <button class="dbtn dbtn-gold" onclick="openReportPreview()">👁 Preview &amp; Finalize Report</button>` : ''}
       ${d.debrief_completed_at ? '' : d.report_finalized_at ? `
       <button class="dbtn dbtn-outline" onclick="markDebriefComplete()">Mark Debrief Complete →</button>` : ''}
     </div>
@@ -5034,10 +5121,102 @@ async function generateReport(e) {
   }
 }
 
-async function finalizeReport() {
+// ── Report preview + three-layer finalize gate ───────────────────────────
+
+async function openReportPreview() {
   const d = DIAG_SELECTED;
   if (!d) return;
-  if (!confirm('Finalize and send to client? This will email them a link to their report in the portal.')) return;
+
+  // Reset modal state
+  const bodyEl      = document.getElementById('rp-body');
+  const metaEl      = document.getElementById('rp-meta-line');
+  const checkEl     = document.getElementById('rp-review-check');
+  const sendBtn     = document.getElementById('rp-send-btn');
+  const nameLabel   = document.getElementById('rp-client-name-label');
+  const sendNameEl  = document.getElementById('rp-send-name');
+
+  checkEl.checked  = false;
+  sendBtn.disabled = true;
+  bodyEl.innerHTML = '<div class="rp-loading">Loading report draft…</div>';
+
+  // Populate client identity in footer
+  const clientLabel = [d.client_name, d.client_org].filter(Boolean).join(' at ');
+  nameLabel.textContent  = clientLabel || 'this client';
+  sendNameEl.textContent = (d.client_name || 'Client').split(' ')[0];
+  metaEl.textContent     = `${d.client_name || '—'}${d.client_email ? ' · ' + d.client_email : ''}${d.client_org ? ' · ' + d.client_org : ''}`;
+
+  // Open modal immediately so coach sees it loading
+  document.getElementById('report-preview-modal').classList.add('open');
+
+  // Fetch latest report draft
+  try {
+    const { data: drafts, error } = await db
+      .from('diagnostic_report_drafts')
+      .select('*')
+      .eq('diagnostic_id', d.id)
+      .order('generated_at', { ascending: false })
+      .limit(1);
+
+    if (error || !drafts || drafts.length === 0) {
+      bodyEl.innerHTML = `<div class="rp-loading" style="color:#dc2626;">
+        No report draft found. Generate the report first, then return here to finalize.
+      </div>`;
+      return;
+    }
+
+    const draft   = drafts[0];
+    const report  = draft.content_json || {};
+    const narrative = report.full_narrative || null;
+
+    bodyEl.innerHTML = narrative
+      ? narrative
+      : buildCoachReportFallback(report);
+
+  } catch (err) {
+    bodyEl.innerHTML = `<div class="rp-loading" style="color:#dc2626;">Error loading report: ${err.message}</div>`;
+  }
+}
+
+function buildCoachReportFallback(r) {
+  let html = '';
+  if (r.executive_summary) html += `<h2>Executive Summary</h2><div class="rp-highlight">${r.executive_summary}</div>`;
+  const sections = [
+    ['trust_section',       'Trust'],
+    ['proactivity_section', 'Proactivity'],
+    ['productivity_section','Productivity'],
+    ['impact_section',      'Business Impact'],
+    ['bench_section',       'Bench Strength'],
+    ['succession_section',  'Succession & Future Self'],
+    ['custom_section',      'Custom Item Results'],
+  ];
+  for (const [key, label] of sections) {
+    if (r[key]) html += `<h2>${label}</h2>${r[key]}`;
+  }
+  if (r.priorities_90_day && r.priorities_90_day.length > 0) {
+    html += `<h2>90-Day Priorities</h2><ul>${r.priorities_90_day.map(p => `<li>${p}</li>`).join('')}</ul>`;
+  }
+  return html || '<p style="color:#6b7280;text-align:center;padding:32px 0;">Report content is unavailable. Try regenerating the report.</p>';
+}
+
+function toggleFinalizeBtn() {
+  const checked = document.getElementById('rp-review-check').checked;
+  document.getElementById('rp-send-btn').disabled = !checked;
+}
+
+async function confirmAndFinalize() {
+  const d = DIAG_SELECTED;
+  if (!d) return;
+  const checkEl = document.getElementById('rp-review-check');
+  if (!checkEl.checked) { alert('Please confirm you have reviewed the report first.'); return; }
+
+  const clientLabel = [d.client_name, d.client_org].filter(Boolean).join(' at ');
+  const emailLine   = d.client_email ? `\n\nEmail will go to: ${d.client_email}` : '';
+  if (!confirm(`Send report to ${clientLabel}?${emailLine}\n\nThis cannot be undone.`)) return;
+
+  const sendBtn = document.getElementById('rp-send-btn');
+  sendBtn.disabled = true;
+  sendBtn.textContent = 'Sending…';
+
   try {
     const r = await fetch('/api/diagnostic?action=finalize-report', {
       method: 'POST',
@@ -5045,13 +5224,28 @@ async function finalizeReport() {
       body: JSON.stringify({ diagnostic_id: d.id }),
     });
     const data = await r.json();
-    if (!r.ok) { alert('Error finalizing report: ' + (data.error || r.status)); return; }
-    const emailNote = data.email_sent ? ' Email sent to client.' : ' (Email could not be sent — check Resend config.)';
-    alert('Report finalized.' + emailNote);
+    if (!r.ok) {
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Send to Client →';
+      alert('Error finalizing report: ' + (data.error || r.status));
+      return;
+    }
+    closeDiagModal('report-preview-modal');
+    const emailNote = data.email_sent
+      ? `Report finalized. Email sent to ${d.client_email || 'client'}.`
+      : `Report finalized. Email could not be sent — check Resend config.`;
+    alert(emailNote);
     await refreshSelected();
   } catch (err) {
+    sendBtn.disabled = false;
+    sendBtn.textContent = 'Send to Client →';
     alert('Error: ' + err.message);
   }
+}
+
+async function finalizeReport() {
+  // Kept for backward compatibility — routes to the gated preview flow
+  openReportPreview();
 }
 
 async function markDebriefComplete() {
