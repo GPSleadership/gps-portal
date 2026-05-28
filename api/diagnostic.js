@@ -928,6 +928,43 @@ function buildPortalNudgeEmail({ clientName, leaderOrg, portalUrl, daysSince }) 
   };
 }
 
+function buildAllCompleteEmail({ leaderName, completedCount, closeDate }) {
+  const closeFmt = closeDate
+    ? new Date(closeDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+    : null;
+  return {
+    subject: `✅ All ${completedCount} raters complete — ${leaderName}`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
+        <div style="background:#0B1F3B;padding:20px 28px;border-radius:8px 8px 0 0;">
+          <div style="color:#a8b8cc;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">GPS Leadership Solutions — Diagnostic Alert</div>
+          <div style="color:#ffffff;font-size:20px;font-weight:700;">100% Response Rate — ${leaderName}</div>
+        </div>
+        <div style="background:#f0f7f0;padding:20px 28px;border-bottom:3px solid #2e7d32;">
+          <div style="font-size:15px;font-weight:700;color:#2e7d32;">All ${completedCount} raters have submitted their surveys.</div>
+          ${closeFmt ? `<div style="font-size:13px;color:#555;margin-top:6px;">Survey window closes ${closeFmt} — you can close it early now if you'd like.</div>` : ''}
+        </div>
+        <div style="padding:20px 28px;">
+          <p style="font-size:14px;line-height:1.6;margin:0 0 16px;">
+            Every stakeholder on <strong>${leaderName}</strong>'s list has responded.
+            You now have a full data set — no need to wait for the close date.
+          </p>
+          <div style="background:#f5f5f5;border-radius:6px;padding:14px 18px;font-size:13px;color:#555;margin-bottom:20px;">
+            <strong>Next step:</strong> Close the survey in the coach portal → Generate the report.
+          </div>
+          <a href="${process.env.PORTAL_BASE_URL || ''}/coach.html"
+             style="display:inline-block;background:#C5A028;color:#fff;font-weight:700;text-decoration:none;padding:12px 24px;border-radius:6px;font-size:14px;">
+            Open Coach Portal →
+          </a>
+        </div>
+        <div style="padding:12px 28px 20px;font-size:11px;color:#999;">
+          This is an automated notification from GPS Leadership Solutions.
+        </div>
+      </div>
+    `,
+  };
+}
+
 function buildDeliveryAlertEmail({ errorCount, totalCount, errSummary }) {
   return {
     subject: `⚠ Email delivery alert — ${errorCount} failures in last 2h`,
@@ -963,7 +1000,7 @@ async function handleReminders(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const log = { r1_sent: [], r2_sent: [], t2_alerts: [], plans_locked: [], delivery_alert: null, errors: [] };
+  const log = { r1_sent: [], r2_sent: [], t2_alerts: [], all_complete_alerts: [], plans_locked: [], delivery_alert: null, errors: [] };
   const now = new Date();
 
   try {
@@ -1145,15 +1182,50 @@ async function handleReminders(req, res) {
       log.errors.push({ type: 'PORTAL_NUDGE_SECTION', error: nudgeErr.message });
     }
 
+    // ── Section 6: All-Raters-Complete Alert ───────────────────────────────────
+    // When every non-self rater has responded, alert Alex once.
+    try {
+      const openForCompleteRes = await sb(
+        `/rest/v1/diagnostics?status=eq.survey_open&all_raters_complete_at=is.null&select=id,client_name,close_date`
+      );
+      const openForComplete = await openForCompleteRes.json() || [];
+
+      for (const diag of openForComplete) {
+        const ratersRes = await sb(
+          `/rest/v1/diagnostic_raters?diagnostic_id=eq.${diag.id}&is_self=eq.false&select=id,name,completed_at`
+        );
+        const raters = await ratersRes.json() || [];
+        if (raters.length < 3) continue;  // don't alert for tiny sets
+        const all = raters.every(r => r.completed_at);
+        if (!all) continue;
+
+        const completedCount = raters.length;
+        const email = buildAllCompleteEmail({ leaderName: diag.client_name, completedCount, closeDate: diag.close_date });
+        try {
+          await sendEmail({ to: COACH_EMAIL, ...email, emailType: 'diagnostic_all_complete' });
+          await sb(`/rest/v1/diagnostics?id=eq.${diag.id}`, 'PATCH',
+            { all_raters_complete_at: now.toISOString(), updated_at: now.toISOString() },
+            { Prefer: 'return=minimal' }
+          );
+          log.all_complete_alerts.push({ diag: diag.client_name, count: completedCount });
+        } catch (err) {
+          log.errors.push({ type: 'ALL_COMPLETE_ALERT', diag: diag.client_name, error: err.message });
+        }
+      }
+    } catch (err) {
+      log.errors.push({ type: 'ALL_COMPLETE_SECTION', error: err.message });
+    }
+
     return res.status(200).json({
-      ran_at:          now.toISOString(),
-      r1_sent:         log.r1_sent.length,
-      r2_sent:         log.r2_sent.length,
-      t2_alerts:       log.t2_alerts.length,
-      plans_locked:    log.plans_locked.length,
-      portal_nudges:   log.portal_nudges || 0,
-      delivery_alert:  log.delivery_alert,
-      details:         log,
+      ran_at:               now.toISOString(),
+      r1_sent:              log.r1_sent.length,
+      r2_sent:              log.r2_sent.length,
+      t2_alerts:            log.t2_alerts.length,
+      all_complete_alerts:  log.all_complete_alerts.length,
+      plans_locked:         log.plans_locked.length,
+      portal_nudges:        log.portal_nudges || 0,
+      delivery_alert:       log.delivery_alert,
+      details:              log,
     });
 
 

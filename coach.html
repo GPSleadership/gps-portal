@@ -936,11 +936,12 @@
               style="padding:7px 12px;border:1.5px solid var(--d-border);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;min-width:180px;outline:none;"
               onfocus="this.style.borderColor='var(--d-blue)'" onblur="this.style.borderColor='var(--d-border)'" />
             <div style="display:flex;gap:4px;">
-              <button class="diag-filter-btn active" id="dfilter-all"    onclick="setDiagFilter('all',this)">All</button>
-              <button class="diag-filter-btn"        id="dfilter-active" onclick="setDiagFilter('active',this)">Active</button>
-              <button class="diag-filter-btn"        id="dfilter-setup"  onclick="setDiagFilter('setup',this)">Setup</button>
-              <button class="diag-filter-btn"        id="dfilter-closed" onclick="setDiagFilter('closed',this)">Report Ready</button>
-              <button class="diag-filter-btn"        id="dfilter-done"   onclick="setDiagFilter('done',this)">Done</button>
+              <button class="diag-filter-btn active" id="dfilter-all"      onclick="setDiagFilter('all',this)">All</button>
+              <button class="diag-filter-btn"        id="dfilter-active"  onclick="setDiagFilter('active',this)">Active</button>
+              <button class="diag-filter-btn"        id="dfilter-setup"   onclick="setDiagFilter('setup',this)">Setup</button>
+              <button class="diag-filter-btn"        id="dfilter-closed"  onclick="setDiagFilter('closed',this)">Report Ready</button>
+              <button class="diag-filter-btn"        id="dfilter-done"    onclick="setDiagFilter('done',this)">Done</button>
+              <button class="diag-filter-btn"        id="dfilter-archived" onclick="setDiagFilter('archived',this)" style="color:var(--d-mid);opacity:.7;">Archived</button>
             </div>
           </div>
         </div>
@@ -4480,6 +4481,9 @@ function renderDiagTable() {
       const hay = `${d.client_name || ''} ${d.client_org || ''} ${d.client_title || ''}`.toLowerCase();
       if (!hay.includes(search)) return false;
     }
+    if (_diagFilter === 'archived') return !!d.is_archived;
+    // All other filters: hide archived
+    if (d.is_archived) return false;
     if (_diagFilter === 'active')  return d.status === 'survey_open';
     if (_diagFilter === 'setup')   return SETUP_STATUSES.includes(d.status);
     if (_diagFilter === 'closed')  return CLOSED_STATUSES.includes(d.status);
@@ -4546,7 +4550,14 @@ function renderDiagTable() {
     <tbody>${rows}</tbody>
   </table>
   <div style="padding:8px 16px;font-size:11px;color:var(--d-mid);border-top:1px solid var(--d-border);">
-    Showing ${filtered.length} of ${ALL_DIAGS.length} diagnostic${ALL_DIAGS.length !== 1 ? 's' : ''}
+    ${(() => {
+      const base = _diagFilter === 'archived' ? ALL_DIAGS.filter(d => d.is_archived).length : ALL_DIAGS.filter(d => !d.is_archived).length;
+      const suffix = _diagFilter === 'archived' ? ' archived' : '';
+      return `Showing ${filtered.length} of ${base} diagnostic${base !== 1 ? 's' : ''}${suffix}`;
+    })()}
+    ${ALL_DIAGS.filter(d => d.is_archived).length > 0 && _diagFilter !== 'archived'
+      ? `<span style="margin-left:12px;color:var(--d-mid);opacity:.7;">${ALL_DIAGS.filter(d=>d.is_archived).length} archived — <a href="#" style="color:var(--d-mid);" onclick="setDiagFilter('archived',document.getElementById('dfilter-archived'));return false;">show</a></span>`
+      : ''}
   </div>`;
 }
 
@@ -4624,6 +4635,13 @@ function renderDetailHeader() {
   if (d.status === 'survey_closed' || d.status === 'report_draft') {
     actions.push(`<button class="dbtn dbtn-primary dbtn-sm" onclick="switchDiagTabById('dtab-report')">Generate Report →</button>`);
   }
+  // Archive / Unarchive (always available)
+  if (d.is_archived) {
+    actions.push(`<button class="dbtn dbtn-outline dbtn-sm" style="color:var(--d-green);border-color:var(--d-green);" onclick="archiveDiag(false)">↩ Unarchive</button>`);
+  } else {
+    actions.push(`<button class="dbtn dbtn-outline dbtn-sm" style="color:var(--d-mid);border-color:var(--d-border);" onclick="archiveDiag(true)" title="Hide from default view">Archive</button>`);
+  }
+
   const da = document.getElementById('detail-actions');
   if (da) da.innerHTML = actions.join('');
 
@@ -4900,9 +4918,11 @@ function renderSurveyTab() {
   ${d.alert_t2_sent_at ? `<div class="dalert dalert-amber"><span class="dalert-icon">⚠</span>
     <div>T-2 alert sent ${diagFormatDate(d.alert_t2_sent_at)} — response count was below 7 with 2 days to close.</div></div>` : ''}
   <div class="card" style="padding:0;overflow:hidden;">
-    <div style="padding:14px 16px;border-bottom:1px solid var(--d-border);font-size:13px;font-weight:700;color:var(--d-blue);">
-      Individual Completion — Coach View Only
-      <span style="font-size:11px;font-weight:400;color:var(--d-mid);margin-left:8px;">Never shown to the leader.</span>
+    <div style="padding:14px 16px;border-bottom:1px solid var(--d-border);font-size:13px;font-weight:700;color:var(--d-blue);display:flex;align-items:center;justify-content:space-between;">
+      <span>Individual Completion — Coach View Only
+        <span style="font-size:11px;font-weight:400;color:var(--d-mid);margin-left:8px;">Never shown to the leader.</span>
+      </span>
+      <button class="dbtn dbtn-outline dbtn-sm" onclick="exportDiagCSV()" title="Download all rater responses as CSV">⬇ Export Data</button>
     </div>
     <table>
       <thead><tr><th>Rater</th><th>Relationship</th><th>Status</th><th>Reminders</th></tr></thead>
@@ -5468,6 +5488,88 @@ async function saveRaterEmail(id) {
   const rater = DIAG_RATERS.find(r => r.id === id);
   if (rater) { rater.email = newEmail; rater.email_bounced = false; }
   renderRatersTab();
+}
+
+// ── Export Diagnostic Data as CSV ────────────────────────────────────────────
+async function exportDiagCSV() {
+  if (!DIAG_SEL) return;
+  const btn = event?.target;
+  if (btn) { btn.textContent = '⏳ Loading…'; btn.disabled = true; }
+
+  try {
+    // Fetch all responses for this diagnostic
+    const { data: responses, error } = await db
+      .from('diagnostic_responses')
+      .select('rater_id, question_code, score, text_response')
+      .eq('diagnostic_id', DIAG_SEL.id);
+    if (error) throw error;
+
+    // Build lookup maps
+    const raterMap = {};
+    DIAG_RATERS.forEach(r => { raterMap[r.id] = r; });
+
+    const qMap = {};
+    DIAG_GLOBAL_QUESTIONS.forEach(q => { qMap[q.code] = q.text.replace(/\[Name\]/g, DIAG_SEL.client_name.split(' ')[0]); });
+    // Add open-ended codes not in DIAG_GLOBAL_QUESTIONS
+    const openEndedLabels = {
+      'E1': 'Leader greatest strengths',
+      'E2': 'Areas leader should develop',
+      'E3': 'One thing leader should stop/start/continue',
+      'G1': DIAG_SEL.custom_g1_question || 'Custom question',
+    };
+
+    function csvEsc(v) {
+      if (v == null || v === '') return '';
+      const s = String(v).replace(/"/g, '""');
+      return /[,"\n\r]/.test(s) ? `"${s}"` : s;
+    }
+
+    const headers = ['Rater Name', 'Relationship', 'Is Self', 'Completed', 'Question Code', 'Question Text', 'Score', 'Text Response'];
+    const rows = [headers.join(',')];
+
+    (responses || []).forEach(resp => {
+      const rater = raterMap[resp.rater_id] || {};
+      const qText = qMap[resp.question_code] || openEndedLabels[resp.question_code] || resp.question_code;
+      rows.push([
+        csvEsc(rater.name || ''),
+        csvEsc(rater.relationship || (rater.is_self ? 'Self' : '')),
+        rater.is_self ? 'Yes' : 'No',
+        rater.completed_at ? diagFormatDate(rater.completed_at) : 'Pending',
+        csvEsc(resp.question_code),
+        csvEsc(qText),
+        resp.score != null ? resp.score : '',
+        csvEsc(resp.text_response || ''),
+      ].join(','));
+    });
+
+    const csv = rows.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    const safe = DIAG_SEL.client_name.replace(/[^a-z0-9]/gi, '_');
+    a.href     = url;
+    a.download = `GPS_Diagnostic_${safe}_${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    alert('Export failed: ' + err.message);
+  } finally {
+    if (btn) { btn.textContent = '⬇ Export Data'; btn.disabled = false; }
+  }
+}
+
+// ── Archive / Unarchive ───────────────────────────────────────────────────────
+async function archiveDiag(archive) {
+  const label = archive ? 'archive' : 'unarchive';
+  if (!confirm(`${archive ? 'Archive' : 'Unarchive'} this diagnostic?\n\n${archive ? 'It will be hidden from the default list but data is preserved.' : 'It will reappear in the default list.'}`)) return;
+  const { error } = await db.from('diagnostics').update({ is_archived: archive }).eq('id', DIAG_SEL.id);
+  if (error) { alert('Error: ' + error.message); return; }
+  DIAG_SEL.is_archived = archive;
+  ALL_DIAGS = ALL_DIAGS.map(d => d.id === DIAG_SEL.id ? { ...d, is_archived: archive } : d);
+  renderDetailHeader();
+  renderDiagList();
 }
 
 async function saveOverride(code) {
