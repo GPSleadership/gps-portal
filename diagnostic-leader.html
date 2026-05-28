@@ -93,9 +93,26 @@ input:focus,select:focus{outline:none;border-color:var(--blue);}
 @keyframes spin{to{transform:rotate(360deg);}}
 
 @media(max-width:600px){
-  .add-rater-grid{grid-template-columns:1fr 1fr; }
-  .page{padding:20px 14px 50px;}
-  .header{padding:0 16px;}
+  /* Layout */
+  .page{padding:16px 12px 60px;}
+  .header{padding:0 14px;}
+
+  /* Rater add form: single column on phone */
+  .add-rater-grid{grid-template-columns:1fr;}
+
+  /* Cards */
+  .card{padding:16px 14px;}
+
+  /* Buttons full-width on phone */
+  .btn{width:100%;justify-content:center;}
+  .btn + .btn{margin-top:8px;}
+
+  /* State screens */
+  .state-screen{margin:30px 12px;padding:28px 16px;}
+
+  /* Table: make rater rows readable */
+  table{font-size:13px;}
+  th,td{padding:8px 10px;}
 }
 </style>
 </head>

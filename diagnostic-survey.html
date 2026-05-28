@@ -107,9 +107,34 @@ textarea.tall{min-height:130px;}
 .ai-badge{background:var(--gold-light);border:1px solid var(--gold);color:var(--amber);font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;text-transform:uppercase;letter-spacing:.04em;display:inline-block;margin-bottom:8px;}
 
 @media(max-width:540px){
-  .scale-10-opt{min-width:32px;padding:10px 2px;font-size:13px;}
-  .likert-opt{padding:10px 4px;font-size:13px;}
-  .screen{padding:20px 14px 50px;}
+  /* Layout */
+  .screen{padding:20px 12px 60px;}
+  .card{padding:18px 14px;}
+  .state-screen{margin:40px 14px;padding:28px 18px;}
+
+  /* Scale controls — larger touch targets */
+  .likert-opt{padding:13px 4px;font-size:13px;min-height:44px;}
+  .scale-10{gap:4px;}
+  .scale-10-opt{min-width:28px;padding:11px 2px;font-size:13px;min-height:44px;}
+
+  /* Navigation buttons — full width on phone */
+  .nav-row{flex-direction:column-reverse;gap:10px;}
+  .nav-row .btn{width:100%;justify-content:center;}
+
+  /* Section label */
+  .section-label{font-size:11px;letter-spacing:.04em;}
+
+  /* Question text readable on small screens */
+  .q-text{font-size:13.5px;}
+
+  /* Header compact */
+  .header{padding:12px 14px;}
+  .header-logo{font-size:16px;}
+  .header-title{font-size:12px;}
+
+  /* Progress bar */
+  .progress-wrap{padding:8px 14px;}
+  .progress-label{font-size:11px;}
 }
 </style>
 </head>
@@ -724,6 +749,27 @@ async function submitSurvey() {
   if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
 
   try {
+    // Hard-block: re-verify survey is still open at submission time
+    // Catches the case where Alex closes the survey while a rater has the page open
+    const { data: freshDiag, error: diagCheckErr } = await db
+      .from('diagnostics')
+      .select('status, survey_closed_at')
+      .eq('id', DIAGNOSTIC.id)
+      .limit(1)
+      .single();
+
+    if (diagCheckErr || !freshDiag) throw new Error('Could not verify survey status. Please refresh and try again.');
+
+    const stillOpen = freshDiag.status === 'survey_open' && !freshDiag.survey_closed_at;
+    const selfStillValid = IS_SELF && ['intake_complete','self_assessment_pending','self_assessment_complete','survey_open'].includes(freshDiag.status);
+
+    if (!IS_SELF && !stillOpen) {
+      _surveySubmitting = false;
+      if (btn) { btn.disabled = false; btn.textContent = 'Submit →'; }
+      showState('screen-closed');
+      return;
+    }
+
     // Build response rows
     const rows = Object.entries(ANSWERS)
       .filter(([, ans]) => (ans.score !== undefined) || (ans.text && ans.text.length > 0))

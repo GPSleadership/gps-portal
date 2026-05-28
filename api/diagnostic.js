@@ -321,6 +321,14 @@ async function handleGenerateQuestion(req, res) {
       return res.status(400).json({ error: 'Leader has not completed the self-assessment. self_three_year_vision is required to generate G1.' });
     }
 
+    // Server-side debounce: block requests within 30 seconds of last generation
+    if (diag.custom_g1_generated_at) {
+      const secondsSince = (Date.now() - new Date(diag.custom_g1_generated_at).getTime()) / 1000;
+      if (secondsSince < 30) {
+        return res.status(429).json({ error: `Please wait ${Math.ceil(30 - secondsSince)} seconds before regenerating.` });
+      }
+    }
+
     const userPrompt = `Leader name: ${diag.client_name}
 
 3-Year Vision:

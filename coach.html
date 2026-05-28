@@ -4714,7 +4714,8 @@ function renderOverviewTab() {
     </div>` : `
     <div class="dalert dalert-amber" style="margin-top:12px;">
       <span class="dalert-icon">⚡</span>
-      <div>3-year vision response is available. <button class="dbtn dbtn-outline dbtn-sm" onclick="generateG1()">Generate Custom Rater Question →</button></div>
+      <div>3-year vision response is available. <button class="dbtn dbtn-outline dbtn-sm" onclick="generateG1()">Generate Custom Rater Question →</button>
+        <span style="font-size:11px;color:var(--d-mid);margin-left:8px;">${_g1AttemptsUsed()} of ${G1_MAX_ATTEMPTS} attempts used</span></div>
     </div>`}
   </div>` : '';
 
@@ -4996,7 +4997,15 @@ function renderQuestionsTab() {
          <div style="font-size:11px;color:var(--d-mid);margin-top:6px;">Generated ${diagFormatDate(DIAG_SEL.custom_g1_generated_at)} from leader's 3-year vision</div>`
       : `<div class="dalert dalert-amber" style="margin-bottom:0;"><span class="dalert-icon">⚡</span>
          <div>Not yet generated. Complete when leader finishes self-assessment.
-         ${DIAG_SEL.self_three_year_vision ? `<button class="dbtn dbtn-outline dbtn-sm" onclick="generateG1()" style="margin-left:8px;">Generate Now →</button>` : 'Leader must complete self-assessment first.'}</div></div>`}
+         ${DIAG_SEL.self_three_year_vision
+            ? (() => {
+                const used = _g1AttemptsUsed();
+                const left = G1_MAX_ATTEMPTS - used;
+                return left > 0
+                  ? `<button class="dbtn dbtn-outline dbtn-sm" onclick="generateG1()" style="margin-left:8px;">Generate Now →</button> <span style="font-size:11px;color:var(--d-mid);">${used}/${G1_MAX_ATTEMPTS} attempts used</span>`
+                  : `<span style="font-size:12px;color:var(--d-red2);margin-left:8px;">Generation limit reached (${G1_MAX_ATTEMPTS}/${G1_MAX_ATTEMPTS}). Edit manually above.</span>`;
+              })()
+            : 'Leader must complete self-assessment first.'}</div></div>`}
   </div>`;
   const qc = document.getElementById('questions-content');
   if (qc) qc.innerHTML = html;
@@ -5214,20 +5223,45 @@ async function reopenDiagStep(stepN) {
   });
 }
 
+const G1_MAX_ATTEMPTS = 3;
+function _g1AttemptsKey() { return `gps_g1_attempts_${DIAG_SEL?.id}`; }
+function _g1AttemptsUsed() { return parseInt(localStorage.getItem(_g1AttemptsKey()) || '0', 10); }
+
 async function generateG1() {
   const vision = DIAG_SEL.self_three_year_vision;
   if (!vision) { alert('Self-report succession response not found.'); return; }
+
+  const used = _g1AttemptsUsed();
+  if (used >= G1_MAX_ATTEMPTS) {
+    alert(`Generation limit reached (${G1_MAX_ATTEMPTS} of ${G1_MAX_ATTEMPTS} attempts used).\n\nEdit the question manually in the text field below if needed.`);
+    return;
+  }
+
+  const remaining = G1_MAX_ATTEMPTS - used;
+  if (DIAG_SEL.custom_g1_question) {
+    const willRemain = remaining - 1;
+    if (!confirm(`Replace the existing custom question with a new AI-generated one?\n\nThis uses attempt ${used + 1} of ${G1_MAX_ATTEMPTS}. ${willRemain} attempt${willRemain !== 1 ? 's' : ''} will remain.`)) return;
+  }
+
+  const btn = event?.target;
+  if (btn) { btn.disabled = true; btn.textContent = '⚙ Generating…'; }
+
   try {
     const resp = await fetch('/api/diagnostic?action=generate-question', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ diagnostic_id: DIAG_SEL.id, vision_text: vision }),
+      body: JSON.stringify({ diagnostic_id: DIAG_SEL.id }),
     });
-    if (!resp.ok) throw new Error(await resp.text());
+    if (!resp.ok) {
+      const errData = await resp.json().catch(() => ({}));
+      throw new Error(errData.error || resp.statusText);
+    }
     const { question } = await resp.json();
+    localStorage.setItem(_g1AttemptsKey(), String(used + 1));
     await updateDiag({ custom_g1_question: question, custom_g1_generated_at: new Date().toISOString() });
     await refreshSelected();
   } catch(e) {
     alert('Error generating question: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = DIAG_SEL.custom_g1_question ? `Regenerate (${remaining} left) →` : 'Generate Now →'; }
   }
 }
 
