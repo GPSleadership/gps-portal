@@ -4880,7 +4880,27 @@ function renderRatersTab() {
   const catBadges = Object.entries(cats).map(([rel, n]) =>
     `<span style="font-size:12px;background:var(--d-light);border:1px solid var(--d-border);padding:3px 10px;border-radius:20px;">${rel}: ${n}</span>`
   ).join(' ');
-  const rows = nonSelf.map(r => `
+
+  // ── Interview state ──────────────────────────────────────────────────────────
+  const intEnabled  = !!d.interviews_enabled;
+  const intMax      = d.interview_max_count || 0;
+  const intUsed     = nonSelf.filter(r => r.will_interview).length;
+  const intAtCap    = intMax > 0 && intUsed >= intMax;
+
+  const rows = nonSelf.map(r => {
+    const interviewCell = intEnabled
+      ? (() => {
+          const checked  = !!r.will_interview;
+          const disabled = !checked && intAtCap;
+          return `<td style="text-align:center;">
+            ${checked ? '<span title="Interview scheduled" style="font-size:14px;">💬</span>&nbsp;' : ''}
+            <input type="checkbox" ${checked ? 'checked' : ''} ${disabled ? 'disabled title="Interview cap reached"' : ''}
+              onchange="toggleRaterInterview('${r.id}', ${checked})"
+              style="width:16px;height:16px;cursor:${disabled?'not-allowed':'pointer'};">
+          </td>`;
+        })()
+      : '';
+    return `
   <tr>
     <td>
       <div style="font-weight:700;font-size:13px;">${r.name}</div>
@@ -4901,13 +4921,58 @@ function renderRatersTab() {
         ? `<span style="color:var(--d-red2);font-weight:700;font-size:12px;">⚠ Email Bounced</span>`
         : `<span class="dot ${r.completed_at?'dot-green':'dot-grey'}"></span>${r.completed_at?'Completed':'Pending'}`}
     </td>
+    ${interviewCell}
     <td><button class="dbtn dbtn-outline dbtn-sm" style="color:var(--d-red2);border-color:var(--d-red2);" onclick="removeRater('${r.id}')">Remove</button></td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
+
   const canSendInvites    = d.status === 'self_assessment_complete' && nonSelf.length >= 3 && !d.invites_sent_at;
   const invitesSent       = !!d.invites_sent_at;
   const raterListReady    = !!d.raters_finalized_at && !invitesSent;
   const rc = document.getElementById('raters-content');
   if (!rc) return;
+
+  // ── Interview settings panel ─────────────────────────────────────────────────
+  const interviewPanel = `
+  <div class="card" style="margin-bottom:16px;border:1.5px solid ${intEnabled?'var(--d-blue)':'var(--d-border)'};background:${intEnabled?'var(--d-blue-light)':'var(--d-light)'};box-shadow:none;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:2px;">
+          Interviews ${intEnabled ? `<span style="color:var(--d-green);margin-left:6px;">● Enabled</span>` : `<span style="color:var(--d-mid);margin-left:6px;">○ Disabled</span>`}
+        </div>
+        <div style="font-size:11px;color:var(--d-mid);">
+          ${intEnabled
+            ? (intMax > 0 ? `${intUsed} of ${intMax} interview slots assigned` : 'No cap set — set a max to limit slots')
+            : 'Enable to mark raters for a 1:1 interview with Alex. They get the calendar link in their invite email.'}
+        </div>
+      </div>
+      <button class="dbtn ${intEnabled?'dbtn-outline':'dbtn-primary'} dbtn-sm"
+        style="${intEnabled?'color:var(--d-mid);border-color:var(--d-border);':''}"
+        onclick="toggleInterviews(${intEnabled})">
+        ${intEnabled ? 'Disable Interviews' : 'Enable Interviews'}
+      </button>
+    </div>
+    ${intEnabled ? `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px;padding-top:14px;border-top:1px solid var(--d-border);">
+      <div class="dform-group" style="margin-bottom:0;">
+        <label>Calendar Link <span style="font-weight:400;color:var(--d-mid);">(sent to interview-tagged raters)</span></label>
+        <input id="int-cal-link" type="url" placeholder="https://go.gpsleadership.com/schedule/..."
+          value="${(d.interview_calendar_link||'').replace(/"/g,'&quot;')}"
+          style="font-size:12px;">
+      </div>
+      <div class="dform-group" style="margin-bottom:0;">
+        <label>Max Interviews <span style="font-weight:400;color:var(--d-mid);">(cap on slots)</span></label>
+        <input id="int-max-count" type="number" min="1" max="20" placeholder="e.g. 7"
+          value="${intMax || ''}"
+          style="font-size:12px;width:100px;">
+      </div>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:8px;align-items:center;">
+      <button class="dbtn dbtn-primary dbtn-sm" onclick="saveInterviewSettings()">Save Settings</button>
+      <span id="int-save-msg" style="font-size:11px;color:var(--d-green);display:none;">✓ Saved</span>
+    </div>` : ''}
+  </div>`;
+
   rc.innerHTML = `
   ${selfRow ? `<div class="dalert dalert-blue"><span class="dalert-icon">ℹ</span>
     <div>Self-assessment token created. Leader portal:
@@ -4916,6 +4981,7 @@ function renderRatersTab() {
   ${raterListReady ? `<div class="dalert dalert-green" style="margin-bottom:12px;"><span class="dalert-icon">✅</span>
     <div><strong>${d.client_name} submitted their rater list on ${diagFormatDate(d.raters_finalized_at)}.</strong>
     ${nonSelf.length} rater${nonSelf.length!==1?'s':''} added. Review the list below and send invitations when ready.</div></div>` : ''}
+  ${interviewPanel}
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
     <div style="display:flex;gap:6px;flex-wrap:wrap;">${catBadges || '<span style="font-size:12px;color:var(--d-mid);">No raters added yet</span>'}</div>
     <div style="display:flex;gap:8px;">
@@ -4927,8 +4993,8 @@ function renderRatersTab() {
     <div>Invites locked until leader completes self-assessment. <span style="font-size:12px;color:var(--d-mid);">You can still add raters to the list now.</span></div></div>` : ''}
   <div class="card" style="padding:0;overflow:hidden;margin-bottom:16px;">
     <table>
-      <thead><tr><th>Rater</th><th>Relationship</th><th>Invited</th><th>Status</th><th></th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="5" style="text-align:center;color:var(--d-mid);padding:24px;">No raters added yet.</td></tr>'}</tbody>
+      <thead><tr><th>Rater</th><th>Relationship</th><th>Invited</th><th>Status</th>${intEnabled?'<th style="text-align:center;">Interview</th>':''}<th></th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="${intEnabled?6:5}" style="text-align:center;color:var(--d-mid);padding:24px;">No raters added yet.</td></tr>`}</tbody>
     </table>
   </div>
   ${!invitesSent ? `
@@ -4946,6 +5012,44 @@ function renderRatersTab() {
     </div>
     <div id="ar-msg" style="font-size:12px;color:var(--d-red2);margin-top:8px;"></div>
   </div>` : ''}`;
+}
+
+// ── Interview Controls ────────────────────────────────────────────────────────
+async function toggleInterviews(currentState) {
+  await updateDiag({ interviews_enabled: !currentState });
+  renderRatersTab();
+}
+
+async function saveInterviewSettings() {
+  const link  = (document.getElementById('int-cal-link')?.value  || '').trim();
+  const maxEl = document.getElementById('int-max-count');
+  const max   = maxEl ? (parseInt(maxEl.value, 10) || null) : null;
+  await updateDiag({ interview_calendar_link: link || null, interview_max_count: max });
+  const msg = document.getElementById('int-save-msg');
+  if (msg) { msg.style.display = 'inline'; setTimeout(() => msg.style.display = 'none', 2500); }
+}
+
+async function toggleRaterInterview(raterId, currentState) {
+  const d = DIAG_SEL;
+  const intMax  = d.interview_max_count || 0;
+  const intUsed = DIAG_RATERS.filter(r => r.will_interview).length;
+
+  // Guard: don't allow exceeding cap when turning on
+  if (!currentState && intMax > 0 && intUsed >= intMax) {
+    alert(`Interview cap reached (${intMax}). Uncheck another rater first.`);
+    renderRatersTab();
+    return;
+  }
+
+  const { error } = await db
+    .from('diagnostic_raters')
+    .update({ will_interview: !currentState })
+    .eq('id', raterId);
+
+  if (!error) {
+    DIAG_RATERS = DIAG_RATERS.map(r => r.id === raterId ? { ...r, will_interview: !currentState } : r);
+  }
+  renderRatersTab();
 }
 
 // ── Tab: Survey Status ────────────────────────────────────────────────────────

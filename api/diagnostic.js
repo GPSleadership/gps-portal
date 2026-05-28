@@ -152,12 +152,31 @@ export default async function handler(req, res) {
 // Body: { diagnostic_id }
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function buildInviteEmail({ raterName, leaderName, leaderTitle, leaderOrg, surveyLink, closeDate }) {
+function buildInviteEmail({ raterName, leaderName, leaderTitle, leaderOrg, surveyLink, closeDate, calendarLink }) {
   const firstName  = (raterName || '').split(' ')[0] || 'there';
   const leaderFull = [leaderName, leaderTitle, leaderOrg].filter(Boolean).join(' — ');
   const closeFmt   = closeDate
     ? new Date(closeDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
     : 'the survey deadline';
+
+  // Optional interview booking section (appended when calendarLink is provided)
+  const interviewSection = calendarLink ? `
+    <div style="margin:28px 0;background:#f0f4ff;border:1.5px solid #1A3D6E;border-radius:8px;padding:20px 24px;">
+      <div style="font-size:14px;font-weight:700;color:#1A3D6E;margin-bottom:8px;">📅 Also: Schedule a Brief Interview</div>
+      <p style="margin:0 0 14px;font-size:14px;color:#333;">
+        In addition to the survey, I'd like to schedule a short conversation with you — typically 20–30 minutes.
+        Use the link below to pick a time that works for you.
+      </p>
+      <div style="text-align:center;">
+        <a href="${calendarLink}"
+           style="background:#C09A2A;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:700;display:inline-block;letter-spacing:0.3px;">
+          Book Your Interview Time →
+        </a>
+      </div>
+      <p style="font-size:12px;color:#666;margin-top:12px;text-align:center;">
+        Or copy: <a href="${calendarLink}" style="color:#1A3D6E;">${calendarLink}</a>
+      </p>
+    </div>` : '';
 
   return `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
@@ -185,6 +204,7 @@ function buildInviteEmail({ raterName, leaderName, leaderTitle, leaderOrg, surve
           </a>
         </div>
         <p style="font-size:13px;color:#666;">Or copy this link: <a href="${surveyLink}" style="color:#1A3D6E;">${surveyLink}</a></p>
+        ${interviewSection}
         <p style="margin-top:24px;">Thank you for taking the time — this feedback genuinely matters.</p>
         <p>– Alex Tremble<br /><span style="color:#666;font-size:13px;">GPS Leadership Solutions</span></p>
         <div style="margin-top:32px;padding-top:20px;border-top:1px solid #eee;font-size:11px;color:#999;">
@@ -204,7 +224,7 @@ async function handleSendInvites(req, res) {
 
   try {
     const diagRes = await sb(
-      `/rest/v1/diagnostics?id=eq.${diagnostic_id}&select=id,client_name,client_title,client_org,client_email,close_date,status,self_assessment_completed_at&limit=1`
+      `/rest/v1/diagnostics?id=eq.${diagnostic_id}&select=id,client_name,client_title,client_org,client_email,close_date,status,self_assessment_completed_at,interviews_enabled,interview_calendar_link&limit=1`
     );
     const diags = await diagRes.json();
     if (!Array.isArray(diags) || diags.length === 0) return res.status(404).json({ error: 'Diagnostic not found' });
@@ -215,7 +235,7 @@ async function handleSendInvites(req, res) {
     }
 
     const ratersRes = await sb(
-      `/rest/v1/diagnostic_raters?diagnostic_id=eq.${diagnostic_id}&is_self=eq.false&invited_at=is.null&select=id,name,email,relationship,token`
+      `/rest/v1/diagnostic_raters?diagnostic_id=eq.${diagnostic_id}&is_self=eq.false&invited_at=is.null&select=id,name,email,relationship,token,will_interview`
     );
     const raters = await ratersRes.json();
 
@@ -237,7 +257,13 @@ async function handleSendInvites(req, res) {
 
     for (const rater of raters) {
       const surveyLink = `${PORTAL_BASE}/diagnostic-survey?token=${rater.token}`;
-      const subject    = `Your input is requested — ${diag.client_name} leadership feedback`;
+      // Include calendar link in email only when this rater is marked for interview AND a link exists
+      const calendarLink = (diag.interviews_enabled && rater.will_interview && diag.interview_calendar_link)
+        ? diag.interview_calendar_link
+        : null;
+      const subject    = calendarLink
+        ? `Your input is requested — ${diag.client_name} leadership feedback + interview invite`
+        : `Your input is requested — ${diag.client_name} leadership feedback`;
       const html       = buildInviteEmail({
         raterName:   rater.name,
         leaderName:  diag.client_name,
@@ -245,6 +271,7 @@ async function handleSendInvites(req, res) {
         leaderOrg:   diag.client_org,
         surveyLink,
         closeDate:   closeDateDisp,
+        calendarLink,
       });
 
       const inviteCc = [diag.client_email, 'team@gpsleadership.org'].filter(Boolean);
@@ -252,7 +279,7 @@ async function handleSendInvites(req, res) {
         await sendEmail({ to: rater.email, subject, html, emailType: 'diagnostic_invite', recipientName: rater.name, cc: inviteCc });
         await sb(`/rest/v1/diagnostic_raters?id=eq.${rater.id}`, 'PATCH', { invited_at: nowISO }, { Prefer: 'return=minimal' });
         sent++;
-        sentList.push({ name: rater.name, email: rater.email });
+        sentList.push({ name: rater.name, email: rater.email, interview: !!calendarLink });
       } catch (err) {
         errors.push({ name: rater.name, email: rater.email, error: err.message });
       }
