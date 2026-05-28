@@ -4777,10 +4777,25 @@ function renderRatersTab() {
   ).join(' ');
   const rows = nonSelf.map(r => `
   <tr>
-    <td><div style="font-weight:700;font-size:13px;">${r.name}</div><div style="font-size:11px;color:var(--d-mid);">${r.email}</div></td>
+    <td>
+      <div style="font-weight:700;font-size:13px;">${r.name}</div>
+      <div style="font-size:11px;color:${r.email_bounced?'var(--d-red2)':'var(--d-mid)'};">
+        ${r.email_bounced ? '⚠ ' : ''}${r.email}
+        ${!r.completed_at ? `<button class="dbtn dbtn-outline dbtn-sm" style="margin-left:6px;font-size:10px;padding:1px 6px;vertical-align:middle;" onclick="openEditRaterEmail('${r.id}','${r.email.replace(/'/g,"\\'").replace(/"/g,'&quot;')}')">Edit</button>` : ''}
+      </div>
+      <div id="rater-email-edit-${r.id}" style="display:none;margin-top:6px;display:none;">
+        <input id="rater-email-input-${r.id}" type="email" value="${r.email.replace(/"/g,'&quot;')}" style="font-size:12px;padding:3px 8px;border:1.5px solid var(--d-blue);border-radius:4px;width:200px;">
+        <button class="dbtn dbtn-primary dbtn-sm" style="margin-left:4px;" onclick="saveRaterEmail('${r.id}')">Save</button>
+        <button class="dbtn dbtn-outline dbtn-sm" style="margin-left:4px;" onclick="closeEditRaterEmail('${r.id}')">Cancel</button>
+      </div>
+    </td>
     <td style="font-size:12px;">${r.relationship}</td>
     <td style="font-size:12px;color:var(--d-mid);">${r.invited_at ? diagFormatDate(r.invited_at) : '—'}</td>
-    <td><span class="dot ${r.completed_at?'dot-green':'dot-grey'}"></span>${r.completed_at?'Completed':'Pending'}</td>
+    <td>
+      ${r.email_bounced
+        ? `<span style="color:var(--d-red2);font-weight:700;font-size:12px;">⚠ Email Bounced</span>`
+        : `<span class="dot ${r.completed_at?'dot-green':'dot-grey'}"></span>${r.completed_at?'Completed':'Pending'}`}
+    </td>
     <td><button class="dbtn dbtn-outline dbtn-sm" style="color:var(--d-red2);border-color:var(--d-red2);" onclick="removeRater('${r.id}')">Remove</button></td>
   </tr>`).join('');
   const canSendInvites    = d.status === 'self_assessment_complete' && nonSelf.length >= 3 && !d.invites_sent_at;
@@ -4847,9 +4862,16 @@ function renderSurveyTab() {
   ).join('');
   const raterRows = nonSelf.map(r =>
     `<tr>
-      <td><div style="font-weight:700;font-size:13px;">${r.name}</div><div style="font-size:11px;color:var(--d-mid);">${r.email}</div></td>
+      <td>
+        <div style="font-weight:700;font-size:13px;">${r.name}</div>
+        <div style="font-size:11px;color:${r.email_bounced?'var(--d-red2)':'var(--d-mid)'};">${r.email_bounced ? '⚠ ' : ''}${r.email}</div>
+      </td>
       <td style="font-size:12px;">${r.relationship}</td>
-      <td><span class="dot ${r.completed_at?'dot-green':'dot-grey'}"></span>${r.completed_at ? `Completed ${diagFormatDate(r.completed_at)}` : 'Pending'}</td>
+      <td>
+        ${r.email_bounced
+          ? `<span style="color:var(--d-red2);font-weight:700;font-size:12px;">⚠ Email Bounced</span>`
+          : `<span class="dot ${r.completed_at?'dot-green':'dot-grey'}"></span>${r.completed_at ? `Completed ${diagFormatDate(r.completed_at)}` : 'Pending'}`}
+      </td>
       <td style="font-size:12px;color:var(--d-mid);">
         ${r.reminder_1_sent_at ? `R1: ${diagFormatDate(r.reminder_1_sent_at)}` : '—'}
         ${r.reminder_2_sent_at ? ` · R2: ${diagFormatDate(r.reminder_2_sent_at)}` : ''}
@@ -5099,7 +5121,11 @@ async function closeSurveyNow() {
       <div><strong>This locks all data immediately.</strong> Raters who haven't responded will no longer be able to submit.</div>
     </div>
     <div style="margin-bottom:8px;"><strong>${DIAG_SEL.client_name}</strong> · ${done} of ${total} rater${total!==1?'s':''} responded (${total>0?Math.round(done/total*100):0}%)</div>
-    ${done < 7 ? `<div style="color:var(--d-red2);font-size:12px;font-weight:600;margin-bottom:8px;">⚠ Only ${done} response${done!==1?'s':''} — below the 7-response minimum for a valid report.</div>` : ''}
+    ${done === 0
+      ? `<div class="dalert dalert-red" style="margin-bottom:8px;"><span class="dalert-icon">🚫</span><div><strong>Zero responses recorded.</strong> Closing now will produce no usable data. Consider extending the close date or re-sending invitations first.</div></div>`
+      : done < 7
+        ? `<div style="color:var(--d-red2);font-size:12px;font-weight:600;margin-bottom:8px;">⚠ Only ${done} response${done!==1?'s':''} — below the 7-response minimum for a valid report.</div>`
+        : ''}
     <div style="font-size:12px;color:var(--d-mid);">You can reopen the survey window afterward if needed.</div>`,
     confirmLabel: 'Yes, Close Survey',
     confirmClass: 'dbtn-red',
@@ -5410,6 +5436,38 @@ async function removeRater(id) {
   renderRatersTab();
   const rc = document.getElementById('tab-rater-count');
   if (rc) rc.textContent = DIAG_RATERS.filter(r=>!r.is_self).length;
+}
+
+function openEditRaterEmail(id, currentEmail) {
+  const wrap = document.getElementById('rater-email-edit-' + id);
+  if (!wrap) return;
+  wrap.style.display = 'block';
+  const inp = document.getElementById('rater-email-input-' + id);
+  if (inp) { inp.value = currentEmail; inp.focus(); }
+}
+
+function closeEditRaterEmail(id) {
+  const wrap = document.getElementById('rater-email-edit-' + id);
+  if (wrap) wrap.style.display = 'none';
+}
+
+async function saveRaterEmail(id) {
+  const inp = document.getElementById('rater-email-input-' + id);
+  if (!inp) return;
+  const newEmail = inp.value.trim();
+  if (!newEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+    inp.style.borderColor = 'var(--d-red2)';
+    return;
+  }
+  inp.style.borderColor = 'var(--d-blue)';
+  const { error } = await db.from('diagnostic_raters')
+    .update({ email: newEmail, email_bounced: false })
+    .eq('id', id);
+  if (error) { alert('Error saving email: ' + error.message); return; }
+  // Update local state
+  const rater = DIAG_RATERS.find(r => r.id === id);
+  if (rater) { rater.email = newEmail; rater.email_bounced = false; }
+  renderRatersTab();
 }
 
 async function saveOverride(code) {
