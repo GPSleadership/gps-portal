@@ -1,7 +1,7 @@
 # GPS Leadership Portal — Survival Package
 ### Everything needed to recreate this system from scratch
 
-**Last updated:** May 27, 2026  
+**Last updated:** May 28, 2026  
 **GitHub repo:** https://github.com/GPSleadership/gps-portal  
 **Live URL:** https://portal.gpsleadership.org  
 **Coach dashboard:** https://portal.gpsleadership.org/coach  
@@ -24,6 +24,8 @@ The GPS Leadership Portal is a client-facing delivery platform for Alex Tremble 
 - Leader completes self-assessment; 10–15 raters complete surveys
 - Claude generates a full narrative report with scored dimensions, themes, and 90-day recommendations
 - Report delivered through the client portal with a coach debrief session
+
+**Strategic intent:** The portal is deliberately a data collection engine, not just a delivery tool. Every feature is designed to capture behavioral and engagement data that will (1) refine the GPS system over time, (2) inform new products, and (3) train the AI to be better at what it does. When designing new features, always ask: "Can this data be captured in a way we can query later?" Log more than you think you need.
 
 ---
 
@@ -58,6 +60,7 @@ coach.html           → Coach dashboard (password-protected)
                        
 diagnostic-survey.html → Rater survey (accessed via token link in invite email)
                           TP3 V2 question bank, section progress bar, self vs rater branching
+                          Mobile-optimized: 44px touch targets, stacked nav buttons
                           
 survey.html          → Stakeholder feedback survey (90-day coaching program)
 
@@ -72,15 +75,21 @@ client-DEMO.html     → Demo version of client portal (no live data)
 diagnostic.js        → Master diagnostic handler. Routes via ?action= param:
                          send-invites      → sends rater survey emails via Resend
                          generate-question → generates AI custom rater question (G1)
+                                            Server-side 30s debounce gate in addition
+                                            to localStorage 3-attempt client-side limit
                          generate-report   → generates full TP3 report via Claude
                          generate-team-report → generates multi-client team report
                          finalize-report   → marks report final, emails client
                          reminders         → cron: rater reminders + T-2 alerts + 
+                                            all-raters-complete alert (7+ raters) +
                                             auto-lock plans + email delivery health +
                                             portal engagement nudges
                                             
 ask.js               → Ask Alex Q&A endpoint. Calls Claude with GPS system prompt.
-                       Rate-limited to prevent abuse.
+                       Logs full question + response to ask_alex_log (v18).
+                       Also logs to ask_alex_usage (legacy counter table).
+                       Captures: question_text, response_text, sprint_number,
+                       input_tokens, output_tokens.
                        
 get-client.js        → Client authentication. GET ?token=X → returns client record.
                        POST {email} → sends portal link recovery email.
@@ -102,7 +111,7 @@ import-clients.js    → Bulk client import from CSV
 email-templates.js   → Returns email template previews for coach review
 ```
 
-### Database Migrations (run in order v2 → v16)
+### Database Migrations (run in order v2 → v18)
 ```
 supabase-migration-v2.sql   → email_log, admin_accounts, checkin_drafts
 supabase-migration-v3.sql   → stakeholders, survey_responses, survey_tokens
@@ -120,6 +129,12 @@ supabase-migration-v13.sql  → diagnostics + diagnostic_raters + diagnostic_rep
 supabase-migration-v14.sql  → RLS policies, indexes, email_log diagnostic columns
 supabase-migration-v15.sql  → alert_t2_sent_at, survey_closed_at on diagnostics
 supabase-migration-v16.sql  → debrief fields, plan fields, coaching_notes, interview_notes
+supabase-migration-v17.sql  → is_archived (BOOLEAN) + all_raters_complete_at (TIMESTAMPTZ)
+                              on diagnostics table
+supabase-migration-v18.sql  → ask_alex_log table: full Q+R text capture per interaction
+                              (id, client_id, asked_at, question_text, response_text,
+                               sprint_number, input_tokens, output_tokens)
+                              RLS: service_role INSERT, anon SELECT
 ```
 
 ### Config
@@ -156,6 +171,8 @@ CRON_SECRET           [random string — used to authenticate manual cron trigge
 - Resend key: resend.com → API Keys
 - CRON_SECRET: generate any random string (openssl rand -hex 32)
 
+**IMPORTANT — ANTHROPIC_API_KEY:** This key must be added before testing any diagnostic report generation or Ask Alex functionality. Without it, both features fail silently. After adding, redeploy from Vercel dashboard.
+
 ---
 
 ## 5. How to Recreate From Scratch
@@ -163,7 +180,7 @@ CRON_SECRET           [random string — used to authenticate manual cron trigge
 ### Step 1: Supabase Setup
 1. Create new Supabase project at supabase.com
 2. Go to SQL Editor
-3. Run migrations IN ORDER: v2.sql through v16.sql
+3. Run migrations IN ORDER: v2.sql through v18.sql
 4. Note your project URL and both API keys
 
 ### Step 2: Resend Setup
@@ -217,14 +234,20 @@ The anon key + Row Level Security (RLS) means clients can only see their own dat
 **Why Vercel Hobby instead of a VPS?**
 Zero ops. No server maintenance, automatic SSL, auto-deploy from GitHub. Hobby plan is free and handles this traffic easily. The 12-function limit is reached — any new API endpoints must be added as routes inside existing files using `?action=` routing.
 
-**Why Resend instead of SendGrid/Mailchimp?**
-Better deliverability for transactional email, simpler API, developer-friendly. GPS uses Resend for all automated email. Marketing email (newsletters) goes through a separate system.
-
 **Why `?action=` routing in api/diagnostic.js?**
 Vercel Hobby plan caps at 12 serverless functions. We're at exactly 12. All diagnostic operations (6 actions) live in one file routed by query param. This is the ceiling — if you need more functions on Vercel, upgrade to Pro.
 
+**Why Resend instead of SendGrid/Mailchimp?**
+Better deliverability for transactional email, simpler API, developer-friendly. GPS uses Resend for all automated email. Marketing email (newsletters) goes through a separate system.
+
 **Why store report as JSON with `full_narrative` as pre-rendered HTML?**
 Claude generates the narrative once. Storing it as HTML lets the portal render it directly without re-processing. The JSON also stores the scored dimensions separately, so they can be displayed in structured sections.
+
+**Why localStorage for G1 rate limiting?**
+The custom rater question (G1) generation is limited to 3 attempts per diagnostic. localStorage stores the attempt count client-side. The server also enforces a 30-second debounce. Combined, this prevents runaway API usage without a separate rate-limit table.
+
+**Why ask_alex_log instead of just ask_alex_usage?**
+The `ask_alex_usage` table only captured question_length (a counter). `ask_alex_log` was added in v18 to capture the full question and response text — the raw material for future model training, product development, and system refinement. Both tables are kept: usage for counters/UI stats, log for full-text analysis.
 
 **Why localStorage for weekly nudge tracking?**
 The weekly leadership prompts (weeks 1-3) track which prompts a client has seen using localStorage. This is intentionally lightweight — if they clear localStorage, they see the prompt again (harmless). Avoids a DB column for a low-stakes UX feature.
@@ -237,17 +260,21 @@ The weekly leadership prompts (weeks 1-3) track which prompts a client has seen 
 clients
   id, name, email, org, title, token (portal login), portal_first_active_at,
   last_active_at, is_active, is_archived, plan_submitted_at, current_sprint_number,
-  preferred_name, ai_terms_accepted, coaching_sessions_enabled, industry
+  preferred_name, ai_terms_accepted, coaching_sessions_enabled, industry,
+  ask_alex_enabled, ask_alex_total_questions, ask_alex_last_used_at
 
 diagnostics
   id, client_id (→clients), client_name, client_email, client_title, client_org,
   status (setup → self_assessment_pending → survey_open → survey_closed → 
            report_draft → report_final → debrief_complete → plan_active),
   tier (standard/pro), email_delivery_mode,
+  is_archived (BOOLEAN) — hides from coach dashboard default view (v17)
+  all_raters_complete_at (TIMESTAMPTZ) — stamped when 7th+ rater completes (v17)
   [self-report fields: self_strengths, self_blind_spots, self_leadership_style...],
   [succession fields: self_three_year_vision, self_successor_candidates...],
   intake_notes, coaching_notes, interview_notes,
-  report_finalized_at, debrief_completed_at, plan_status, plan_locked_at
+  report_finalized_at, debrief_completed_at, plan_status, plan_locked_at,
+  custom_g1_generated_at — timestamp of last G1 generation (server-side debounce)
 
 diagnostic_raters
   id, diagnostic_id, name, email, token (survey access), is_self, role,
@@ -256,6 +283,15 @@ diagnostic_raters
 diagnostic_report_drafts
   id, diagnostic_id, version (1,2,3...), content_json (full report as JSON + HTML narrative),
   generated_at, model_used, input_tokens, output_tokens
+
+ask_alex_log  ← NEW (v18): full Q+R text capture
+  id, client_id (→clients), asked_at,
+  question_text (TEXT), response_text (TEXT),
+  sprint_number (INTEGER), input_tokens, output_tokens
+  RLS: service_role INSERT, anon SELECT
+
+ask_alex_usage  ← legacy counter table (kept for backward compat)
+  id, client_id, asked_at, question_length
 
 email_log
   id, sent_at, recipient_email, email_type, status (sent/error), error_details, resend_id
@@ -275,13 +311,19 @@ The core leadership model. All diagnostic questions, report sections, and Ask Al
 The flagship diagnostic product. 35 rater questions across 5 TP3 dimensions + custom AI-generated succession question (G1). Minimum 7 rater responses for report generation. Full narrative report generated by Claude with strengths, blind spots, patterns, and 90-day recommendations.
 
 **Ask Alex**
-AI Q&A trained on GPS frameworks. System prompt includes client context (industry, plan status, preferred name), GPS voice (direct, candid, calm), and industry-specific variations (standard vs government). Rate-limited per day. Terms acceptance gate.
+AI Q&A trained on GPS frameworks. System prompt includes client context (industry, plan status, preferred name), GPS voice (direct, candid, calm), and industry-specific variations (standard vs government). Rate-limited per day. Terms acceptance gate. Every question and response is now logged in full to `ask_alex_log` for future analysis and model improvement.
+
+**Data Strategy**
+The portal is intentionally a data engine. Key data captured:
+- Leadership challenges surfaced through Ask Alex (by industry, company size, leader level)
+- Rater behavioral observations across all TP3 dimensions
+- Whether leaders show progress on specific behaviors over time
+- Portal engagement (check-in completion rates, Ask Alex usage frequency)
+- Correlation between engagement and outcomes (plan completion, behavior change)
 
 ---
 
 ## 9. Premortem Analysis — Failure Modes Addressed
-
-This system was analyzed using a premortem methodology (imagine it failed, work backward to causes). 35 failure modes identified, triaged by likelihood × severity.
 
 ### P0 (Critical — implemented)
 1. No gate before report finalize → added 3-layer review: preview modal + checkbox + named confirm dialog
@@ -300,17 +342,25 @@ This system was analyzed using a premortem methodology (imagine it failed, work 
 12. Client has no portal token → finalize-report API returns 422 with clear message
 13. Portal engagement → weekly leadership prompt (weeks 1-3), 7-day nudge email, last-active in coach view
 
-### Known P2 Items (to address next)
-- Bounce visibility in coach Raters tab (email_bounced tracked in DB, not shown in UI)
-- Rater email correction after invite sent
-- Diagnostic text search (filter buttons exist, name search missing)
-- Close-survey-with-zero-completions warning
-- Diagnostic archive/hide for completed diagnostics
-- All-raters-complete notification when 7th rater finishes
-- Diagnostic data export (CSV/JSON)
-- Survey token hard-block when diagnostic is already closed
-- Generate-question rate limit per diagnostic
-- Mobile polish on diagnostic-survey.html
+### P2 (Implemented — May 28, 2026)
+
+**Tier 1 — Rater management**
+14. Bounce visibility → ⚠ badge on rater rows in coach Raters tab; email shown in red
+15. Rater email correction → inline edit modal on coach Raters tab; resets email_bounced on save
+16. Zero-response close warning → red alert banner when closing survey with 0 completions
+
+**Tier 2 — Diagnostic management**
+17. Diagnostic archive/hide → Archive/Unarchive button in coach detail; "Archived" filter tab; footer count with "show" link
+18. All-raters-complete notification → email alert to Alex when 7+ raters complete; `all_raters_complete_at` stamped; sent once (checked via IS NULL guard)
+19. Diagnostic data export → "⬇ CSV" and "⬇ Excel" buttons in Survey tab; Excel uses SheetJS (2 sheets: Responses + Diagnostic Info)
+
+**Tier 3 — Safety & polish**
+20. G1 rate limit → 3 attempts per diagnostic (localStorage client-side + 30s server debounce); UI shows attempt count, locks button at limit
+21. Survey token hard-block → re-verifies diagnostic status from DB on submit; blocks stale tokens when survey already closed
+22. Mobile polish → 44px touch targets on Likert/scale-10; stacked full-width nav buttons; compressed header/padding; single-column rater grid on leader portal
+
+**Ask Alex Logger (data strategy — May 28, 2026)**
+23. Ask Alex questions not captured → added `ask_alex_log` table (migration v18); `api/ask.js` now logs full question text, response text, sprint_number, token counts per interaction; coach.html shows per-client question history with collapsible responses in client profile
 
 ---
 
@@ -322,7 +372,7 @@ All times UTC. Vercel runs these automatically.
 |-----|----------|------|-------------|
 | Coaching reminders | Mondays 2pm UTC | api/send-reminders.js | Check-in nudges, auto-archive |
 | Survey reminders | Daily 2pm UTC | api/survey-reminders.js | Stakeholder survey nudges, auto-confirm, welcome sequence |
-| Diagnostic reminders | Daily 2pm UTC | api/diagnostic.js?action=reminders | Rater R1/R2 reminders, T-2 alerts, plan auto-lock, email health check, portal nudges |
+| Diagnostic reminders | Daily 2pm UTC | api/diagnostic.js?action=reminders | Rater R1/R2 reminders, T-2 alerts, all-complete alert, plan auto-lock, email health check, portal nudges |
 
 To trigger manually (for testing): POST to the endpoint with `{ "manual_trigger": true }` and `Authorization: Bearer [CRON_SECRET]`
 
@@ -370,4 +420,4 @@ All API keys and secrets are stored as Vercel environment variables — never in
 
 ---
 
-*This document was generated on May 27, 2026. The system continues to evolve — update this document when major changes are made.*
+*This document was last updated May 28, 2026. Update it whenever new migrations, API changes, or architectural decisions are made.*
