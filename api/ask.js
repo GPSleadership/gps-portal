@@ -1,6 +1,6 @@
 // api/ask.js
 // Secure proxy for Anthropic API calls — keeps the API key server-side.
-// Also logs each Ask Alex interaction to ask_alex_usage and updates client counters.
+// Logs each Ask Alex interaction to ask_alex_log (full text) + ask_alex_usage (counters).
 
 const SUPABASE_URL    = process.env.SUPABASE_URL    || 'https://pbnkefuqpoztcxfagiod.supabase.co';
 const SUPABASE_SECRET = process.env.SUPABASE_SECRET_KEY;
@@ -40,10 +40,19 @@ export default async function handler(req, res) {
 
     // ── Log usage (awaited so Vercel doesn't kill the function before it runs) ──
     if (response.ok && token && SUPABASE_SECRET) {
-      const questionLength = Array.isArray(messages) && messages.length > 0
-        ? (messages[messages.length - 1]?.content || '').length
-        : 0;
-      await logUsage(token, questionLength).catch(() => {});
+      // Extract question text: last user-role message in the array
+      const lastUserMsg = Array.isArray(messages)
+        ? [...messages].reverse().find(m => m.role === 'user')
+        : null;
+      const questionText   = lastUserMsg?.content || '';
+      const questionLength = questionText.length;
+
+      // Extract response text + token counts from Anthropic response
+      const responseText  = data?.content?.[0]?.text || '';
+      const inputTokens   = data?.usage?.input_tokens  || null;
+      const outputTokens  = data?.usage?.output_tokens || null;
+
+      await logUsage(token, questionText, questionLength, responseText, inputTokens, outputTokens).catch(() => {});
     }
 
     return res.status(response.status).json(data);
@@ -53,11 +62,11 @@ export default async function handler(req, res) {
   }
 }
 
-// ── Log to ask_alex_usage + update client counters ───────────────────────────
-async function logUsage(token, questionLength) {
-  // 1. Look up client by token
+// ── Log to ask_alex_log (full text) + ask_alex_usage (counters) ─────────────
+async function logUsage(token, questionText, questionLength, responseText, inputTokens, outputTokens) {
+  // 1. Look up client by token (also fetch current_sprint for context)
   const clientRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/clients?token=eq.${encodeURIComponent(token)}&select=id`,
+    `${SUPABASE_URL}/rest/v1/clients?token=eq.${encodeURIComponent(token)}&select=id,current_sprint`,
     {
       headers: {
         apikey: SUPABASE_SECRET,
@@ -68,11 +77,32 @@ async function logUsage(token, questionLength) {
   if (!clientRes.ok) return;
   const clients = await clientRes.json();
   if (!clients || clients.length === 0) return;
-  const clientId = clients[0].id;
+  const clientId     = clients[0].id;
+  const sprintNumber = clients[0].current_sprint || null;
 
   const now = new Date().toISOString();
 
-  // 2. Insert usage row
+  // 2. Insert full-text log row into ask_alex_log
+  await fetch(`${SUPABASE_URL}/rest/v1/ask_alex_log`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_SECRET,
+      Authorization: `Bearer ${SUPABASE_SECRET}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify({
+      client_id:     clientId,
+      asked_at:      now,
+      question_text: questionText  || null,
+      response_text: responseText  || null,
+      sprint_number: sprintNumber,
+      input_tokens:  inputTokens   || null,
+      output_tokens: outputTokens  || null,
+    })
+  });
+
+  // 3. Insert legacy usage row (question_length counter — kept for backward compat)
   await fetch(`${SUPABASE_URL}/rest/v1/ask_alex_usage`, {
     method: 'POST',
     headers: {
@@ -85,14 +115,10 @@ async function logUsage(token, questionLength) {
       client_id:       clientId,
       asked_at:        now,
       question_length: questionLength || null,
-      // metadata JSONB reserved for future: thumbs_up/down, topic_category, etc.
     })
   });
 
-  // 3. Increment total_questions and set last_used_at using Postgres RPC
-  // We use a direct PATCH + custom header to do an atomic increment safely.
-  // Supabase supports this via the "x-supabase-api-version" header approach,
-  // but the simplest safe method here is a raw SQL call via RPC.
+  // 4. Atomic increment on client counters (total_questions, last_used_at)
   await fetch(`${SUPABASE_URL}/rest/v1/rpc/increment_ask_alex`, {
     method: 'POST',
     headers: {
