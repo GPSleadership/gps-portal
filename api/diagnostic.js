@@ -1195,7 +1195,7 @@ async function handleReminders(req, res) {
           `/rest/v1/diagnostic_raters?diagnostic_id=eq.${diag.id}&is_self=eq.false&select=id,name,completed_at`
         );
         const raters = await ratersRes.json() || [];
-        if (raters.length < 3) continue;  // don't alert for tiny sets
+        if (raters.length < 7) continue;  // minimum 7 responses required for a valid report
         const all = raters.every(r => r.completed_at);
         if (!all) continue;
 

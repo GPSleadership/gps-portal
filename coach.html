@@ -4922,7 +4922,10 @@ function renderSurveyTab() {
       <span>Individual Completion — Coach View Only
         <span style="font-size:11px;font-weight:400;color:var(--d-mid);margin-left:8px;">Never shown to the leader.</span>
       </span>
-      <button class="dbtn dbtn-outline dbtn-sm" onclick="exportDiagCSV()" title="Download all rater responses as CSV">⬇ Export Data</button>
+      <div style="display:inline-flex;gap:6px;">
+        <button class="dbtn dbtn-outline dbtn-sm" onclick="exportDiagData('csv')"   title="Download as CSV — for other tools / AI import">⬇ CSV</button>
+        <button class="dbtn dbtn-outline dbtn-sm" onclick="exportDiagData('excel')" title="Download as Excel — for pivot tables and scoring analysis">⬇ Excel</button>
+      </div>
     </div>
     <table>
       <thead><tr><th>Rater</th><th>Relationship</th><th>Status</th><th>Reminders</th></tr></thead>
@@ -5490,14 +5493,13 @@ async function saveRaterEmail(id) {
   renderRatersTab();
 }
 
-// ── Export Diagnostic Data as CSV ────────────────────────────────────────────
-async function exportDiagCSV() {
+// ── Export Diagnostic Data (CSV or Excel) ────────────────────────────────────
+async function exportDiagData(format = 'csv') {
   if (!DIAG_SEL) return;
   const btn = event?.target;
   if (btn) { btn.textContent = '⏳ Loading…'; btn.disabled = true; }
 
   try {
-    // Fetch all responses for this diagnostic
     const { data: responses, error } = await db
       .from('diagnostic_responses')
       .select('rater_id, question_code, score, text_response')
@@ -5508,55 +5510,87 @@ async function exportDiagCSV() {
     const raterMap = {};
     DIAG_RATERS.forEach(r => { raterMap[r.id] = r; });
 
+    const firstName = DIAG_SEL.client_name.split(' ')[0];
     const qMap = {};
-    DIAG_GLOBAL_QUESTIONS.forEach(q => { qMap[q.code] = q.text.replace(/\[Name\]/g, DIAG_SEL.client_name.split(' ')[0]); });
-    // Add open-ended codes not in DIAG_GLOBAL_QUESTIONS
+    DIAG_GLOBAL_QUESTIONS.forEach(q => { qMap[q.code] = q.text.replace(/\[Name\]/g, firstName); });
     const openEndedLabels = {
-      'E1': 'Leader greatest strengths',
-      'E2': 'Areas leader should develop',
-      'E3': 'One thing leader should stop/start/continue',
+      'E1': 'What are this leader\'s greatest strengths?',
+      'E2': 'What should this leader develop or improve?',
+      'E3': 'One thing this leader should stop, start, or continue?',
       'G1': DIAG_SEL.custom_g1_question || 'Custom question',
     };
 
-    function csvEsc(v) {
-      if (v == null || v === '') return '';
-      const s = String(v).replace(/"/g, '""');
-      return /[,"\n\r]/.test(s) ? `"${s}"` : s;
-    }
+    const safe = DIAG_SEL.client_name.replace(/[^a-z0-9]/gi, '_');
+    const date = new Date().toISOString().slice(0, 10);
+    const filename = `GPS_Diagnostic_${safe}_${date}`;
 
-    const headers = ['Rater Name', 'Relationship', 'Is Self', 'Completed', 'Question Code', 'Question Text', 'Score', 'Text Response'];
-    const rows = [headers.join(',')];
-
-    (responses || []).forEach(resp => {
+    // Build data rows (shared between both formats)
+    const dataRows = (responses || []).map(resp => {
       const rater = raterMap[resp.rater_id] || {};
       const qText = qMap[resp.question_code] || openEndedLabels[resp.question_code] || resp.question_code;
-      rows.push([
-        csvEsc(rater.name || ''),
-        csvEsc(rater.relationship || (rater.is_self ? 'Self' : '')),
-        rater.is_self ? 'Yes' : 'No',
-        rater.completed_at ? diagFormatDate(rater.completed_at) : 'Pending',
-        csvEsc(resp.question_code),
-        csvEsc(qText),
-        resp.score != null ? resp.score : '',
-        csvEsc(resp.text_response || ''),
-      ].join(','));
+      return {
+        'Rater Name':      rater.name || '',
+        'Relationship':    rater.relationship || (rater.is_self ? 'Self' : ''),
+        'Is Self':         rater.is_self ? 'Yes' : 'No',
+        'Completed':       rater.completed_at ? diagFormatDate(rater.completed_at) : 'Pending',
+        'Question Code':   resp.question_code,
+        'Question Text':   qText,
+        'Score':           resp.score != null ? resp.score : '',
+        'Text Response':   resp.text_response || '',
+      };
     });
 
-    const csv = rows.join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    const safe = DIAG_SEL.client_name.replace(/[^a-z0-9]/gi, '_');
-    a.href     = url;
-    a.download = `GPS_Diagnostic_${safe}_${new Date().toISOString().slice(0,10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    if (format === 'excel') {
+      // Excel export via SheetJS (already loaded for client import)
+      const ws = XLSX.utils.json_to_sheet(dataRows);
+      // Set column widths
+      ws['!cols'] = [
+        { wch: 22 }, { wch: 18 }, { wch: 8 }, { wch: 14 },
+        { wch: 14 }, { wch: 55 }, { wch: 7 }, { wch: 50 },
+      ];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Responses');
+      // Add a summary sheet with diagnostic metadata
+      const meta = [
+        { Field: 'Leader', Value: DIAG_SEL.client_name },
+        { Field: 'Organization', Value: DIAG_SEL.client_org || '' },
+        { Field: 'Title', Value: DIAG_SEL.client_title || '' },
+        { Field: 'Survey Closed', Value: DIAG_SEL.survey_closed_at ? diagFormatDate(DIAG_SEL.survey_closed_at) : '' },
+        { Field: 'Total Raters', Value: DIAG_RATERS.filter(r => !r.is_self).length },
+        { Field: 'Completed', Value: DIAG_RATERS.filter(r => !r.is_self && r.completed_at).length },
+        { Field: 'Exported', Value: date },
+      ];
+      const wsMeta = XLSX.utils.json_to_sheet(meta);
+      wsMeta['!cols'] = [{ wch: 18 }, { wch: 40 }];
+      XLSX.utils.book_append_sheet(wb, wsMeta, 'Diagnostic Info');
+      XLSX.writeFile(wb, `${filename}.xlsx`);
+
+    } else {
+      // CSV export
+      const headers = Object.keys(dataRows[0] || {
+        'Rater Name':'','Relationship':'','Is Self':'','Completed':'',
+        'Question Code':'','Question Text':'','Score':'','Text Response':'',
+      });
+      function csvEsc(v) {
+        if (v == null || v === '') return '';
+        const s = String(v).replace(/"/g, '""');
+        return /[,"\n\r]/.test(s) ? `"${s}"` : s;
+      }
+      const lines = [headers.map(csvEsc).join(',')];
+      dataRows.forEach(row => lines.push(headers.map(h => csvEsc(row[h])).join(',')));
+      const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = `${filename}.csv`;
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
   } catch (err) {
     alert('Export failed: ' + err.message);
   } finally {
-    if (btn) { btn.textContent = '⬇ Export Data'; btn.disabled = false; }
+    if (btn) { btn.textContent = format === 'excel' ? '⬇ Excel' : '⬇ CSV'; btn.disabled = false; }
   }
 }
 
