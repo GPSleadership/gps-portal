@@ -275,7 +275,7 @@
       display: none;
       position: fixed; inset: 0;
       background: rgba(0,0,0,0.5);
-      z-index: 100;
+      z-index: 300;
       align-items: center;
       justify-content: center;
     }
@@ -4752,18 +4752,22 @@ function renderOverviewTab() {
   const reopenableSteps = new Set([1, 2, 3, 5, 6, 7]);
 
   const stepsHtml = steps.map(s => {
-    const isDone   = s.done;
-    const isCur    = s.n === cur && !isDone;
-    const circle   = isDone ? '✓' : s.n;
-    const color    = isDone ? 'var(--d-green)' : isCur ? 'var(--d-blue)' : 'var(--d-mid)';
-    // Show reopen link for completed steps that have a reopen map entry
+    // isReopened: the step timestamp says done, but the current status has been
+    // rolled back to this point — show as amber "editing" state, not green done
+    const isReopened = s.done && s.n === cur;
+    const isDone   = s.done && !isReopened;
+    const isCur    = s.n === cur && !isDone && !isReopened;
+    const circle   = isDone ? '✓' : isReopened ? '↺' : s.n;
+    const color    = isDone ? 'var(--d-green)' : isReopened ? 'var(--d-amber)' : isCur ? 'var(--d-blue)' : 'var(--d-mid)';
+    // Show reopen button only for fully done steps (not the current/reopened one)
     const canReopen = isDone && reopenableSteps.has(s.n) && DIAG_REOPEN_MAP[s.n];
     const reopenBtn = canReopen
       ? `<button class="dbtn dbtn-outline dbtn-sm" style="margin-left:8px;padding:2px 8px;font-size:11px;" onclick="reopenDiagStep(${s.n})">Reopen</button>`
+      : isReopened ? `<span style="font-size:11px;color:var(--d-amber);margin-left:8px;font-weight:700;">Editing</span>`
       : '';
-    return `<div style="display:flex;gap:12px;margin-bottom:8px;align-items:center;opacity:${isDone||isCur?1:.45};">
+    return `<div style="display:flex;gap:12px;margin-bottom:8px;align-items:center;opacity:${isDone||isCur||isReopened?1:.45};">
       <div style="width:24px;height:24px;border-radius:50%;background:${color};color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0;">${circle}</div>
-      <div style="flex:1;padding-top:2px;font-size:13px;font-weight:${isCur?700:600};color:${isCur?'var(--d-blue)':isDone?'var(--d-dark)':'var(--d-mid)'};">${s.label}</div>
+      <div style="flex:1;padding-top:2px;font-size:13px;font-weight:${isCur||isReopened?700:600};color:${isReopened?'var(--d-amber)':isCur?'var(--d-blue)':isDone?'var(--d-dark)':'var(--d-mid)'};">${s.label}</div>
       ${reopenBtn}
     </div>`;
   }).join('');
@@ -4911,8 +4915,11 @@ function renderRatersTab() {
   </tr>`;
   }).join('');
 
-  const canSendInvites    = d.status === 'self_assessment_complete' && nonSelf.length >= 3 && !d.invites_sent_at;
-  const invitesSent       = !!d.invites_sent_at;
+  // If status is self_assessment_complete, the rater list has been reopened (or never sent).
+  // Treat as "invites not yet sent" in that state so the Add Rater form and Send button reappear.
+  const reopened          = d.status === 'self_assessment_complete';
+  const invitesSent       = !!d.invites_sent_at && !reopened;
+  const canSendInvites    = reopened && nonSelf.length >= 3;
   const raterListReady    = !!d.raters_finalized_at && !invitesSent;
   const rc = document.getElementById('raters-content');
   if (!rc) return;
@@ -5279,7 +5286,18 @@ function openSendInvitesModal() {
   const closeDate = new Date();
   closeDate.setDate(closeDate.getDate() + 14);
   const closeDateStr = closeDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+  // Soft warning: succession data exists but G1 question not yet generated
+  const g1Missing = !!DIAG_SEL.self_three_year_vision && !DIAG_SEL.custom_g1_question;
+  const g1Warning = g1Missing
+    ? `<div class="dalert dalert-amber" style="margin-bottom:14px;">
+        <span class="dalert-icon">⚠️</span>
+        <div><strong>No custom G1 question generated yet.</strong> ${DIAG_SEL.client_name} completed the succession section, but the AI rater question hasn't been created. Raters will receive the survey without it. <a href="#" onclick="closeDiagModal('send-invites-modal');generateG1();return false;" style="color:#7A5A00;font-weight:700;text-decoration:underline;">Generate it first →</a> or proceed below to send anyway.</div>
+      </div>`
+    : '';
+
   document.getElementById('send-invites-body').innerHTML = `
+    ${g1Warning}
     <p style="font-size:13px;margin-bottom:14px;">You are about to send survey invitations to <strong>${nonSelf.length} raters</strong> for <strong>${DIAG_SEL.client_name}</strong>.</p>
     <div class="dalert dalert-blue" style="margin-bottom:14px;"><span class="dalert-icon">📅</span>
       <div>Survey window opens <strong>today</strong> and closes automatically on <strong>${closeDateStr}</strong> (14 days).</div>
@@ -5298,10 +5316,16 @@ async function confirmSendInvites() {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ diagnostic_id: DIAG_SEL.id }),
     });
-    if (!resp.ok) throw new Error(await resp.text());
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || resp.status);
     await updateDiag({ status: 'survey_open', invites_sent_at: new Date().toISOString() });
     await refreshSelected();
-    alert('Invitations sent successfully.');
+    if (data.sent === 0) {
+      alert('No new invitations sent.\n\nAll raters on this list have already been invited. To send to new raters, reopen step 3 first, then add the new raters before sending.');
+    } else {
+      const errNote = data.errors?.length ? `\n\n⚠ ${data.errors.length} failed to send — check the Emails log for details.` : '';
+      alert(`${data.sent} invitation${data.sent !== 1 ? 's' : ''} sent successfully.${errNote}`);
+    }
   } catch(e) {
     alert('Error sending invites: ' + e.message);
   }
