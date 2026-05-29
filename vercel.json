@@ -144,9 +144,6 @@
     "api/submit-closeout.js": {
       "maxDuration": 15
     },
-    "api/import-clients.js": {
-      "maxDuration": 30
-    },
     "api/email-templates.js": {
       "maxDuration": 15
     }
