@@ -1,423 +1,500 @@
 # GPS Leadership Portal — Survival Package
 ### Everything needed to recreate this system from scratch
 
-**Last updated:** May 28, 2026  
-**GitHub repo:** https://github.com/GPSleadership/gps-portal  
-**Live URL:** https://portal.gpsleadership.org  
-**Coach dashboard:** https://portal.gpsleadership.org/coach  
-**Client portal:** https://portal.gpsleadership.org/client  
+**Last updated:** May 29, 2026
+**GitHub repo:** https://github.com/GPSleadership/gps-portal
+**Live URL:** https://portal.gpsleadership.org
+**Coach dashboard:** https://portal.gpsleadership.org/coach
+**Client portal:** https://portal.gpsleadership.org/client
 
 ---
 
 ## 1. What This System Is
 
-The GPS Leadership Portal is a client-facing delivery platform for Alex Tremble / GPS Leadership Solutions. It handles two core products:
+The GPS Leadership Portal is the delivery platform for GPS Leadership Solutions, owned and operated by Alex Tremble. It supports two distinct products sold to CEOs and senior leaders at multi-location, operations-heavy businesses ($10M–$100M+ revenue).
 
-**A. 90-Day Leadership Coaching Program**
-- Clients get a personal portal where they receive and track their 90-day action plan
-- Weekly check-ins, sprint tracking, stakeholder feedback surveys
-- "Ask Alex" — an AI assistant (Claude) trained on GPS frameworks (TP3™)
-- Coach dashboard for managing all clients, reviewing check-ins, and tracking engagement
+**Product A — 90-Day Leadership Coaching Program**
+Clients receive a personal portal containing their 90-day leadership action plan. They complete weekly check-ins, track sprint progress, receive stakeholder feedback surveys (TP3™ Scoreboard), and access "Ask Alex" — an AI assistant built on Claude and trained on GPS frameworks. Alex manages all clients from a separate coach dashboard.
 
-**B. 14-Day Executive Leadership Diagnostic**
-- Full 360-style leadership assessment using the TP3™ framework (Trust, Proactivity, Productivity → Profitability)
-- Leader completes self-assessment; 10–15 raters complete surveys
-- Claude generates a full narrative report with scored dimensions, themes, and 90-day recommendations
-- Report delivered through the client portal with a coach debrief session
+**Product B — 14-Day Executive Leadership Diagnostic**
+A full 360-style leadership assessment using the TP3™ framework (Trust, Proactivity, Productivity → Profitability). The leader completes a self-assessment, then 10–15 raters (direct reports, peers, supervisors, board members) complete confidential surveys. Claude generates a full narrative report with scored dimensions, behavioral themes, and a 90-day development plan. Pro tier adds succession planning questions and optional 1:1 rater interviews with Alex.
 
-**Strategic intent:** The portal is deliberately a data collection engine, not just a delivery tool. Every feature is designed to capture behavioral and engagement data that will (1) refine the GPS system over time, (2) inform new products, and (3) train the AI to be better at what it does. When designing new features, always ask: "Can this data be captured in a way we can query later?" Log more than you think you need.
+**Strategic intent:** The portal is intentionally a data collection engine. Every interaction is designed to capture leadership behavioral data — challenges surfaced through Ask Alex, rater observations across TP3 dimensions, engagement patterns — to refine the GPS system and inform future products. This is a first-generation AI-augmented coaching platform.
 
 ---
 
 ## 2. Technology Stack
 
-| Layer | Service | What it does |
-|-------|---------|-------------|
-| Hosting | Vercel (Hobby plan) | Serves all HTML files + runs serverless API functions |
-| Database | Supabase (PostgreSQL) | All data: clients, diagnostics, raters, surveys, emails |
-| Email | Resend | All transactional email (invites, reminders, reports) |
-| AI | Anthropic Claude API (claude-sonnet-4-6) | Ask Alex Q&A + diagnostic report generation |
-| Domain | portal.gpsleadership.org | Custom domain pointed to Vercel |
-| Source control | GitHub (GPSleadership/gps-portal) | All code lives here |
+| Layer | Service | What it does | Alternative if unavailable |
+|-------|---------|-------------|---------------------------|
+| Hosting | Vercel (Hobby) | Serves HTML files + runs serverless API functions, auto-deploys from GitHub | Netlify, Railway, Render — see Section 8 |
+| Database | Supabase (PostgreSQL) | All persistent data: clients, diagnostics, raters, surveys, emails | Any PostgreSQL host — Neon, Railway Postgres, AWS RDS |
+| Email | Resend | All transactional email (invites, reminders, reports, portal links) | SendGrid, Postmark |
+| AI | Anthropic Claude API (claude-sonnet-4-6) | Ask Alex Q&A + diagnostic report generation | Any LLM with function-calling — GPT-4, Gemini |
+| Domain | portal.gpsleadership.org | Custom domain → Vercel | Move DNS CNAME to new host |
+| Source control | GitHub (GPSleadership/gps-portal) | All code versioned here | GitLab, Bitbucket, local zip |
 
-**Why this stack:**
-- Vercel: zero-config deployment from GitHub, auto-deploys on push, free tier covers the load
-- Supabase: PostgreSQL with a REST API (PostgREST) accessible directly from browser JS — no separate backend needed
-- Resend: modern email API with excellent deliverability, simple Node SDK
-- All files are single HTML files — no build step, no framework, no bundler. Open the file and it works.
+**Key architectural choice:** All front-end files are single-file vanilla HTML/CSS/JS with no build step, no framework, no bundler. This is intentional — files open locally without any tooling, can be edited in any text editor, and the entire codebase is readable without a development environment. This trades some developer ergonomics for extreme portability and maintainability by non-engineers.
 
 ---
 
-## 3. File Map — What Every File Does
+## 3. File Map
 
 ### HTML Pages (user-facing)
-```
-client.html          → Client portal (login via ?token=X)
-                       Tabs: My Plan, My Results, My Diagnostic, Ask Alex
-                       
-coach.html           → Coach dashboard (password-protected)
-                       Tabs: Dashboard, Clients, Diagnostics, Team Reports, Email Log
-                       
-diagnostic-survey.html → Rater survey (accessed via token link in invite email)
-                          TP3 V2 question bank, section progress bar, self vs rater branching
-                          Mobile-optimized: 44px touch targets, stacked nav buttons
-                          
-survey.html          → Stakeholder feedback survey (90-day coaching program)
 
-diagnostic-sandbox.html → Clickable prototype / design reference (not production)
-diagnostic-leader.html  → Legacy leader portal (superseded by client.html)
-diagnostic-coach.html   → Legacy coach diagnostic view (superseded by coach.html)
-client-DEMO.html     → Demo version of client portal (no live data)
-```
+| File | URL | What it does |
+|------|-----|-------------|
+| `client.html` | /client | Client portal. Token-gated via `?token=X`. Tabs: My Plan, My Results, My Diagnostic, Ask Alex. Full sprint tracking, check-ins, stakeholder scoreboards, AI assistant. ~6,000 lines. |
+| `coach.html` | /coach | Alex's dashboard. Password-protected. Tabs: Dashboard, Clients, Diagnostics, Team Reports, Email Log. Manages all clients and diagnostics. ~6,200 lines. |
+| `diagnostic-survey.html` | /diagnostic-survey | Rater survey. Token-gated. TP3 V2 question bank (35 questions), section progress bar, self vs rater branching, mobile-optimized. Hard-blocks on closed surveys. |
+| `survey.html` | /survey | Stakeholder feedback survey for the 90-day coaching program. Separate from the diagnostic system. |
+| `diagnostic-leader.html` | /diagnostic-leader | Leader intake portal for the diagnostic. Self-assessment form, rater list submission, unlock sequence. |
+| `diagnostic-sandbox.html` | /diagnostic-sandbox | Clickable prototype / design reference. Not production. |
+| `diagnostic-coach.html` | /diagnostic-coach | Legacy coach diagnostic view. Superseded by coach.html Diagnostics tab. |
+| `client-DEMO.html` | — | Demo version of client portal. No live data. For sales/preview use. |
+| `gps-executive-console.html` | — | Executive console UI (in development). |
 
-### API Functions (Vercel serverless, all in /api/)
-```
-diagnostic.js        → Master diagnostic handler. Routes via ?action= param:
-                         send-invites      → sends rater survey emails via Resend
-                         generate-question → generates AI custom rater question (G1)
-                                            Server-side 30s debounce gate in addition
-                                            to localStorage 3-attempt client-side limit
-                         generate-report   → generates full TP3 report via Claude
-                         generate-team-report → generates multi-client team report
-                         finalize-report   → marks report final, emails client
-                         reminders         → cron: rater reminders + T-2 alerts + 
-                                            all-raters-complete alert (7+ raters) +
-                                            auto-lock plans + email delivery health +
-                                            portal engagement nudges
-                                            
-ask.js               → Ask Alex Q&A endpoint. Calls Claude with GPS system prompt.
-                       Logs full question + response to ask_alex_log (v18).
-                       Also logs to ask_alex_usage (legacy counter table).
-                       Captures: question_text, response_text, sprint_number,
-                       input_tokens, output_tokens.
-                       
-get-client.js        → Client authentication. GET ?token=X → returns client record.
-                       POST {email} → sends portal link recovery email.
-                       
-notify.js            → Email notification hub for coaching program (check-ins,
-                       plan submissions, stakeholder responses, welcome sequence)
-                       
-send-reminders.js    → Weekly reminders cron for coaching clients (check-in nudges,
-                       auto-archive after 45 days inactive)
-                       
-survey-reminders.js  → Daily reminders for stakeholder surveys, auto-confirm logic,
-                       welcome reminder email sequence
-                       
-survey.js            → Handles stakeholder survey load + submission
-accept-terms.js      → Records AI terms acceptance timestamp in DB
-start-sprint.js      → Starts a new 13-week sprint for a client
-submit-closeout.js   → Handles 90-day plan closeout submission
-import-clients.js    → Bulk client import from CSV
-email-templates.js   → Returns email template previews for coach review
-```
+### API Functions (`/api/` — Vercel serverless, Node.js)
 
-### Database Migrations (run in order v2 → v18)
-```
-supabase-migration-v2.sql   → email_log, admin_accounts, checkin_drafts
-supabase-migration-v3.sql   → stakeholders, survey_responses, survey_tokens
-supabase-migration-v4.sql   → full schema rewrite with sprint system
-supabase-migration-v5.sql   → confirmed_at on stakeholders
-supabase-migration-v6.sql   → sprint_number on checkins
-supabase-migration-v7.sql   → last_active_at on clients (45-day auto-archive)
-supabase-migration-v8.sql   → portal_first_active_at on clients (90-day access window)
-supabase-migration-v9.sql   → continuation_step for post-expiry email sequence
-supabase-migration-v10.sql  → welcome_reminder_step for onboarding emails
-supabase-migration-v11.sql  → preferred_name, title, org on clients; coach_profile table
-supabase-migration-v12.sql  → diagnostic-related client fields
-supabase-migration-v13.sql  → diagnostics + diagnostic_raters + diagnostic_report_drafts
-                              + diagnostic_question_overrides + diagnostic_team_reports
-supabase-migration-v14.sql  → RLS policies, indexes, email_log diagnostic columns
-supabase-migration-v15.sql  → alert_t2_sent_at, survey_closed_at on diagnostics
-supabase-migration-v16.sql  → debrief fields, plan fields, coaching_notes, interview_notes
-supabase-migration-v17.sql  → is_archived (BOOLEAN) + all_raters_complete_at (TIMESTAMPTZ)
-                              on diagnostics table
-supabase-migration-v18.sql  → ask_alex_log table: full Q+R text capture per interaction
-                              (id, client_id, asked_at, question_text, response_text,
-                               sprint_number, input_tokens, output_tokens)
-                              RLS: service_role INSERT, anon SELECT
-```
+| File | Trigger | What it does |
+|------|---------|-------------|
+| `diagnostic.js` | POST `?action=` | Master diagnostic handler. 6 routes via action param: `send-invites`, `generate-question` (G1), `generate-report`, `generate-team-report`, `finalize-report`, `reminders`. 60s maxDuration. ~1,650 lines. |
+| `ask.js` | POST | Ask Alex endpoint. Calls Anthropic API. Logs full Q+R to `ask_alex_log`. Keeps legacy counter in `ask_alex_usage`. 60s maxDuration. |
+| `get-client.js` | GET / POST | Client auth: GET `?token=X` returns client record. POST `{email}` sends portal link recovery email. |
+| `notify.js` | POST | Email notification hub for coaching program: check-in alerts, plan submissions, stakeholder responses, welcome emails. |
+| `send-reminders.js` | Cron (Mon 2pm UTC) | Weekly coaching reminders: check-in nudges, auto-archive after 45 days inactive. |
+| `survey-reminders.js` | Cron (daily 2pm UTC) | Daily stakeholder survey nudges, auto-confirm logic, welcome email sequence. |
+| `survey.js` | GET / POST | Stakeholder survey load + submission handler. |
+| `accept-terms.js` | POST | Records AI terms acceptance timestamp. |
+| `start-sprint.js` | POST | Starts a new 13-week sprint for a client. |
+| `submit-closeout.js` | POST | Handles 90-day plan closeout submission. |
+| `import-clients.js` | POST | Bulk client import from CSV. |
+| `email-templates.js` | GET | Returns email template previews for coach review. |
+
+> **Critical:** Vercel Hobby plan caps at 12 serverless functions. This project is at exactly 12. All diagnostic operations share one file via `?action=` routing. Adding any new API file requires upgrading to Vercel Pro or merging into an existing file.
+
+### Database Migrations (run in order v2 → v19)
+
+| File | What it adds |
+|------|-------------|
+| `supabase-setup.sql` | Initial schema: clients, sprints, checkins, stakeholders, survey_tokens, survey_responses |
+| `supabase-migration-v2.sql` | email_log, admin_accounts, checkin_drafts |
+| `supabase-migration-v3.sql` | stakeholders, survey_responses, survey_tokens |
+| `supabase-migration-v4.sql` | Full schema rewrite with sprint system |
+| `supabase-migration-v5.sql` | confirmed_at on stakeholders |
+| `supabase-migration-v6.sql` | sprint_number on checkins |
+| `supabase-migration-v7.sql` | last_active_at on clients (45-day auto-archive) |
+| `supabase-migration-v8.sql` | portal_first_active_at on clients (90-day access window) |
+| `supabase-migration-v9.sql` | continuation_step for post-expiry email sequence |
+| `supabase-migration-v10.sql` | welcome_reminder_step for onboarding emails |
+| `supabase-migration-v11.sql` | preferred_name, title, org on clients; coach_profile table |
+| `supabase-migration-v12.sql` | Diagnostic-related client fields |
+| `supabase-migration-v13.sql` | diagnostics, diagnostic_raters, diagnostic_report_drafts, diagnostic_question_overrides, diagnostic_team_reports |
+| `supabase-migration-v14.sql` | RLS policies, indexes, email_log diagnostic columns |
+| `supabase-migration-v15.sql` | alert_t2_sent_at, survey_closed_at on diagnostics |
+| `supabase-migration-v16.sql` | Debrief fields, plan fields, coaching_notes, interview_notes |
+| `supabase-migration-v17.sql` | is_archived (BOOLEAN), all_raters_complete_at (TIMESTAMPTZ) on diagnostics |
+| `supabase-migration-v18.sql` | ask_alex_log table: full Q+R text capture (question_text, response_text, sprint_number, token counts) |
+| `supabase-migration-v19.sql` | interviews_enabled, interview_calendar_link, interview_max_count on diagnostics; will_interview on diagnostic_raters |
 
 ### Config
-```
-vercel.json          → URL rewrites, cron schedules, API function timeouts (maxDuration)
-```
+
+| File | What it does |
+|------|-------------|
+| `vercel.json` | URL rewrites (clean paths), cron schedules, CORS headers, function maxDuration timeouts |
+| `.env.example` | Template of all required environment variables (no real values) |
+| `SETUP-GUIDE.md` | Step-by-step setup instructions for new deployment |
+| `GPS_PORTAL_SURVIVAL_PACKAGE.md` | This document |
+
+### Scripts (not deployed — run locally)
+
+| File | What it does |
+|------|-------------|
+| `check.sh` | Pre-push validation: JS syntax check on all HTML files, backslash-backtick hazard scan, vercel.json/vercelignore consistency check, serverless function count. Run automatically via git hook — do not bypass. |
+| `deploy.sh` | Safe deploy wrapper: runs check.sh, then stages all changes, commits with your message, and pushes. Usage: `./deploy.sh "commit message"` |
+| `smoke-test.sh` | Post-deploy health check: hits /coach, /client, and key API endpoints on the live portal. Run 90 seconds after a push. |
+| `install-hooks.sh` | One-time setup: installs the git pre-push hook so check.sh runs automatically on every `git push`. Must be re-run after cloning on a new machine. |
+| `scripts/export-backup.js` | Exports Supabase data to local JSON for backup |
+| `scripts/cleanup-test-profiles.js` | Removes test client records from DB |
 
 ---
 
-## 4. Environment Variables (Required)
+## 4. Environment Variables
 
-Set these in Vercel → Project Settings → Environment Variables:
+All set in Vercel → Project Settings → Environment Variables. Never in code.
 
-```
-SUPABASE_URL          https://[your-project].supabase.co
-SUPABASE_ANON         eyJ... (anon/public key — safe for browser)
-SUPABASE_SECRET_KEY   eyJ... (service role key — server-side only, never expose)
-
-ANTHROPIC_API_KEY     sk-ant-... (Claude API key)
-
-RESEND_API_KEY        re_... (Resend API key)
-RESEND_FROM_EMAIL     Alex Tremble – GPS Leadership <alex@gpsleadership.org>
-
-PORTAL_BASE_URL       https://portal.gpsleadership.org
-SITE_URL              https://portal.gpsleadership.org  (same as above)
-
-COACH_ALERT_EMAIL     alex@gpsleadership.org
-CRON_SECRET           [random string — used to authenticate manual cron triggers]
-```
-
-**Where to get each:**
-- Supabase keys: Supabase dashboard → Project Settings → API
-- Anthropic key: console.anthropic.com → API Keys
-- Resend key: resend.com → API Keys
-- CRON_SECRET: generate any random string (openssl rand -hex 32)
-
-**IMPORTANT — ANTHROPIC_API_KEY:** This key must be added before testing any diagnostic report generation or Ask Alex functionality. Without it, both features fail silently. After adding, redeploy from Vercel dashboard.
+| Variable | Required | What it does | Where to get it |
+|----------|----------|-------------|----------------|
+| `SUPABASE_URL` | ✅ | Supabase project REST API URL | Supabase dashboard → Project Settings → API |
+| `SUPABASE_ANON` | ✅ | Supabase anon/public key (safe for browser JS) | Same location |
+| `SUPABASE_SECRET_KEY` | ✅ | Supabase service role key (server-side only — never expose) | Same location |
+| `ANTHROPIC_API_KEY` | ✅ | Claude API key — required for Ask Alex and report generation | console.anthropic.com → API Keys |
+| `RESEND_API_KEY` | ✅ | Resend email API key | resend.com → API Keys |
+| `RESEND_FROM_EMAIL` | ✅ | Sender name + address, e.g. `Alex Tremble – GPS Leadership <alex@gpsleadership.org>` | Set manually to match verified domain |
+| `PORTAL_BASE_URL` | ✅ | Root URL, e.g. `https://portal.gpsleadership.org` | Your domain |
+| `SITE_URL` | ✅ | Same as PORTAL_BASE_URL (used in email links) | Your domain |
+| `COACH_ALERT_EMAIL` | ✅ | Where system alerts go (bounce spikes, all-raters-complete, etc.) | alex@gpsleadership.org |
+| `CRON_SECRET` | ✅ | Authenticates manual cron triggers via Authorization header | Generate: `openssl rand -hex 32` |
 
 ---
 
-## 5. How to Recreate From Scratch
+## 5. Step-by-Step Setup Guide (Zero to Live)
 
-### Step 1: Supabase Setup
-1. Create new Supabase project at supabase.com
-2. Go to SQL Editor
-3. Run migrations IN ORDER: v2.sql through v18.sql
-4. Note your project URL and both API keys
+### Step 1: Supabase
+1. Create account at supabase.com
+2. Create new project (choose a region close to your users)
+3. Go to SQL Editor
+4. Run migrations in order: `supabase-setup.sql`, then `v2.sql` through `v19.sql`
+5. Go to Project Settings → API → copy Project URL and both keys (anon + service_role)
+6. Verify RLS is enabled: in the Table Editor, confirm the lock icon appears on all tables
 
-### Step 2: Resend Setup
+### Step 2: Resend
 1. Create account at resend.com
 2. Add domain: gpsleadership.org
-3. Add DNS records (DKIM + SPF + DMARC) — Resend shows you exactly what to add
-4. Create API key with Send access
-5. Verify domain is active before sending
+3. Add DNS records shown by Resend (DKIM + SPF + DMARC) at your domain registrar
+4. Wait for verification (usually minutes, can take up to 24 hours)
+5. Create API key with "Send" permission
+6. Test with a manual send before going live
 
-### Step 3: Anthropic Setup
+### Step 3: Anthropic
 1. Create account at console.anthropic.com
-2. Add billing method
+2. Add payment method (pay-as-you-go)
 3. Create API key
-4. Note: model used is claude-sonnet-4-6
+4. Model used: `claude-sonnet-4-6` — verify this model is still available at time of setup
+5. Budget alert recommended: set a monthly spend alert in billing settings
 
-### Step 4: GitHub Setup
-1. Create repo (public or private)
-2. Push all files from local folder
-3. Keep .gitignore — never commit .env files
+### Step 4: GitHub
+1. Create organization: GPSleadership (or personal repo)
+2. Push all files: `git init`, `git add .`, `git commit -m "Initial"`, `git push`
+3. Confirm `.env` is in `.gitignore` — never commit real secrets
 
-### Step 5: Vercel Setup
+### Step 5: Vercel
 1. Create account at vercel.com
-2. Import GitHub repo
-3. Add all environment variables (Section 4 above)
-4. Add custom domain: portal.gpsleadership.org
-5. Point domain DNS → Vercel (they'll show you the records)
-6. Verify deployment works at the Vercel-provided URL first
+2. Import GitHub repo (Connect to Git → select GPSleadership/gps-portal)
+3. Framework preset: **Other** (not Next.js — this is vanilla HTML)
+4. Add all 10 environment variables from Section 4
+5. Deploy — Vercel auto-detects the `api/` folder and deploys each `.js` file as a serverless function
+6. Add custom domain: portal.gpsleadership.org
+7. Update DNS at registrar: add CNAME → `cname.vercel-dns.com`
+8. Wait for SSL certificate (usually < 5 minutes)
 
-### Step 6: Cron Verification
-Three cron jobs are configured in vercel.json:
-- `/api/send-reminders` — Mondays at 2pm UTC (coaching program)
-- `/api/survey-reminders` — Daily at 2pm UTC (stakeholder surveys)
-- `/api/diagnostic?action=reminders` — Daily at 2pm UTC (diagnostic system)
+### Step 6: Verify cron jobs
+1. Go to Vercel → Project → Cron Jobs
+2. Confirm three jobs appear (send-reminders, survey-reminders, diagnostic reminders)
+3. Test manually: POST to `/api/send-reminders` with `Authorization: Bearer [CRON_SECRET]` and body `{"manual_trigger": true}`
 
-Vercel Hobby plan supports cron jobs. Verify they're listed in Vercel → Project → Cron Jobs.
+### Step 7: Create coach login
+Run in Supabase SQL Editor:
+```sql
+INSERT INTO admin_accounts (name, email, password, role)
+VALUES ('Alex Tremble', 'alex@gpsleadership.org', 'YOUR_PASSWORD_HERE', 'admin');
+```
 
-### Step 7: Coach Login
-The coach dashboard uses a hardcoded password stored in the `admin_accounts` table.
-After setup, insert a row: `INSERT INTO admin_accounts (name, email, password, role) VALUES ('Alex Tremble', 'alex@gpsleadership.org', '[password]', 'admin');`
+### Step 8: Smoke test
+1. Open `https://portal.gpsleadership.org/coach` → confirm login works
+2. Create a test client → verify portal link generates
+3. Open the portal link → confirm client portal loads
+4. Test Ask Alex → confirm response (requires ANTHROPIC_API_KEY)
+5. Create a test diagnostic → send a test invite → confirm email arrives
 
 ---
 
 ## 6. Architecture Decisions & Why
 
-**Why single HTML files instead of React/Next.js?**
-Simple wins. No build step, no dependency management, no npm vulnerabilities. Files can be opened locally, edited in any text editor, and deployed by pasting into Vercel. Alex can see the entire codebase without a development environment.
+**Single-file HTML pages (no React/Vue/framework)**
+No build step, no npm, no dependency vulnerabilities. Files open locally in any browser with no setup. Alex or any future developer can read the entire codebase without a development environment. The tradeoff is large files (coach.html is ~6,200 lines) but this is manageable. If files grow past ~10,000 lines, consider splitting into modular JS includes.
 
-**Why Supabase directly from the browser (no backend)?**
-The anon key + Row Level Security (RLS) means clients can only see their own data (UUIDs are unguessable). Cuts out an entire middleware layer. The service role key is only used in serverless functions, never exposed to clients.
+**Supabase directly from browser (no backend middleware)**
+The anon key + Row Level Security means clients can only see their own data (UUIDs are unguessable without a brute-force attack). Cutting the middleware layer eliminates an entire class of server management. The service role key is used only in Vercel serverless functions — never exposed to the browser.
 
-**Why Vercel Hobby instead of a VPS?**
-Zero ops. No server maintenance, automatic SSL, auto-deploy from GitHub. Hobby plan is free and handles this traffic easily. The 12-function limit is reached — any new API endpoints must be added as routes inside existing files using `?action=` routing.
+**`?action=` routing in api/diagnostic.js**
+Vercel Hobby caps at 12 serverless functions. This project is at the cap. All 6 diagnostic operations (send invites, generate question, generate report, generate team report, finalize report, reminders) live in one file routed by query param. This is a hard architectural constraint. Moving to Vercel Pro removes this limit.
 
-**Why `?action=` routing in api/diagnostic.js?**
-Vercel Hobby plan caps at 12 serverless functions. We're at exactly 12. All diagnostic operations (6 actions) live in one file routed by query param. This is the ceiling — if you need more functions on Vercel, upgrade to Pro.
+**Report stored as JSON + pre-rendered HTML narrative**
+Claude generates the report once. The `content_json` field stores the full structured report (scored dimensions, themes, recommendations) plus a `full_narrative` key containing pre-rendered HTML. The portal renders the HTML directly — no re-processing required. This trades storage space for zero latency on report display.
 
-**Why Resend instead of SendGrid/Mailchimp?**
-Better deliverability for transactional email, simpler API, developer-friendly. GPS uses Resend for all automated email. Marketing email (newsletters) goes through a separate system.
+**localStorage for rate limiting (G1)**
+The custom rater question (G1) generation is capped at 3 attempts per diagnostic. Client-side localStorage tracks the count; server-side enforces a 30-second debounce. Combined gate prevents runaway API usage without a separate rate-limit table.
 
-**Why store report as JSON with `full_narrative` as pre-rendered HTML?**
-Claude generates the narrative once. Storing it as HTML lets the portal render it directly without re-processing. The JSON also stores the scored dimensions separately, so they can be displayed in structured sections.
+**ask_alex_log for data strategy**
+The original `ask_alex_usage` table only captured question length (a counter). `ask_alex_log` (v18) captures full question text, response text, sprint context, and token counts. Both tables coexist: usage for UI stats, log for future model training and product development. This is a deliberate data strategy — the portal is designed to accumulate proprietary training data over time.
 
-**Why localStorage for G1 rate limiting?**
-The custom rater question (G1) generation is limited to 3 attempts per diagnostic. localStorage stores the attempt count client-side. The server also enforces a 30-second debounce. Combined, this prevents runaway API usage without a separate rate-limit table.
-
-**Why ask_alex_log instead of just ask_alex_usage?**
-The `ask_alex_usage` table only captured question_length (a counter). `ask_alex_log` was added in v18 to capture the full question and response text — the raw material for future model training, product development, and system refinement. Both tables are kept: usage for counters/UI stats, log for full-text analysis.
-
-**Why localStorage for weekly nudge tracking?**
-The weekly leadership prompts (weeks 1-3) track which prompts a client has seen using localStorage. This is intentionally lightweight — if they clear localStorage, they see the prompt again (harmless). Avoids a DB column for a low-stakes UX feature.
+**Interview feature (v19) — per-diagnostic flag, not tier-based**
+Interview access is controlled per-diagnostic via `interviews_enabled` toggle rather than being locked to Pro tier. This is because standard-tier clients sometimes receive interviews as a goodwill gesture. A tier-based gate would require override logic; a per-diagnostic flag is simpler and more flexible.
 
 ---
 
-## 7. Key Data Model (Core Tables)
+## 7. Key Data Model
 
 ```
 clients
-  id, name, email, org, title, token (portal login), portal_first_active_at,
-  last_active_at, is_active, is_archived, plan_submitted_at, current_sprint_number,
-  preferred_name, ai_terms_accepted, coaching_sessions_enabled, industry,
-  ask_alex_enabled, ask_alex_total_questions, ask_alex_last_used_at
+  id (UUID), name, email, org, title, preferred_name
+  token                       — portal login key, unique per client
+  portal_first_active_at      — when they first opened the portal
+  last_active_at              — updated on every portal load
+  is_active, is_archived      — lifecycle flags
+  current_sprint_number       — which 13-week sprint they're in
+  plan_submitted_at           — when they first submitted their action plan
+  coaching_sessions_enabled   — shows attendance question in check-ins
+  ask_alex_enabled            — shows/hides Ask Alex tab
+  ask_alex_total_questions    — counter (incremented via RPC)
+  ask_alex_last_used_at
+  industry, revenue_band, num_locations  — for AI context
+  coaching_program_start_date, coaching_program_end_date
+  diagnostic_report_url       — Google Drive link to their report
+  portal_locked               — locks portal access
 
 diagnostics
-  id, client_id (→clients), client_name, client_email, client_title, client_org,
-  status (setup → self_assessment_pending → survey_open → survey_closed → 
-           report_draft → report_final → debrief_complete → plan_active),
-  tier (standard/pro), email_delivery_mode,
-  is_archived (BOOLEAN) — hides from coach dashboard default view (v17)
-  all_raters_complete_at (TIMESTAMPTZ) — stamped when 7th+ rater completes (v17)
-  [self-report fields: self_strengths, self_blind_spots, self_leadership_style...],
-  [succession fields: self_three_year_vision, self_successor_candidates...],
-  intake_notes, coaching_notes, interview_notes,
-  report_finalized_at, debrief_completed_at, plan_status, plan_locked_at,
-  custom_g1_generated_at — timestamp of last G1 generation (server-side debounce)
+  id (UUID), client_id (→clients), client_name, client_email, client_title, client_org
+  leader_token                — leader's portal access
+  status                      — pipeline: setup → intake_complete → self_assessment_pending
+                                → self_assessment_complete → survey_open → survey_closed
+                                → report_draft → report_final → debrief_complete → plan_active
+  tier (standard | pro)
+  email_delivery_mode (gps_sends | client_sends)
+  is_archived                 — hides from default coach view
+  all_raters_complete_at      — stamped when 7+ raters complete
+  interviews_enabled          — per-diagnostic interview flag (v19)
+  interview_calendar_link     — GHL calendar URL for interview-tagged raters
+  interview_max_count         — cap on interview slots
+  custom_g1_question          — AI-generated custom rater question
+  custom_g1_generated_at      — timestamp for server-side debounce
+  [self-report fields]        — self_strengths, self_blind_spots, self_leadership_style,
+                                self_three_year_vision, self_successor_candidates...
+  intake_notes, coaching_notes, interview_notes
+  invites_sent_at, survey_closed_at, report_finalized_at, debrief_completed_at
+  close_date, start_date
 
 diagnostic_raters
-  id, diagnostic_id, name, email, token (survey access), is_self, role,
-  invited_at, completed_at, reminder_1_sent_at, reminder_2_sent_at, email_bounced
+  id, diagnostic_id (→diagnostics), name, email
+  token                       — survey access key
+  is_self                     — TRUE for leader's own self-assessment row
+  role, relationship          — e.g. "Direct Report", "Peer"
+  invited_at, completed_at
+  reminder_1_sent_at, reminder_2_sent_at
+  email_bounced               — flagged by bounce webhook
+  will_interview              — TRUE = gets calendar link in invite email (v19)
 
 diagnostic_report_drafts
-  id, diagnostic_id, version (1,2,3...), content_json (full report as JSON + HTML narrative),
+  id, diagnostic_id, version (1,2,3...)
+  content_json                — full report: scored dimensions + full_narrative (pre-rendered HTML)
   generated_at, model_used, input_tokens, output_tokens
 
-ask_alex_log  ← NEW (v18): full Q+R text capture
-  id, client_id (→clients), asked_at,
-  question_text (TEXT), response_text (TEXT),
-  sprint_number (INTEGER), input_tokens, output_tokens
-  RLS: service_role INSERT, anon SELECT
+ask_alex_log  (v18 — full text capture)
+  id, client_id, asked_at
+  question_text, response_text
+  sprint_number, input_tokens, output_tokens
 
-ask_alex_usage  ← legacy counter table (kept for backward compat)
+ask_alex_usage  (legacy counter — kept for backward compat)
   id, client_id, asked_at, question_length
 
 email_log
   id, sent_at, recipient_email, email_type, status (sent/error), error_details, resend_id
 
-clients → checkins → sprints (coaching program check-in system)
-clients → stakeholders → survey_tokens → survey_responses (stakeholder feedback)
+clients → checkins            — weekly check-in submissions
+clients → sprint_closeouts    — 90-day closeout forms
+clients → stakeholders → survey_tokens → survey_responses  — stakeholder feedback loop
 ```
 
 ---
 
-## 8. GPS Frameworks Embedded in the System
+## 8. Platform Migration Guide
 
-**TP3™ Framework (Trust, Proactivity, Productivity → Profitability)**
-The core leadership model. All diagnostic questions, report sections, and Ask Alex prompts are organized around TP3. The report has scored dimensions under each pillar plus an Execution & Accountability pillar and a Succession & Future Self section (Pro tier).
+### If Vercel goes away
+1. Wrap all `api/*.js` files in Express routes: `app.post('/api/endpoint', handler)` — the function signature changes from `export default function handler(req, res)` to a standard Express handler
+2. Host HTML files as static assets (any CDN or S3)
+3. Set up cron jobs via the new platform's scheduler or a service like Upstash
+4. The 12-function limit was a Vercel Hobby constraint — no equivalent limit on other platforms
 
-**14-Day Executive Leadership Diagnostic**
-The flagship diagnostic product. 35 rater questions across 5 TP3 dimensions + custom AI-generated succession question (G1). Minimum 7 rater responses for report generation. Full narrative report generated by Claude with strengths, blind spots, patterns, and 90-day recommendations.
+### If Supabase goes away
+1. Spin up PostgreSQL on Neon, Railway, AWS RDS, or any Postgres host
+2. Run all migrations v2–v19 in order against the new database
+3. Supabase exposes PostgREST — replace `fetch` calls in API files with a `pg` or `postgres` Node client
+4. Update `SUPABASE_URL` and both keys in environment variables
+5. The browser-side Supabase JS client (`createClient`) would need to be replaced with direct API calls or a different client library
 
-**Ask Alex**
-AI Q&A trained on GPS frameworks. System prompt includes client context (industry, plan status, preferred name), GPS voice (direct, candid, calm), and industry-specific variations (standard vs government). Rate-limited per day. Terms acceptance gate. Every question and response is now logged in full to `ask_alex_log` for future analysis and model improvement.
+### If Resend goes away
+1. Replace `sendEmail()` calls in `api/notify.js` and `api/diagnostic.js` with the new provider's API
+2. The email HTML templates are self-contained strings in the code — they don't need to change
+3. Verify DKIM/SPF/DMARC records for gpsleadership.org on the new provider
+4. Update `RESEND_API_KEY` and `RESEND_FROM_EMAIL` environment variables
 
-**Data Strategy**
-The portal is intentionally a data engine. Key data captured:
-- Leadership challenges surfaced through Ask Alex (by industry, company size, leader level)
-- Rater behavioral observations across all TP3 dimensions
-- Whether leaders show progress on specific behaviors over time
-- Portal engagement (check-in completion rates, Ask Alex usage frequency)
-- Correlation between engagement and outcomes (plan completion, behavior change)
+### If Anthropic Claude API goes away
+1. Replace the Anthropic API call in `api/ask.js` and `api/diagnostic.js` with the new LLM's API
+2. The system prompts are self-contained strings in the code — the logic doesn't change, only the API call shape
+3. Update `ANTHROPIC_API_KEY` to the new provider's key
+4. Report generation context window requirements: the diagnostic report prompt is large. The replacement model needs at least 32K context and strong instruction-following for the structured JSON output format.
+
+### Estimated migration time (competent developer)
+- Vercel → Railway/Render: ~4 hours
+- Supabase → any Postgres: ~8 hours (mostly testing RLS equivalents)
+- Resend → SendGrid: ~2 hours
+- Anthropic → other LLM: ~4 hours (prompt tuning for new model)
 
 ---
 
-## 9. Premortem Analysis — Failure Modes Addressed
+## 9. Feature Log (What Was Built & When)
 
-### P0 (Critical — implemented)
-1. No gate before report finalize → added 3-layer review: preview modal + checkbox + named confirm dialog
-2. Report generated on thin data → minimum 7-rater gate + amber warning + CONFIRM override
-3. No portal link recovery → POST route on get-client.js, recovery form in client.html
-4. RLS not verified → confirmed via Supabase SQL editor
-5. Email authentication → DKIM/SPF/DMARC records on gpsleadership.org via Resend
+### Foundation (2024–early 2025)
+- Client portal (client.html) with token-gated login, plan display, weekly check-ins
+- Coach dashboard (coach.html) with client management
+- Email system (notify.js, send-reminders.js) for weekly coaching reminders
+- Supabase schema: clients, checkins, sprints, stakeholders, survey system
+- Ask Alex AI assistant with GPS system prompt
+- Sprint system: 13-week sprints, start-next-sprint flow, 90-day closeouts
+- Portal access window (90-day timer from first active)
+- Welcome email sequence
 
-### P1 (High — implemented)
-6. Rater double-submission → `_surveySubmitting` flag + `completed_at` check
-7. No rater removal → × button in client portal with guards (not self, not complete, not finalized)
-8. Claude API flakiness → retry logic (2 retries, 3s delay, on 529/500)
-9. Runaway report costs → MAX_REPORT_DRAFTS = 5 per diagnostic
-10. Email delivery failures → Section 4 in reminders cron: spike detection alert to coach
-11. Client misses report email → report-ready banner in portal (persists across sessions)
-12. Client has no portal token → finalize-report API returns 422 with clear message
-13. Portal engagement → weekly leadership prompt (weeks 1-3), 7-day nudge email, last-active in coach view
+### Coach portal redesign (2025)
+- Full-screen client profiles replacing modal approach
+- User menu, profile modal, preferred name
+- Meet Your Coach card in client portal
+- Coach profile management
 
-### P2 (Implemented — May 28, 2026)
+### Diagnostic system — Phase 5 (early 2026)
+- Full diagnostic pipeline: 9-milestone status flow
+- diagnostic-survey.html: TP3 V2 question bank, 35 questions across 5 dimensions
+- diagnostic-leader.html: self-assessment + rater list submission
+- api/diagnostic.js: all 6 actions in one file
+- AI report generation (Claude): full narrative + scored dimensions
+- Team reports across multiple diagnostic clients
+- GHL export field mapping
+
+### P2 Improvements (May 2026)
 
 **Tier 1 — Rater management**
-14. Bounce visibility → ⚠ badge on rater rows in coach Raters tab; email shown in red
-15. Rater email correction → inline edit modal on coach Raters tab; resets email_bounced on save
-16. Zero-response close warning → red alert banner when closing survey with 0 completions
+- Bounce badge on rater rows + inline email correction
+- Zero-response warning when closing survey early
 
 **Tier 2 — Diagnostic management**
-17. Diagnostic archive/hide → Archive/Unarchive button in coach detail; "Archived" filter tab; footer count with "show" link
-18. All-raters-complete notification → email alert to Alex when 7+ raters complete; `all_raters_complete_at` stamped; sent once (checked via IS NULL guard)
-19. Diagnostic data export → "⬇ CSV" and "⬇ Excel" buttons in Survey tab; Excel uses SheetJS (2 sheets: Responses + Diagnostic Info)
+- Archive/unarchive diagnostics (hidden from default view)
+- All-raters-complete email alert when 7+ raters finish (threshold = minimum for valid report)
+- CSV + Excel export of diagnostic response data
 
 **Tier 3 — Safety & polish**
-20. G1 rate limit → 3 attempts per diagnostic (localStorage client-side + 30s server debounce); UI shows attempt count, locks button at limit
-21. Survey token hard-block → re-verifies diagnostic status from DB on submit; blocks stale tokens when survey already closed
-22. Mobile polish → 44px touch targets on Likert/scale-10; stacked full-width nav buttons; compressed header/padding; single-column rater grid on leader portal
+- G1 rate limit: 3 attempts per diagnostic (localStorage + 30s server debounce)
+- Survey token hard-block: re-verifies status at submit time
+- Mobile optimization: 44px touch targets, stacked nav, compressed layout
 
-**Ask Alex Logger (data strategy — May 28, 2026)**
-23. Ask Alex questions not captured → added `ask_alex_log` table (migration v18); `api/ask.js` now logs full question text, response text, sprint_number, token counts per interaction; coach.html shows per-client question history with collapsible responses in client profile
+**Ask Alex Logger (May 28, 2026)**
+- ask_alex_log table (v18): full question + response text, sprint context, token counts
+- api/ask.js updated: captures all content on every interaction
+- Coach dashboard: per-client question history with collapsible responses
+
+**Interview Feature (May 28, 2026)**
+- Per-diagnostic interview toggle (not tier-gated — enables goodwill interviews on standard tier)
+- Calendar link field + max interview slot cap
+- Checkbox per rater row to mark for interview (enforces cap)
+- Interview-tagged raters receive calendar booking section in their invite email
+
+**Deployment Safety System (May 29, 2026)**
+
+Root cause incident: Coach portal login was completely non-functional for the duration of a live coaching session. Two independent bugs compounded each other.
+
+Bug 1 — JS parse error (coach.html, line 4807): A `\`` (backslash-backtick) inside a `${}` expression within a template literal was a real JavaScript syntax error. In expression context, `\`` is not a valid template literal delimiter — only a plain backtick works there. The error caused the entire 4,800-line script block to fail at parse time. Because JavaScript parse errors on a script block don't always surface in the browser console, the button did nothing with zero visible feedback. The fix: replace with string concatenation.
+
+Bug 2 — Vercel build failure (vercel.json): `api/import-clients.js` was listed in the `functions` config in `vercel.json` but excluded by `.vercelignore`. Vercel validates function config before deploying and fails the entire build if a listed file is excluded or missing. The build was failing in 1 second, meaning no new code had been deployed from any commit for the preceding days. The fix: remove the excluded file from `vercel.json` functions.
+
+Resolution: added `check.sh`, `deploy.sh`, `smoke-test.sh`, and `install-hooks.sh` to catch both classes of error automatically on every git push. See Section 10 for full documentation.
 
 ---
 
-## 10. Cron Schedule
+## 10. Deployment Safety System
+
+**Why this exists:** On May 29, 2026, a `\`` (backslash-backtick) syntax error in coach.html caused the entire JavaScript block to fail silently. The login button did nothing. There were no browser console errors. Simultaneously, `vercel.json` referenced `api/import-clients.js` in its `functions` config while `.vercelignore` excluded that same file — causing every Vercel build to fail at the config validation step before any code was deployed. Both errors were undetectable without tooling. The portal was down for the duration of a live coaching session.
+
+These scripts exist to catch both classes of error before any code reaches Vercel.
+
+---
+
+### The Four Scripts
+
+**`check.sh` — Pre-push validator**
+
+Runs five checks in sequence:
+
+1. **JavaScript syntax** — Extracts all inline `<script>` blocks from every HTML file and runs `node --check` against them. Catches parse errors that browsers report silently or not at all.
+
+2. **Backslash-backtick scan** — Searches for literal `\`` characters in coach.html and client.html. Inside a `${}` expression in a template literal, `\`` is a syntax error (valid only inside a string literal, not as a template literal delimiter in expression context). This is the specific bug that broke login on May 29, 2026.
+
+3. **vercel.json / .vercelignore consistency** — Verifies that every file listed in the `functions` section of `vercel.json` (a) actually exists on disk and (b) is not excluded by `.vercelignore`. A mismatch causes Vercel to fail the entire build in ~1 second before deploying anything.
+
+4. **Serverless function count** — Counts deployed `api/*.js` files (minus `.vercelignore` exclusions) against the Vercel Hobby plan limit of 12. Warns at 11, fails at 13+.
+
+5. **Untracked file warning** — Flags any `.html`, `.js`, `.json`, or `.sh` files that exist locally but aren't staged. Prevents silently shipping without recently added files.
+
+**`deploy.sh` — Safe deploy wrapper**
+
+Replaces bare `git push origin main`. Usage: `./deploy.sh "your commit message"`. Runs check.sh first; only commits and pushes if all checks pass. If checks fail, push is blocked and the specific error is displayed.
+
+**`install-hooks.sh` — One-time git hook installer**
+
+Installs a git pre-push hook in `.git/hooks/pre-push` that calls check.sh automatically. After running this once, every `git push` — regardless of how it's issued — triggers the check. The hook is stored in `.git/` which is not tracked by git, so this must be re-run after cloning on a new machine.
+
+**`smoke-test.sh` — Post-deploy health check**
+
+Run 90 seconds after a push to confirm the live portal is healthy. Checks:
+- `/coach` returns HTTP 200 and contains the login screen
+- `/client` returns HTTP 200 and contains GPS branding
+- Live page does NOT contain backslash-backtick hazards (confirms new code is serving)
+- `/api/get-client` and `/api/diagnostic` return expected responses (not 500)
+- Supabase JS CDN is reachable
+
+---
+
+### Setup on a New Machine (or After Cloning)
+
+```bash
+cd "/path/to/gps-portal"
+chmod +x check.sh deploy.sh smoke-test.sh install-hooks.sh
+./install-hooks.sh
+```
+
+That's it. The pre-push hook is now active. Every `git push` runs the check automatically.
+
+**Dependency:** `check.sh` requires Node.js for JS syntax checking. The script auto-detects Node at common Mac install locations (`/opt/homebrew/bin`, `/usr/local/bin`, `~/.nvm/`). If Node is not found, syntax checking is skipped with a warning — the other four checks still run. Install Node from nodejs.org if you want full validation.
+
+---
+
+### Adapting These Scripts to a New Platform
+
+The checks in `check.sh` are platform-agnostic — they validate local files before they leave your machine, not anything specific to Vercel. When migrating:
+
+- The **JS syntax check** and **backslash-backtick scan** apply on any platform.
+- The **vercel.json check** needs to be adapted to the new platform's config file. The principle is the same: any file referenced in deployment config must exist and not be excluded.
+- The **function count check** is Vercel Hobby-specific. Remove or adjust the limit for other platforms.
+- The **smoke-test URLs** only need the base URL updated (`BASE="https://your-new-domain.com"`).
+
+---
+
+## 11. Cron Schedule
 
 All times UTC. Vercel runs these automatically.
 
-| Job | Schedule | File | What it does |
-|-----|----------|------|-------------|
-| Coaching reminders | Mondays 2pm UTC | api/send-reminders.js | Check-in nudges, auto-archive |
-| Survey reminders | Daily 2pm UTC | api/survey-reminders.js | Stakeholder survey nudges, auto-confirm, welcome sequence |
-| Diagnostic reminders | Daily 2pm UTC | api/diagnostic.js?action=reminders | Rater R1/R2 reminders, T-2 alerts, all-complete alert, plan auto-lock, email health check, portal nudges |
+| Job | Cron | File | What it does |
+|-----|------|------|-------------|
+| Coaching reminders | `0 14 * * 1` (Mon 2pm UTC) | send-reminders.js | Check-in nudges, 45-day auto-archive |
+| Survey reminders | `0 14 * * *` (daily 2pm UTC) | survey-reminders.js | Stakeholder survey nudges, auto-confirm, welcome sequence |
+| Diagnostic reminders | `0 14 * * *` (daily 2pm UTC) | diagnostic.js?action=reminders | R1/R2 rater reminders, T-2 alerts, all-complete alert, plan auto-lock, email health check |
 
-To trigger manually (for testing): POST to the endpoint with `{ "manual_trigger": true }` and `Authorization: Bearer [CRON_SECRET]`
-
----
-
-## 11. If You're Starting Over on a New Platform
-
-The entire system is portable. Here's what you'd need:
-
-**Minimum to recreate:**
-1. The HTML files (self-contained, just need environment variables wired in)
-2. The API functions (12 files, Node.js, standard fetch calls)
-3. A PostgreSQL database (Supabase or any Postgres host)
-4. An email API (Resend or SendGrid)
-5. An Anthropic API key
-6. A static file + serverless function host (Vercel, Netlify, Railway, etc.)
-
-**On a different platform (e.g., Railway, Render, Fly.io):**
-- All API functions would need to be wrapped in an Express/Fastify server
-- The `export default function handler(req, res)` signature would change to `app.post('/api/endpoint', handler)`
-- Everything else stays the same
-
-**Without Supabase:**
-- Any PostgreSQL database works
-- Replace the `sb()` helper in each API file with a `pg` or `postgres` client
-- The SQL schema (all migrations) is standard PostgreSQL — runs on any Postgres
-
-**Without Vercel:**
-- Host HTML files anywhere (Netlify, S3 + CloudFront, GitHub Pages)
-- Run API functions as Express routes on any Node.js host
-- Set up cron jobs via your platform's scheduler or a service like Upstash
+**Manual trigger:** POST with `Authorization: Bearer [CRON_SECRET]` and body `{"manual_trigger": true}`
 
 ---
 
-## 12. Contact & Credentials Location
+## 12. Credentials & Account Locations
 
-- **Supabase:** supabase.com → GPSleadership organization
-- **Vercel:** vercel.com → GPSleadership team
-- **Resend:** resend.com → GPS Leadership account
-- **Anthropic:** console.anthropic.com → GPS Leadership account
-- **GitHub:** github.com/GPSleadership
-- **Domain registrar:** wherever gpsleadership.org is registered (check DNS settings there)
+| Service | Location |
+|---------|---------|
+| Supabase | supabase.com → GPSleadership organization |
+| Vercel | vercel.com → GPS Leadership Solutions team |
+| Resend | resend.com → GPS Leadership account |
+| Anthropic | console.anthropic.com → GPS Leadership account |
+| GitHub | github.com/GPSleadership |
+| Domain registrar | Wherever gpsleadership.org DNS is managed |
+| GHL (GoHighLevel) | Calendar links for interview scheduling live here |
 
-All API keys and secrets are stored as Vercel environment variables — never in the codebase.
+All API keys and secrets are stored exclusively as Vercel environment variables. They are never in source code or this document.
 
 ---
 
-*This document was last updated May 28, 2026. Update it whenever new migrations, API changes, or architectural decisions are made.*
+*Last updated: May 28, 2026. This document is auto-updated nightly at 9 PM when code changes are detected (Cowork scheduled task: gps-portal-survival-package-update). Update manually after any major architectural change that isn't captured by file diffs alone.*
