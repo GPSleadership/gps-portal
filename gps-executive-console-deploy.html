@@ -1,0 +1,1749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPS Executive Console</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<style>
+  :root {
+    color-scheme: light;
+    --navy: #004369; --red: #DB1F48; --teal: #01949A;
+    --sand: #E5DDC8; --navy-dark: #002D47;
+    --light-teal: #E8F7F7; --light-sand: #F7F4EE;
+    --bg: #F4F6F9; --card: #FFFFFF; --text: #1A1A2E;
+    --muted: #64748B; --border: #E2E8F0;
+    --warn: #F59E0B; --danger: #EF4444; --success: #10B981;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.5; }
+  .top-bar { height: 6px; background: linear-gradient(90deg, var(--navy), var(--teal), var(--red)); }
+  .header { background: var(--navy); color: white; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .logo-mark { width: 32px; height: 32px; background: linear-gradient(135deg, var(--teal), var(--navy-dark)); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; color: white; letter-spacing: -0.5px; }
+  .header-right { display: flex; align-items: center; gap: 10px; }
+  .date-badge { background: rgba(255,255,255,0.12); border-radius: 6px; padding: 5px 12px; font-size: 12px; font-weight: 500; }
+  .refresh-btn { background: var(--teal); color: white; border: none; border-radius: 6px; padding: 5px 14px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .refresh-btn:hover { opacity: 0.85; }
+  .refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .main { padding: 18px 20px; max-width: 1300px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+  .stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .stat-card { background: var(--card); border-radius: 10px; padding: 14px 16px; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  .stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+  .stat-value { font-size: 22px; font-weight: 800; color: var(--navy); line-height: 1; }
+  .stat-value.warn { color: var(--warn); }
+  .stat-value.danger { color: var(--danger); }
+  .stat-value.success { color: var(--success); }
+  .stat-value.teal { color: var(--teal); }
+  .stat-sub { font-size: 10px; color: var(--muted); margin-top: 4px; }
+  .stat-badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; margin-top: 4px; }
+  .badge-warn { background: #FEF3C7; color: #92400E; }
+  .badge-danger { background: #FEE2E2; color: #991B1B; }
+  .badge-success { background: #D1FAE5; color: #065F46; }
+  .content-grid { display: grid; grid-template-columns: 1fr 380px; gap: 14px; align-items: start; }
+  .left-col { display: flex; flex-direction: column; gap: 14px; }
+  .right-col { display: flex; flex-direction: column; gap: 14px; }
+  .card { background: var(--card); border-radius: 10px; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.05); overflow: hidden; }
+  .card-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: white; }
+  .card-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--navy); display: flex; align-items: center; gap: 7px; }
+  .card-title .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot-navy { background: var(--navy); } .dot-teal { background: var(--teal); }
+  .dot-red { background: var(--red); } .dot-warn { background: var(--warn); }
+  .dot-green { background: var(--success); } .dot-purple { background: #7C3AED; }
+  .card-badge { font-size: 10px; color: var(--muted); background: var(--bg); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border); }
+  .card-body { padding: 14px 16px; }
+  .loading { display: flex; align-items: center; gap: 8px; padding: 20px 16px; color: var(--muted); font-size: 12px; }
+  .spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--teal); border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error-state { padding: 12px 16px; color: var(--muted); font-size: 12px; font-style: italic; }
+  .pipeline-list { display: flex; flex-direction: column; gap: 8px; }
+  .pipeline-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; background: var(--light-sand); border-radius: 7px; border-left: 3px solid var(--navy); }
+  .pipeline-item.high { border-left-color: var(--red); }
+  .pipeline-item.medium { border-left-color: var(--teal); }
+  .pipeline-name { flex: 1; font-weight: 600; font-size: 12px; color: var(--navy-dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pipeline-value { font-weight: 700; font-size: 12px; color: var(--navy); flex-shrink: 0; }
+  .cal-day-group { margin-bottom: 12px; }
+  .cal-day-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+  .cal-day-label.today { color: var(--teal); }
+  .cal-items { display: flex; flex-direction: column; gap: 4px; }
+  .cal-item { display: flex; gap: 10px; align-items: flex-start; padding: 7px 10px; border-radius: 6px; background: var(--bg); border-left: 3px solid var(--border); }
+  .cal-item.client { border-left-color: var(--teal); background: var(--light-teal); }
+  .cal-item.prospect { border-left-color: var(--navy); background: #EFF6FF; }
+  .cal-item.podcast { border-left-color: var(--red); background: #FFF1F2; }
+  .cal-item.internal { border-left-color: var(--sand); background: var(--light-sand); }
+  .cal-time { font-size: 10px; color: var(--muted); white-space: nowrap; min-width: 65px; padding-top: 1px; font-weight: 600; }
+  .cal-title { font-size: 12px; font-weight: 600; color: var(--navy-dark); line-height: 1.3; }
+  .cal-sub { font-size: 10px; color: var(--muted); margin-top: 1px; }
+  .fin-bar-container { margin-bottom: 14px; }
+  .fin-bar-label { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
+  .fin-bar-name { font-size: 12px; font-weight: 600; color: var(--navy-dark); }
+  .fin-bar-amounts { font-size: 11px; color: var(--muted); }
+  .fin-bar-track { height: 10px; background: var(--bg); border-radius: 5px; overflow: hidden; border: 1px solid var(--border); }
+  .fin-bar-fill { height: 100%; border-radius: 5px; }
+  .fill-warn { background: linear-gradient(90deg, var(--warn), #EF4444); }
+  .fill-danger { background: var(--danger); }
+  .fin-note { font-size: 10px; color: var(--muted); margin-top: 3px; }
+  .fin-note.urgent { color: var(--danger); font-weight: 600; }
+  .fin-divider { height: 1px; background: var(--border); margin: 12px 0; }
+  .fin-chart-wrap { height: 110px; position: relative; }
+  .action-list { display: flex; flex-direction: column; gap: 6px; }
+  .action-item { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 7px; background: var(--bg); border: 1px solid var(--border); }
+  .action-item.urgent { border-color: #FCA5A5; background: #FFF1F2; }
+  .action-check { width: 16px; height: 16px; border-radius: 4px; border: 2px solid var(--border); flex-shrink: 0; margin-top: 1px; background: white; }
+  .action-item.urgent .action-check { border-color: var(--red); }
+  .action-text { flex: 1; }
+  .action-title { font-size: 12px; font-weight: 600; color: var(--navy-dark); line-height: 1.3; }
+  .action-from { font-size: 10px; color: var(--muted); margin-top: 1px; }
+  .action-pri { font-size: 9px; font-weight: 700; padding: 2px 5px; border-radius: 3px; flex-shrink: 0; }
+  .pri-urgent { background: #FEE2E2; color: var(--danger); }
+  .pri-high { background: #FEF3C7; color: #92400E; }
+  .pri-normal { background: #DBEAFE; color: #1E40AF; }
+  .section-label { display: flex; align-items: center; gap: 8px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin-bottom: 8px; }
+  .section-label hr { flex: 1; border: none; border-top: 1px solid var(--border); }
+  .no-events { font-size: 12px; color: var(--muted); text-align: center; padding: 16px; font-style: italic; }
+  .alert-banner { background: #FEE2E2; border: 1px solid #FCA5A5; border-left: 4px solid var(--danger); border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #991B1B; display: flex; align-items: center; gap: 8px; }
+  .bottom-bar { height: 4px; background: linear-gradient(90deg, var(--teal), var(--navy)); margin-top: 8px; }
+
+  /* NOTES */
+  .notes-compose { display: flex; gap: 8px; align-items: flex-end; padding: 12px 16px; border-bottom: 1px solid var(--border); background: #FAFBFF; }
+  .notes-input-wrap { flex: 1; }
+  .notes-textarea { width: 100%; resize: none; border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px; font-size: 13px; font-family: inherit; color: var(--text); background: white; outline: none; min-height: 44px; max-height: 120px; }
+  .notes-textarea:focus { border-color: var(--teal); box-shadow: 0 0 0 2px rgba(1,148,154,0.12); }
+  .notes-controls { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+  .notes-tag-select { font-size: 11px; border: 1px solid var(--border); border-radius: 5px; padding: 4px 8px; color: var(--text); background: white; cursor: pointer; outline: none; }
+  .notes-save-btn { background: var(--navy); color: white; border: none; border-radius: 6px; padding: 7px 16px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .notes-save-btn:hover { background: var(--navy-dark); }
+  .notes-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .notes-list { max-height: 320px; overflow-y: auto; }
+  .note-item { display: flex; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--border); align-items: flex-start; }
+  .note-item:last-child { border-bottom: none; }
+  .note-item:hover { background: var(--bg); }
+  .note-item.done-note { opacity: 0.45; }
+  .note-done-btn { width: 18px; height: 18px; border-radius: 4px; border: 2px solid var(--border); flex-shrink: 0; cursor: pointer; background: white; margin-top: 2px; display: flex; align-items: center; justify-content: center; font-size: 10px; }
+  .note-done-btn:hover { border-color: var(--teal); background: var(--light-teal); }
+  .note-done-btn.done { background: var(--teal); border-color: var(--teal); color: white; }
+  .note-body { flex: 1; min-width: 0; }
+  .note-text { font-size: 13px; color: var(--navy-dark); line-height: 1.4; word-break: break-word; }
+  .note-item.done-note .note-text { text-decoration: line-through; }
+  .note-meta { display: flex; align-items: center; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+  .note-time { font-size: 10px; color: var(--muted); }
+  .note-source { font-size: 9px; font-weight: 600; padding: 1px 5px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .source-sms { background: #E0E7FF; color: #3730A3; }
+  .source-phone { background: #F3E8FF; color: #6B21A8; }
+  .source-console { background: #D1FAE5; color: #065F46; }
+  .note-tag { font-size: 9px; font-weight: 600; padding: 1px 5px; border-radius: 3px; background: #FEF3C7; color: #92400E; }
+  .notes-empty { text-align: center; padding: 28px 16px; color: var(--muted); font-size: 12px; font-style: italic; }
+  .send-claude-btn { background: none; border: 1px solid var(--border); border-radius: 5px; cursor: pointer; font-size: 11px; padding: 2px 6px; color: var(--muted); flex-shrink: 0; margin-top: 2px; transition: all 0.15s; }
+  .send-claude-btn:hover { background: var(--light-teal); border-color: var(--teal); color: var(--teal); }
+  .notes-footer { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; border-top: 1px solid var(--border); background: var(--bg); font-size: 10px; color: var(--muted); }
+  .mobile-pill { background: #F3E8FF; color: #6B21A8; padding: 2px 7px; border-radius: 10px; font-weight: 600; font-size: 9px; }
+
+  /* CASH SECTION */
+  .cash-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .acct-card { border-radius: 8px; padding: 10px 12px; border: 1px solid var(--border); }
+  .acct-card.ops { background: #EFF6FF; border-color: #BFDBFE; }
+  .acct-card.comp { background: var(--light-teal); border-color: #99E6E8; }
+  .acct-card.tax { background: #FEF3C7; border-color: #FDE68A; }
+  .acct-card.health { background: #F0FDF4; border-color: #BBF7D0; }
+  .acct-card.savings { background: var(--light-sand); border-color: var(--sand); }
+  .acct-card.income { background: #FFF1F2; border-color: #FCA5A5; }
+  .acct-card.marketing { background: #F5F3FF; border-color: #DDD6FE; }
+  .acct-card.emergency { background: #F0FDF4; border-color: #86EFAC; }
+  .acct-card.carloan { background: var(--light-sand); border-color: var(--sand); }
+  .acct-name { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 3px; }
+  .acct-bal { font-size: 17px; font-weight: 800; color: var(--navy-dark); }
+  .acct-bal.low { color: var(--danger); }
+  .acct-bal.ok { color: var(--success); }
+  .acct-sub { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .runway-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .runway-card { background: var(--bg); border-radius: 8px; padding: 12px; border: 1px solid var(--border); }
+  .runway-label { font-size: 11px; font-weight: 600; color: var(--navy-dark); margin-bottom: 8px; }
+  .runway-months { font-size: 28px; font-weight: 800; line-height: 1; }
+  .runway-months.safe { color: var(--success); }
+  .runway-months.warn { color: var(--warn); }
+  .runway-months.danger { color: var(--danger); }
+  .runway-months.unknown { color: var(--muted); font-size: 18px; }
+  .runway-detail { font-size: 10px; color: var(--muted); margin-top: 4px; }
+  .runway-input-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+  .runway-input-label { font-size: 10px; color: var(--muted); white-space: nowrap; }
+  .runway-input { border: 1px solid var(--border); border-radius: 5px; padding: 4px 7px; font-size: 12px; width: 90px; font-family: inherit; background: white; }
+  .runway-input:focus { outline: none; border-color: var(--teal); }
+  .runway-set-btn { font-size: 10px; background: var(--teal); color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; }
+  .liability-row { display: flex; gap: 10px; margin-top: 4px; }
+  .liability-item { flex: 1; background: #FFF1F2; border: 1px solid #FCA5A5; border-radius: 8px; padding: 8px 10px; }
+  .liability-item.ok-liab { background: var(--light-sand); border-color: var(--border); }
+  .liability-name { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); }
+  .liability-amt { font-size: 15px; font-weight: 800; color: var(--danger); margin-top: 2px; }
+  .liability-amt.ok { color: var(--navy-dark); }
+  .liability-note { font-size: 9px; color: var(--muted); margin-top: 2px; }
+  .edit-balances-btn { font-size: 10px; color: var(--teal); background: none; border: none; cursor: pointer; text-decoration: underline; padding: 0; }
+  .net-worth-bar { background: var(--bg); border-radius: 8px; padding: 10px 14px; border: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+
+  /* ACTION ITEMS — INTERACTIVE */
+  .action-check { cursor: pointer; transition: all 0.15s; }
+  .action-check:hover { border-color: var(--teal); background: var(--light-teal); }
+  .action-check.checked { background: var(--teal) !important; border-color: var(--teal) !important; display: flex; align-items: center; justify-content: center; font-size: 10px; color: white; }
+  .action-item.done-item { opacity: 0.38; transition: opacity 0.3s; }
+  .action-item.done-item .action-title { text-decoration: line-through; }
+  .action-done-toggle { font-size: 10px; color: var(--teal); background: none; border: none; cursor: pointer; padding: 6px 0 2px; text-decoration: underline; display: block; }
+  .action-add-row { display: flex; gap: 8px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); background: #FAFBFF; }
+  .action-add-input { flex: 1; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 12px; font-family: inherit; outline: none; color: var(--text); }
+  .action-add-input:focus { border-color: var(--teal); box-shadow: 0 0 0 2px rgba(1,148,154,0.1); }
+  .action-add-btn { background: var(--navy); color: white; border: none; border-radius: 6px; padding: 6px 12px; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .action-add-btn:hover { background: var(--navy-dark); }
+
+  /* CASH FLOW FORECAST */
+  .scenario-tabs { display: flex; border-bottom: 1px solid var(--border); }
+  .scenario-tab { flex: 1; text-align: center; padding: 9px 4px; font-size: 11px; font-weight: 600; cursor: pointer; border: none; background: none; color: var(--muted); border-bottom: 3px solid transparent; transition: all 0.15s; }
+  .scenario-tab.active { color: var(--navy); border-bottom-color: var(--teal); background: var(--light-teal); }
+  .scenario-tab:hover:not(.active) { color: var(--navy); background: var(--bg); }
+  .forecast-chart-wrap { height: 190px; position: relative; margin-top: 4px; }
+  .forecast-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
+  .forecast-metric { background: var(--bg); border-radius: 7px; padding: 9px 10px; border: 1px solid var(--border); text-align: center; }
+  .forecast-metric-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); font-weight: 600; }
+  .forecast-metric-value { font-size: 16px; font-weight: 800; color: var(--navy); margin-top: 3px; }
+  .forecast-metric-value.warn { color: var(--warn); }
+  .forecast-metric-value.danger { color: var(--danger); }
+  .forecast-metric-value.success { color: var(--success); }
+  .forecast-event-list { margin-top: 14px; }
+  .forecast-event-row { display: flex; gap: 10px; align-items: flex-start; padding: 5px 0; border-bottom: 1px dotted var(--border); }
+  .forecast-event-row:last-child { border-bottom: none; }
+  .forecast-event-week { font-size: 10px; font-weight: 700; color: var(--muted); min-width: 40px; padding-top: 1px; white-space: nowrap; }
+  .forecast-event-icon { font-size: 11px; flex-shrink: 0; width: 16px; }
+  .forecast-event-desc { font-size: 11px; color: var(--navy-dark); flex: 1; line-height: 1.4; }
+  .forecast-event-amt { font-size: 11px; font-weight: 700; flex-shrink: 0; }
+  .forecast-event-amt.in { color: var(--success); }
+  .forecast-event-amt.out { color: var(--danger); }
+  .forecast-event-amt.neutral { color: var(--muted); }
+  .decision-box { background: #FEF3C7; border: 1px solid #FDE68A; border-left: 4px solid var(--warn); border-radius: 8px; padding: 10px 14px; margin-top: 14px; }
+  .decision-box-title { font-size: 11px; font-weight: 700; color: #92400E; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .decision-item { font-size: 11px; color: #78350F; margin-bottom: 3px; display: flex; gap: 6px; line-height: 1.4; }
+  .tight-zone { background: #FFF1F2; border: 1px solid #FCA5A5; border-radius: 6px; padding: 7px 12px; margin-top: 10px; font-size: 11px; color: #991B1B; font-weight: 500; }
+
+  /* PASSWORD CHANGE MODAL */
+  .pw-modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:8000; align-items:center; justify-content:center; }
+  .pw-modal-overlay.open { display:flex; }
+  .pw-modal { background:white; border-radius:12px; padding:28px 32px; width:100%; max-width:380px; box-shadow:0 16px 48px rgba(0,0,0,0.25); }
+  .pw-modal-title { font-size:15px; font-weight:700; color:var(--navy); margin-bottom:18px; }
+  .pw-field { margin-bottom:12px; }
+  .pw-label { font-size:11px; font-weight:600; color:var(--muted); margin-bottom:5px; display:block; text-transform:uppercase; letter-spacing:0.5px; }
+  .pw-input { width:100%; border:1.5px solid var(--border); border-radius:7px; padding:9px 12px; font-size:13px; font-family:inherit; outline:none; box-sizing:border-box; }
+  .pw-input:focus { border-color:var(--teal); }
+  .pw-msg { font-size:11px; margin-top:4px; display:none; }
+  .pw-msg.error { color:var(--danger); }
+  .pw-msg.success { color:var(--success); }
+  .pw-btn-row { display:flex; gap:8px; margin-top:18px; }
+  .pw-btn { flex:1; padding:10px; border-radius:7px; font-size:12px; font-weight:600; cursor:pointer; border:none; font-family:inherit; transition:opacity 0.15s; }
+  .pw-btn.primary { background:var(--navy); color:white; }
+  .pw-btn.primary:hover { opacity:0.85; }
+  .pw-btn.secondary { background:var(--bg); color:var(--navy); border:1px solid var(--border); }
+
+  /* COACH UPLOADS */
+  .coach-tab-row { display:flex; border-bottom:1px solid var(--border); }
+  .coach-tab { flex:1; text-align:center; padding:9px 4px; font-size:11px; font-weight:600; cursor:pointer; border:none; background:none; color:var(--muted); border-bottom:3px solid transparent; transition:all 0.15s; }
+  .coach-tab.active { color:var(--navy); border-bottom-color:var(--teal); background:var(--light-teal); }
+  .coach-tab:hover:not(.active) { background:var(--bg); color:var(--navy); }
+  .coach-form-wrap { padding:14px 16px; border-bottom:1px solid var(--border); background:#FAFBFF; }
+  .coach-field-row { display:flex; gap:8px; margin-bottom:10px; }
+  .coach-input { flex:1; border:1px solid var(--border); border-radius:7px; padding:7px 10px; font-size:12px; font-family:inherit; outline:none; background:white; }
+  .coach-input:focus { border-color:var(--teal); }
+  .coach-textarea { width:100%; resize:vertical; border:1px solid var(--border); border-radius:7px; padding:9px 11px; font-size:13px; font-family:inherit; outline:none; min-height:110px; background:white; box-sizing:border-box; }
+  .coach-textarea:focus { border-color:var(--teal); box-shadow:0 0 0 2px rgba(1,148,154,0.1); }
+  .coach-save-btn { background:var(--navy); color:white; border:none; border-radius:7px; padding:8px 18px; font-size:12px; font-weight:600; cursor:pointer; }
+  .coach-save-btn:hover { background:var(--navy-dark); }
+  .coach-upload-list { max-height:420px; overflow-y:auto; }
+  .coach-upload-item { padding:13px 16px; border-bottom:1px solid var(--border); }
+  .coach-upload-item:last-child { border-bottom:none; }
+  .coach-item-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:5px; }
+  .coach-item-title { font-size:12px; font-weight:700; color:var(--navy-dark); }
+  .coach-item-meta { font-size:10px; color:var(--muted); white-space:nowrap; margin-left:8px; }
+  .coach-item-preview { font-size:11px; color:var(--muted); line-height:1.5; margin-bottom:8px; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+  .coach-actions-row { display:flex; flex-wrap:wrap; gap:4px; }
+  .coach-action-chip { display:inline-flex; align-items:center; gap:5px; background:#EFF6FF; border:1px solid #BFDBFE; border-radius:5px; padding:3px 9px; font-size:10px; font-weight:600; color:#1E40AF; cursor:pointer; transition:all 0.15s; }
+  .coach-action-chip:hover { background:#DBEAFE; }
+  .coach-action-chip.added { background:#D1FAE5; border-color:#6EE7B7; color:#065F46; cursor:default; }
+  .coach-hint { padding:10px 16px 8px; font-size:11px; color:var(--muted); border-top:1px solid var(--border); background:var(--bg); }
+</style>
+</head>
+<body>
+
+<!-- ─── PASSWORD CHANGE MODAL ─────────────────────────────────────────────── -->
+<div id="pwModal" class="pw-modal-overlay">
+  <div class="pw-modal">
+    <div class="pw-modal-title">🔑 Change Password</div>
+    <div class="pw-field">
+      <label class="pw-label">Current Password</label>
+      <input class="pw-input" id="pwCurrent" type="password" placeholder="Enter current password">
+    </div>
+    <div class="pw-field">
+      <label class="pw-label">New Password</label>
+      <input class="pw-input" id="pwNew" type="password" placeholder="Enter new password">
+    </div>
+    <div class="pw-field">
+      <label class="pw-label">Confirm New Password</label>
+      <input class="pw-input" id="pwConfirm" type="password" placeholder="Confirm new password">
+    </div>
+    <div id="pwMsg" class="pw-msg"></div>
+    <div class="pw-btn-row">
+      <button class="pw-btn secondary" onclick="closePwModal()">Cancel</button>
+      <button class="pw-btn primary" id="pwSaveBtn" onclick="saveNewPassword()">Update Password</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── LOGIN OVERLAY ─────────────────────────────────────────────────────── -->
+<div id="loginOverlay" style="display:none;position:fixed;inset:0;background:linear-gradient(135deg,#002D47 0%,#004369 50%,#01949A 100%);z-index:9999;align-items:center;justify-content:center;flex-direction:column;">
+  <div style="background:white;border-radius:14px;padding:36px 40px;width:100%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,0.35);text-align:center;">
+    <div style="width:52px;height:52px;background:linear-gradient(135deg,#01949A,#004369);border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:20px;color:white;margin:0 auto 16px;letter-spacing:-0.5px;">GPS</div>
+    <div style="font-size:18px;font-weight:800;color:#004369;margin-bottom:4px;">Executive Console</div>
+    <div style="font-size:12px;color:#64748B;margin-bottom:24px;">GPS Leadership Solutions</div>
+    <input id="loginInput" type="password" placeholder="Enter password" onkeydown="if(event.key==='Enter')submitLogin()"
+      style="width:100%;border:1.5px solid #E2E8F0;border-radius:8px;padding:11px 14px;font-size:14px;font-family:inherit;outline:none;margin-bottom:10px;color:#1A1A2E;box-sizing:border-box;"
+      onfocus="this.style.borderColor='#01949A'" onblur="this.style.borderColor='#E2E8F0'">
+    <div id="loginError" style="display:none;font-size:12px;color:#EF4444;margin-bottom:10px;text-align:left;"></div>
+    <button id="loginBtn" onclick="submitLogin()"
+      style="width:100%;background:#004369;color:white;border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;"
+      onmouseover="this.style.background='#002D47'" onmouseout="this.style.background='#004369'">Sign In</button>
+  </div>
+  <div style="margin-top:16px;font-size:11px;color:rgba(255,255,255,0.5);">Secured · GPS Leadership Solutions</div>
+</div>
+
+<!-- ─── CONSOLE BODY ──────────────────────────────────────────────────────── -->
+<div id="consoleBody" style="display:none;">
+
+<div class="top-bar"></div>
+
+<div class="header">
+  <div class="header-left">
+    <div class="logo-mark">GPS</div>
+    <div>
+      <div style="font-size:16px;font-weight:700;color:white;">Executive Console</div>
+      <div style="font-size:11px;opacity:0.65;margin-top:1px;">GPS Leadership Solutions — Alex Tremble</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="date-badge" id="dateBadge">Loading...</div>
+    <button class="refresh-btn" onclick="loadAll()" id="refreshBtn">↻ Refresh</button>
+    <button class="refresh-btn" onclick="openPwModal()" style="background:rgba(255,255,255,0.15);">🔑 Password</button>
+    <button class="refresh-btn" onclick="logout()" style="background:rgba(255,255,255,0.12);">⎋ Lock</button>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- STAT ROW -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Open Pipeline</div>
+      <div class="stat-value" id="statOpenValue"><span style="font-size:13px;color:var(--muted)">…</span></div>
+      <div class="stat-sub" id="statOpenCount">— open deals</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Top Deal</div>
+      <div class="stat-value teal" id="statTopDeal">—</div>
+      <div class="stat-sub" id="statTopName" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px;">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Combined Liquid Cash</div>
+      <div class="stat-value warn">$17,007</div>
+      <div class="stat-sub">BIZ OPS + Owner Comp + Income</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Monthly Payroll</div>
+      <div class="stat-value" style="color:var(--navy);">$6,478</div>
+      <div class="stat-sub">Alex $5,660 · Oakkah $817 · 1st/mo</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Cap One ···3673</div>
+      <div class="stat-value warn">$7,359</div>
+      <div class="stat-sub">$6,116 new charges · AutoPay Jun 10</div>
+      <span class="stat-badge badge-warn">⚠ Review</span>
+    </div>
+  </div>
+
+  <!-- ─── P&L SNAPSHOT ROW ─── Update numbers below when you pull a new QBO report -->
+  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);padding:0 2px;margin-bottom:-4px;">
+    P&L Snapshot &nbsp;·&nbsp; <span style="font-weight:400;">Jan 1 – Apr 30, 2026 &nbsp;·&nbsp; Source: QBO &nbsp;·&nbsp; Updated May 28, 2026</span>
+  </div>
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">YTD Revenue</div>
+      <div class="stat-value teal" id="plRevenue">$49,394</div>
+      <div class="stat-sub">Jan 1 – Apr 30, 2026</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">YTD Expenses</div>
+      <div class="stat-value warn" id="plExpenses">$35,444</div>
+      <div class="stat-sub">incl. $27,884 payroll</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">YTD Net Income</div>
+      <div class="stat-value success" id="plNet">$14,061</div>
+      <div class="stat-sub">28.5% margin</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Full-Year Pace</div>
+      <div class="stat-value warn" id="plPace">$148K</div>
+      <div class="stat-sub">vs ~$325K prior year pace</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">YoY Revenue Δ</div>
+      <div class="stat-value danger" id="plYoY">−54%</div>
+      <div class="stat-sub">$108K same period 2025</div>
+    </div>
+  </div>
+
+  <!-- ALERT -->
+  <div class="alert-banner" style="background:#FEF3C7;border-color:#F59E0B;">
+    <span style="font-size:14px;flex-shrink:0;">⚠️</span>
+    <span><strong>Capital One ···3673:</strong> AutoPay $1,243 due Jun 10 — but $6,116 in new charges since last statement. Next statement balance ~$6K. Review charges and ensure full payment is covered. WF ···5758 min $397 due Jun 1.</span>
+  </div>
+
+  <!-- MAIN GRID -->
+  <div class="content-grid">
+    <div class="left-col">
+
+      <!-- PIPELINE -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="dot dot-navy"></span> Pipeline Snapshot</div>
+          <span class="card-badge" id="pipelineUpdated">Live · GHL via Make</span>
+        </div>
+        <div id="pipelineContent"><div class="loading"><div class="spinner"></div>Pulling pipeline…</div></div>
+      </div>
+
+      <!-- CALENDAR -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="dot dot-teal"></span> This Week's Calendar</div>
+          <span class="card-badge">Live · Google Calendar</span>
+        </div>
+        <div id="calendarContent"><div class="loading"><div class="spinner"></div>Loading calendar…</div></div>
+      </div>
+
+    </div>
+
+    <div class="right-col">
+
+      <!-- FINANCIAL SNAPSHOT (credit cards trend) -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="dot dot-warn"></span> Credit Card Trend</div>
+          <span class="card-badge">As of May 2026</span>
+        </div>
+        <div class="card-body">
+          <div class="section-label"><span>WF Balance (6 months)</span><hr></div>
+          <div class="fin-chart-wrap"><canvas id="wfChart"></canvas></div>
+          <div class="fin-divider"></div>
+          <div class="fin-bar-container">
+            <div class="fin-bar-label"><span class="fin-bar-name">Wells Fargo ···5758</span><span class="fin-bar-amounts">$18,179 / $23,000</span></div>
+            <div class="fin-bar-track"><div class="fin-bar-fill fill-warn" style="width:79%"></div></div>
+            <div class="fin-note">14.5% APR · min $397 due Jun 1 · autopay enrolled · ⚠ $6K SP Acquisition charges in May</div>
+          </div>
+          <div class="fin-bar-container">
+            <div class="fin-bar-label"><span class="fin-bar-name">Capital One ···3673</span><span class="fin-bar-amounts">$7,359 current</span></div>
+            <div class="fin-bar-track"><div class="fin-bar-fill fill-warn" style="width:100%"></div></div>
+            <div class="fin-note urgent">⚠ $6,116 new charges since May 16 stmt · AutoPay $1,243 Jun 10 · next stmt ~$6K</div>
+          </div>
+          <div class="fin-bar-container">
+            <div class="fin-bar-label"><span class="fin-bar-name">Chase Ink ···4688</span><span class="fin-bar-amounts">$633 / $15,500</span></div>
+            <div class="fin-bar-track"><div class="fin-bar-fill" style="width:4%;background:var(--success);"></div></div>
+            <div class="fin-note">AutoPay $201 due Jun 7 ✓</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ACTION ITEMS -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="dot dot-red"></span> Action Items</div>
+          <span class="card-badge" id="actionBadge">6 open</span>
+        </div>
+        <div class="action-add-row">
+          <input class="action-add-input" id="actionAddInput" type="text" placeholder="Add action item… (Enter to save)" />
+          <button class="action-add-btn" onclick="addActionItem()">+ Add</button>
+        </div>
+        <div class="card-body" style="padding-top:10px;">
+          <div class="action-list" id="actionList">
+            <div class="action-item urgent" data-id="ai-1" data-pri="urgent">
+              <div class="action-check" onclick="checkActionItem('ai-1',this)"></div>
+              <div class="action-text"><div class="action-title">Review Capital One $6,116 new charges — confirm next statement covered</div><div class="action-from">Financial · AutoPay Jun 10 covers $1,243 only</div></div>
+              <span class="action-pri pri-urgent">This week</span>
+            </div>
+            <div class="action-item urgent" data-id="ai-2" data-pri="urgent">
+              <div class="action-check" onclick="checkActionItem('ai-2',this)"></div>
+              <div class="action-text"><div class="action-title">Confirm NM client invoice payment date (30 days?)</div><div class="action-from">Cash Flow · Week 3 risk</div></div>
+              <span class="action-pri pri-urgent">Today</span>
+            </div>
+            <div class="action-item urgent" data-id="ai-3" data-pri="urgent">
+              <div class="action-check" onclick="checkActionItem('ai-3',this)"></div>
+              <div class="action-text"><div class="action-title">Send Dean Dally recap — assessment pricing & next steps</div><div class="action-from">Blaine Brothers · May 21</div></div>
+              <span class="action-pri pri-urgent">Today</span>
+            </div>
+            <div class="action-item" data-id="ai-4" data-pri="high">
+              <div class="action-check" onclick="checkActionItem('ai-4',this)"></div>
+              <div class="action-text"><div class="action-title">Reduce contractors to 10 hrs/week each — notify this week</div><div class="action-from">Budget · saves ~$260/wk</div></div>
+              <span class="action-pri pri-high">This week</span>
+            </div>
+            <div class="action-item" data-id="ai-5" data-pri="high">
+              <div class="action-check" onclick="checkActionItem('ai-5',this)"></div>
+              <div class="action-text"><div class="action-title">Draft Claude prompt with 3 assessment questions</div><div class="action-from">Michelle / SeniorExecs · May 22</div></div>
+              <span class="action-pri pri-high">This week</span>
+            </div>
+            <div class="action-item" data-id="ai-6" data-pri="high">
+              <div class="action-check" onclick="checkActionItem('ai-6',this)"></div>
+              <div class="action-text"><div class="action-title">Check Jan's timesheets — reduce hero hours for budget</div><div class="action-from">Hero Check-In · May 22</div></div>
+              <span class="action-pri pri-high">This week</span>
+            </div>
+            <div class="action-item" data-id="ai-7" data-pri="normal">
+              <div class="action-check" onclick="checkActionItem('ai-7',this)"></div>
+              <div class="action-text"><div class="action-title">Share podcast link with Steve Bashir (Dayton Parts)</div><div class="action-from">Steve Bashir · May 21</div></div>
+              <span class="action-pri pri-normal">This week</span>
+            </div>
+            <div class="action-item" data-id="ai-8" data-pri="normal">
+              <div class="action-check" onclick="checkActionItem('ai-8',this)"></div>
+              <div class="action-text"><div class="action-title">Update David Winjum to biweekly — 30 min earlier</div><div class="action-from">Coaching session · May 22</div></div>
+              <span class="action-pri pri-normal">This week</span>
+            </div>
+          </div>
+          <div id="actionDoneSection" style="display:none;margin-top:8px;">
+            <button class="action-done-toggle" id="actionDoneToggle" onclick="toggleDoneSection()">▸ Show completed (0)</button>
+            <div class="action-list" id="actionDoneList" style="display:none;margin-top:6px;"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ─── CASH POSITION & RUNWAY ─────────────────────────────────── -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><span class="dot dot-green"></span> Cash Position &amp; Runway</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="edit-balances-btn" onclick="editBalances()">✏ Update balances</button>
+        <span class="card-badge" id="cashAsOf">As of May 25, 2026</span>
+      </div>
+    </div>
+    <div class="card-body">
+
+      <!-- Account grid -->
+      <div class="section-label"><span>Navy Federal Accounts</span><hr></div>
+      <div class="cash-grid" id="acctGrid"><!-- rendered by JS --></div>
+
+      <div class="fin-divider"></div>
+
+      <!-- Liabilities -->
+      <div class="section-label"><span>Liabilities</span><hr></div>
+      <div class="liability-row">
+        <div class="liability-item">
+          <div class="liability-name">WF Business Line ···5758</div>
+          <div class="liability-amt">$18,179</div>
+          <div class="liability-note">14.5% APR · min $397 due Jun 1</div>
+        </div>
+        <div class="liability-item">
+          <div class="liability-name">Capital One ···3673 ⚠</div>
+          <div class="liability-amt">$7,359</div>
+          <div class="liability-note">AutoPay $1,243 Jun 10 · $6K new charges pending</div>
+        </div>
+        <div class="liability-item">
+          <div class="liability-name">Chase Ink ···4688</div>
+          <div class="liability-amt ok">$633</div>
+          <div class="liability-note">AutoPay $201 due Jun 7 ✓</div>
+        </div>
+        <div class="liability-item ok-liab">
+          <div class="liability-name">Vehicle Loan ···7187</div>
+          <div class="liability-amt ok">$21,872</div>
+          <div class="liability-note">Secured debt · car payment savings set aside</div>
+        </div>
+      </div>
+
+      <div class="net-worth-bar" id="netWorthBar"><!-- rendered by JS --></div>
+
+      <div class="fin-divider"></div>
+
+      <!-- Runway -->
+      <div class="section-label"><span>Runway</span><hr style="flex:1;border:none;border-top:1px solid var(--border);"><span style="font-size:10px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;">Based on actual monthly burn</span></div>
+      <div class="runway-row">
+        <div class="runway-card">
+          <div class="runway-label">🏢 BIZ OPS Runway</div>
+          <div class="runway-months" id="runwayOps">—</div>
+          <div class="runway-detail" id="runwayOpsDetail"></div>
+          <div style="font-size:10px;color:var(--muted);margin-top:5px;">Avg burn: <strong>$3,627/mo</strong> <span style="font-weight:400;">(contractors + ops)</span></div>
+          <div class="runway-input-row" style="margin-top:8px;">
+            <span class="runway-input-label" style="color:var(--muted);">What-if $</span>
+            <input class="runway-input" id="inputOps" type="number" placeholder="override" oninput="calcRunway()" style="opacity:0.7;">
+            <button class="runway-set-btn" onclick="saveRunway()" style="opacity:0.7;">Set</button>
+          </div>
+        </div>
+        <div class="runway-card">
+          <div class="runway-label">💼 Owner Comp Runway</div>
+          <div class="runway-months" id="runwayComp">—</div>
+          <div class="runway-detail" id="runwayCompDetail"></div>
+          <div style="font-size:10px;color:var(--muted);margin-top:5px;">Monthly draw: <strong>$6,477/mo</strong> <span style="font-weight:400;">(salary $5,660 + Oakkah $817)</span></div>
+          <div class="runway-input-row" style="margin-top:8px;">
+            <span class="runway-input-label" style="color:var(--muted);">What-if $</span>
+            <input class="runway-input" id="inputComp" type="number" placeholder="override" oninput="calcRunway()" style="opacity:0.7;">
+            <button class="runway-set-btn" onclick="saveRunway()" style="opacity:0.7;">Set</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ─── CASH FLOW FORECAST ───────────────────────────────────── -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><span class="dot dot-teal"></span> 60-Day Cash Flow Forecast</div>
+      <span class="card-badge" id="forecastAsOf">As of May 26, 2026</span>
+    </div>
+    <div class="scenario-tabs">
+      <button class="scenario-tab active" onclick="setScenario('base',this)">📊 Base Case</button>
+      <button class="scenario-tab" onclick="setScenario('best',this)">🟢 Best Case</button>
+      <button class="scenario-tab" onclick="setScenario('stress',this)">🔴 Stress Test</button>
+    </div>
+    <div class="card-body">
+      <div class="forecast-chart-wrap"><canvas id="forecastChart"></canvas></div>
+      <div class="forecast-metrics" id="forecastMetrics"></div>
+      <div class="tight-zone" id="forecastTightZone"></div>
+      <div class="section-label" style="margin-top:14px;"><span>Event Timeline</span><hr></div>
+      <div class="forecast-event-list" id="forecastEvents"></div>
+      <div class="decision-box">
+        <div class="decision-box-title">⚡ What The Profit First Numbers Actually Say</div>
+        <div class="decision-item"><span>→</span><span><strong>Only 30% of every dollar you earn goes to BIZ OPS.</strong> $10,500 check → BIZ OPS gets $3,150. The rest is locked: TAXES $2,625 (IRS, not yours), OWNER COMP $3,570, etc. Operating cash is the constraint.</span></div>
+        <div class="decision-item"><span>→</span><span><strong>The executive coach payments break BIZ OPS in Base and Stress cases.</strong> Each $5K payment exceeds what BIZ OPS holds at that moment. The $7,008 marketing account is your bridge — it's not part of the Profit First split and can cover the gap.</span></div>
+        <div class="decision-item"><span>→</span><span><strong>OWNER COMP is healthy throughout all three scenarios.</strong> Alex's payroll ($5,660/mo) is covered. July payroll is covered. No risk there given the $12,673 starting balance.</span></div>
+        <div class="decision-item"><span>→</span><span><strong>The fastest fix for Base/Stress case:</strong> Negotiate the Wk 3 coach payment 2–3 weeks later — after NM invoice clears. That single timing shift keeps BIZ OPS positive without touching the marketing account.</span></div>
+        <div class="decision-item"><span>→</span><span><strong>TAXES ($23,173) is off the table.</strong> Do not count it, do not touch it. That money is already owed.</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── NOTES ──────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><span class="dot dot-purple"></span> Notes &amp; Capture</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="mobile-pill">📱 Free mobile capture</span>
+        <span class="card-badge" id="notesUpdated">Synced · Supabase</span>
+      </div>
+    </div>
+    <div class="notes-compose">
+      <div class="notes-input-wrap">
+        <textarea class="notes-textarea" id="noteInput" placeholder="Quick thought, follow-up, idea... (or open your bookmarked capture page on your phone)" rows="2"></textarea>
+      </div>
+      <div class="notes-controls">
+        <select class="notes-tag-select" id="noteTag">
+          <option value="">No tag</option>
+          <option value="followup">Follow Up</option>
+          <option value="idea">Idea</option>
+          <option value="client">Client</option>
+          <option value="financial">Financial</option>
+          <option value="action">Action</option>
+        </select>
+        <button class="notes-save-btn" id="noteSaveBtn" onclick="saveNote()">Save Note</button>
+      </div>
+    </div>
+    <div class="notes-list" id="notesList"><div class="loading"><div class="spinner"></div>Loading notes…</div></div>
+    <div class="notes-footer">
+      <span style="font-size:10px;color:var(--muted);">📱 Mobile: bookmark <strong>pbnkefuqpoztcxfagiod.supabase.co/functions/v1/capture-note</strong> on your phone — free, no account needed</span>
+      <span id="notesCount" style="font-size:10px;color:var(--muted);"></span>
+    </div>
+  </div>
+
+  <!-- ─── COACH NOTES & UPLOADS ──────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><span class="dot" style="background:#7C3AED;"></span> Coach Notes &amp; Sessions</div>
+      <span class="card-badge" id="coachBadge">Loading…</span>
+    </div>
+    <div class="coach-tab-row">
+      <button class="coach-tab active" id="coachTabAddBtn" onclick="setCoachTab('add',this)">+ Add Session Notes</button>
+      <button class="coach-tab" id="coachTabHistoryBtn" onclick="setCoachTab('history',this)">📋 History &amp; Actions</button>
+    </div>
+
+    <!-- ADD TAB -->
+    <div id="coachTabAdd">
+      <div class="coach-form-wrap">
+        <div class="coach-field-row">
+          <input class="coach-input" id="coachTitle" type="text" placeholder="Session title  e.g. May 26 Coaching Session">
+          <input class="coach-input" id="coachDate" type="date" style="max-width:155px;">
+          <select class="coach-input" id="coachType" style="max-width:155px;">
+            <option value="notes">Coach Notes</option>
+            <option value="transcript">Transcript</option>
+            <option value="summary">Session Summary</option>
+            <option value="homework">Homework / Tasks</option>
+          </select>
+        </div>
+        <textarea class="coach-textarea" id="coachContent" placeholder="Paste your coach's notes, session summary, transcript, or homework list here…&#10;&#10;Tip: action items, tasks, and commitments will be automatically extracted and added to your Action Items list."></textarea>
+        <div style="display:flex;justify-content:flex-end;margin-top:10px;">
+          <button class="coach-save-btn" id="coachSaveBtn" onclick="saveCoachUpload()">💾 Save &amp; Extract Action Items</button>
+        </div>
+      </div>
+      <div class="coach-hint">
+        💡 <strong>Recordings:</strong> Play back your session audio, then paste a transcript or your own notes above. For best results, include bullet points or numbered tasks — they'll be extracted directly into your Action Items.
+      </div>
+    </div>
+
+    <!-- HISTORY TAB -->
+    <div id="coachTabHistory" style="display:none;">
+      <div class="coach-upload-list" id="coachList">
+        <div class="loading"><div class="spinner"></div>Loading sessions…</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<div class="bottom-bar"></div>
+</div><!-- /consoleBody -->
+
+<script>
+// ─── PASSWORD GATE ────────────────────────────────────────────────────────────
+const FALLBACK_HASH = '16eb771d911a094add575974f8b0a53978f07159823ae14b0473f549c873892f'; // GPS2026!
+const SESSION_KEY = 'gps_console_auth';
+let LIVE_PW_HASH = FALLBACK_HASH;
+
+async function hashPassword(pw) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+async function loadPwHash() {
+  try {
+    const rows = await supaFetch('/rest/v1/gps_settings?key=eq.pw_hash&select=value');
+    if (rows && rows[0]) LIVE_PW_HASH = rows[0].value;
+  } catch(e) { /* use fallback */ }
+}
+
+async function checkAuth() {
+  await loadPwHash();
+  if (sessionStorage.getItem(SESSION_KEY) === 'ok') { showConsole(); return; }
+  showLoginScreen();
+}
+
+function showLoginScreen() {
+  document.getElementById('loginOverlay').style.display = 'flex';
+  document.getElementById('consoleBody').style.display = 'none';
+  setTimeout(() => document.getElementById('loginInput').focus(), 50);
+}
+
+function showConsole() {
+  document.getElementById('loginOverlay').style.display = 'none';
+  document.getElementById('consoleBody').style.display = 'block';
+  loadAll();
+}
+
+async function submitLogin() {
+  const pw = document.getElementById('loginInput').value;
+  const errEl = document.getElementById('loginError');
+  const btn = document.getElementById('loginBtn');
+  if (!pw) return;
+  btn.disabled = true; btn.textContent = 'Checking…';
+  const h = await hashPassword(pw);
+  if (h === LIVE_PW_HASH) {
+    sessionStorage.setItem(SESSION_KEY, 'ok');
+    showConsole();
+  } else {
+    errEl.textContent = 'Incorrect password. Try again.';
+    errEl.style.display = 'block';
+    document.getElementById('loginInput').value = '';
+    setTimeout(() => document.getElementById('loginInput').focus(), 50);
+    btn.disabled = false; btn.textContent = 'Sign In';
+  }
+}
+
+function logout() {
+  sessionStorage.removeItem(SESSION_KEY);
+  showLoginScreen();
+}
+
+// ─── CHANGE PASSWORD ──────────────────────────────────────────────────────────
+function openPwModal() {
+  document.getElementById('pwCurrent').value = '';
+  document.getElementById('pwNew').value = '';
+  document.getElementById('pwConfirm').value = '';
+  const msg = document.getElementById('pwMsg');
+  msg.style.display = 'none'; msg.textContent = '';
+  document.getElementById('pwModal').classList.add('open');
+  setTimeout(() => document.getElementById('pwCurrent').focus(), 50);
+}
+
+function closePwModal() {
+  document.getElementById('pwModal').classList.remove('open');
+}
+
+async function saveNewPassword() {
+  const cur = document.getElementById('pwCurrent').value;
+  const nw = document.getElementById('pwNew').value;
+  const cf = document.getElementById('pwConfirm').value;
+  const msg = document.getElementById('pwMsg');
+  const btn = document.getElementById('pwSaveBtn');
+
+  msg.style.display = 'none';
+  if (!cur || !nw || !cf) { showPwMsg('All fields are required.', 'error'); return; }
+  if (nw.length < 6) { showPwMsg('New password must be at least 6 characters.', 'error'); return; }
+  if (nw !== cf) { showPwMsg('New passwords don\'t match.', 'error'); return; }
+
+  btn.disabled = true; btn.textContent = 'Saving…';
+  const curHash = await hashPassword(cur);
+  if (curHash !== LIVE_PW_HASH) {
+    showPwMsg('Current password is incorrect.', 'error');
+    btn.disabled = false; btn.textContent = 'Update Password';
+    return;
+  }
+  const newHash = await hashPassword(nw);
+  try {
+    await supaFetch('/rest/v1/gps_settings?key=eq.pw_hash', {
+      method: 'PATCH', prefer: 'return=minimal',
+      body: JSON.stringify({value: newHash, updated_at: new Date().toISOString()})
+    });
+    LIVE_PW_HASH = newHash;
+    showPwMsg('Password updated successfully!', 'success');
+    setTimeout(closePwModal, 1800);
+  } catch(e) {
+    showPwMsg('Could not save. Try again.', 'error');
+  }
+  btn.disabled = false; btn.textContent = 'Update Password';
+}
+
+function showPwMsg(text, type) {
+  const el = document.getElementById('pwMsg');
+  el.textContent = text;
+  el.className = 'pw-msg ' + type;
+  el.style.display = 'block';
+}
+
+// ─── COACH UPLOADS ────────────────────────────────────────────────────────────
+function setCoachTab(tab, btn) {
+  document.querySelectorAll('.coach-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('coachTabAdd').style.display = tab === 'add' ? 'block' : 'none';
+  document.getElementById('coachTabHistory').style.display = tab === 'history' ? 'block' : 'none';
+  if (tab === 'history') loadCoachUploads();
+}
+
+function extractActionItems(text) {
+  const items = [];
+  const lines = text.split('\n');
+  const patterns = [
+    /^[\s]*[-•*]\s+(.+)/,          // bullet points
+    /^[\s]*\d+[.)]\s+(.+)/,        // numbered list
+    /^[\s]*(action|todo|task|do|homework|follow.?up)[:\s]+(.+)/i,  // labeled actions
+    /^[\s]*(you will|you should|alex will|alex should|alex needs to|commit to|committed to)\s+(.+)/i,
+    /^[\s]*(by next session|before next|this week|today)[:\s,]+(.+)/i,
+  ];
+  lines.forEach(line => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.length < 8) return;
+    for (const p of patterns) {
+      const m = trimmed.match(p);
+      if (m) {
+        const captured = (m[2] || m[1]).trim();
+        if (captured.length > 5 && captured.length < 200) {
+          items.push(captured.replace(/[.!?]$/, ''));
+        }
+        break;
+      }
+    }
+  });
+  return [...new Set(items)].slice(0, 12);
+}
+
+async function saveCoachUpload() {
+  const title = document.getElementById('coachTitle').value.trim();
+  const content = document.getElementById('coachContent').value.trim();
+  const date = document.getElementById('coachDate').value;
+  const type = document.getElementById('coachType').value;
+  const btn = document.getElementById('coachSaveBtn');
+  if (!title || !content) { alert('Please add a title and paste your notes.'); return; }
+  btn.disabled = true; btn.textContent = 'Saving…';
+  const actionItems = extractActionItems(content);
+  try {
+    await supaFetch('/rest/v1/gps_coach_uploads', {
+      method: 'POST', prefer: 'return=minimal',
+      body: JSON.stringify({
+        title, content, upload_type: type,
+        session_date: date || null,
+        action_items: actionItems,
+        processed: actionItems.length > 0
+      })
+    });
+    document.getElementById('coachTitle').value = '';
+    document.getElementById('coachContent').value = '';
+    document.getElementById('coachDate').value = '';
+    // Auto-add extracted items to action list
+    if (actionItems.length > 0) {
+      actionItems.forEach(item => addActionItemFromCoach(item, title));
+      alert(`✓ Saved! ${actionItems.length} action item${actionItems.length > 1 ? 's' : ''} extracted and added to your Action Items.`);
+    } else {
+      alert('✓ Session notes saved. No action items were detected — check the History tab to review.');
+    }
+    loadCoachBadge();
+    setCoachTab('history', document.getElementById('coachTabHistoryBtn'));
+  } catch(e) { alert('Could not save. Try again.'); }
+  btn.disabled = false; btn.textContent = '💾 Save & Extract Action Items';
+}
+
+function addActionItemFromCoach(text, sessionTitle) {
+  const id = 'ai-coach-' + Date.now() + '-' + Math.random().toString(36).slice(2,6);
+  const div = document.createElement('div');
+  div.className = 'action-item';
+  div.dataset.id = id;
+  div.dataset.pri = 'high';
+  div.innerHTML = `<div class="action-check" onclick="checkActionItem('${id}',this)"></div><div class="action-text"><div class="action-title">${escHtml(text)}</div><div class="action-from">Coach · ${escHtml(sessionTitle)}</div></div><span class="action-pri pri-high">Coach task</span>`;
+  document.getElementById('actionList').prepend(div);
+  updateActionBadge();
+  // Save to Supabase for cross-device sync
+  (async () => {
+    let customs = [];
+    try {
+      const rows = await supaFetch('/rest/v1/gps_settings?key=eq.gps_action_custom&select=value');
+      if (rows && rows[0] && rows[0].value) customs = JSON.parse(rows[0].value);
+    } catch(e) {
+      try { customs = JSON.parse(localStorage.getItem('gps_action_custom')||'[]'); } catch(_){}
+    }
+    customs.push({id, text, date: new Date().toISOString()});
+    supaFetch('/rest/v1/gps_settings', {
+      method: 'POST',
+      prefer: 'resolution=merge-duplicates,return=minimal',
+      body: JSON.stringify({ key: 'gps_action_custom', value: JSON.stringify(customs), updated_at: new Date().toISOString() })
+    }).catch(() => localStorage.setItem('gps_action_custom', JSON.stringify(customs)));
+  })();
+}
+
+async function loadCoachUploads() {
+  const el = document.getElementById('coachList');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div>Loading sessions…</div>';
+  try {
+    const rows = await supaFetch('/rest/v1/gps_coach_uploads?select=id,title,content,upload_type,session_date,action_items,created_at&order=created_at.desc&limit=30');
+    if (!rows || !rows.length) {
+      el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--muted);font-size:12px;font-style:italic;">No sessions yet. Add your first coach notes above.</div>';
+      return;
+    }
+    let html = '';
+    rows.forEach(r => {
+      const items = r.action_items || [];
+      const dateStr = r.session_date ? new Date(r.session_date + 'T12:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : timeAgo(r.created_at);
+      const typeLabel = {notes:'Notes', transcript:'Transcript', summary:'Summary', homework:'Homework'}[r.upload_type] || r.upload_type;
+      html += `<div class="coach-upload-item">
+        <div class="coach-item-header">
+          <div class="coach-item-title">${escHtml(r.title)}</div>
+          <div class="coach-item-meta">${typeLabel} · ${dateStr}</div>
+        </div>
+        <div class="coach-item-preview">${escHtml(r.content)}</div>
+        ${items.length > 0 ? `<div class="coach-actions-row">${items.map((item, i) =>
+          `<span class="coach-action-chip" id="chip-${r.id}-${i}" onclick="addChipToActions(this,'${escHtml(item).replace(/'/g,"\\'")}','${escHtml(r.title).replace(/'/g,"\\'")}')">+ ${escHtml(item)}</span>`
+        ).join('')}</div>` : '<div style="font-size:10px;color:var(--muted);font-style:italic;">No action items extracted</div>'}
+      </div>`;
+    });
+    el.innerHTML = html;
+    loadCoachBadge();
+  } catch(e) { el.innerHTML = '<div class="error-state">Could not load sessions.</div>'; }
+}
+
+function addChipToActions(chipEl, text, sessionTitle) {
+  if (chipEl.classList.contains('added')) return;
+  addActionItemFromCoach(text, sessionTitle);
+  chipEl.classList.add('added');
+  chipEl.textContent = '✓ Added';
+}
+
+async function loadCoachBadge() {
+  try {
+    const rows = await supaFetch('/rest/v1/gps_coach_uploads?select=id');
+    document.getElementById('coachBadge').textContent = (rows ? rows.length : 0) + ' sessions';
+  } catch(e) { document.getElementById('coachBadge').textContent = '—'; }
+}
+
+// ─── SUPABASE DIRECT API ────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://pbnkefuqpoztcxfagiod.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBibmtlZnVxcG96dGN4ZmFnaW9kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5OTkwMzEsImV4cCI6MjA5MjU3NTAzMX0.DxEMR2Ckt9QJlRMkFenEZn-gzsVoi8-6CFcAItTePjo';
+
+async function supaFetch(path, opts = {}) {
+  const res = await fetch(SUPABASE_URL + path, {
+    method: opts.method || 'GET',
+    headers: {
+      'apikey': SUPABASE_ANON,
+      'Authorization': 'Bearer ' + SUPABASE_ANON,
+      'Content-Type': 'application/json',
+      ...(opts.prefer ? {'Prefer': opts.prefer} : {}),
+      ...(opts.headers || {})
+    },
+    ...(opts.body ? {body: opts.body} : {})
+  });
+  if (!res.ok) throw new Error(res.statusText);
+  const text = await res.text();
+  if (!text || text.trim() === '') return null;
+  return JSON.parse(text);
+}
+
+// ─── ACCOUNT DATA (synced via Supabase — updated by morning/midday/EOD sweeps) ───
+const CONSOLE_VERSION = '2026-05-27';
+if (localStorage.getItem('gps_console_version') !== CONSOLE_VERSION) {
+  localStorage.removeItem('gps_accounts');
+  localStorage.removeItem('gps_accounts_date');
+  localStorage.setItem('gps_console_version', CONSOLE_VERSION);
+}
+const DEFAULT_ACCOUNTS = {
+  income:    { label: 'Income', sub: 'All revenue in', bal: 0, cls: 'income' },
+  bizops:    { label: 'BIZ OPS (30%)', sub: 'Operating expenses', bal: 6691.83, cls: 'ops' },
+  ownercomp: { label: 'OWNER COMP (34%)', sub: 'Payroll & draws', bal: 16243.14, cls: 'comp' },
+  taxes:     { label: 'TAXES (25%)', sub: 'Tax reserve — do not touch', bal: 25797.94, cls: 'tax' },
+  healthcare:{ label: 'HEALTHCARE (6%)', sub: 'Health premiums', bal: 4631.71, cls: 'health' },
+  savings:   { label: 'SAVINGS (5%)', sub: 'Next year buffer', bal: 6364.32, cls: 'savings' },
+  carloan:   { label: 'Car Loan', sub: 'Monthly payment savings', bal: 3337.72, cls: 'carloan' },
+  marketing: { label: 'Business Marketing', sub: 'Family travel 2026', bal: 7007.82, cls: 'marketing' },
+  emergency: { label: 'Family Emergency', sub: '~7 months runway backstop', bal: 45042.52, cls: 'emergency' }
+};
+const LIABILITIES = { wf: 18178.55, capone: 7358.92, chase: 632.99, carloan: 21872.30 };
+const TOTAL_LIABILITIES = Object.values(LIABILITIES).reduce((a,b)=>a+b,0);
+
+function getAccounts() {
+  const saved = localStorage.getItem('gps_accounts');
+  if (saved) {
+    const overrides = JSON.parse(saved);
+    const out = {};
+    for (const k in DEFAULT_ACCOUNTS) {
+      out[k] = {...DEFAULT_ACCOUNTS[k], bal: overrides[k] ?? DEFAULT_ACCOUNTS[k].bal};
+    }
+    return out;
+  }
+  return {...DEFAULT_ACCOUNTS};
+}
+
+function renderAccounts() {
+  const accts = getAccounts();
+  const totalCash = Object.values(accts).reduce((s,a)=>s+a.bal,0);
+  const netWorth = totalCash - TOTAL_LIABILITIES;
+  let html = '';
+  for (const a of Object.values(accts)) {
+    const lowCls = a.bal < 500 ? 'low' : a.bal > 10000 ? 'ok' : '';
+    html += `<div class="acct-card ${a.cls}"><div class="acct-name">${a.label}</div><div class="acct-bal ${lowCls}">$${a.bal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div><div class="acct-sub">${a.sub}</div></div>`;
+  }
+  document.getElementById('acctGrid').innerHTML = html;
+  const nwEl = document.getElementById('netWorthBar');
+  const nwColor = netWorth > 50000 ? 'var(--success)' : netWorth > 20000 ? 'var(--warn)' : 'var(--danger)';
+  nwEl.innerHTML = `
+    <div><div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">Total Business Cash</div><div style="font-size:20px;font-weight:800;color:var(--navy);">$${totalCash.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}</div></div>
+    <div style="text-align:center;"><div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">Total Liabilities</div><div style="font-size:20px;font-weight:800;color:var(--danger);">$${TOTAL_LIABILITIES.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}</div></div>
+    <div style="text-align:right;"><div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">Net Position</div><div style="font-size:20px;font-weight:800;color:${nwColor};">$${netWorth.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}</div></div>`;
+}
+
+async function editBalances() {
+  const accts = getAccounts();
+  const names = {income:'Income',bizops:'BIZ OPS',ownercomp:'Owner Comp',taxes:'Taxes',healthcare:'Healthcare',savings:'Savings',carloan:'Car Loan',marketing:'Marketing',emergency:'Family Emergency'};
+  const updates = {};
+  for (const [k, a] of Object.entries(accts)) {
+    const val = prompt(`${names[k]} balance:`, a.bal.toFixed(2));
+    if (val === null) break;
+    updates[k] = parseFloat(val.replace(/[$,]/g,'')) || a.bal;
+  }
+  const balJson = JSON.stringify(Object.fromEntries(Object.entries(updates)));
+  localStorage.setItem('gps_accounts', balJson);
+  const today = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  localStorage.setItem('gps_accounts_date', today);
+  document.getElementById('cashAsOf').textContent = 'As of ' + today;
+  renderAccounts();
+  calcRunway();
+  // Sync to Supabase so balances update across all devices
+  try {
+    await supaFetch('/rest/v1/gps_settings', {
+      method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal',
+      body: JSON.stringify({key:'accounts', value:balJson, updated_at:new Date().toISOString()})
+    });
+  } catch(e) { /* silent — localStorage already saved */ }
+}
+
+async function loadAccountsFromSupabase() {
+  try {
+    const rows = await supaFetch('/rest/v1/gps_settings?key=eq.accounts&select=value,updated_at');
+    if (rows && rows[0] && rows[0].value) {
+      // Supabase has data — update localStorage and re-render
+      const balances = JSON.parse(rows[0].value);
+      localStorage.setItem('gps_accounts', JSON.stringify(balances));
+      const d = new Date(rows[0].updated_at);
+      const dateStr = d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+      localStorage.setItem('gps_accounts_date', dateStr);
+      document.getElementById('cashAsOf').textContent = 'As of ' + dateStr;
+      renderAccounts();
+      calcRunway();
+    } else {
+      // No Supabase data yet — seed it with current defaults so sweeps can update it
+      const accts = getAccounts();
+      const balJson = JSON.stringify(Object.fromEntries(Object.entries(accts).map(([k,v])=>[k,v.bal])));
+      await supaFetch('/rest/v1/gps_settings', {
+        method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal',
+        body: JSON.stringify({key:'accounts', value:balJson, updated_at:new Date().toISOString()})
+      });
+    }
+  } catch(e) { /* use localStorage/defaults */ }
+}
+
+function calcRunway() {
+  const accts = getAccounts();
+  // Use static defaults if input is blank; override if user typed something
+  // BIZ OPS: $3,627/mo (contractors + ops — Oakkah is payroll, lives in Owner Comp)
+  // OWNER COMP: $6,477/mo (Alex salary $5,660 + Oakkah $817)
+  const ops = parseFloat(document.getElementById('inputOps').value) || 3627;
+  const comp = parseFloat(document.getElementById('inputComp').value) || 6477;
+  const opsEl = document.getElementById('runwayOps');
+  const compEl = document.getElementById('runwayComp');
+  const opsDetail = document.getElementById('runwayOpsDetail');
+  const compDetail = document.getElementById('runwayCompDetail');
+
+  if (ops > 0) {
+    const months = accts.bizops.bal / ops;
+    const rounded = Math.floor(months * 10) / 10;
+    opsEl.textContent = rounded.toFixed(1) + ' mo';
+    opsEl.className = 'runway-months ' + (months >= 3 ? 'safe' : months >= 1.5 ? 'warn' : 'danger');
+    opsDetail.textContent = `$${accts.bizops.bal.toLocaleString('en-US',{maximumFractionDigits:0})} ÷ $${ops.toLocaleString()}/mo`;
+  } else {
+    opsEl.textContent = '— mo'; opsEl.className = 'runway-months unknown';
+    opsDetail.textContent = `Current: $${accts.bizops.bal.toLocaleString('en-US',{maximumFractionDigits:0})}`;
+  }
+
+  if (comp > 0) {
+    const months = accts.ownercomp.bal / comp;
+    const rounded = Math.floor(months * 10) / 10;
+    compEl.textContent = rounded.toFixed(1) + ' mo';
+    compEl.className = 'runway-months ' + (months >= 3 ? 'safe' : months >= 1.5 ? 'warn' : 'danger');
+    compDetail.textContent = `$${accts.ownercomp.bal.toLocaleString('en-US',{maximumFractionDigits:0})} ÷ $${comp.toLocaleString()}/mo`;
+  } else {
+    compEl.textContent = '— mo'; compEl.className = 'runway-months unknown';
+    compDetail.textContent = `Current: $${accts.ownercomp.bal.toLocaleString('en-US',{maximumFractionDigits:0})}`;
+  }
+}
+
+function saveRunway() {
+  const ops = document.getElementById('inputOps').value;
+  const comp = document.getElementById('inputComp').value;
+  if (ops) localStorage.setItem('gps_monthly_ops', ops);
+  if (comp) localStorage.setItem('gps_monthly_comp', comp);
+  calcRunway();
+}
+
+function loadRunwayInputs() {
+  // Static defaults based on actual expenses:
+  // OWNER COMP: $6,477/mo — Alex salary $5,660.42 + Oakkah $817.08 (payroll, from Owner Comp acct)
+  // BIZ OPS: $3,627/mo — contractors $1,127 + other ops ~$2,500 (Oakkah is NOT in BIZ OPS)
+  // What-if overrides saved per device in localStorage
+  const ops = localStorage.getItem('gps_monthly_ops') || '3627';
+  const comp = localStorage.getItem('gps_monthly_comp') || '6477';
+  // Only show override values in inputs if they differ from defaults
+  if (ops !== '3627') document.getElementById('inputOps').value = ops;
+  if (comp !== '6477') document.getElementById('inputComp').value = comp;
+  calcRunway();
+}
+
+// ─── UTILS ────────────────────────────────────────────────────────────────────
+function fmt$(n) { if(n>=1000000)return'$'+(n/1e6).toFixed(1)+'M';if(n>=1000)return'$'+Math.round(n/1000)+'K';return'$'+n.toLocaleString(); }
+function fmtTime(dt) { if(!dt)return''; const d=new Date(dt);let h=d.getHours(),m=d.getMinutes();const ap=h>=12?'pm':'am';h=h%12||12;return h+(m?':'+String(m).padStart(2,'0'):'')+ap; }
+function dayLabel(ds) {
+  const d=new Date(ds),t=new Date(),tm=new Date(t);tm.setDate(t.getDate()+1);
+  const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const mos=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  if(d.toDateString()===t.toDateString())return'Today — '+days[d.getDay()]+', '+mos[d.getMonth()]+' '+d.getDate();
+  if(d.toDateString()===tm.toDateString())return'Tomorrow — '+days[d.getDay()]+', '+mos[d.getMonth()]+' '+d.getDate();
+  return days[d.getDay()]+', '+mos[d.getMonth()]+' '+d.getDate();
+}
+function isToday(ds){return new Date(ds).toDateString()===new Date().toDateString();}
+function classifyEvent(t){const s=(t||'').toLowerCase();if(s.includes('podcast')||s.includes('executive appeal')||s.includes('pre-interview'))return'podcast';if(s.includes('coaching')||s.includes('collin')||s.includes('david')||s.includes('dean dally')||s.includes('steve bashir'))return'client';if(s.includes('discovery')||s.includes('follow-up')||s.includes('simon')||s.includes('scott')||s.includes('dwayne')||s.includes('brice')||s.includes('etech')||s.includes('marco'))return'prospect';return'internal';}
+function timeAgo(iso){const s=Math.floor((Date.now()-new Date(iso))/1000);if(s<60)return'just now';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';const d=Math.floor(s/86400);return d===1?'yesterday':d+'d ago';}
+function sqlEsc(s){return(s||'').replace(/'/g,"''");}
+function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+// ─── PIPELINE ─────────────────────────────────────────────────────────────────
+async function loadPipeline() {
+  const el=document.getElementById('pipelineContent');
+  el.innerHTML=`<div class="card-body" style="padding-top:14px;">
+    <div style="text-align:center;padding:14px 12px 18px;">
+      <div style="font-size:28px;margin-bottom:8px;">📊</div>
+      <div style="font-size:12px;font-weight:700;color:var(--navy-dark);margin-bottom:5px;">Live pipeline requires GoHighLevel</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.5;">Your pipeline syncs through Make. Open GHL directly to see current opportunities and deal values.</div>
+      <a href="https://app.gohighlevel.com" target="_blank" rel="noopener" style="background:var(--navy);color:white;padding:7px 18px;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;display:inline-block;">Open GoHighLevel →</a>
+    </div>
+  </div>`;
+  document.getElementById('pipelineUpdated').textContent='View in GHL';
+  document.getElementById('statOpenValue').innerHTML='<span style="font-size:13px;color:var(--muted)">—</span>';
+  document.getElementById('statOpenCount').textContent='open GHL to refresh';
+}
+
+// ─── CALENDAR ─────────────────────────────────────────────────────────────────
+async function loadCalendar() {
+  const el=document.getElementById('calendarContent');
+  try {
+    const rows = await supaFetch('/rest/v1/gps_settings?key=eq.cal_embed_url&select=value');
+    if (rows && rows[0] && rows[0].value) {
+      const src = rows[0].value.includes('?') ? rows[0].value + '&showTitle=0&showNav=1&showPrint=0&showTabs=0&showCalendars=0' : rows[0].value;
+      el.innerHTML=`<div style="height:400px;"><iframe src="${src}" style="border:none;width:100%;height:100%;" frameborder="0" scrolling="no" allowfullscreen></iframe></div>`;
+      return;
+    }
+  } catch(e) {}
+  el.innerHTML=`<div class="card-body" style="padding-top:14px;">
+    <div style="text-align:center;padding:10px 12px 16px;">
+      <div style="font-size:28px;margin-bottom:8px;">📅</div>
+      <div style="font-size:12px;font-weight:700;color:var(--navy-dark);margin-bottom:4px;">Connect your Google Calendar</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px;line-height:1.5;">In Google Calendar → Settings → your calendar → <em>Integrate calendar</em> → copy the Embed URL. Paste it below to show live events here.</div>
+      <div style="display:flex;gap:6px;max-width:360px;margin:0 auto 10px;">
+        <input id="calEmbedInput" placeholder="Paste embed URL from Google Calendar…" style="flex:1;border:1px solid var(--border);border-radius:6px;padding:6px 9px;font-size:11px;outline:none;font-family:inherit;">
+        <button onclick="saveCalEmbed()" style="background:var(--teal);color:white;border:none;border-radius:6px;padding:6px 13px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;">Save</button>
+      </div>
+      <a href="https://calendar.google.com" target="_blank" rel="noopener" style="color:var(--teal);font-size:11px;text-decoration:none;">Or open Google Calendar →</a>
+    </div>
+  </div>`;
+}
+
+async function saveCalEmbed() {
+  const url = (document.getElementById('calEmbedInput')||{}).value?.trim();
+  if (!url) return;
+  try {
+    await supaFetch('/rest/v1/gps_settings', {
+      method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal',
+      body: JSON.stringify({key:'cal_embed_url', value:url, updated_at:new Date().toISOString()})
+    });
+    loadCalendar();
+  } catch(e) { alert('Could not save. Try again.'); }
+}
+
+// ─── CHART ────────────────────────────────────────────────────────────────────
+function initChart() {
+  const ctx=document.getElementById('wfChart');
+  if(!ctx||ctx._c)return;
+  ctx._c=new Chart(ctx,{type:'line',data:{labels:['Dec','Jan','Feb','Mar','Apr','May'],datasets:[{data:[271,10093,10268,10167,14629,18075],borderColor:'#DB1F48',backgroundColor:'rgba(219,31,72,0.08)',fill:true,tension:0.4,pointRadius:4,pointBackgroundColor:'#DB1F48',borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'$'+c.raw.toLocaleString()}}},scales:{x:{grid:{display:false},ticks:{font:{size:10},color:'#64748B'}},y:{grid:{color:'#F1F5F9'},ticks:{font:{size:9},color:'#64748B',callback:v=>'$'+(v/1000).toFixed(0)+'K'}}}}});
+}
+
+// ─── NOTES ────────────────────────────────────────────────────────────────────
+async function loadNotes() {
+  const el=document.getElementById('notesList');
+  try {
+    const rows=await supaFetch('/rest/v1/gps_notes?select=id,text,source,tag,done,created_at&order=done.asc,created_at.desc&limit=50');
+    if(!rows||!rows.length){el.innerHTML='<div class="notes-empty">No notes yet. Add above or open the mobile capture URL on your phone.</div>';document.getElementById('notesCount').textContent='0 notes';return;}
+    document.getElementById('notesCount').textContent=rows.filter(r=>!r.done).length+' open · '+rows.length+' total';
+    let html='';
+    rows.forEach(r=>{
+      const srcCls=r.source==='sms'?'source-sms':r.source==='phone'?'source-phone':'source-console';
+      const srcLabel=r.source==='sms'?'📱 SMS':r.source==='phone'?'📱 Phone':'💻 Console';
+      html+=`<div class="note-item ${r.done?'done-note':''}" id="note-${r.id}">
+        <div class="note-done-btn ${r.done?'done':''}" onclick="toggleNote('${r.id}',${!r.done})">${r.done?'✓':''}</div>
+        <div class="note-body">
+          <div class="note-text">${escHtml(r.text)}</div>
+          <div class="note-meta"><span class="note-time">${timeAgo(r.created_at)}</span><span class="note-source ${srcCls}">${srcLabel}</span>${r.tag?`<span class="note-tag">#${r.tag}</span>`:''}</div>
+        </div>
+        <button class="send-claude-btn" onclick="sendToClaudeNote(${JSON.stringify(r.text)},this)" title="Copy to Claude">📤</button>
+      </div>`;
+    });
+    el.innerHTML=html;
+    document.getElementById('notesUpdated').textContent='Synced '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  } catch(e){el.innerHTML='<div class="notes-empty">Could not load notes. <a href="#" onclick="loadNotes();return false;">Retry</a></div>';}
+}
+
+async function saveNote() {
+  const input=document.getElementById('noteInput'),tag=document.getElementById('noteTag'),btn=document.getElementById('noteSaveBtn');
+  const text=input.value.trim();
+  if(!text)return;
+  btn.disabled=true;btn.textContent='Saving…';
+  try {
+    await supaFetch('/rest/v1/gps_notes',{method:'POST',prefer:'return=minimal',body:JSON.stringify({text,source:'console',tag:tag.value||null,done:false})});
+    input.value='';tag.value='';
+    await loadNotes();
+  } catch(e){alert('Could not save. Try again.');}
+  btn.disabled=false;btn.textContent='Save Note';
+}
+
+async function toggleNote(id,done) {
+  try {
+    await supaFetch(`/rest/v1/gps_notes?id=eq.${id}`,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({done})});
+    await loadNotes();
+  } catch(e){}
+}
+
+function sendToClaudeNote(text, btn) {
+  const msg = 'Please action this for me: ' + text;
+  navigator.clipboard.writeText(msg).then(() => {
+    const orig = btn.textContent; btn.textContent = '✅';
+    setTimeout(() => { btn.textContent = orig; }, 2000);
+  }).catch(() => { prompt('Copy this and paste into Claude:', msg); });
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('noteInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey))saveNote();});
+  document.getElementById('actionAddInput').addEventListener('keydown',e=>{if(e.key==='Enter')addActionItem();});
+});
+
+// ─── ACTION ITEMS ────────────────────────────────────────────────────────────
+// State cached in memory; persisted to Supabase so it syncs across devices/browsers
+
+window._actionState = {};   // {id: true} = done
+
+async function loadActionStateFromSupabase() {
+  try {
+    const rows = await supaFetch('/rest/v1/gps_settings?key=eq.gps_action_done&select=value');
+    if (rows && rows[0] && rows[0].value) {
+      window._actionState = JSON.parse(rows[0].value);
+    }
+  } catch(e) {
+    // Fallback: try localStorage if Supabase is unreachable
+    try { window._actionState = JSON.parse(localStorage.getItem('gps_action_done')||'{}'); } catch(_){}
+  }
+}
+
+function getActionState() {
+  return window._actionState;
+}
+
+function saveActionState(state) {
+  window._actionState = state;
+  // Async write to Supabase — non-blocking so UI stays snappy
+  supaFetch('/rest/v1/gps_settings', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates,return=minimal',
+    body: JSON.stringify({ key: 'gps_action_done', value: JSON.stringify(state), updated_at: new Date().toISOString() })
+  }).catch(() => {
+    // Silent fallback to localStorage if Supabase write fails
+    localStorage.setItem('gps_action_done', JSON.stringify(state));
+  });
+}
+
+function initActionItems() {
+  const state = getActionState();
+  const items = document.querySelectorAll('#actionList .action-item');
+  let openCount = 0;
+  items.forEach(item => {
+    const id = item.dataset.id;
+    if (state[id]) {
+      markItemDone(item, true);
+    } else {
+      openCount++;
+    }
+  });
+  rebuildDoneSection();
+  document.getElementById('actionBadge').textContent = openCount + ' open';
+}
+
+function checkActionItem(id, checkEl) {
+  const state = getActionState();
+  const item = checkEl.closest('.action-item');
+  const isDone = !state[id];
+  state[id] = isDone || undefined;
+  if (!isDone) delete state[id];
+  saveActionState(state);
+  if (isDone) {
+    markItemDone(item, true);
+    setTimeout(() => rebuildDoneSection(), 350);
+    // If this came from a sweep, dismiss it in Supabase so it stays done across devices
+    if (item.dataset.sweepItem) dismissSweepItem(id);
+  } else {
+    // uncheck — move back to active list
+    item.remove();
+    rebuildDoneSection();
+    // re-add to active list
+    const activeList = document.getElementById('actionList');
+    item.classList.remove('done-item');
+    const chk = item.querySelector('.action-check');
+    chk.classList.remove('checked');
+    chk.textContent = '';
+    activeList.appendChild(item);
+  }
+  updateActionBadge();
+}
+
+function markItemDone(item, animate) {
+  if (animate) {
+    item.style.transition = 'opacity 0.3s';
+    item.style.opacity = '0.38';
+    setTimeout(() => { item.classList.add('done-item'); item.style.opacity = ''; }, 300);
+  } else {
+    item.classList.add('done-item');
+  }
+  const chk = item.querySelector('.action-check');
+  chk.classList.add('checked');
+  chk.textContent = '✓';
+}
+
+function rebuildDoneSection() {
+  const state = getActionState();
+  const allItems = document.querySelectorAll('#actionList .action-item');
+  const doneList = document.getElementById('actionDoneList');
+  const doneSection = document.getElementById('actionDoneSection');
+  const doneToggle = document.getElementById('actionDoneToggle');
+  let doneItems = [];
+  allItems.forEach(item => {
+    if (state[item.dataset.id]) doneItems.push(item);
+  });
+  // Move done items out of active list
+  doneItems.forEach(item => {
+    document.getElementById('actionList').removeChild(item);
+    doneList.appendChild(item);
+  });
+  if (doneItems.length > 0 || doneList.children.length > 0) {
+    const total = doneList.children.length;
+    doneSection.style.display = 'block';
+    const open = doneToggle.textContent.includes('▾');
+    doneToggle.textContent = (open ? '▾' : '▸') + ` Show completed (${total})`;
+  } else {
+    doneSection.style.display = 'none';
+  }
+  updateActionBadge();
+}
+
+function toggleDoneSection() {
+  const toggle = document.getElementById('actionDoneToggle');
+  const list = document.getElementById('actionDoneList');
+  const isOpen = list.style.display !== 'none';
+  list.style.display = isOpen ? 'none' : 'block';
+  const count = list.children.length;
+  toggle.textContent = (isOpen ? '▸' : '▾') + ` Show completed (${count})`;
+}
+
+function updateActionBadge() {
+  const activeCount = document.querySelectorAll('#actionList .action-item').length;
+  document.getElementById('actionBadge').textContent = activeCount + ' open';
+}
+
+let actionCounter = 100;
+async function addActionItem() {
+  const input = document.getElementById('actionAddInput');
+  const text = input.value.trim();
+  if (!text) return;
+  const id = 'ai-custom-' + (++actionCounter);
+  const div = document.createElement('div');
+  div.className = 'action-item';
+  div.dataset.id = id;
+  div.dataset.pri = 'normal';
+  div.innerHTML = `<div class="action-check" onclick="checkActionItem('${id}',this)"></div><div class="action-text"><div class="action-title">${escHtml(text)}</div><div class="action-from">Added manually · ${new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div></div><span class="action-pri pri-normal">This week</span>`;
+  document.getElementById('actionList').appendChild(div);
+  input.value = '';
+  updateActionBadge();
+  // Save to Supabase for cross-device sync
+  let customs = [];
+  try {
+    const rows = await supaFetch('/rest/v1/gps_settings?key=eq.gps_action_custom&select=value');
+    if (rows && rows[0] && rows[0].value) customs = JSON.parse(rows[0].value);
+  } catch(e) {
+    try { customs = JSON.parse(localStorage.getItem('gps_action_custom')||'[]'); } catch(_){}
+  }
+  customs.push({id, text, date: new Date().toISOString()});
+  supaFetch('/rest/v1/gps_settings', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates,return=minimal',
+    body: JSON.stringify({ key: 'gps_action_custom', value: JSON.stringify(customs), updated_at: new Date().toISOString() })
+  }).catch(() => localStorage.setItem('gps_action_custom', JSON.stringify(customs)));
+}
+
+async function loadCustomActionItems() {
+  let customs = [];
+  try {
+    const rows = await supaFetch('/rest/v1/gps_settings?key=eq.gps_action_custom&select=value');
+    if (rows && rows[0] && rows[0].value) {
+      customs = JSON.parse(rows[0].value);
+    }
+  } catch(e) {
+    // Fallback to localStorage
+    try { customs = JSON.parse(localStorage.getItem('gps_action_custom')||'[]'); } catch(_){}
+  }
+  const state = getActionState();
+  customs.forEach(c => {
+    if (document.querySelector(`[data-id="${c.id}"]`)) return;
+    const div = document.createElement('div');
+    div.className = 'action-item' + (state[c.id] ? ' done-item' : '');
+    div.dataset.id = c.id;
+    div.innerHTML = `<div class="action-check${state[c.id]?' checked':''}" onclick="checkActionItem('${c.id}',this)">${state[c.id]?'✓':''}</div><div class="action-text"><div class="action-title">${escHtml(c.text)}</div><div class="action-from">Added manually · ${new Date(c.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div></div><span class="action-pri pri-normal">This week</span>`;
+    document.getElementById('actionList').appendChild(div);
+  });
+}
+
+async function loadSweepActionItems() {
+  try {
+    const rows = await supaFetch('/rest/v1/gps_settings?key=eq.sweep_action_items&select=value');
+    if (!rows || !rows[0] || !rows[0].value) return;
+    const items = JSON.parse(rows[0].value);
+    const list = document.getElementById('actionList');
+    items.filter(i => !i.dismissed).forEach(item => {
+      if (document.querySelector(`[data-id="${item.id}"]`)) return;
+      const div = document.createElement('div');
+      div.className = 'action-item';
+      div.dataset.id = item.id;
+      div.dataset.sweepItem = 'true';
+      const isHigh = item.priority === 'high';
+      div.innerHTML = `<div class="action-check" onclick="checkActionItem('${item.id}',this)"></div><div class="action-text"><div class="action-title">${escHtml(item.text)}</div><div class="action-from">${escHtml(item.from)}</div></div><span class="action-pri ${isHigh?'pri-high':'pri-normal'}">${isHigh?'Needs reply':'This week'}</span>`;
+      list.appendChild(div);
+    });
+    updateActionBadge();
+    rebuildDoneSection();
+  } catch(e) { /* silent — sweep items are bonus, not critical */ }
+}
+
+async function dismissSweepItem(id) {
+  try {
+    const rows = await supaFetch('/rest/v1/gps_settings?key=eq.sweep_action_items&select=value');
+    if (!rows || !rows[0] || !rows[0].value) return;
+    const items = JSON.parse(rows[0].value);
+    const updated = items.map(i => i.id === id ? {...i, dismissed: true} : i);
+    await supaFetch('/rest/v1/gps_settings', {
+      method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal',
+      body: JSON.stringify({key:'sweep_action_items', value:JSON.stringify(updated), updated_at:new Date().toISOString()})
+    });
+  } catch(e) { /* silent */ }
+}
+
+// ─── CASH FLOW FORECAST ───────────────────────────────────────────────────────
+// ─── PROFIT FIRST REALITY CHECK ───────────────────────────────────────────────
+// Every dollar of revenue is split BEFORE it can be spent:
+//   BIZ OPS 30%  → operating expenses (Oakkah payroll, contractors, coach, overhead)
+//   OWNER COMP 34% → Alex payroll only ($5,660.42/mo on the 1st)
+//   TAXES 25%    → UNTOUCHABLE reserve
+//   HEALTHCARE 6% + SAVINGS 5% → locked in purpose
+//
+// So $10,500 income → BIZ OPS only gets $3,150. TAXES gets $2,625 that cannot be spent.
+//
+// STARTING BALANCES (May 25):
+//   BIZ OPS: $4,059  |  OWNER COMP: $12,673
+//   CapOne bridge: move $3K mktg + $2K healthcare → BIZ OPS after bridge: $2,059
+//
+// INCOME → SPLIT:
+//   $10,500 check  → BIZ OPS +$3,150 | OWNER COMP +$3,570
+//   $8,250 NM      → BIZ OPS +$2,475 | OWNER COMP +$2,805
+//   $10,000 Wkshp1 → BIZ OPS +$3,000 | OWNER COMP +$3,400
+//   $10,500 Wkshp2 → BIZ OPS +$3,150 | OWNER COMP +$3,570
+
+const PF = { ops: 0.30, comp: 0.34, tax: 0.25, health: 0.06, save: 0.05 };
+
+const SCENARIOS = {
+  base: {
+    label: 'Base Case',
+    desc: 'NM invoice 30 days · Workshops Wk 5 & Wk 8 · Coach from BIZ OPS',
+    weeks: ['Now','CapOne Paid','Wk 1\nJun 1','Wk 2','Wk 3','Wk 4','Wk 5','Wk 6\nJul 1','Wk 7','Wk 8'],
+    // BIZ OPS: start $4,059 → after bridge (moved $3K mktg + $2K healthcare to cover CapOne): $2,059
+    bizops:   [4059, 2059, 4132, 3872, -1388, 827, 3567, 2490, -2770, 120],
+    // OWNER COMP: start $12,673 → June payroll hits Wk 1, July payroll hits Wk 6
+    ownercomp:[12673, 12673, 10583, 10583, 10583, 13388, 16788, 11128, 11128, 14698],
+    events: [
+      {week:'Now',    icon:'🔴', desc:'Capital One past due — move $3K mktg + $2K healthcare → BIZ OPS, pay $7K CapOne', amt:'-$7,000', cls:'out'},
+      {week:'Wk 1',  icon:'🟢', desc:'Check clears → split: BIZ OPS +$3,150 · OWNER COMP +$3,570 · TAXES +$2,625 (locked)', amt:'+$10,500', cls:'in'},
+      {week:'Wk 1',  icon:'💰', desc:'June 1 payroll from OWNER COMP: Alex -$5,660 · Oakkah -$817 from BIZ OPS', amt:'-$6,478', cls:'out'},
+      {week:'Wk 3',  icon:'⚠', desc:'Coach payment 1 (-$5,000 from BIZ OPS) — BIZ OPS only has $3,872. GAP: ~$1,400. Cover with marketing account.', amt:'-$5,000', cls:'out'},
+      {week:'Wk 4',  icon:'🟢', desc:'NM invoice received → split: BIZ OPS +$2,475 · OWNER COMP +$2,805 · TAXES +$2,063 (locked)', amt:'+$8,250', cls:'in'},
+      {week:'Wk 5',  icon:'🟢', desc:'Workshop 1 → split: BIZ OPS +$3,000 · OWNER COMP +$3,400 · TAXES +$2,500 (locked)', amt:'+$10,000', cls:'in'},
+      {week:'Wk 6',  icon:'💰', desc:'July 1 payroll from OWNER COMP: Alex -$5,660 · Oakkah -$817 from BIZ OPS', amt:'-$6,478', cls:'out'},
+      {week:'Wk 7',  icon:'⚠', desc:'Coach payment 2 (-$5,000 from BIZ OPS) — BIZ OPS only has $2,490. GAP: ~$2,770. Cover with marketing account.', amt:'-$5,000', cls:'out'},
+      {week:'Wk 8',  icon:'🟢', desc:'Workshop 2 → split: BIZ OPS +$3,150 · OWNER COMP +$3,570 · TAXES +$2,625 (locked)', amt:'+$10,500', cls:'in'},
+    ],
+    bizops_trough: -2770, bizops_trough_week: 'Wk 7',
+    ownercomp_trough: 10583, ownercomp_trough_week: 'Wk 1-3',
+    gap_total: 4158, // total BIZ OPS shortfall needing bridge
+    color_ops: '#DB1F48', color_comp: '#004369'
+  },
+  best: {
+    label: 'Best Case',
+    desc: 'NM invoice early (Wk 2) · Workshops Wk 4 & Wk 7 · Coach from BIZ OPS',
+    weeks: ['Now','CapOne Paid','Wk 1\nJun 1','Wk 2','Wk 3','Wk 4','Wk 5','Wk 6\nJul 1','Wk 7','Wk 8'],
+    bizops:   [4059, 2059, 4132, 6347, 1087, 3827, 3567, 2490, 2380, 2120],
+    ownercomp:[12673, 12673, 10583, 13388, 13388, 16788, 16788, 11128, 14698, 14698],
+    events: [
+      {week:'Now',   icon:'🔴', desc:'Pay Capital One — bridge: $3K mktg + $2K healthcare → BIZ OPS', amt:'-$7,000', cls:'out'},
+      {week:'Wk 1',  icon:'🟢', desc:'Check clears → BIZ OPS +$3,150 · OWNER COMP +$3,570 · TAXES +$2,625 locked', amt:'+$10,500', cls:'in'},
+      {week:'Wk 1',  icon:'💰', desc:'June 1 payroll — Alex -$5,660 (OWNER COMP) · Oakkah -$817 (BIZ OPS)', amt:'-$6,478', cls:'out'},
+      {week:'Wk 2',  icon:'🟢', desc:'NM invoice early → BIZ OPS +$2,475 · OWNER COMP +$2,805 · TAXES +$2,063 locked', amt:'+$8,250', cls:'in'},
+      {week:'Wk 3',  icon:'🔴', desc:'Coach payment 1 from BIZ OPS ($6,347 on hand) — covered, $1,087 remaining', amt:'-$5,000', cls:'out'},
+      {week:'Wk 4',  icon:'🟢', desc:'Workshop 1 early → BIZ OPS +$3,000 · OWNER COMP +$3,400 · TAXES +$2,500 locked', amt:'+$10,000', cls:'in'},
+      {week:'Wk 6',  icon:'💰', desc:'July 1 payroll — Alex -$5,660 (OWNER COMP) · Oakkah -$817 (BIZ OPS)', amt:'-$6,478', cls:'out'},
+      {week:'Wk 7',  icon:'🟢', desc:'Workshop 2 early → BIZ OPS +$3,150 · OWNER COMP +$3,570 · TAXES +$2,625 locked', amt:'+$10,500', cls:'in'},
+      {week:'Wk 7',  icon:'🔴', desc:'Coach payment 2 from BIZ OPS ($2,490 + $3,150 = $5,640) — covered', amt:'-$5,000', cls:'out'},
+    ],
+    bizops_trough: 1087, bizops_trough_week: 'Wk 3',
+    ownercomp_trough: 10583, ownercomp_trough_week: 'Wk 1',
+    gap_total: 0, // no gap — BIZ OPS stays positive throughout
+    color_ops: '#10B981', color_comp: '#004369'
+  },
+  stress: {
+    label: 'Stress Test',
+    desc: 'NM delayed Wk 6 · Workshops delayed 2 weeks · BIZ OPS goes negative Wk 3–6',
+    weeks: ['Now','CapOne Paid','Wk 1\nJun 1','Wk 2','Wk 3','Wk 4','Wk 5','Wk 6\nJul 1','Wk 7','Wk 8'],
+    bizops:   [4059, 2059, 4132, 3872, -1388, -1648, -1908, -510, 2230, -2770],
+    ownercomp:[12673, 12673, 10583, 10583, 10583, 10583, 10583, 7728, 11128, 11128],
+    events: [
+      {week:'Now',   icon:'🔴', desc:'Pay Capital One — bridge from marketing + healthcare', amt:'-$7,000', cls:'out'},
+      {week:'Wk 1',  icon:'🟢', desc:'Check clears → BIZ OPS +$3,150 · OWNER COMP +$3,570 · TAXES +$2,625 locked', amt:'+$10,500', cls:'in'},
+      {week:'Wk 1',  icon:'💰', desc:'June 1 payroll — Alex -$5,660 (OWNER COMP) · Oakkah -$817 (BIZ OPS)', amt:'-$6,478', cls:'out'},
+      {week:'Wk 3',  icon:'⚠', desc:'Coach pmt 1 hits with only $3,872 in BIZ OPS. Gap: ~$1,400. WF line or marketing account required.', amt:'-$5,000', cls:'out'},
+      {week:'Wk 4-5',icon:'🔴', desc:'BIZ OPS stays negative. No income has landed yet. WF credit line ($4,924) needed as bridge.', amt:'Gap', cls:'neutral'},
+      {week:'Wk 6',  icon:'🟢', desc:'NM invoice delayed arrival → BIZ OPS +$2,475 · OWNER COMP +$2,805 · July payroll also hits', amt:'+$8,250', cls:'in'},
+      {week:'Wk 7',  icon:'🟢', desc:'Workshop 1 delayed → BIZ OPS +$3,000 · OWNER COMP +$3,400', amt:'+$10,000', cls:'in'},
+      {week:'Wk 7',  icon:'⚠', desc:'Coach pmt 2 hits right as Workshop 1 lands. BIZ OPS: $2,230 before, -$2,770 after. Gap needs cover.', amt:'-$5,000', cls:'out'},
+      {week:'Wk 8',  icon:'🟢', desc:'Workshop 2 delayed → BIZ OPS +$3,150. Finally restores positive balance.', amt:'+$10,500', cls:'in'},
+    ],
+    bizops_trough: -1908, bizops_trough_week: 'Wk 5',
+    ownercomp_trough: 7728, ownercomp_trough_week: 'Wk 6',
+    gap_total: 8658, // cumulative BIZ OPS gap
+    color_ops: '#EF4444', color_comp: '#004369'
+  }
+};
+
+let activeScenario = 'base';
+let forecastChartInst = null;
+
+function setScenario(key, btn) {
+  activeScenario = key;
+  document.querySelectorAll('.scenario-tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  renderForecast();
+}
+
+function renderForecast() {
+  const s = SCENARIOS[activeScenario];
+  const ctx = document.getElementById('forecastChart');
+  if (forecastChartInst) forecastChartInst.destroy();
+
+  // Clip negatives to 0 for chart display; show gaps via annotations
+  const bizopsChart = s.bizops.map(v => Math.max(0, v));
+  const ownerChart  = s.ownercomp;
+
+  forecastChartInst = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: s.weeks,
+      datasets: [
+        {
+          label: 'BIZ OPS (30%)',
+          data: bizopsChart,
+          borderColor: s.color_ops,
+          backgroundColor: s.color_ops + '18',
+          fill: true,
+          tension: 0.35,
+          pointRadius: s.bizops.map(v => v < 0 ? 7 : 4),
+          pointBackgroundColor: s.bizops.map(v => v < 0 ? '#EF4444' : v < 2000 ? '#F59E0B' : s.color_ops),
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+          borderWidth: 2.5,
+          borderDash: []
+        },
+        {
+          label: 'OWNER COMP (34%)',
+          data: ownerChart,
+          borderColor: s.color_comp,
+          backgroundColor: 'transparent',
+          fill: false,
+          tension: 0.35,
+          pointRadius: 3,
+          pointBackgroundColor: s.color_comp,
+          pointBorderColor: '#fff',
+          pointBorderWidth: 1.5,
+          borderWidth: 1.5,
+          borderDash: [4, 3]
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top',
+          labels: { font: {size:10}, boxWidth: 20, padding: 10, color: '#64748B' }
+        },
+        tooltip: {
+          callbacks: {
+            title: (items) => s.weeks[items[0].dataIndex].replace('\n',' '),
+            label: (item) => {
+              const raw = s[item.dataset.label.includes('BIZ') ? 'bizops' : 'ownercomp'][item.dataIndex];
+              const flag = raw < 0 ? ' ⚠ SHORTFALL' : '';
+              return `${item.dataset.label}: $${Math.abs(raw).toLocaleString()}${flag}`;
+            },
+            afterBody: (items) => {
+              const wi = items[0].dataIndex;
+              const bv = s.bizops[wi];
+              if (bv < 0) return [`Gap: $${Math.abs(bv).toLocaleString()} — needs bridge from marketing acct or WF line`];
+              return [];
+            }
+          }
+        }
+      },
+      scales: {
+        x: { grid: {display:false}, ticks: {font:{size:9}, color:'#64748B', maxRotation:0} },
+        y: {
+          grid: { color: '#F1F5F9' },
+          ticks: { font:{size:9}, color:'#64748B', callback: v => '$'+(v/1000).toFixed(0)+'K' },
+          min: 0,
+          suggestedMax: 20000
+        }
+      }
+    }
+  });
+
+  // Metrics — show BOTH account troughs
+  const bMin = s.bizops_trough;
+  const ocMin = s.ownercomp_trough;
+  const bClass = bMin < 0 ? 'danger' : bMin < 3000 ? 'warn' : 'success';
+  const ocClass = ocMin < 5000 ? 'warn' : 'success';
+  const gapClass = s.gap_total > 0 ? 'danger' : 'success';
+  document.getElementById('forecastMetrics').innerHTML = `
+    <div class="forecast-metric">
+      <div class="forecast-metric-label">BIZ OPS Low Point</div>
+      <div class="forecast-metric-value ${bClass}">${bMin < 0 ? '-$'+Math.abs(bMin).toLocaleString() : '$'+bMin.toLocaleString()}</div>
+      <div style="font-size:9px;color:var(--muted);margin-top:2px;">${s.bizops_trough_week}</div>
+    </div>
+    <div class="forecast-metric">
+      <div class="forecast-metric-label">Owner Comp Low</div>
+      <div class="forecast-metric-value ${ocClass}">$${ocMin.toLocaleString()}</div>
+      <div style="font-size:9px;color:var(--muted);margin-top:2px;">${s.ownercomp_trough_week}</div>
+    </div>
+    <div class="forecast-metric">
+      <div class="forecast-metric-label">BIZ OPS Gap</div>
+      <div class="forecast-metric-value ${gapClass}">${s.gap_total > 0 ? '$'+s.gap_total.toLocaleString() : 'None'}</div>
+      <div style="font-size:9px;color:var(--muted);margin-top:2px;">needs bridging</div>
+    </div>
+    <div class="forecast-metric">
+      <div class="forecast-metric-label">Taxes (Locked)</div>
+      <div class="forecast-metric-value" style="color:var(--muted);">$23,173+</div>
+      <div style="font-size:9px;color:var(--danger);margin-top:2px;">DO NOT TOUCH</div>
+    </div>`;
+
+  // Tight zone / gap warning
+  const tzEl = document.getElementById('forecastTightZone');
+  if (s.gap_total > 0) {
+    tzEl.style.display = 'block';
+    const bridgeSrc = s.gap_total <= 4500 ? 'Marketing account ($7,008 available) covers this.' : 'Requires WF credit line ($4,924) + marketing account.';
+    tzEl.innerHTML = `⚠ BIZ OPS cash gap: <strong>$${s.gap_total.toLocaleString()}</strong> total bridging needed across coach payments. ${bridgeSrc} TAXES account ($23,173) is NOT available — that money belongs to the IRS.`;
+  } else {
+    tzEl.style.display = 'block';
+    tzEl.style.background = '#D1FAE5';
+    tzEl.style.borderColor = '#6EE7B7';
+    tzEl.style.color = '#065F46';
+    tzEl.innerHTML = `✓ BIZ OPS stays positive throughout. No bridge needed — this is the best case scenario.`;
+  }
+
+  // Events
+  let evHtml = '';
+  s.events.forEach(ev => {
+    evHtml += `<div class="forecast-event-row"><div class="forecast-event-week">${ev.week.replace('\n',' ')}</div><div class="forecast-event-icon">${ev.icon}</div><div class="forecast-event-desc">${ev.desc}</div><div class="forecast-event-amt ${ev.cls}">${ev.amt}</div></div>`;
+  });
+  document.getElementById('forecastEvents').innerHTML = evHtml;
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+function setDate(){document.getElementById('dateBadge').textContent=new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});}
+
+async function loadAll() {
+  const btn=document.getElementById('refreshBtn');
+  btn.disabled=true;btn.textContent='Refreshing…';
+  document.getElementById('pipelineContent').innerHTML='<div class="loading"><div class="spinner"></div>Pulling pipeline…</div>';
+  document.getElementById('calendarContent').innerHTML='<div class="loading"><div class="spinner"></div>Loading calendar…</div>';
+  document.getElementById('notesList').innerHTML='<div class="loading"><div class="spinner"></div>Loading notes…</div>';
+  setDate();initChart();renderAccounts();loadRunwayInputs();
+  const cashDate=localStorage.getItem('gps_accounts_date');
+  if(cashDate)document.getElementById('cashAsOf').textContent='As of '+cashDate;
+  // Action items — load Supabase state FIRST so checkmarks sync across devices
+  await loadActionStateFromSupabase();
+  await loadCustomActionItems();
+  initActionItems();
+  // Forecast
+  renderForecast();
+  await Promise.allSettled([loadPipeline(),loadCalendar(),loadNotes(),loadCoachBadge(),loadAccountsFromSupabase(),loadSweepActionItems()]);
+  btn.disabled=false;btn.textContent='↻ Refresh';
+}
+
+window.addEventListener('load', checkAuth);
+</script>
+</body>
+</html>

@@ -9,13 +9,17 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Find node — check common Mac install locations
-export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.nvm/versions/node/$(ls $HOME/.nvm/versions/node/ 2>/dev/null | tail -1)/bin:$PATH"
+# Find node — try direct PATH first, then login shell (needed when running from git hooks)
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:$PATH"
 NODE=$(command -v node 2>/dev/null)
 if [ -z "$NODE" ]; then
-  echo "  ⚠  node not found — skipping JS syntax check"
-  echo "     Install Node.js from nodejs.org if you want full validation"
-  NODE="echo SKIP"
+  # Git hooks don't load .zshrc/.bash_profile — spawn a login shell to get the real PATH
+  NODE=$(bash -l -c 'command -v node 2>/dev/null' 2>/dev/null)
+fi
+if [ -z "$NODE" ]; then
+  echo "  ⚠  node not found — JS syntax check skipped"
+  echo "     (Install Node.js from nodejs.org for full validation)"
+  NODE="SKIP"
 fi
 
 ERRORS=0
@@ -46,7 +50,7 @@ scripts = re.findall(r'<script(?![^>]*\bsrc\b)[^>]*>(.*?)</script>', content, re
 print('\n'.join(scripts))
 PYEOF
 
-  if [ "$NODE" = "echo SKIP" ]; then
+  if [ "$NODE" = "SKIP" ]; then
     echo "  ⚠  $f — skipped (node not found)"
     WARNINGS=$((WARNINGS + 1))
     continue
