@@ -4938,11 +4938,11 @@ function renderRatersTab() {
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
       <div>
         <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:2px;">
-          Interviews ${intEnabled ? `<span style="color:var(--d-green);margin-left:6px;">● Enabled</span>` : `<span style="color:var(--d-mid);margin-left:6px;">○ Disabled</span>`}
+          Interviews ${intEnabled ? '<span style="color:var(--d-green);margin-left:6px;">● Enabled</span>' : '<span style="color:var(--d-mid);margin-left:6px;">○ Disabled</span>'}
         </div>
         <div style="font-size:11px;color:var(--d-mid);">
           ${intEnabled
-            ? (intMax > 0 ? `${intUsed} of ${intMax} interview slots assigned` : 'No cap set — set a max to limit slots')
+            ? (intMax > 0 ? intUsed + ' of ' + intMax + ' interview slots assigned' : 'No cap set — set a max to limit slots')
             : 'Enable to mark raters for a 1:1 interview with Alex. They get the calendar link in their invite email.'}
         </div>
       </div>
