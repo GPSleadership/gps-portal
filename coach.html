@@ -1397,50 +1397,20 @@ if (hasValidSession()) {
   unlockDashboard();
 }
 
-async function checkPassword() {
+function checkPassword() {
   const val = document.getElementById('passwordInput').value.trim();
-  if (!val) return;
-
-  const btn = document.querySelector('#loginBox button');
-  if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
-
-  const timeout = ms => new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms));
-
-  try {
-    // Load coach password from settings (5s timeout)
-    let stored = 'GPS2026';
-    try {
-      const { data } = await Promise.race([
-        db.from('coach_settings').select('value').eq('key', 'coach_password').single(),
-        timeout(5000)
-      ]);
-      if (data && data.value) stored = data.value;
-    } catch (_) { /* use fallback */ }
-
-    if (val === stored) {
-      saveSession();
-      unlockDashboard();
-      return;
-    }
-
-    // Check admin accounts (5s timeout)
-    try {
-      const { data: adminData } = await Promise.race([
-        db.from('admin_accounts').select('password').eq('is_active', true),
-        timeout(5000)
-      ]);
-      if ((adminData || []).some(a => a.password === val)) {
-        saveSession();
-        unlockDashboard();
-        return;
-      }
-    } catch (_) { /* ignore */ }
-
-    document.getElementById('loginError').textContent = 'Incorrect password.';
-    document.getElementById('passwordInput').value = '';
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Enter Dashboard'; }
+  if (!val) {
+    document.getElementById('loginError').textContent = 'Please enter your password.';
+    return;
   }
+  if (val === 'GPS2026') {
+    saveSession();
+    unlockDashboard();
+    return;
+  }
+  document.getElementById('loginError').textContent = 'Incorrect password. Try again.';
+  document.getElementById('passwordInput').value = '';
+  document.getElementById('passwordInput').focus();
 }
 
 // ─────────────────────────────────────────────
@@ -4834,10 +4804,10 @@ function renderOverviewTab() {
         const daysAgo = Math.round((Date.now() - new Date(la)) / (1000*60*60*24));
         const color   = daysAgo <= 3 ? 'var(--d-green)' : daysAgo <= 7 ? 'var(--d-amber)' : 'var(--d-red)';
         const label   = daysAgo === 0 ? 'today' : daysAgo === 1 ? 'yesterday' : daysAgo + ' days ago';
-        return \`<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--d-border);font-size:12px;">
-          <span style="color:var(--d-mid);">Last portal visit: </span>
-          <span style="font-weight:700;color:\${color};">\${label}</span>
-        </div>\`;
+        return '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--d-border);font-size:12px;">' +
+          '<span style="color:var(--d-mid);">Last portal visit: </span>' +
+          '<span style="font-weight:700;color:' + color + ';">' + label + '</span>' +
+          '</div>';
       })()}
     </div>
     <div class="card" style="margin-bottom:0;">
