@@ -2,6 +2,7 @@
 // Routes all diagnostic actions through a single serverless function.
 //
 // POST /api/diagnostic?action=send-invites      — send rater invite emails
+// POST /api/diagnostic?action=send-leader-link  — email leader their self-assessment portal link
 // POST /api/diagnostic?action=generate-question — generate custom G1 question via Claude
 // POST /api/diagnostic?action=generate-report   — generate full TP3 report via Claude
 // GET|POST /api/diagnostic?action=reminders     — cron: rater reminders + T-2 alerts + auto-lock
@@ -135,6 +136,7 @@ export default async function handler(req, res) {
 
   switch (action) {
     case 'send-invites':         return handleSendInvites(req, res);
+    case 'send-leader-link':     return handleSendLeaderLink(req, res);
     case 'generate-question':    return handleGenerateQuestion(req, res);
     case 'generate-report':      return handleGenerateReport(req, res);
     case 'generate-team-report': return handleGenerateTeamReport(req, res);
@@ -300,6 +302,106 @@ async function handleSendInvites(req, res) {
 
   } catch (err) {
     console.error('[diagnostic/send-invites] error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ACTION: send-leader-link
+// POST /api/diagnostic?action=send-leader-link
+// Body: { diagnostic_id }
+// Emails the leader their self-assessment portal link.
+// Safe to re-send if the leader hasn't completed it yet.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function buildLeaderOnboardingEmail({ leaderName, leaderTitle, leaderOrg, portalLink, coachEmail }) {
+  const firstName   = (leaderName || '').split(' ')[0] || 'there';
+  const orgLine     = leaderOrg ? ` at ${leaderOrg}` : '';
+  const contactLine = coachEmail
+    ? `If you have questions, reply to this email or reach Alex directly at <a href="mailto:${coachEmail}" style="color:#1A3D6E;">${coachEmail}</a>.`
+    : 'If you have questions, reply to this email.';
+
+  return `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
+      <div style="background:#1A3D6E;padding:20px 28px;border-radius:8px 8px 0 0;">
+        <div style="color:#C09A2A;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">GPS Leadership Solutions</div>
+        <div style="color:#ffffff;font-size:20px;font-weight:700;">Your Leadership Diagnostic Has Started</div>
+      </div>
+      <div style="background:#ffffff;padding:28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
+        <p>Hi ${firstName},</p>
+        <p>We're ready to begin your GPS Leadership Diagnostic. The first step is your self-assessment — a structured look at how you see your own leadership right now.</p>
+        <p>This is where you set the baseline. Your raters' feedback will be compared against your own perspective, so be honest. There are no wrong answers.</p>
+        <div style="background:#f5f7fa;border-left:4px solid #C09A2A;padding:16px 20px;border-radius:0 6px 6px 0;margin:20px 0;">
+          <div style="font-weight:700;color:#1A3D6E;margin-bottom:6px;">What to expect:</div>
+          <ul style="margin:0;padding-left:18px;font-size:14px;color:#333;">
+            <li>The self-assessment takes approximately <strong>20–30 minutes</strong>.</li>
+            <li>You'll answer questions about your leadership habits, team dynamics, and future vision.</li>
+            <li>Your responses are visible only to Alex — not shared directly with your team.</li>
+            <li>Complete it in one sitting if you can. You can save progress and return if needed.</li>
+          </ul>
+        </div>
+        <div style="margin:28px 0;text-align:center;">
+          <a href="${portalLink}"
+             style="background:#1A3D6E;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;display:inline-block;letter-spacing:0.3px;">
+            Open Your Leadership Portal →
+          </a>
+        </div>
+        <p style="font-size:13px;color:#666;text-align:center;">Or copy this link: <a href="${portalLink}" style="color:#1A3D6E;word-break:break-all;">${portalLink}</a></p>
+        <p style="margin-top:24px;">Once you complete the self-assessment, I'll reach out about next steps — including finalizing the list of people who will provide feedback on your leadership.</p>
+        <p>${contactLine}</p>
+        <p>– Alex Tremble<br /><span style="color:#666;font-size:13px;">GPS Leadership Solutions</span></p>
+        <div style="margin-top:32px;padding-top:20px;border-top:1px solid #eee;font-size:11px;color:#999;">
+          This link is unique to you and should not be shared. If you believe you received this in error, please reply to this email.
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function handleSendLeaderLink(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const { diagnostic_id } = req.body || {};
+  if (!diagnostic_id) return res.status(400).json({ error: 'diagnostic_id is required' });
+
+  try {
+    const diagRes = await sb(
+      `/rest/v1/diagnostics?id=eq.${diagnostic_id}&select=id,client_name,client_title,client_org,client_email,leader_token,self_assessment_completed_at&limit=1`
+    );
+    const diags = await diagRes.json();
+    if (!Array.isArray(diags) || diags.length === 0) return res.status(404).json({ error: 'Diagnostic not found' });
+    const diag = diags[0];
+
+    if (!diag.client_email) return res.status(400).json({ error: 'No email address on file for this leader. Add it in the diagnostic setup before sending.' });
+    if (!diag.leader_token) return res.status(400).json({ error: 'Leader token not found. This diagnostic may be incomplete — please contact support.' });
+
+    if (diag.self_assessment_completed_at) {
+      return res.status(400).json({ error: 'Self-assessment already completed. No need to re-send the portal link.' });
+    }
+
+    const portalLink = `${PORTAL_BASE}/diagnostic-leader.html?token=${diag.leader_token}`;
+    const subject    = `Your GPS Leadership Diagnostic is ready — next steps inside`;
+    const html       = buildLeaderOnboardingEmail({
+      leaderName:  diag.client_name,
+      leaderTitle: diag.client_title,
+      leaderOrg:   diag.client_org,
+      portalLink,
+      coachEmail:  COACH_EMAIL,
+    });
+
+    await sendEmail({
+      to:            diag.client_email,
+      subject,
+      html,
+      emailType:     'leader_onboarding',
+      recipientName: diag.client_name,
+    });
+
+    return res.status(200).json({ message: `Portal link sent to ${diag.client_email}`, email: diag.client_email });
+
+  } catch (err) {
+    console.error('[diagnostic/send-leader-link] error:', err);
     return res.status(500).json({ error: err.message });
   }
 }

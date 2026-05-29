@@ -4718,10 +4718,19 @@ function renderDetailHeader() {
 
   const leaderLink = `${DIAG_BASE_URL}/diagnostic-leader.html?token=${d.leader_token}`;
   const dl = document.getElementById('detail-links');
-  if (dl) dl.innerHTML =
-    `<strong>Leader portal:</strong>
-     <a href="${leaderLink}" target="_blank" style="color:var(--d-blue);word-break:break-all;">${leaderLink}</a>
-     <button class="dbtn dbtn-outline dbtn-sm" style="margin-left:8px;" onclick="diagCopyText('${leaderLink}')">Copy</button>`;
+  if (dl) {
+    const selfDone  = !!d.self_assessment_completed_at;
+    const emailBtn  = d.client_email && !selfDone
+      ? `<button class="dbtn dbtn-primary dbtn-sm" style="margin-left:8px;" onclick="sendLeaderPortalLink()">📧 Email to Leader</button>`
+      : selfDone
+        ? `<span style="font-size:12px;color:var(--d-green);margin-left:8px;font-weight:600;">✓ Self-assessment complete</span>`
+        : `<span style="font-size:12px;color:var(--d-mid);margin-left:8px;" title="Add client email in Setup to enable this button">No email on file</span>`;
+    dl.innerHTML =
+      `<strong>Leader portal:</strong>
+       <a href="${leaderLink}" target="_blank" style="color:var(--d-blue);word-break:break-all;">${leaderLink}</a>
+       <button class="dbtn dbtn-outline dbtn-sm" style="margin-left:8px;" onclick="diagCopyText('${leaderLink}')">Copy</button>
+       ${emailBtn}`;
+  }
 
   const rc = document.getElementById('tab-rater-count');
   if (rc) rc.textContent = DIAG_RATERS.filter(r => !r.is_self).length;
@@ -6229,6 +6238,37 @@ function diagStatusBadge(status) {
 
 function diagCopyText(text) {
   navigator.clipboard.writeText(text).then(() => alert('Link copied to clipboard.'));
+}
+
+// ── Send leader portal link via email ─────────────────────────────────────────
+async function sendLeaderPortalLink() {
+  const d = DIAG_SEL;
+  if (!d) return;
+  if (!d.client_email) {
+    alert('No email address on file for this leader.\n\nAdd it in the Setup tab, then try again.');
+    return;
+  }
+  if (d.self_assessment_completed_at) {
+    alert(`${d.client_name} has already completed the self-assessment. No need to re-send the portal link.`);
+    return;
+  }
+  const confirmed = confirm(
+    `Send the portal link to ${d.client_name} at ${d.client_email}?\n\nThey'll receive an onboarding email with their unique link and instructions for completing the self-assessment.`
+  );
+  if (!confirmed) return;
+
+  try {
+    const resp = await fetch('/api/diagnostic?action=send-leader-link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ diagnostic_id: d.id }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || resp.status);
+    alert(`Portal link sent to ${data.email}`);
+  } catch (err) {
+    alert('Error sending email: ' + err.message);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
