@@ -9,13 +9,30 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Find node — try direct PATH first, then login shell (needed when running from git hooks)
+# Find node — git hooks run in a stripped shell, so try several strategies
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:$PATH"
 NODE=$(command -v node 2>/dev/null)
+
+# Strategy 2: zsh login shell (catches nvm/homebrew configured via .zshrc — most common on Mac)
 if [ -z "$NODE" ]; then
-  # Git hooks don't load .zshrc/.bash_profile — spawn a login shell to get the real PATH
+  NODE=$(zsh -l -c 'command -v node 2>/dev/null' 2>/dev/null)
+fi
+
+# Strategy 3: bash login shell (catches nvm configured via .bash_profile)
+if [ -z "$NODE" ]; then
   NODE=$(bash -l -c 'command -v node 2>/dev/null' 2>/dev/null)
 fi
+
+# Strategy 4: common nvm paths directly
+if [ -z "$NODE" ]; then
+  for NVM_NODE in "$HOME/.nvm/versions/node"/*/bin/node; do
+    if [ -x "$NVM_NODE" ]; then
+      NODE="$NVM_NODE"
+      break
+    fi
+  done
+fi
+
 if [ -z "$NODE" ]; then
   echo "  ⚠  node not found — JS syntax check skipped"
   echo "     (Install Node.js from nodejs.org for full validation)"
