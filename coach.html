@@ -1401,31 +1401,46 @@ async function checkPassword() {
   const val = document.getElementById('passwordInput').value.trim();
   if (!val) return;
 
-  // Load coach password from settings
-  const { data } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
-  const stored = (data && data.value) ? data.value : 'GPS2026'; // fallback
+  const btn = document.querySelector('#loginBox button');
+  if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
 
-  if (val === stored) {
-    saveSession();
-    unlockDashboard();
-    return;
+  const timeout = ms => new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms));
+
+  try {
+    // Load coach password from settings (5s timeout)
+    let stored = 'GPS2026';
+    try {
+      const { data } = await Promise.race([
+        db.from('coach_settings').select('value').eq('key', 'coach_password').single(),
+        timeout(5000)
+      ]);
+      if (data && data.value) stored = data.value;
+    } catch (_) { /* use fallback */ }
+
+    if (val === stored) {
+      saveSession();
+      unlockDashboard();
+      return;
+    }
+
+    // Check admin accounts (5s timeout)
+    try {
+      const { data: adminData } = await Promise.race([
+        db.from('admin_accounts').select('password').eq('is_active', true),
+        timeout(5000)
+      ]);
+      if ((adminData || []).some(a => a.password === val)) {
+        saveSession();
+        unlockDashboard();
+        return;
+      }
+    } catch (_) { /* ignore */ }
+
+    document.getElementById('loginError').textContent = 'Incorrect password.';
+    document.getElementById('passwordInput').value = '';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Enter Dashboard'; }
   }
-
-  // Check admin accounts as fallback
-  const { data: adminData } = await db
-    .from('admin_accounts')
-    .select('password')
-    .eq('is_active', true);
-
-  const adminPasswords = (adminData || []).map(a => a.password);
-  if (adminPasswords.includes(val)) {
-    saveSession();
-    unlockDashboard();
-    return;
-  }
-
-  document.getElementById('loginError').textContent = 'Incorrect password.';
-  document.getElementById('passwordInput').value = '';
 }
 
 // ─────────────────────────────────────────────
