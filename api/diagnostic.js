@@ -1169,7 +1169,7 @@ async function handleGenerateReport(req, res) {
     const nextVersion   = latestVersion + 1;
 
     // ── Cost ceiling: max 5 report generations per diagnostic ────────────
-    const MAX_REPORT_DRAFTS = 5;
+    const MAX_REPORT_DRAFTS = 20;
     if (latestVersion >= MAX_REPORT_DRAFTS) {
       return res.status(429).json({
         error: `Report generation limit reached (${MAX_REPORT_DRAFTS} drafts maximum). Contact support if you need to regenerate.`,
