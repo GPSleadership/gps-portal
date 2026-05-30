@@ -5309,6 +5309,32 @@ function renderReportTab() {
       <button class="dbtn dbtn-outline dbtn-sm" style="margin-left:auto;" onclick="exportDiagnosticResponses()">⬇ Export Responses (Excel)</button>` : ''}
     </div>
   </div>
+
+  <div class="card">
+    <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:4px;">Data Package Export</div>
+    <div style="font-size:12px;color:var(--d-mid);margin-bottom:12px;">Download everything verbatim — intake notes, coaching notes, interview notes, self-assessment, all rater scores, and all open-text responses. Nothing summarized or cut.</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="dbtn dbtn-outline" onclick="downloadExcelPackage(event)">⬇ Excel — Scores &amp; Responses</button>
+      <button class="dbtn dbtn-outline" onclick="downloadWordPackage(event)">⬇ Word Doc — Notes &amp; Verbatims</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:4px;">Upload Draft Report</div>
+    <div style="font-size:12px;color:var(--d-mid);margin-bottom:12px;">Paste your AI-drafted report or upload a .docx. The portal wraps it in GPS branding — then you can edit it inline and export as PDF.</div>
+    <div class="dform-group">
+      <label style="font-size:12px;">Paste draft text or HTML</label>
+      <textarea id="draft-paste-field" style="min-height:120px;font-family:monospace;font-size:11px;" placeholder="Paste your drafted report here…"></textarea>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px;">
+      <button class="dbtn dbtn-primary" onclick="formatAndPreviewDraft(event)">Format &amp; Preview →</button>
+      <span style="color:var(--d-mid);font-size:12px;">— or —</span>
+      <button class="dbtn dbtn-outline" onclick="document.getElementById('draft-upload-file').click()">⬆ Upload .docx</button>
+      <input type="file" id="draft-upload-file" accept=".docx" style="display:none;" onchange="handleDraftUpload(this)">
+      <span id="draft-upload-msg" style="font-size:12px;color:var(--d-mid);"></span>
+    </div>
+  </div>
+
   <div class="card">
     <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:12px;">90-Day Plan</div>
     <div class="dform-group">
@@ -5626,6 +5652,326 @@ async function exportDiagnosticResponses() {
   } catch(err) {
     alert('Export failed: ' + err.message);
   }
+}
+
+// ── Data Package Export ──────────────────────────────────────────────────────
+
+const TP3_Q_DESC = {
+  A1:'Demonstrates integrity by consistently following through on commitments',
+  A2:'Treats team members fairly and equitably',
+  A3:'Is transparent and honest in communications',
+  A4:'Acknowledges mistakes and takes responsibility',
+  A5:'Creates an environment where team members feel safe to speak up',
+  A6:'Is accessible and approachable when team members need guidance',
+  A7:'Maintains consistent standards and expectations across the team',
+  B1:'Identifies and addresses potential problems before they escalate',
+  B2:'Takes initiative without being told what to do',
+  B3:'Brings solutions, not just problems, to discussions',
+  B4:'Anticipates how decisions will affect other parts of the organization',
+  B5:'Manages up effectively — keeps leadership informed without being prompted',
+  B6:'Delegates appropriately and develops team members capacity',
+  C1:'Produces high-quality work consistently',
+  C2:'Uses their time effectively and helps others do the same',
+  C3:'Runs focused, productive meetings',
+  C4:'Drives projects to completion on time',
+  C5:'Removes obstacles that slow down the team',
+  C6:'Makes decisions at the right level without unnecessary escalation',
+  D1:'Overall leadership impact (1–10 scale)',
+  F1:'Actively develops the skills and capabilities of team members',
+  F2:'Is building a team that could operate effectively without them',
+  G1:'Custom Vision Alignment Question',
+  G2:'Custom GPS Gap Probe Question',
+};
+
+const TP3_TEXT_Q_DESC = {
+  A8:'Trust — Open comments',
+  B7:'Proactivity — Open comments',
+  C7:'Productivity — Open comments',
+  D2:'Most important change this leader could make',
+  E1:'Proudest contribution (self-assessment)',
+  E2:'Biggest challenge (self-assessment)',
+  E3:'Additional comments (self-assessment)',
+  F3:'Bench strength / team development comments',
+  G1:'G1 custom question — text response',
+  G2:'G2 custom question — text response',
+};
+
+async function fetchAllDiagData() {
+  const d = DIAG_SEL;
+  if (!d) throw new Error('No diagnostic selected');
+  const hdr = { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` };
+  const base = 'https://pbnkefuqpoztcxfagiod.supabase.co/rest/v1';
+  const [rR, resR] = await Promise.all([
+    fetch(`${base}/diagnostic_raters?diagnostic_id=eq.${d.id}&select=id,name,email,relationship,is_self,invited_at,completed_at`, { headers: hdr }),
+    fetch(`${base}/diagnostic_responses?diagnostic_id=eq.${d.id}&select=rater_id,question_code,score,text_response,submitted_at`, { headers: hdr }),
+  ]);
+  return { diag: d, raters: await rR.json(), responses: await resR.json() };
+}
+
+async function downloadExcelPackage(evt) {
+  const btn = evt.currentTarget; btn.disabled = true; btn.textContent = 'Building…';
+  try {
+    const { diag, raters, responses } = await fetchAllDiagData();
+    const rMap = Object.fromEntries(raters.map(r => [r.id, r]));
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: Client Profile
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+      ['Field','Value'],
+      ['Name', diag.client_name||''],
+      ['Title', diag.client_title||''],
+      ['Organization', diag.client_org||''],
+      ['Email', diag.client_email||''],
+      ['Intake Date', diag.intake_date ? new Date(diag.intake_date).toLocaleDateString() : ''],
+      ['Survey Close Date', diag.close_date ? new Date(diag.close_date).toLocaleDateString() : ''],
+      ['Tier', diag.tier||''],
+      ['Status', diag.status||''],
+      ['Custom G1 Question', diag.custom_g1_question||''],
+      ['Custom G2 Question', diag.custom_g2_question||''],
+    ]), 'Client Profile');
+
+    // Sheet 2: Rater Roster
+    const rosterRows = [['Name','Email','Relationship','Is Self','Invited','Completed']];
+    for (const r of raters) rosterRows.push([
+      r.name||'', r.email||'', r.relationship||'', r.is_self?'Yes':'No',
+      r.invited_at ? new Date(r.invited_at).toLocaleDateString() : 'Not sent',
+      r.completed_at ? new Date(r.completed_at).toLocaleDateString() : 'Incomplete',
+    ]);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rosterRows), 'Rater Roster');
+
+    // Sheet 3: Scores by Rater Group (averages per question per group)
+    const rels = ['Direct Report','Peer','Supervisor','Internal Partner'];
+    const normRel = (rel) => (rel||'').toLowerCase().replace(/s$/,'').trim(); // "direct reports" → "direct report"
+    const scoredCodes = Object.keys(TP3_Q_DESC);
+    const avgHdr = ['Code','Behavior',  ...rels, 'Self','All Others (non-self)'];
+    const avgRows = [avgHdr];
+    for (const code of scoredCodes) {
+      const cResps = responses.filter(r => r.question_code === code && r.score != null);
+      const grpAvg = (rel) => {
+        const g = cResps.filter(r => normRel(rMap[r.rater_id]?.relationship) === rel.toLowerCase());
+        return g.length ? (g.reduce((s,r)=>s+r.score,0)/g.length).toFixed(2) : '';
+      };
+      const selfR = cResps.filter(r => rMap[r.rater_id]?.is_self);
+      const othR  = cResps.filter(r => !rMap[r.rater_id]?.is_self);
+      avgRows.push([
+        code,
+        code==='G1'?(diag.custom_g1_question||TP3_Q_DESC.G1):
+        code==='G2'?(diag.custom_g2_question||TP3_Q_DESC.G2):TP3_Q_DESC[code]||code,
+        grpAvg('direct report'), grpAvg('peer'), grpAvg('supervisor'), grpAvg('internal partner'),
+        selfR.length?(selfR.reduce((s,r)=>s+r.score,0)/selfR.length).toFixed(2):'',
+        othR.length?(othR.reduce((s,r)=>s+r.score,0)/othR.length).toFixed(2):'',
+      ]);
+    }
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(avgRows), 'Scores by Group');
+
+    // Sheet 4: Raw numeric scores (one row per rater)
+    const scoreHdr = ['Rater Name','Email','Relationship','Is Self', ...scoredCodes];
+    const scoreRows = [scoreHdr];
+    for (const rater of raters) {
+      const rResps = responses.filter(r => r.rater_id === rater.id);
+      scoreRows.push([
+        rater.name||'', rater.email||'', rater.relationship||'', rater.is_self?'Yes':'No',
+        ...scoredCodes.map(code => { const a = rResps.find(r=>r.question_code===code); return a?.score??''; }),
+      ]);
+    }
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(scoreRows), 'Raw Numeric Scores');
+
+    // Sheet 5: Verbatim text responses
+    const verbRows = [['Rater Name','Relationship','Is Self','Question Code','Question Description','Response (verbatim)']];
+    for (const resp of responses) {
+      if (!resp.text_response?.trim()) continue;
+      const rater = rMap[resp.rater_id]||{};
+      const qDesc = resp.question_code==='G1'?(diag.custom_g1_question||'G1 — Custom Vision Alignment'):
+                    resp.question_code==='G2'?(diag.custom_g2_question||'G2 — Custom GPS Gap Probe'):
+                    TP3_TEXT_Q_DESC[resp.question_code]||resp.question_code;
+      verbRows.push([rater.name||'', rater.relationship||'', rater.is_self?'Yes':'No', resp.question_code, qDesc, resp.text_response.trim()]);
+    }
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(verbRows), 'Verbatim Responses');
+
+    const safe = (diag.client_name||'diagnostic').replace(/[^a-zA-Z0-9]/g,'_');
+    XLSX.writeFile(wb, `${safe}_GPS_Data_Package.xlsx`);
+  } catch(err) { alert('Export failed: '+err.message); }
+  finally { btn.disabled=false; btn.innerHTML='⬇ Excel — Scores &amp; Responses'; }
+}
+
+async function downloadWordPackage(evt) {
+  const btn = evt.currentTarget; btn.disabled = true; btn.textContent = 'Building…';
+  try {
+    const { diag, raters, responses } = await fetchAllDiagData();
+    const rMap = Object.fromEntries(raters.map(r => [r.id, r]));
+    const h1 = t => `<h1 style="font-size:16pt;color:#1e3a6e;border-bottom:1.5pt solid #1e3a6e;padding-bottom:3pt;margin-top:18pt;margin-bottom:6pt;">${t}</h1>`;
+    const h2 = t => `<h2 style="font-size:13pt;color:#1e3a6e;margin-top:12pt;margin-bottom:4pt;">${t}</h2>`;
+    const lbl = (label, val) => `<p><strong>${label}:</strong> ${val?.trim() ? val.trim() : '<em>[Not provided]</em>'}</p>`;
+    const verbBlock = text => `<p style="margin:3pt 0 3pt 16pt;white-space:pre-wrap;">${text.trim()}</p>`;
+
+    let html = `<html><head><meta charset="UTF-8"><style>body{font-family:Calibri,sans-serif;font-size:11pt;color:#111;line-height:1.5;}p{margin:3pt 0;}</style></head><body>`;
+    html += `<div style="text-align:center;margin-bottom:18pt;">
+      <div style="font-size:20pt;font-weight:bold;color:#1e3a6e;">GPS LEADERSHIP SOLUTIONS</div>
+      <div style="font-size:14pt;color:#1e3a6e;">14-Day Executive Leadership Diagnostic — Data Package</div>
+      <div style="font-size:10pt;color:#666;margin-top:4pt;">Generated: ${new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})} · CONFIDENTIAL · FOR AI PROCESSING — ALL CONTENT VERBATIM</div>
+    </div><hr style="border:1pt solid #1e3a6e;margin-bottom:14pt;">`;
+
+    html += h1('1. Client Information');
+    html += lbl('Name', diag.client_name);
+    html += lbl('Title', diag.client_title);
+    html += lbl('Organization', diag.client_org);
+    html += lbl('Email', diag.client_email);
+    html += lbl('Intake Date', diag.intake_date ? new Date(diag.intake_date).toLocaleDateString() : '');
+    html += lbl('Survey Close Date', diag.close_date ? new Date(diag.close_date).toLocaleDateString() : '');
+    html += lbl('Diagnostic Tier', diag.tier);
+    html += lbl('Status', diag.status);
+    html += lbl('Number of Raters Invited', String(raters.filter(r=>!r.is_self).length));
+    html += lbl('Raters Completed', String(raters.filter(r=>!r.is_self&&r.completed_at).length));
+
+    html += h1('2. Intake Notes');
+    html += diag.intake_notes?.trim() ? verbBlock(diag.intake_notes) : '<p><em>[No intake notes on file]</em></p>';
+
+    html += h1('3. Coaching Session Notes');
+    html += diag.coaching_notes?.trim() ? verbBlock(diag.coaching_notes) : '<p><em>[No coaching notes on file]</em></p>';
+
+    html += h1('4. Interview Notes');
+    html += diag.interview_notes?.trim() ? verbBlock(diag.interview_notes) : '<p><em>[No interview notes on file]</em></p>';
+
+    html += h1('5. Leader Self-Assessment — Succession &amp; Future Self');
+    html += h2('3-Year Vision');
+    html += diag.self_three_year_vision?.trim() ? verbBlock(diag.self_three_year_vision) : '<p><em>[Not provided]</em></p>';
+    html += h2('Future Self &amp; Capabilities Needed');
+    html += diag.self_future_self_capabilities?.trim() ? verbBlock(diag.self_future_self_capabilities) : '<p><em>[Not provided]</em></p>';
+    html += h2('Immediate Successor Readiness (Leader\'s View)');
+    html += diag.self_immediate_successor_view?.trim() ? verbBlock(diag.self_immediate_successor_view) : '<p><em>[Not provided]</em></p>';
+    html += h2('Successor Candidates Identified');
+    html += diag.self_successor_candidates?.trim() ? verbBlock(diag.self_successor_candidates) : '<p><em>[Not provided]</em></p>';
+    html += h2('Successor Development Actions Underway');
+    html += diag.self_successor_development_actions?.trim() ? verbBlock(diag.self_successor_development_actions) : '<p><em>[Not provided]</em></p>';
+
+    html += h1('6. Custom Diagnostic Questions');
+    html += h2('G1 — Vision Alignment Question');
+    html += lbl('Question text', diag.custom_g1_question || '[Not generated]');
+    html += h2('G2 — GPS Gap Probe Question');
+    html += lbl('Question text', diag.custom_g2_question || '[Not generated]');
+
+    html += h1('7. Rater Roster');
+    html += `<table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:10pt;">
+      <tr style="background:#1e3a6e;color:#fff;"><th>Name</th><th>Email</th><th>Relationship</th><th>Self</th><th>Completed</th></tr>`;
+    for (const r of raters) html += `<tr><td>${r.name||''}</td><td>${r.email||''}</td><td>${r.relationship||''}</td><td>${r.is_self?'Yes':'No'}</td><td>${r.completed_at?new Date(r.completed_at).toLocaleDateString():'No'}</td></tr>`;
+    html += `</table>`;
+
+    html += h1('8. All Verbatim Survey Responses');
+    html += `<p><em>All text responses reproduced verbatim exactly as entered. Attributed by rater group, not individual.</em></p>`;
+    const textCodes = ['A8','B7','C7','D2','E1','E2','E3','F3','G1','G2'];
+    for (const code of textCodes) {
+      const cResps = responses.filter(r => r.question_code===code && r.text_response?.trim());
+      if (!cResps.length) continue;
+      const qDesc = code==='G1'?(diag.custom_g1_question||'G1 — Custom Vision Alignment'):
+                    code==='G2'?(diag.custom_g2_question||'G2 — Custom GPS Gap Probe'):
+                    TP3_TEXT_Q_DESC[code]||code;
+      html += h2(`${code}: ${qDesc}`);
+      for (const resp of cResps) {
+        const rater = rMap[resp.rater_id]||{};
+        const grp = rater.is_self ? 'Self (Leader)' : (rater.relationship||'Rater');
+        html += `<p><strong>[${grp}]</strong><br>${verbBlock(resp.text_response)}</p>`;
+      }
+    }
+
+    html += `</body></html>`;
+    const blob = new Blob(['﻿', html], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(diag.client_name||'diagnostic').replace(/[^a-zA-Z0-9]/g,'_')}_GPS_Notes_Verbatims.doc`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch(err) { alert('Export failed: '+err.message); }
+  finally { btn.disabled=false; btn.innerHTML='⬇ Word Doc — Notes &amp; Verbatims'; }
+}
+
+// ── Draft Report Upload → Format → Preview ───────────────────────────────────
+
+async function handleDraftUpload(inputEl) {
+  const file = inputEl.files[0];
+  if (!file) return;
+  const msg = document.getElementById('draft-upload-msg');
+  msg.style.color = 'var(--d-mid)'; msg.textContent = 'Reading file…';
+  try {
+    if (!window.mammoth) {
+      await new Promise((res, rej) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';
+        s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      });
+    }
+    const buf = await file.arrayBuffer();
+    const result = await mammoth.convertToHtml({ arrayBuffer: buf });
+    if (!result.value?.trim()) throw new Error('No content found in file');
+    document.getElementById('draft-paste-field').value = result.value;
+    msg.style.color = 'var(--d-green)';
+    msg.textContent = `✓ ${file.name} loaded — click Format & Preview to continue`;
+  } catch(err) {
+    msg.style.color = 'var(--d-red)';
+    msg.textContent = 'Error: ' + err.message;
+  }
+  inputEl.value = '';
+}
+
+async function formatAndPreviewDraft(evt) {
+  const d = DIAG_SEL;
+  if (!d) return;
+  const raw = (document.getElementById('draft-paste-field').value || '').trim();
+  if (!raw) { alert('Paste your draft text or upload a .docx file first.'); return; }
+  const btn = evt.currentTarget; btn.disabled = true; btn.textContent = 'Formatting…';
+  try {
+    const hdr = { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` };
+    const base = 'https://pbnkefuqpoztcxfagiod.supabase.co/rest/v1';
+
+    // Branded cover — same as generate-report endpoint
+    const reportDate = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+    const clientLine = [d.client_name, d.client_title, d.client_org].filter(Boolean).join(' · ');
+    const cover = `<div class="report-cover">
+  <div class="report-cover-logo">GPS LEADERSHIP SOLUTIONS</div>
+  <div class="report-cover-subtitle">14-Day Executive Leadership Diagnostic Report</div>
+  <div class="report-cover-client">${clientLine}</div>
+  <div class="report-cover-meta">
+    <span>Prepared by: Alex D. Tremble, CEO &nbsp;·&nbsp; GPS Leadership Solutions</span>
+    <span>${reportDate}</span>
+    <span class="report-confidential-badge">CONFIDENTIAL</span>
+  </div>
+</div><hr class="report-cover-divider">`;
+    const reportHtml = cover + '\n' + raw;
+
+    // Next version number
+    const vR = await fetch(`${base}/diagnostic_report_drafts?diagnostic_id=eq.${d.id}&select=version&order=version.desc&limit=1`, { headers: hdr });
+    const vData = await vR.json();
+    const nextVer = ((vData[0]?.version) || 0) + 1;
+
+    // Save to Supabase
+    const saveR = await fetch(`${base}/diagnostic_report_drafts`, {
+      method: 'POST',
+      headers: { ...hdr, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+      body: JSON.stringify({
+        diagnostic_id: d.id,
+        version: nextVer,
+        raw_markdown: reportHtml,
+        content_json: { report_format: 'html_v2', source: 'manual_upload', uploaded_at: new Date().toISOString() },
+        generated_at: new Date().toISOString(),
+      }),
+    });
+    if (!saveR.ok) throw new Error(`Save failed (${saveR.status})`);
+
+    // Update diagnostic status if needed
+    if (!['report_draft','report_final'].includes(d.status)) {
+      await fetch(`${base}/diagnostics?id=eq.${d.id}`, {
+        method: 'PATCH',
+        headers: { ...hdr, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+        body: JSON.stringify({ status: 'report_draft', report_generated_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
+      });
+    }
+
+    document.getElementById('draft-paste-field').value = '';
+    await refreshSelected();
+    openReportPreview(); // open with the new draft — edit, then PDF
+  } catch(err) { alert('Error: ' + err.message); }
+  finally { btn.disabled = false; btn.innerHTML = 'Format &amp; Preview →'; }
 }
 
 async function generateReportOverride() {
