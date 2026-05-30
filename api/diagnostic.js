@@ -910,6 +910,10 @@ Generate the diagnostic report JSON now.`.trim();
       },
       generated_at: now,
     }, { Prefer: 'return=representation' });
+    if (!draftRes.ok) {
+      const errBody = await draftRes.text();
+      throw new Error(`Failed to save report draft (HTTP ${draftRes.status}): ${errBody.slice(0, 300)}`);
+    }
     const drafts = await draftRes.json();
     const draft  = Array.isArray(drafts) ? drafts[0] : drafts;
 
