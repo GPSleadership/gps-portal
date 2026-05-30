@@ -5611,7 +5611,7 @@ async function generateReportOverride() {
 // ── Report preview + three-layer finalize gate ───────────────────────────
 
 async function openReportPreview() {
-  const d = DIAG_SELECTED;
+  const d = DIAG_SEL;
   if (!d) return;
 
   // Reset modal state
@@ -5691,7 +5691,7 @@ function toggleFinalizeBtn() {
 }
 
 async function confirmAndFinalize() {
-  const d = DIAG_SELECTED;
+  const d = DIAG_SEL;
   if (!d) return;
   const checkEl = document.getElementById('rp-review-check');
   if (!checkEl.checked) { alert('Please confirm you have reviewed the report first.'); return; }
