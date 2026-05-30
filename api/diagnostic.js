@@ -141,6 +141,7 @@ export default async function handler(req, res) {
     case 'generate-question':    return handleGenerateQuestion(req, res);
     case 'generate-g2-question': return handleGenerateG2Question(req, res);
     case 'generate-report':      return handleGenerateReport(req, res);
+    case 'import-survey-data':   return handleImportSurveyData(req, res);
     case 'generate-team-report': return handleGenerateTeamReport(req, res);
     case 'finalize-report':      return handleFinalizeReport(req, res);
     case 'reminders':            return handleReminders(req, res);
@@ -943,7 +944,14 @@ HTML elements to use:
 GENERATE THESE SECTIONS IN ORDER:
 
 SECTION 1: EXECUTIVE SUMMARY
-3–4 punchy sentences. State the TP3 Index score, the single biggest strength, the most critical gap, and the business implication. No softening. This is a scorecard, not a comfort letter.
+One sentence naming the overall TP3 Index score and performance tier. Then a <ul class="report-list"> with 5–6 bullets. Use <strong> for the label in each bullet:
+• <strong>TP3 Index:</strong> [score] — [tier: Exceptional / Strong / Solid / Developing / Needs Attention / Critical Gap]
+• <strong>Top Strength:</strong> [named strength with the score or pattern that confirms it]
+• <strong>Critical Gap:</strong> [named gap with the score or pattern that reveals it — be direct]
+• <strong>Self-Perception:</strong> [Self vs. All Others — aligned, notable blind spot, or under-confidence]
+• <strong>Business Consequence:</strong> [one sentence — what this profile means for team performance or business execution right now]
+• <strong>Watch Item:</strong> [only if a score is below 3.0, there is a sharp rater-group split, or a verbatim demands immediate attention — omit this bullet if nothing warrants it]
+No paragraphs in this section. No softening. Scannable in 30 seconds.
 
 SECTION 2: YOUR TP3 PROFILE
 Create a score table. Rows: Trust | Proactivity | Productivity | TP3 Index | Overall Impact (1–10) | Bench Strength. Columns: Direct Reports | Peers | Supervisors | Int'l Partners | Self | All Others. Show n/a where no raters in that group.
@@ -1106,8 +1114,22 @@ Write the complete 14-Day Executive Leadership Diagnostic Report for ${diag.clie
     // Sonnet + 7000 tokens + 1 retry — requires Vercel Pro (120s maxDuration)
     const raw = await callClaude(REPORT_SYSTEM_PROMPT, userPrompt, 7000, { retries: 1, retryDelayMs: 2000, model: CLAUDE_REPORT_MODEL });
 
-    // Output is full HTML — no JSON parsing needed
-    const reportHtml = raw.trim();
+    // Output is full HTML — prepend branded cover before storing
+    const reportDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const clientLine = [diag.client_name, diag.client_title, diag.client_org].filter(Boolean).join(' · ');
+    const brandedCover = `<div class="report-cover">
+  <div class="report-cover-logo">GPS LEADERSHIP SOLUTIONS</div>
+  <div class="report-cover-subtitle">14-Day Executive Leadership Diagnostic Report</div>
+  <div class="report-cover-client">${clientLine}</div>
+  <div class="report-cover-meta">
+    <span>Prepared by: Alex D. Tremble, CEO &nbsp;·&nbsp; GPS Leadership Solutions</span>
+    <span>${reportDate}</span>
+    <span class="report-confidential-badge">CONFIDENTIAL</span>
+  </div>
+</div>
+<hr class="report-cover-divider">
+`;
+    const reportHtml = brandedCover + raw.trim();
     if (!reportHtml) {
       return res.status(500).json({ error: 'Claude returned an empty report. Please try again.' });
     }
@@ -1956,6 +1978,65 @@ function buildTeamReportPrompt({ org_name, team_name, prepared_for_name, prepare
 
   lines.push('', 'Generate the full team diagnostic report following the section format above.');
   return lines.join('\n');
+}
+
+// ── Import survey data (test/manual data entry) ──────────────────────────────
+async function handleImportSurveyData(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const { diagnostic_id, raters } = req.body || {};
+  if (!diagnostic_id) return res.status(400).json({ error: 'diagnostic_id required' });
+  if (!Array.isArray(raters) || raters.length === 0) return res.status(400).json({ error: 'raters array required' });
+  if (raters.length > 25) return res.status(400).json({ error: 'Max 25 raters per import' });
+
+  try {
+    const now = new Date().toISOString();
+    let raterCount = 0;
+    let responseCount = 0;
+
+    for (const rater of raters) {
+      if (!rater.name || !rater.email || !rater.relationship) continue;
+
+      // Insert rater record — mark completed immediately so it counts toward the report
+      const raterRes = await sb('/rest/v1/diagnostic_raters', 'POST', {
+        diagnostic_id,
+        name:         rater.name,
+        email:        rater.email,
+        relationship: rater.relationship,
+        is_self:      rater.is_self === true || rater.is_self === 'true' || rater.is_self === 'TRUE',
+        invited_at:   now,
+        completed_at: now,
+      }, { Prefer: 'return=representation' });
+
+      const raterData = await raterRes.json();
+      if (!Array.isArray(raterData) || !raterData[0]?.id) {
+        console.error('[import] Failed to insert rater:', rater.name, raterData);
+        continue;
+      }
+      const raterId = raterData[0].id;
+      raterCount++;
+
+      // Build response rows — rated scores + text responses
+      const rows = [];
+      for (const [code, score] of Object.entries(rater.scores || {})) {
+        const n = Number(score);
+        if (isNaN(n) || n <= 0) continue;
+        rows.push({ rater_id: raterId, diagnostic_id, question_code: code, score: n, submitted_at: now });
+      }
+      for (const [code, text] of Object.entries(rater.texts || {})) {
+        if (!text || !String(text).trim()) continue;
+        rows.push({ rater_id: raterId, diagnostic_id, question_code: code, text_response: String(text).trim(), submitted_at: now });
+      }
+      if (rows.length > 0) {
+        await sb('/rest/v1/diagnostic_responses', 'POST', rows, { Prefer: 'return=minimal' });
+        responseCount += rows.length;
+      }
+    }
+
+    return res.status(200).json({ rater_count: raterCount, response_count: responseCount });
+  } catch (err) {
+    console.error('[import-survey-data] error:', err);
+    return res.status(500).json({ error: err.message });
+  }
 }
 
 async function handleGenerateTeamReport(req, res) {
