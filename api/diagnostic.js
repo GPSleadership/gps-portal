@@ -26,7 +26,7 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const COACH_EMAIL       = process.env.COACH_ALERT_EMAIL   || 'alex@gpsleadership.org';
 const CRON_SECRET       = process.env.CRON_SECRET;
 const CLAUDE_MODEL        = 'claude-sonnet-4-6';
-const CLAUDE_REPORT_MODEL = 'claude-haiku-4-5-20251001'; // Faster for long report generation — stays under 60s Vercel timeout
+const CLAUDE_REPORT_MODEL = 'claude-sonnet-4-6'; // Full-quality report model — requires Vercel Pro (120s timeout)
 
 // ── Supabase fetch helper ────────────────────────────────────────────────────
 function sb(path, method = 'GET', body = null, extra = {}) {
@@ -745,52 +745,260 @@ function formatVerbatimsForPrompt(verbatims) {
   return lines.length > 0 ? lines.join('\n') : '\n(No verbatim responses available)';
 }
 
-const REPORT_SYSTEM_PROMPT = `You are an expert executive coach and leadership assessment specialist working for GPS Leadership Solutions.
+// ── Per-rater-group data builder (Option B) ──────────────────────────────────
+function buildRaterGroupData(responses, allRaters) {
+  const raterMetaMap = new Map(allRaters.map(r => [r.id, r]));
 
-Your job is to generate a structured 14-Day Executive Leadership Diagnostic Report based on quantitative TP3 survey data and verbatim rater feedback.
+  const RATED  = ['A1','A2','A3','A4','A5','A6','A7','B1','B2','B3','B4','B5','B6','C1','C2','C3','C4','C5','C6','D1','F1','F2','G1','G2'];
+  const OPEN   = ['A8','A9','A10','B7','B8','B9','B10','C7','C8','C9','D2','F3'];
+  const GKEYS  = ['direct_report','peer','supervisor','internal_partner'];
 
-GPS uses the TP3™ Framework:
-- Trust: Do people trust this leader to do what they say?
-- Proactivity: Does this leader anticipate and act before being asked?
-- Productivity: Does this leader produce high-value output and help others do the same?
-- TP3 Index: The combined average across all three dimensions (scale 0–5)
-- Overall Impact: A 1–10 direct rating of the leader's impact
-- Bench Score: Are they developing the people around them?
+  const mkBucket = () => ({
+    raterIds:  new Set(),
+    scores:    Object.fromEntries(RATED.map(c => [c, []])),
+    verbatims: Object.fromEntries(OPEN.map(c => [c, []])),
+  });
+  const buckets = {
+    direct_report:    mkBucket(),
+    peer:             mkBucket(),
+    supervisor:       mkBucket(),
+    internal_partner: mkBucket(),
+    self:             mkBucket(),
+    all_others:       mkBucket(),
+  };
 
-Scoring guide (all on 1–5 scale unless noted):
-4.5–5.0 = Exceptional | 4.0–4.4 = Strong | 3.5–3.9 = Solid | 3.0–3.4 = Developing | 2.5–2.9 = Needs Attention | <2.5 = Critical Gap
+  for (const resp of responses) {
+    const meta = raterMetaMap.get(resp.rater_id);
+    if (!meta) continue;
+    const key = meta.is_self ? 'self' : (GKEYS.includes(meta.relationship) ? meta.relationship : null);
+    if (!key) continue;
+    buckets[key].raterIds.add(resp.rater_id);
+    if (!meta.is_self) buckets.all_others.raterIds.add(resp.rater_id);
+    if (resp.score != null && RATED.includes(resp.question_code)) {
+      buckets[key].scores[resp.question_code].push(Number(resp.score));
+      if (!meta.is_self) buckets.all_others.scores[resp.question_code].push(Number(resp.score));
+    }
+    if (resp.text_response?.trim() && OPEN.includes(resp.question_code)) {
+      buckets[key].verbatims[resp.question_code].push(resp.text_response.trim());
+      if (!meta.is_self) buckets.all_others.verbatims[resp.question_code].push(resp.text_response.trim());
+    }
+  }
 
-Writing rules:
-1. Write directly TO the leader (second person: "you", "your team"). This is THEIR report.
-2. Be specific. Quote or closely paraphrase verbatims where they add force. Do not use generic filler.
-3. Be honest about gaps. Do not soften a 2.8 into "an area with growth opportunity." Say what it means.
-4. Every section should include at least one specific, actionable observation — not just a score summary.
-5. The 90-Day Priority section must give the leader exactly 3 prioritized actions, each with: what to do, why it matters now, and how to know it's working.
-6. Write like a direct, intelligent executive coach — not an HR consultant.
+  const GROUP_LABELS = {
+    direct_report: 'Direct Reports', peer: 'Peers', supervisor: 'Supervisors',
+    internal_partner: 'Internal Partners', self: 'Self', all_others: 'All Others',
+  };
 
-REQUIRED OUTPUT FORMAT — respond with a valid JSON object and nothing else:
-{
-  "executive_summary": "string — 3-4 sentences: overall picture, biggest strength, most critical gap, what it means for the business",
-  "trust_section": "string — 3-5 sentences on Trust score, standout questions, verbatim insights, what raters need from this leader",
-  "proactivity_section": "string — same format for Proactivity",
-  "productivity_section": "string — same format for Productivity",
-  "impact_section": "string — 2-3 sentences on Overall Impact score + D2 verbatims",
-  "bench_section": "string — 2-3 sentences on Bench/Succession readiness + F3 verbatim",
-  "custom_section": "string or null — if G1 data available: 2 sentences on the custom question result",
-  "succession_section": "string — 2-3 sentences synthesizing the leader's succession response with rater bench data",
-  "priorities_90_day": [
-    {
-      "rank": 1,
-      "title": "string — short imperative (e.g., 'Close the commitment gap')",
-      "what": "string — specific behavioral change",
-      "why": "string — business impact / stakes",
-      "signal": "string — how to know it's working in 90 days"
-    },
-    { "rank": 2 },
-    { "rank": 3 }
-  ],
-  "full_narrative": "string — HTML report body (~350-500 words). Use <h2>, <p>, <ul> tags. No inline styles. Direct, punchy — no padding. For coach review in the portal."
-}`;
+  const result = {};
+  for (const [key, b] of Object.entries(buckets)) {
+    const avgScores = {};
+    for (const c of RATED) avgScores[c] = avg(b.scores[c]);
+    const tAvg  = avg(['A1','A2','A3','A4','A5','A6','A7'].map(c => avgScores[c]).filter(s => s != null));
+    const prAvg = avg(['B1','B2','B3','B4','B5','B6'].map(c => avgScores[c]).filter(s => s != null));
+    const pdAvg = avg(['C1','C2','C3','C4','C5','C6'].map(c => avgScores[c]).filter(s => s != null));
+    result[key] = {
+      label:           GROUP_LABELS[key],
+      n:               b.raterIds.size,
+      avgScores,
+      verbatims:       b.verbatims,
+      trustAvg:        tAvg,
+      proactivityAvg:  prAvg,
+      productivityAvg: pdAvg,
+      tp3Index:        avg([tAvg, prAvg, pdAvg].filter(s => s != null)),
+      impactAvg:       avgScores['D1'],
+      benchAvg:        avg(['F1','F2'].map(c => avgScores[c]).filter(s => s != null)),
+      g1Avg:           avgScores['G1'],
+      g2Avg:           avgScores['G2'],
+    };
+  }
+  return result;
+}
+
+// ── Format per-group data for the Claude prompt ──────────────────────────────
+function formatRaterGroupDataForPrompt(gd, diag) {
+  const GRPS = [
+    ['direct_report', 'DR'],
+    ['peer', 'Peer'],
+    ['supervisor', 'Supr'],
+    ['internal_partner', 'IntP'],
+    ['self', 'Self'],
+    ['all_others', 'All-Oth'],
+  ];
+  const f = v => (v != null ? v.toFixed(2) : 'n/a');
+  const row = (name, key) => {
+    const vals = GRPS.map(([g]) => f(gd[g]?.[key]).padStart(5)).join(' | ');
+    return `${name.padEnd(22)}| ${vals}`;
+  };
+
+  const lines = [];
+  lines.push('=== TP3 SCORES BY RATER GROUP (scale 1-5 unless noted) ===');
+  lines.push(`\n${'Dimension'.padEnd(22)}| ${'  DR'.padStart(5)} | ${'Peer'.padStart(5)} | ${'Supr'.padStart(5)} | ${'IntP'.padStart(5)} | ${'Self'.padStart(5)} | ${'All-Oth'.padStart(7)}`);
+  lines.push('-'.repeat(70));
+  lines.push(row('Trust (A1-A7)', 'trustAvg'));
+  lines.push(row('Proactivity (B1-B6)', 'proactivityAvg'));
+  lines.push(row('Productivity (C1-C6)', 'productivityAvg'));
+  lines.push(row('TP3 Index', 'tp3Index'));
+  lines.push(row('Impact D1 (1-10 scale)', 'impactAvg'));
+  lines.push(row('Bench (F1-F2)', 'benchAvg'));
+  if (gd.all_others?.g1Avg != null || gd.self?.g1Avg != null) lines.push(row('G1 Vision Align', 'g1Avg'));
+  if (gd.all_others?.g2Avg != null || gd.self?.g2Avg != null) lines.push(row('G2 GPS Gap Probe', 'g2Avg'));
+  lines.push(`\nRater counts: ${GRPS.map(([g, lbl]) => `${lbl}: ${gd[g]?.n ?? 0}`).join(' | ')}`);
+
+  // Item-level scores
+  lines.push('\n=== ITEM-LEVEL SCORES ===');
+  const ITEM_SECTIONS = [
+    { label: 'TRUST (A1–A7)', codes: ['A1','A2','A3','A4','A5','A6','A7'] },
+    { label: 'PROACTIVITY (B1–B6)', codes: ['B1','B2','B3','B4','B5','B6'] },
+    { label: 'PRODUCTIVITY (C1–C6)', codes: ['C1','C2','C3','C4','C5','C6'] },
+    { label: 'BENCH (F1–F2)', codes: ['F1','F2'] },
+  ];
+  if (diag.custom_g1_question) ITEM_SECTIONS.push({ label: 'G1 VISION ALIGNMENT', codes: ['G1'] });
+  if (diag.custom_g2_question) ITEM_SECTIONS.push({ label: 'G2 GPS GAP PROBE', codes: ['G2'] });
+
+  for (const { label, codes } of ITEM_SECTIONS) {
+    lines.push(`\n${label}:`);
+    for (const c of codes) {
+      const qText = QUESTIONS[c] || (c === 'G1' ? diag.custom_g1_question : diag.custom_g2_question) || c;
+      const vals = GRPS.map(([g]) => f(gd[g]?.avgScores?.[c]).padStart(5)).join(' | ');
+      lines.push(`  ${c}: ${qText.slice(0, 65)}${qText.length > 65 ? '…' : ''}`);
+      lines.push(`     → ${vals}  (DR | Peer | Supr | IntP | Self | All-Oth)`);
+    }
+  }
+
+  // Verbatims by group
+  lines.push('\n=== VERBATIM RESPONSES BY RATER GROUP ===');
+  const VERB_SECTIONS = [
+    { label: 'Trust verbatims (A8–A10)', codes: ['A8','A9','A10'] },
+    { label: 'Proactivity verbatims (B7–B10)', codes: ['B7','B8','B9','B10'] },
+    { label: 'Productivity verbatims (C7–C9)', codes: ['C7','C8','C9'] },
+    { label: 'Impact comments (D2)', codes: ['D2'] },
+    { label: 'Bench/succession comments (F3)', codes: ['F3'] },
+  ];
+  const NON_SELF = GRPS.filter(([g]) => g !== 'self' && g !== 'all_others');
+  for (const { label, codes } of VERB_SECTIONS) {
+    const groupLines = [];
+    for (const [gKey, gLbl] of NON_SELF) {
+      const quotes = codes.flatMap(c => (gd[gKey]?.verbatims?.[c] || []).map(v => `    "${v}"`));
+      if (quotes.length > 0) { groupLines.push(`  [${gLbl}]:`); groupLines.push(...quotes); }
+    }
+    if (groupLines.length > 0) { lines.push(`\n${label}:`); lines.push(...groupLines); }
+  }
+
+  return lines.join('\n');
+}
+
+// ── Full-report system prompt (Option B) ────────────────────────────────────
+const REPORT_SYSTEM_PROMPT = `You are writing a GPS Leadership 14-Day Executive Leadership Diagnostic Report. This document will be delivered directly to the leader after coach review. It must be client-ready: specific, honest, direct, and actionable. No placeholder language. No generic observations. No hedging.
+
+VOICE: Write directly to the leader in second person ("you," "your," "your team"). Sound like a trusted advisor who sees this leader clearly. Direct and candid — not corporate, not soft. No management jargon. No "as you continue your leadership journey" openers. No "it's worth noting that…" No filler.
+
+THE GPS TP3™ FRAMEWORK:
+• Trust (A1–A7): Does this leader do what they say, treat people consistently, and create safety for honest conversation?
+• Proactivity (B1–B6): Does this leader anticipate problems, bring solutions, and move without being pushed?
+• Productivity (C1–C6): Does this leader produce high-value output and help others use their time well?
+• Overall Impact (D1): Direct 1–10 rating of leadership impact.
+• Bench Strength (F1–F2): Is this leader developing the people around them?
+• Custom items (G1, G2): Diagnostic-specific questions tied to this leader's context.
+
+SCORING (1–5 scale unless noted):
+4.5–5.0 = Exceptional | 4.0–4.4 = Strong | 3.5–3.9 = Solid | 3.0–3.4 = Developing | 2.5–2.9 = Needs Attention | Below 2.5 = Critical Gap
+
+RATER GROUP INTERPRETATION:
+• Direct Reports: Most candid about trust, fairness, and psychological safety in day-to-day interactions.
+• Peers: See collaboration quality, proactivity in shared work, cross-functional follow-through.
+• Supervisors: Observe strategic thinking, executive presence, and upward accountability.
+• Internal Partners: Experience coordination reliability and organizational ripple effects.
+• Self: Compare to "All Others" — Self higher than Others = likely blind spot. Self lower = under-confidence or unusual self-awareness.
+
+WRITING RULES:
+1. Be specific. Reference actual scores. Name specific behaviors (not just question codes). Quote or closely paraphrase verbatims where they add force.
+2. Be honest. A 2.8 Trust score is not "an area for growth" — it is a gap that is eroding people's willingness to follow this leader. Say that.
+3. Name things. Strengths and blind spots must have clear, descriptive labels (e.g., "Execution Reliability" not "A3 performance").
+4. Quote verbatims using <blockquote class="rater-quote"> tags. Attribute by group only, never by individual.
+5. The 90-Day Plan must be specific enough that the leader knows exactly what to do in week one.
+6. When self-perception diverges from rater perception, say so directly — name the gap, explain the likely cost.
+
+OUTPUT FORMAT — HTML only. No JSON. No markdown. No preamble or postamble. Start immediately with the first section heading.
+
+HTML elements to use:
+• <h2 class="report-section"> — major section headings
+• <h3 class="report-subsection"> — subsection headings within a section
+• <p> — paragraphs
+• <table class="report-table"><thead><tr><th>…</th></tr></thead><tbody><tr><td>…</td></tr></tbody></table> — score tables
+• <blockquote class="rater-quote"> — verbatim quotes from raters
+• <ul class="report-list"><li>…</li></ul> — bullet lists
+• <strong> — key scores and critical phrases
+• <div class="insight-callout"> — particularly important insights or warnings that the coach should not miss
+
+GENERATE THESE SECTIONS IN ORDER:
+
+SECTION 1: EXECUTIVE SUMMARY
+3–4 punchy sentences. State the TP3 Index score, the single biggest strength, the most critical gap, and the business implication. No softening. This is a scorecard, not a comfort letter.
+
+SECTION 2: YOUR TP3 PROFILE
+Create a score table. Rows: Trust | Proactivity | Productivity | TP3 Index | Overall Impact (1–10) | Bench Strength. Columns: Direct Reports | Peers | Supervisors | Int'l Partners | Self | All Others. Show n/a where no raters in that group.
+Follow with 2–3 sentences interpreting the overall pattern. If one group rates this leader notably differently from others, say so and offer a likely explanation.
+
+SECTION 3: TRUST
+• Score by group — where is the spread? Who rates this leader highest and lowest?
+• Which specific behaviors (reference the behavior text, not just A1–A7 codes) are strongest and weakest?
+• Self vs. All Others gap — alignment or blind spot?
+• 2–4 verbatim quotes that best illustrate the trust picture, one per <blockquote class="rater-quote"> tag, attributed only by rater group (e.g., "— Direct Report")
+• 1–2 specific, actionable coaching observations
+
+SECTION 4: PROACTIVITY
+Same structure as Trust.
+
+SECTION 5: PRODUCTIVITY
+Same structure as Trust.
+
+SECTION 6: OVERALL IMPACT
+D1 scores by group. What do D2 verbatims say is the most important change this leader could make? Connect D1 score to the broader TP3 pattern — is the impact score consistent with the trust and proactivity data, or is there a gap worth naming?
+
+SECTION 7: BENCH STRENGTH
+F1 and F2 scores by group. F3 verbatims. If succession data provided: connect it — does what raters see about bench-building align with what the leader believes about their successor pipeline? Be honest if there's a gap.
+
+SECTION 8: VISION ALIGNMENT [GENERATE ONLY IF G1 DATA EXISTS — use the actual G1 question text as the section subtitle]
+G1 scores by group. 2–3 sentences: what does the alignment or gap between rater groups tell us about whether this leader is communicating direction effectively?
+
+SECTION 9: GPS GAP PROBE [GENERATE ONLY IF G2 DATA EXISTS — use the actual G2 question text as the section subtitle]
+G2 scores by group. If G2 < 3.5 for All Others, name this as a Blind Spot in the next section. 2–3 sentences: what does this score reveal about the specific leadership gap this question was probing?
+
+SECTION 10: INTENT VS. IMPACT
+Create a table: Dimension | Self Score | All Others Score | Gap (+ = Self higher) | Interpretation. Include: Trust, Proactivity, Productivity, TP3 Index, Bench, and any G1/G2 scores.
+Gap interpretation guide: >+0.5 = likely blind spot | +0.2 to +0.5 = minor gap | −0.2 to +0.2 = aligned | <−0.2 = under-confidence.
+Then 1–2 paragraphs: where is this leader's self-perception most misaligned with what others experience? What is the cost of that misalignment? If the leader is significantly harder on themselves than raters are, name that too.
+
+SECTION 11: KEY STRENGTHS
+Name exactly 3 strengths. For each, use <h3 class="report-subsection"> with the strength name. Include:
+• Evidence: specific scores and verbatims that confirm this strength
+• Business impact: why this strength matters for this specific organization, in plain language
+
+SECTION 12: DEVELOPMENT PRIORITIES
+Name 2–3 blind spots or development gaps. For each, use <h3 class="report-subsection"> with the gap name. Include:
+• What's happening: the specific behavioral pattern visible in the data
+• The cost: what this gap creates for the team, org, or business outcomes — be concrete
+• The opportunity: what specifically changes if this gets addressed in the next 90 days
+
+SECTION 13: ORGANIZATIONAL IMPACT
+2–3 paragraphs. How does this leader's current profile — strengths AND gaps — show up in team performance, organizational trust, and business execution? Connect leadership behavior to business outcomes. Reference specific scores and verbatims. No generic leadership theory.
+
+SECTION 14: START. STOP. CONTINUE.
+Three <ul class="report-list"> lists with clear headings:
+• START: 3–4 concrete behaviors this leader should add immediately
+• STOP: 3–4 behaviors currently creating friction or drag on the team
+• CONTINUE: 3–4 behaviors that are working and must be protected
+
+SECTION 15: 90-DAY ACTION PLAN
+Three prioritized actions. For each (use <h3 class="report-subsection"> with "Priority 1: [Action Name]"):
+• <strong>What:</strong> The specific behavior change — precise enough to act on Monday morning
+• <strong>Why now:</strong> The business stakes — what happens if this doesn't change in 90 days?
+• <strong>Signal:</strong> How will this leader know it's working? (Observable, specific, 90-day horizon)
+
+SECTION 16: APPENDIX — VERBATIM FEEDBACK BY GROUP
+All significant verbatims not already quoted above, organized by rater group, then by topic area. Label source as rater group only. Include everything worth reading — this section exists so the leader sees the full, unfiltered voice of their raters.
+
+Write the complete report now. This is a 12-page executive document. Depth and specificity over brevity.`;
 
 async function handleGenerateReport(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -807,14 +1015,19 @@ async function handleGenerateReport(req, res) {
     if (!Array.isArray(diags) || diags.length === 0) return res.status(404).json({ error: 'Diagnostic not found' });
     const diag = diags[0];
 
-    const ratersRes = await sb(
-      `/rest/v1/diagnostic_raters?diagnostic_id=eq.${diagnostic_id}&is_self=eq.false&completed_at=not.is.null&select=id`
+    // Fetch ALL completed raters (self + non-self) so we can compute per-group scores
+    const allRatersRes = await sb(
+      `/rest/v1/diagnostic_raters?diagnostic_id=eq.${diagnostic_id}&completed_at=not.is.null&select=id,relationship,is_self`
     );
-    const raters = await ratersRes.json();
-    if (!Array.isArray(raters) || raters.length === 0) {
-      return res.status(400).json({ error: 'No completed rater responses found. Survey must be closed before generating a report.' });
+    const allRaters = await allRatersRes.json();
+    if (!Array.isArray(allRaters) || allRaters.length === 0) {
+      return res.status(400).json({ error: 'No completed responses found. Survey must be closed before generating a report.' });
     }
-    const raterIds = raters.map(r => r.id);
+    const nonSelfRaters = allRaters.filter(r => !r.is_self);
+    if (nonSelfRaters.length === 0) {
+      return res.status(400).json({ error: 'No external rater responses found. At least one rater must complete the survey before generating a report.' });
+    }
+    const raterIds = allRaters.map(r => r.id);
 
     const raterIdFilter = raterIds.map(id => `"${id}"`).join(',');
     const respRes = await sb(
@@ -828,16 +1041,21 @@ async function handleGenerateReport(req, res) {
     const overridesRes = await sb(
       `/rest/v1/diagnostic_question_overrides?diagnostic_id=eq.${diagnostic_id}&select=question_code,override_text`
     );
-    const overrides    = await overridesRes.json() || [];
-    const overrideMap  = Object.fromEntries(overrides.map(o => [o.question_code, o.override_text]));
+    const overrides   = await overridesRes.json() || [];
+    const overrideMap = Object.fromEntries(overrides.map(o => [o.question_code, o.override_text]));
 
-    const scores    = buildScoreSummary(responses);
-    const verbatims = collectVerbatims(responses);
+    // Build per-group data for full report (Option B)
+    const groupData = buildRaterGroupData(responses, allRaters);
+
+    // Also compute aggregate scores (non-self only) for scores_json backward compat
+    const raterMetaMap = new Map(allRaters.map(r => [r.id, r]));
+    const nonSelfResponses = responses.filter(r => !raterMetaMap.get(r.rater_id)?.is_self);
+    const scores = buildScoreSummary(nonSelfResponses);
 
     const versionsRes = await sb(
       `/rest/v1/diagnostic_report_drafts?diagnostic_id=eq.${diagnostic_id}&select=version&order=version.desc&limit=1`
     );
-    const versions    = await versionsRes.json();
+    const versions      = await versionsRes.json();
     const latestVersion = versions?.[0]?.version || 0;
     const nextVersion   = latestVersion + 1;
 
@@ -851,52 +1069,51 @@ async function handleGenerateReport(req, res) {
     }
 
     const overrideNotes = Object.keys(overrideMap).length > 0
-      ? `\nNote — question overrides in effect: ${Object.entries(overrideMap).map(([k,v]) => `${k}: "${v}"`).join('; ')}`
+      ? `\nNote — question text overrides in effect: ${Object.entries(overrideMap).map(([k,v]) => `${k}: "${v}"`).join('; ')}`
       : '';
 
     const coachNotesSection = (diag.intake_notes || diag.coaching_notes || diag.interview_notes)
       ? `\n=== COACH NOTES (CONFIDENTIAL — FOR REPORT CONTEXT ONLY) ===
-${diag.intake_notes      ? `Kick-off / Intake Notes:\n${diag.intake_notes}\n`      : ''}${diag.coaching_notes    ? `Coaching Notes:\n${diag.coaching_notes}\n`          : ''}${diag.interview_notes   ? `Interview Notes:\n${diag.interview_notes}\n`        : ''}`.trimEnd()
+${diag.intake_notes    ? `Kick-off / Intake Notes:\n${diag.intake_notes}\n`    : ''}${diag.coaching_notes  ? `Coaching Notes:\n${diag.coaching_notes}\n`        : ''}${diag.interview_notes ? `Interview Notes:\n${diag.interview_notes}\n`      : ''}`.trimEnd()
       : '';
 
-    const userPrompt = `
-LEADER: ${diag.client_name}${diag.client_title ? `, ${diag.client_title}` : ''}${diag.client_org ? ` — ${diag.client_org}` : ''}
+    const userPrompt = `LEADER: ${diag.client_name}${diag.client_title ? `, ${diag.client_title}` : ''}${diag.client_org ? ` — ${diag.client_org}` : ''}
 DIAGNOSTIC TIER: ${diag.tier || 'standard'}
+${diag.custom_g1_question ? `\nCUSTOM G1 QUESTION (Vision Alignment): "${diag.custom_g1_question}"` : ''}${diag.custom_g2_question ? `\nCUSTOM G2 QUESTION (GPS Gap Probe): "${diag.custom_g2_question}"` : ''}${overrideNotes}
 
-=== QUANTITATIVE SCORES ===
-${formatScoresForPrompt(scores)}${overrideNotes}
+${formatRaterGroupDataForPrompt(groupData, diag)}
 
-=== VERBATIM RESPONSES ===
-${formatVerbatimsForPrompt(verbatims)}
-
-=== SELF-ASSESSMENT — SUCCESSION & FUTURE SELF (LEADER ONLY, CONFIDENTIAL TO REPORT) ===
+=== SELF-ASSESSMENT — SUCCESSION & FUTURE SELF (LEADER ONLY, CONFIDENTIAL) ===
 3-Year Vision: ${diag.self_three_year_vision || 'Not provided'}
-Future self / capabilities: ${diag.self_future_self_capabilities || 'Not provided'}
-Immediate successor view: ${diag.self_immediate_successor_view || 'Not provided'}
-Successor candidates: ${diag.self_successor_candidates || 'Not provided'}
-Successor development actions: ${diag.self_successor_development_actions || 'Not provided'}
-${diag.custom_g1_question ? `\nCustom G1 Question (vision alignment, used in survey): "${diag.custom_g1_question}"` : ''}${diag.custom_g2_question ? `\nCustom G2 Question (GPS gap probe, used in survey): "${diag.custom_g2_question}"` : ''}${coachNotesSection}
+Future self / capabilities needed: ${diag.self_future_self_capabilities || 'Not provided'}
+View of immediate successor readiness: ${diag.self_immediate_successor_view || 'Not provided'}
+Successor candidates identified: ${diag.self_successor_candidates || 'Not provided'}
+Successor development actions underway: ${diag.self_successor_development_actions || 'Not provided'}
+${coachNotesSection}
 
-Generate the diagnostic report JSON now.`.trim();
+Write the complete 14-Day Executive Leadership Diagnostic Report for ${diag.client_name} now.`.trim();
 
-    // Use Haiku (5× faster token generation than Sonnet) + no retries to stay well under Vercel's 60s limit.
-    // 3500 tokens covers all JSON sections + full_narrative (~500 words) with headroom. Haiku at 3500 tokens ≈ 25s.
-    const raw = await callClaude(REPORT_SYSTEM_PROMPT, userPrompt, 3500, { retries: 0, model: CLAUDE_REPORT_MODEL });
+    // Sonnet + 7000 tokens + 1 retry — requires Vercel Pro (120s maxDuration)
+    const raw = await callClaude(REPORT_SYSTEM_PROMPT, userPrompt, 7000, { retries: 1, retryDelayMs: 2000, model: CLAUDE_REPORT_MODEL });
 
-    let reportJson;
-    try {
-      const cleaned = raw.replace(/^[\s\S]*?```(?:json)?\s*/i, '').replace(/\s*```[\s\S]*$/i, '').trim();
-      reportJson = JSON.parse(cleaned);
-    } catch (parseErr) {
-      console.error('[diagnostic/generate-report] JSON parse error. Raw output:\n', raw.slice(0, 500));
-      return res.status(500).json({ error: 'Claude returned malformed JSON.', raw: raw.slice(0, 1000) });
+    // Output is full HTML — no JSON parsing needed
+    const reportHtml = raw.trim();
+    if (!reportHtml) {
+      return res.status(500).json({ error: 'Claude returned an empty report. Please try again.' });
+    }
+    // Basic sanity check — should contain at least one heading tag
+    if (!reportHtml.includes('<h2') && !reportHtml.includes('<h3')) {
+      console.error('[diagnostic/generate-report] Unexpected output (no headings). First 500 chars:\n', reportHtml.slice(0, 500));
+      return res.status(500).json({ error: 'Claude returned unexpected content. Please try again.', raw: reportHtml.slice(0, 500) });
     }
 
     const now = new Date().toISOString();
     const draftRes = await sb('/rest/v1/diagnostic_report_drafts', 'POST', {
       diagnostic_id,
-      version:      nextVersion,
-      content_json: reportJson,
+      version:         nextVersion,
+      content_json:    { report_format: 'html_v2', generated_with_model: CLAUDE_REPORT_MODEL, rater_groups_used: Object.fromEntries(Object.entries(groupData).map(([k,v]) => [k, v.n])) },
+      raw_markdown:    reportHtml,
+      prompt_snapshot: userPrompt.slice(0, 3000),
       scores_json: {
         trust:        scores.trustScore,
         proactivity:  scores.proactivityScore,
@@ -905,10 +1122,16 @@ Generate the diagnostic report JSON now.`.trim();
         impact:       scores.impactScore,
         bench:        scores.benchScore,
         g1:           scores.g1Score,
+        g2:           scores.g2Score,
         rater_count:  scores.raterCount,
         per_question: scores.perQuestion,
+        by_group: Object.fromEntries(
+          Object.entries(groupData)
+            .filter(([k]) => k !== 'all_others')
+            .map(([k, v]) => [k, { n: v.n, trust: v.trustAvg, proactivity: v.proactivityAvg, productivity: v.productivityAvg, tp3: v.tp3Index, bench: v.benchAvg }])
+        ),
       },
-      generated_at: now,
+      generated_at:   now,
     }, { Prefer: 'return=representation' });
     if (!draftRes.ok) {
       const errBody = await draftRes.text();

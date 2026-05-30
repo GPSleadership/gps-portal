@@ -600,6 +600,16 @@
     .rp-body ul { padding-left: 20px; margin: 0 0 12px; }
     .rp-body ul li { margin-bottom: 5px; }
     .rp-body .rp-highlight { background: #f5f7fa; border-left: 4px solid var(--d-gold); padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 12px 0; }
+    /* Option B — full HTML report classes */
+    .rp-body table.report-table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13px; }
+    .rp-body table.report-table th { background: var(--d-blue); color: #fff; padding: 7px 10px; text-align: left; font-weight: 700; }
+    .rp-body table.report-table td { padding: 6px 10px; border-bottom: 1px solid var(--d-border); vertical-align: top; }
+    .rp-body table.report-table tr:last-child td { border-bottom: none; }
+    .rp-body table.report-table tr:nth-child(even) td { background: #f7f9fc; }
+    .rp-body blockquote.rater-quote { border-left: 3px solid var(--d-teal); background: #f0f9f9; margin: 12px 0; padding: 10px 16px; font-style: italic; font-size: 13.5px; color: #1a1a1a; border-radius: 0 6px 6px 0; }
+    .rp-body .insight-callout { background: #fff8ec; border: 1px solid #f5c84a; border-left: 4px solid #d4a017; padding: 12px 16px; border-radius: 6px; margin: 14px 0; }
+    .rp-body ul.report-list { padding-left: 20px; margin: 8px 0 14px; }
+    .rp-body ul.report-list li { margin-bottom: 6px; font-size: 14px; }
     .rp-footer {
       padding: 16px 24px;
       border-top: 1px solid var(--d-border);
@@ -5650,13 +5660,15 @@ async function openReportPreview() {
       return;
     }
 
-    const draft   = drafts[0];
-    const report  = draft.content_json || {};
-    const narrative = report.full_narrative || null;
+    const draft = drafts[0];
 
-    bodyEl.innerHTML = narrative
-      ? narrative
-      : buildCoachReportFallback(report);
+    // Option B reports store full HTML in raw_markdown; legacy reports use content_json
+    if (draft.raw_markdown) {
+      bodyEl.innerHTML = draft.raw_markdown;
+    } else {
+      const report = draft.content_json || {};
+      bodyEl.innerHTML = report.full_narrative || buildCoachReportFallback(report);
+    }
 
   } catch (err) {
     bodyEl.innerHTML = `<div class="rp-loading" style="color:#dc2626;">Error loading report: ${err.message}</div>`;
