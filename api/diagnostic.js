@@ -880,12 +880,12 @@ ${diag.custom_g1_question ? `\nCustom G1 Question (vision alignment, used in sur
 Generate the diagnostic report JSON now.`.trim();
 
     // Use Haiku (5× faster token generation than Sonnet) + no retries to stay well under Vercel's 60s limit.
-    // 2500 tokens is enough for all JSON sections including the full_narrative (~500 words).
-    const raw = await callClaude(REPORT_SYSTEM_PROMPT, userPrompt, 2500, { retries: 0, model: CLAUDE_REPORT_MODEL });
+    // 3500 tokens covers all JSON sections + full_narrative (~500 words) with headroom. Haiku at 3500 tokens ≈ 25s.
+    const raw = await callClaude(REPORT_SYSTEM_PROMPT, userPrompt, 3500, { retries: 0, model: CLAUDE_REPORT_MODEL });
 
     let reportJson;
     try {
-      const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+      const cleaned = raw.replace(/^[\s\S]*?```(?:json)?\s*/i, '').replace(/\s*```[\s\S]*$/i, '').trim();
       reportJson = JSON.parse(cleaned);
     } catch (parseErr) {
       console.error('[diagnostic/generate-report] JSON parse error. Raw output:\n', raw.slice(0, 500));
