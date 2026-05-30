@@ -1018,7 +1018,7 @@ Three prioritized actions. For each (use <h3 class="report-subsection"> with "Pr
 SECTION 16: APPENDIX — VERBATIM FEEDBACK BY GROUP
 All significant verbatims not already quoted above, organized by rater group, then by topic area. Label source as rater group only. Include everything worth reading — this section exists so the leader sees the full, unfiltered voice of their raters.
 
-Write the complete report now. This is a 12-page executive document. Depth and specificity over brevity.`;
+Write the complete report now. Prioritize density over length — every sentence must earn its place. Be direct, specific, and ruthlessly cut generic language. Quality over volume.`;
 
 async function handleGenerateReport(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -1113,9 +1113,9 @@ ${coachNotesSection}
 
 Write the complete 14-Day Executive Leadership Diagnostic Report for ${diag.client_name} now.`.trim();
 
-    // Sonnet + 7000 tokens — no retry, 95s hard timeout (Vercel Pro 120s limit)
-    // timeoutMs=95000 means we abort + return a clean JSON error instead of Vercel killing the connection silently
-    const raw = await callClaude(REPORT_SYSTEM_PROMPT, userPrompt, 7000, { retries: 0, model: CLAUDE_REPORT_MODEL, timeoutMs: 95000 });
+    // Sonnet + 4500 tokens — no retry, 110s hard timeout (Vercel Pro 120s ceiling)
+    // 4500 tokens keeps generation under ~90s at typical Sonnet throughput; 110s abort fires before Vercel silently kills the connection
+    const raw = await callClaude(REPORT_SYSTEM_PROMPT, userPrompt, 4500, { retries: 0, model: CLAUDE_REPORT_MODEL, timeoutMs: 110000 });
 
     // Output is full HTML — prepend branded cover before storing
     const reportDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
