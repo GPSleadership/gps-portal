@@ -43,7 +43,7 @@ function sb(path, method = 'GET', body = null, extra = {}) {
 }
 
 // ── Call Claude API (with retry) ─────────────────────────────────────────────
-async function callClaude(systemPrompt, userPrompt, maxTokens = 512, { retries = 2, retryDelayMs = 3000, model = CLAUDE_MODEL } = {}) {
+async function callClaude(systemPrompt, userPrompt, maxTokens = 512, { retries = 2, retryDelayMs = 3000, model = CLAUDE_MODEL, timeoutMs = null } = {}) {
   let lastErr;
   for (let attempt = 0; attempt <= retries; attempt++) {
     if (attempt > 0) {
@@ -51,7 +51,7 @@ async function callClaude(systemPrompt, userPrompt, maxTokens = 512, { retries =
       await new Promise(r => setTimeout(r, retryDelayMs));
     }
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const fetchOpts = {
         method: 'POST',
         headers: {
           'x-api-key':         ANTHROPIC_API_KEY,
@@ -64,7 +64,9 @@ async function callClaude(systemPrompt, userPrompt, maxTokens = 512, { retries =
           system:     systemPrompt,
           messages: [{ role: 'user', content: userPrompt }],
         }),
-      });
+      };
+      if (timeoutMs) fetchOpts.signal = AbortSignal.timeout(timeoutMs);
+      const res = await fetch('https://api.anthropic.com/v1/messages', fetchOpts);
       // Retry on 529 (overloaded) or 500; surface other errors immediately
       if (res.status === 529 || res.status === 500) {
         const errText = await res.text();
@@ -1111,8 +1113,9 @@ ${coachNotesSection}
 
 Write the complete 14-Day Executive Leadership Diagnostic Report for ${diag.client_name} now.`.trim();
 
-    // Sonnet + 7000 tokens + 1 retry — requires Vercel Pro (120s maxDuration)
-    const raw = await callClaude(REPORT_SYSTEM_PROMPT, userPrompt, 7000, { retries: 1, retryDelayMs: 2000, model: CLAUDE_REPORT_MODEL });
+    // Sonnet + 7000 tokens — no retry, 95s hard timeout (Vercel Pro 120s limit)
+    // timeoutMs=95000 means we abort + return a clean JSON error instead of Vercel killing the connection silently
+    const raw = await callClaude(REPORT_SYSTEM_PROMPT, userPrompt, 7000, { retries: 0, model: CLAUDE_REPORT_MODEL, timeoutMs: 95000 });
 
     // Output is full HTML — prepend branded cover before storing
     const reportDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
