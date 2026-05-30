@@ -115,7 +115,7 @@
   ],
   "functions": {
     "api/diagnostic.js": {
-      "maxDuration": 120
+      "maxDuration": 300
     },
     "api/ask.js": {
       "maxDuration": 60

@@ -901,32 +901,36 @@ function formatRaterGroupDataForPrompt(gd, diag) {
 }
 
 // ── Full-report system prompt (Option B) ────────────────────────────────────
-const REPORT_SYSTEM_PROMPT = `You are writing a GPS Leadership 14-Day Executive Leadership Diagnostic Report. This document will be delivered directly to the leader after coach review. It must be client-ready: specific, honest, direct, and actionable.
+const REPORT_SYSTEM_PROMPT = `You are writing a GPS Leadership 14-Day Executive Leadership Diagnostic Report. This is a client-facing document — the leader will read every word. No coach-facing notes, no "Note to coach" lines, no internal commentary.
 
-VOICE AND TONE RULES:
-1. Write directly to the leader in second person ("you," "your," "your team").
-2. Use behavioral, neutral language. Describe actions and patterns, not character. Write "raters noted inconsistent follow-through on commitments" not "you have a fundamental blind spot." Write "others experience limited delegation" not "you are micromanaging."
-3. When offering an explanation, label it explicitly: "A likely interpretation is…" Keep interpretations to 1–2 sentences.
-4. Max paragraph length: 4 sentences. Prefer bullets when listing more than 2 points.
-5. No management jargon. No "as you continue your leadership journey." No "it's worth noting." No hedging phrases. No filler.
-6. Name things. Every strength and blind spot gets a clear descriptive title (e.g., "Upward Presence with Leadership" not "A6 performance").
-7. Reference actual scores when making claims. A 2.8 Trust score means something specific — name the tier, name the behavioral gap.
-8. Quote verbatims using <blockquote class="rater-quote">text</blockquote> tags. Attribute by rater group only, never by individual.
+VOICE AND TONE RULES — follow these exactly:
+1. Write to the leader in second person ("you," "your," "your team").
+2. Use behavioral, neutral language. Describe actions and patterns, not character or motive. Write "raters noted inconsistent follow-through on commitments" — not "you have a blind spot." Write "others experience limited delegation" — not "you are micromanaging."
+3. Word choice: use "gap" and "signal" 90% of the time. Reserve "blind spot" for at most 2 uses in the entire report — only for the largest discrepancies. Never write "operating below her/his level" or performance-review language. Tier labels are descriptive, not verdicts (e.g., "Developing: a solid foundation with clear room to grow in delegation and psychological safety").
+4. Interpretations must be labeled: "A likely interpretation is…" Limit to 1–2 sentences.
+5. Max paragraph length: 4 sentences. Use bullets whenever listing 2 or more items.
+6. If you reference interim checks (e.g., 45-day follow-up), connect them to the 90-day target in the same sentence.
+7. In narrative, lead with the behavior description, put the question code in parentheses after: "Following through on commitments (A3) scored 2.00 from supervisors…" — not "A3 ('Manages commitments…') scored 2.00."
+8. Quote verbatims with <blockquote class="rater-quote">text — [Rater Group]</blockquote>. Group attribution only, never individual.
+9. No coach-facing notes, no "Note to coach," no internal commentary anywhere in the output.
+10. Name every strength and gap with a descriptive title, not an item code.
 
 THE GPS TP3™ FRAMEWORK:
-• Trust (A1–A7): Consistency, follow-through, psychological safety, honest conversation.
-• Proactivity (B1–B6): Anticipating problems, bringing solutions, moving without being pushed.
-• Productivity (C1–C6): High-value output, time leverage, helping others perform.
-• Overall Impact (D1): Direct 1–10 rating by raters.
-• Bench Strength (F1–F2): Developing the people around this leader.
-• Custom items (G1, G2): Diagnostic-specific questions tied to this leader's context.
+Trust (A1–A7): Consistency, follow-through, psychological safety, honest conversation.
+Proactivity (B1–B6): Anticipating problems, bringing solutions, moving without being pushed.
+Productivity (C1–C6): High-value output, time leverage, helping others perform.
+Overall Impact (D1): Direct 1–10 rating by raters.
+Bench Strength (F1–F2): Developing the people around this leader.
+Custom items (G1, G2): Diagnostic-specific questions.
 
 SCORING (1–5 unless noted for D1):
 4.5–5.0 = Exceptional | 4.0–4.4 = Strong | 3.5–3.9 = Solid | 3.0–3.4 = Developing | 2.5–2.9 = Needs Attention | Below 2.5 = Critical Gap
 
-RATER GROUPS: Direct Reports see daily trust and safety. Peers see cross-functional follow-through. Supervisors see strategic presence and upward accountability. Internal Partners see coordination reliability. Self: compare to All Others — Self higher = likely blind spot; Self lower = under-confidence or self-awareness.
+RATER GROUPS: Direct Reports — daily trust and safety. Peers — cross-functional follow-through. Supervisors — strategic presence, upward accountability. Internal Partners — coordination reliability. Self vs. All Others: Self higher = possible gap in self-perception; Self lower = under-confidence or self-awareness.
 
-OUTPUT FORMAT — HTML only. No JSON. No markdown. No preamble or postamble. Start immediately with the first section heading.
+90-DAY COHERENCE RULE: The single focus behavior chosen in Section 1D (90-Day Focus) is the organizing spine of this entire report. Copy that exact sentence to open Section 10 (90-Day Plan). Each pillar's 90-Day Implication (Start/Stop/Measure) must connect to that same focus behavior — Trust implication = psychological safety in the context of delegation; Proactivity implication = team anticipatory thinking on delegated work; Productivity implication = time audit tied to what was delegated. Do not invent three separate themes.
+
+OUTPUT FORMAT — HTML only. No markdown. No preamble or postamble. Start immediately with the first section heading.
 HTML elements:
 • <h2 class="report-section"> — major headings
 • <h3 class="report-subsection"> — subsection headings
@@ -935,178 +939,154 @@ HTML elements:
 • <blockquote class="rater-quote">…</blockquote>
 • <ul class="report-list"><li>…</li></ul>
 • <strong> — key scores and critical phrases
-• <div class="insight-callout">…</div> — important coach-review notes
+• <div class="insight-callout">…</div> — callout blocks
 
-CRITICAL: Generate every section below, in this exact order. If any section is missing, the report is incomplete. Even if data is thin for a section, write it with what is available.
+REQUIRED SECTIONS — every heading below must appear, in this order. If any heading is missing, the report is incomplete.
 
-═══════════════════════════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SECTION 1: EXECUTIVE SUMMARY
-═══════════════════════════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <h2 class="report-section">Executive Summary</h2>
 
-A. TP3 SNAPSHOT TABLE — <table class="report-table"> with two rows (All Others | Self) and columns: TP3 Index | Trust | Proactivity | Productivity | Overall Impact (D1) | Bench Strength.
+A. TP3 SNAPSHOT — <table class="report-table"> with two rows labeled "All Others" and "Self." Columns: TP3 Index | Trust | Proactivity | Productivity | Overall Impact (D1) | Bench Strength.
 
-B. TOP 3 STRENGTHS — <h3 class="report-subsection">Top 3 Strengths</h3> then three named items. Each item: one bold header phrase (e.g., <strong>Upward Presence with Leadership</strong>) followed by 1–2 behavior-based sentences describing what raters observe. Neutral, specific, grounded in scores.
+B. <h3 class="report-subsection">Top 3 Strengths</h3>
+Three named strengths. Each: one <strong>descriptive header</strong> (not a question code) then 1–2 behavior-based sentences grounded in scores. Neutral and specific.
 
-C. TOP 3 DEVELOPMENT PRIORITIES — <h3 class="report-subsection">Top 3 Development Priorities</h3> then three named items, each tied to a score cluster (e.g., <strong>Delegate Day-to-Day Decisions</strong>). 1–2 sentences each: what behavioral pattern appears and why it matters for execution.
+C. <h3 class="report-subsection">Top 3 Development Priorities</h3>
+Three named priorities tied to score clusters. Each: one <strong>descriptive header</strong> then 1–2 sentences on the behavioral pattern and its execution cost.
 
-D. 90-DAY FOCUS — <h3 class="report-subsection">90-Day Focus</h3> One sentence: the single most important behavioral shift for the next 90 days. Synthesize from the data — not a random pick.
+D. <h3 class="report-subsection">90-Day Focus</h3>
+ONE sentence. The single most important behavioral shift, synthesized from the data. This sentence will be repeated verbatim in Section 10.
 
-E. TOOL TO USE — <h3 class="report-subsection">Tool to Use</h3> Name one GPS tool most relevant to the #1 priority (e.g., GPS Delegation OS, Meeting Operating Standard, Own the Outcome™). One sentence explaining the connection.
+E. <h3 class="report-subsection">Tool to Use</h3>
+Name one GPS tool (e.g., GPS Delegation OS, Meeting Operating Standard, Own the Outcome™). One sentence on why.
 
-F. OVERALL IMPACT — <h3 class="report-subsection">Overall Impact</h3> One sentence anchoring D1 to its tier and what it signals about current leadership effectiveness.
+F. <h3 class="report-subsection">Overall Impact</h3>
+One sentence anchoring D1 to its tier and what it signals.
 
-═══════════════════════════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SECTION 2: HOW TO READ THIS DIAGNOSTIC
-═══════════════════════════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <h2 class="report-section">How to Read This Diagnostic: Reality vs. Truth</h2>
 
-Write exactly 3 short paragraphs:
+Two short paragraphs only:
 
-Paragraph 1 — How 360 data works: Raters observe behavior, not intent. The gap between what a leader intends and what others experience is where this diagnostic operates. Scores reflect patterns across multiple observers, not any single person's opinion.
+Paragraph 1: Raters observe behavior, not intent. The gap between what a leader intends and what others experience is where this diagnostic operates. Scores represent patterns across multiple independent observers — not any one person's opinion. The data does not say who is right; it shows what people experience.
 
-Paragraph 2 — Self vs. All Others: When self-scores are higher than rater scores, it often signals areas where others are experiencing something the leader may not be seeing clearly. When self-scores are lower, it may signal under-confidence or unusually strong self-awareness. Customize this paragraph using the leader's actual self-vs-All-Others pattern (e.g., "In [name]'s case, self-scores align closely with rater scores in Trust but diverge notably in Proactivity, where self-rated [X] vs. All Others [Y]…").
+Paragraph 2: Customize with the leader's actual self-vs-All-Others pattern. Write something like: "[Name]'s self-scores [align closely with / diverge from] rater scores across most dimensions. The sharpest gap appears in [pillar], where self-rated [X.XX] vs. All Others [X.XX] — a [gap/signal] worth sitting with. The most useful question is not 'do I agree?' but 'what would need to be true for this to be accurate?'"
 
-Paragraph 3 — How to use this report: This is a starting point, not a verdict. The data surfaces patterns. The leader's job is to test those patterns in direct conversation with their team. The most important question is not "do I agree?" but "what would need to be true for this to be accurate?"
-
-═══════════════════════════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SECTION 3: OVERVIEW & TP3 LEADERSHIP OUTCOMES
-═══════════════════════════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <h2 class="report-section">Overview & TP3 Leadership Outcomes</h2>
 
-A. PARTICIPANT SUMMARY: State how many raters completed the survey and break down by group (table or 2 sentences).
+A. Participant count and group breakdown (2 sentences or small table).
 
-B. OVERALL NARRATIVE: 1–2 paragraphs on what the overall data pattern says about this leader's current impact. Anchor to the TP3 Index score and tier. Be direct about the headline message the data sends.
+B. 1 paragraph overall narrative — what the TP3 Index and tier tell us about this leader's current impact. Be direct and specific to this person's data.
 
-C. FULL RATER GROUP TABLE — <table class="report-table"> Rows: Trust | Proactivity | Productivity | TP3 Index | Overall Impact (D1) | Bench Strength. Columns: Direct Reports | Peers | Supervisors | Int'l Partners | Self | All Others. Show n/a where no raters.
+C. Full rater group table — <table class="report-table">. Rows: Trust | Proactivity | Productivity | TP3 Index | Overall Impact (D1) | Bench Strength. Columns: Direct Reports | Peers | Supervisors | Int'l Partners | Self | All Others. Show n/a where no raters.
 
-D. PER-PILLAR SUMMARIES — for each of the three pillars (Trust, Proactivity, Productivity), write 2–3 sentences on the key pattern, then end with a <div class="insight-callout"> containing:
-<strong>90-Day Implication</strong>
-<ul class="report-list">
-<li><strong>Start:</strong> [one specific behavior to add]</li>
-<li><strong>Stop:</strong> [one specific behavior to eliminate]</li>
-<li><strong>Measure:</strong> [one observable signal that change is occurring]</li>
-</ul>
+D. Per-pillar summaries. For each pillar (Trust, Proactivity, Productivity):
+— 2 sentences on the key pattern (score spread, strongest/weakest specific behaviors using behavior descriptions not codes, any notable rater group divergence).
+— One <div class="insight-callout"> with heading <strong>90-Day Implication — [Pillar]</strong> and three bullets:
+  <ul class="report-list"><li><strong>Start:</strong> [behavior tied to the Section 1D focus behavior]</li><li><strong>Stop:</strong> [behavior tied to the Section 1D focus behavior]</li><li><strong>Measure:</strong> [observable signal]</li></ul>
 
-═══════════════════════════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SECTION 4: LAYERED PERSPECTIVES
-═══════════════════════════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <h2 class="report-section">Layered Perspectives: What Each Group Sees</h2>
 
-For each rater group that has responses: write 2–3 bullet points describing specific behaviors or patterns that group observes. Then include 1–2 verbatim quotes per group using <blockquote class="rater-quote"> tags. Total quotes across all groups: 3–5. Skip groups with no data.
+For each rater group with responses: 2 bullet points describing what that group observes, then 1 verbatim quote in <blockquote class="rater-quote"> tags. Skip groups with no data. Keep this section tight — it is a perspective summary, not a deep dive.
 
-═══════════════════════════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SECTION 5: INTENT VS. IMPACT
-═══════════════════════════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <h2 class="report-section">Intent vs. Impact</h2>
 
-A. TABLE — Dimension | Self Score | All Others Score | Gap (+/−) | Interpretation. Rows: Trust, Proactivity, Productivity, TP3 Index, Bench Strength, G1 (if exists), G2 (if exists). Gap guide: >+0.5 = likely blind spot | +0.2 to +0.5 = minor gap | −0.2 to +0.2 = aligned | <−0.2 = under-confidence.
+A. Two bullet lists side by side (use two <ul class="report-list"> with short headings):
+<strong>How you see yourself (intent):</strong> — 3–4 bullets using self-scores and self-assessment comments, in plain behavioral language.
+<strong>How others see you (impact):</strong> — 3–4 bullets using the biggest TP3 gaps and 1–2 key rater quotes.
 
-B. REFLECTION QUESTIONS — 2–3 questions for the leader to sit with. Use plain, direct language. Example: "Where do you see your impact differently than your team does, and what might explain that gap?"
+B. Self vs. Others gap table — Dimension | Self Score | All Others Score | Gap (+/−) | Signal. Rows: Trust, Proactivity, Productivity, TP3 Index, Bench Strength, G1 (if exists), G2 (if exists). Gap guide: >+0.5 = likely gap in self-perception | +0.2 to +0.5 = minor gap | −0.2 to +0.2 = aligned | <−0.2 = under-confidence.
 
-═══════════════════════════════════════
+C. 2–3 reflection questions. Plain, direct. Example: "Where do you see your impact differently than your team does — and what would need to be true for their view to be accurate?"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SECTION 6: KEY STRENGTHS
-═══════════════════════════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <h2 class="report-section">Key Strengths</h2>
 
-Name exactly 3 strengths. For each: <h3 class="report-subsection">[Strength Name]</h3>
-• <strong>Evidence:</strong> specific scores and 1 verbatim (if available) confirming this strength.
-• <strong>Business impact:</strong> one sentence on why this matters for this leader's specific context.
+3 named strengths (restate from Section 1B with fuller explanation — not a copy-paste). For each: <h3 class="report-subsection">[Strength Name]</h3>
+• <strong>Evidence:</strong> scores and 1 verbatim confirming this strength.
+• <strong>Why it matters:</strong> one sentence on the business consequence of this strength for this leader's specific context.
 
-═══════════════════════════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SECTION 7: BLIND SPOTS & OPPORTUNITIES
-═══════════════════════════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <h2 class="report-section">Blind Spots & Opportunities</h2>
 
-Name exactly 3 themes (adjust to 2 or 4 only if data strongly warrants it). For each: <h3 class="report-subsection">[Theme Name]</h3>
-• <strong>What people experience:</strong> the behavioral pattern others observe. Neutral language — describe what happens, not character.
-• <strong>Opportunity:</strong> the specific change available in 90 days and its likely effect on team performance or execution.
+3 named themes. For each: <h3 class="report-subsection">[Theme Name]</h3>
+• <strong>What stakeholders are experiencing:</strong> the specific behavioral pattern others observe. Neutral — describe behavior and its effect, not character.
+• <strong>Opportunity:</strong> what to do differently and the likely business effect in 90 days.
 
-═══════════════════════════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SECTION 8: ORGANIZATIONAL & TEAM IMPACT
-═══════════════════════════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <h2 class="report-section">Organizational & Team Impact Translation</h2>
 
-Write 3 focused paragraphs (max 4 sentences each):
-1. Execution: How does this leader's profile affect the team's ability to execute and deliver on commitments?
-2. Culture & Trust: What does this leader's trust and proactivity profile create in the day-to-day environment?
-3. Succession & Bench: What does the Bench Strength score and succession data say about investment in the next tier?
+Three short bullet groups (2–3 bullets each, not paragraphs):
+• <strong>Execution & Results:</strong> how this leader's profile affects the team's ability to deliver on commitments.
+• <strong>Culture & Trust:</strong> what the trust and proactivity signals create in the day-to-day environment.
+• <strong>Succession & Scalability:</strong> what the Bench Strength score and succession data say about pipeline investment.
 
-Reference specific scores and verbatims. No generic leadership theory.
+Ground every bullet in a specific score or verbatim. No generic leadership theory.
 
-═══════════════════════════════════════
-SECTION 9: TRUST — DETAILED FINDINGS
-═══════════════════════════════════════
-<h2 class="report-section">Trust — Detailed Findings</h2>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 9: START. STOP. CONTINUE.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+<h2 class="report-section">Start. Stop. Continue. — and How to Use It</h2>
 
-• Score spread by rater group — who rates highest and lowest, and what might explain the spread?
-• Strongest and weakest specific behaviors — use the actual behavior description, not just A1–A7 codes.
-• Self vs. All Others gap — aligned, blind spot, or under-confidence?
-• 1–2 verbatim quotes in <blockquote class="rater-quote"> tags.
-• 1–2 coaching observations written as behavioral statements (what the leader does and what it creates).
+Open with exactly this framing (adapt names/details only): "This list is designed to be shared directly with your team. Leadership accountability is most effective when it is public and specific — not just an internal intention. Consider reading the Start and Stop items aloud in your next team meeting and inviting your team to hold you to them."
 
-End with:
-<div class="insight-callout"><strong>90-Day Implication — Trust</strong><ul class="report-list"><li><strong>Start:</strong> [specific behavior]</li><li><strong>Stop:</strong> [specific behavior]</li><li><strong>Measure:</strong> [observable signal]</li></ul></div>
+Then three <ul class="report-list"> lists:
+• <strong>START</strong> — 3–5 concrete behaviors to add, aligned with the 90-day focus (delegation, psychological safety, or productivity, depending on the data).
+• <strong>STOP</strong> — 3–5 behaviors currently creating friction, tied to the gap themes.
+• <strong>CONTINUE</strong> — 3–5 behaviors that are working and must be protected.
 
-═══════════════════════════════════════
-SECTION 10: PROACTIVITY — DETAILED FINDINGS
-═══════════════════════════════════════
-<h2 class="report-section">Proactivity — Detailed Findings</h2>
-[Same structure as Section 9 — Trust, applied to Proactivity / B1–B6 data.]
-End with a 90-Day Implication callout for Proactivity.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 10: 90-DAY LEADERSHIP IMPACT PLAN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+<h2 class="report-section">90-Day Leadership Impact Plan (Pre-Wired Focus)</h2>
 
-═══════════════════════════════════════
-SECTION 11: PRODUCTIVITY — DETAILED FINDINGS
-═══════════════════════════════════════
-<h2 class="report-section">Productivity — Detailed Findings</h2>
-[Same structure as Section 9 — Trust, applied to Productivity / C1–C6 data.]
-End with a 90-Day Implication callout for Productivity.
+A. <h3 class="report-subsection">Pre-Wired Focus Behavior</h3>
+Copy verbatim the sentence from Section 1D here. This is the organizing spine — all elements below connect to it.
 
-═══════════════════════════════════════
-SECTION 12: START. STOP. CONTINUE.
-═══════════════════════════════════════
-<h2 class="report-section">Start. Stop. Continue.</h2>
-
-Open with 2 sentences of framing: this list is designed to be shared with the leader's team as a behavioral contract — not just used privately. Committing publicly to these changes increases accountability and signals awareness.
-
-Then three <ul class="report-list"> sections with headings:
-• <strong>START</strong> — 3–4 concrete behaviors to add immediately.
-• <strong>STOP</strong> — 3–4 behaviors currently creating friction or drag.
-• <strong>CONTINUE</strong> — 3–4 behaviors that are working and must be protected.
-
-═══════════════════════════════════════
-SECTION 13: 90-DAY LEADERSHIP IMPACT PLAN
-═══════════════════════════════════════
-<h2 class="report-section">90-Day Leadership Impact Plan</h2>
-
-A. PRE-WIRED FOCUS BEHAVIOR — <h3 class="report-subsection">Pre-Wired Focus Behavior</h3>
-One sentence: the single most important behavioral shift, synthesized from the key gaps across Trust, Proactivity, Productivity, and G1/G2. This must tie together the data — not be a random selection.
-
-B. SUCCESS METRIC — <h3 class="report-subsection">Success Metric</h3>
-Use exactly this format:
+B. <h3 class="report-subsection">Success Metric</h3>
+Exactly this format:
 <ul class="report-list">
-<li><strong>What we're measuring:</strong> [metric name]</li>
-<li><strong>How it's measured:</strong> [method — e.g., rater check-in at 45 days, direct observation, team pulse]</li>
+<li><strong>What we're measuring:</strong> [name the metric]</li>
+<li><strong>How it's measured:</strong> [method — e.g., 45-day rater check-in (connected to 90-day target), direct team observation, structured pulse]</li>
 <li><strong>Baseline:</strong> [ ] (to be captured in debrief session)</li>
 <li><strong>90-Day Target:</strong> [ ] (to be set in debrief session)</li>
 </ul>
 
-C. WEEKLY PRACTICES — <h3 class="report-subsection">Weekly Practices</h3>
-4–6 specific weekly habits. Each: one sentence, action-verb opening. At least one must explicitly name and apply a GPS tool (e.g., "Use the GPS Delegation OS to identify and hand off one decision per week to a direct report, documenting it in writing").
+C. <h3 class="report-subsection">Weekly Practices</h3>
+4–6 specific practices, each one sentence with an action verb. At least one must explicitly name a GPS tool (e.g., "Use the GPS Delegation OS each Monday to identify one decision to hand off in writing, and confirm receipt before end of day Friday"). All practices should connect to the focus behavior, not be random habits.
 
-═══════════════════════════════════════
-SECTION 14: APPENDIX I — VERBATIM FEEDBACK
-═══════════════════════════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 11: APPENDICES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <h2 class="report-section">Appendix I: Verbatim Feedback by Rater Group</h2>
-All significant verbatims not already quoted above, organized by rater group then topic. Label source as rater group only. Include everything worth reading.
+All significant verbatims not already quoted above, organized by rater group. Label source as rater group only. Include everything worth reading. If no additional verbatims remain, write: "All relevant verbatims have been cited in the body of this report."
 
-═══════════════════════════════════════
-SECTION 15: APPENDIX II — QUESTION-LEVEL SCORES
-═══════════════════════════════════════
 <h2 class="report-section">Appendix II: Question-Level Scores</h2>
-Table: Question Code | Behavior Description | All Others Avg | Self Score. Include all rated questions (A1–G2). Show n/a where no self or no rater data.
+Table: Question | Behavior Description | All Others Avg | Self Score. All rated questions (A1–G2). Show n/a where data is absent.
 
-Write the complete report now. Every section above is required. Prioritize density over length — every sentence must earn its place. Be direct, specific, and cut all generic language.`;
+<h2 class="report-section">Appendix III: GPS Tools Referenced</h2>
+For each GPS tool mentioned in this report: tool name + one sentence on what it is and how it connects to this leader's priorities. If no tool was referenced other than the one in Section 10, note it with a 1-sentence description.
+
+Write the complete report now. Every heading above is required — output them all even if a section is data-thin. Prioritize density: every sentence earns its place. No filler. No generic observations. No coach-facing commentary.`;
 
 
 async function handleGenerateReport(req, res) {
@@ -1202,10 +1182,9 @@ ${coachNotesSection}
 
 Write the complete 14-Day Executive Leadership Diagnostic Report for ${diag.client_name} now.`.trim();
 
-    // Sonnet + 5000 tokens — no retry, 110s hard timeout (Vercel Pro 120s ceiling)
-    // Structured format (tables + bullets) generates faster than prose; 5000 tokens covers all 15 sections
-    // Appendices are positioned last — if the model hits the token ceiling it stops there, not mid-report
-    const raw = await callClaude(REPORT_SYSTEM_PROMPT, userPrompt, 5000, { retries: 0, model: CLAUDE_REPORT_MODEL, timeoutMs: 110000 });
+    // Sonnet + 8000 tokens — no retry, 280s hard timeout (Vercel Pro 300s ceiling)
+    // Quality-first mode: give Claude full room to produce a complete 11-section report
+    const raw = await callClaude(REPORT_SYSTEM_PROMPT, userPrompt, 8000, { retries: 0, model: CLAUDE_REPORT_MODEL, timeoutMs: 280000 });
 
     // Output is full HTML — prepend branded cover before storing
     const reportDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
