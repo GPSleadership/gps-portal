@@ -196,8 +196,9 @@ textarea.tall{min-height:130px;}
 <!-- ── THANK YOU ── -->
 <div class="state-screen" id="screen-thankyou" style="display:none;">
   <div class="state-icon">🙏</div>
-  <div class="state-title">Thank you for your feedback.</div>
+  <div class="state-title">Thank you!</div>
   <div class="state-sub" id="thankyou-msg">Your responses have been submitted. They are confidential and will be aggregated with other raters' feedback before being shared. Your perspective matters — thank you for taking the time.</div>
+  <div id="thankyou-redirect" style="display:none;margin-top:16px;font-size:13px;color:var(--mid);">Taking you back to your portal in a moment…</div>
 </div>
 
 <script>
@@ -338,13 +339,15 @@ const QUESTION_BANK = [
     text_rater:'If [First Name] had to step away from their role for the next 6–12 months, our team/function would continue to operate effectively.' },
   { sec:'F', code:'F2', type:'rated_5', raterOnly:true,
     text_rater:'[First Name] actively develops people on the team so they can take on bigger responsibilities over the next 1–3 years.' },
-  { sec:'F', code:'F3', type:'open', raterOnly:true, optional:true,
-    text_rater:'(Optional) What is one thing [First Name] could do over the next 12–18 months to better prepare the team to succeed if they were not in this role?' },
+  { sec:'F', code:'F3', type:'open', raterOnly:true,
+    text_rater:'What is one thing [First Name] could do over the next 12–18 months to better prepare the team to succeed if they were not in this role?' },
 
-  // ── SECTION G: CUSTOM VISION ALIGNMENT (rater only, AI-generated) ─────────
-  // G1 text is dynamically injected from diagnostics.custom_g1_question
-  { sec:'G', code:'G1', type:'rated_5', raterOnly:true, aiGenerated:true,
+  // ── SECTION G: CUSTOM ALIGNMENT (rater only) ──────────────────────────────
+  // G1 and G2 text are dynamically injected from diagnostics.custom_g1_question / custom_g2_question
+  { sec:'G', code:'G1', type:'rated_5', raterOnly:true,
     text_rater:'[G1_QUESTION]' },
+  { sec:'G', code:'G2', type:'rated_5', raterOnly:true,
+    text_rater:'[G2_QUESTION]' },
 
 ];
 
@@ -446,8 +449,10 @@ async function init() {
   if (IS_SELF) {
     SECTIONS = ['A','B','C','D','E'];
   } else {
-    // Only include G if custom question exists
-    SECTIONS = DIAGNOSTIC.custom_g1_question ? ['A','B','C','D','F','G'] : ['A','B','C','D','F'];
+    // Include G section if at least one custom question (G1 or G2) exists
+    SECTIONS = (DIAGNOSTIC.custom_g1_question || DIAGNOSTIC.custom_g2_question)
+      ? ['A','B','C','D','F','G']
+      : ['A','B','C','D','F'];
   }
 
   // 5. Render and show survey
@@ -508,8 +513,9 @@ function renderSection(idx) {
     if (q.sec !== secCode) return false;
     if (q.selfOnly  && !IS_SELF)  return false;
     if (q.raterOnly &&  IS_SELF)  return false;
-    // For G1, only include if custom question exists
-    if (q.aiGenerated && !DIAGNOSTIC.custom_g1_question) return false;
+    // Skip G1 / G2 if their custom text hasn't been generated yet
+    if (q.code === 'G1' && !DIAGNOSTIC.custom_g1_question) return false;
+    if (q.code === 'G2' && !DIAGNOSTIC.custom_g2_question) return false;
     return true;
   });
 
@@ -563,10 +569,16 @@ function buildQuestionHtml(q) {
   // Replace [First Name] placeholder
   text = text.replace(/\[First Name\]/g, LEADER_FIRST);
 
-  // Replace G1 custom question placeholder
+  // Replace G1 / G2 custom question text
   if (q.code === 'G1' && DIAGNOSTIC.custom_g1_question) {
     text = DIAGNOSTIC.custom_g1_question;
   }
+  if (q.code === 'G2' && DIAGNOSTIC.custom_g2_question) {
+    text = DIAGNOSTIC.custom_g2_question;
+  }
+
+  // Fallback: replace any leftover [Leader] placeholder with leader's first name
+  text = text.replace(/\[Leader\]/g, LEADER_FIRST);
 
   const noteHtml = (!IS_SELF && q.note_rater)
     ? `<div class="q-note">${q.note_rater}</div>`
@@ -576,9 +588,8 @@ function buildQuestionHtml(q) {
     ? `<div class="q-optional">Optional — skip if you prefer not to answer.</div>`
     : '';
 
-  const aiBadgeHtml = q.aiGenerated
-    ? `<div class="ai-badge">AI-Generated for this diagnostic</div><br>`
-    : '';
+  // No AI badge — raters don't need to know which questions are generated
+  const aiBadgeHtml = '';
 
   let inputHtml = '';
 
@@ -687,7 +698,9 @@ function validateSection() {
     if (q.selfOnly  && !IS_SELF)  return false;
     if (q.raterOnly &&  IS_SELF)  return false;
     if (q.optional) return false; // optional → skip validation
-    if (q.aiGenerated && !DIAGNOSTIC.custom_g1_question) return false;
+    // Skip G1/G2 if their text hasn't been generated
+    if (q.code === 'G1' && !DIAGNOSTIC.custom_g1_question) return false;
+    if (q.code === 'G2' && !DIAGNOSTIC.custom_g2_question) return false;
     return true;
   });
 
@@ -824,6 +837,14 @@ async function submitSurvey() {
 
     document.getElementById('thankyou-msg').textContent = tyMsg;
     showState('screen-thankyou');
+
+    // For the leader's self-assessment: redirect back to their portal after 3 seconds
+    if (IS_SELF && DIAGNOSTIC.leader_token) {
+      const redirectEl = document.getElementById('thankyou-redirect');
+      if (redirectEl) redirectEl.style.display = 'block';
+      const leaderPortalUrl = `${window.location.origin}/diagnostic-leader.html?token=${DIAGNOSTIC.leader_token}`;
+      setTimeout(() => { window.location.href = leaderPortalUrl; }, 3000);
+    }
 
   } catch (err) {
     console.error('Submit error:', err);

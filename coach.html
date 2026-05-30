@@ -4790,17 +4790,29 @@ function renderOverviewTab() {
     ${succRow('Immediate Successor View', d.self_immediate_successor_view)}
     ${succRow('Successor Candidates', d.self_successor_candidates)}
     ${succRow('Successor Development Actions', d.self_successor_development_actions)}
-    ${d.custom_g1_question ? `
     <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--d-border);">
-      <div style="font-size:11px;font-weight:700;color:var(--d-gold);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">AI-Generated Rater Question (G1)</div>
-      <div style="font-size:13px;border:1.5px solid #A78BFA;background:#F3F0FF;padding:10px 14px;border-radius:6px;">"${d.custom_g1_question}"</div>
-      <div style="font-size:11px;color:var(--d-mid);margin-top:4px;">Generated ${diagFormatDate(d.custom_g1_generated_at)} · Included in all rater surveys</div>
-    </div>` : `
-    <div class="dalert dalert-amber" style="margin-top:12px;">
-      <span class="dalert-icon">⚡</span>
-      <div>3-year vision response is available. <button class="dbtn dbtn-outline dbtn-sm" onclick="generateG1()">Generate Custom Rater Question →</button>
-        <span style="font-size:11px;color:var(--d-mid);margin-left:8px;">${_g1AttemptsUsed()} of ${G1_MAX_ATTEMPTS} attempts used</span></div>
-    </div>`}
+      <div style="font-size:11px;font-weight:700;color:var(--d-gold);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Custom Rater Questions</div>
+      ${d.custom_g1_question ? `
+      <div style="margin-bottom:8px;">
+        <div style="font-size:11px;font-weight:600;color:var(--d-mid);margin-bottom:3px;">G1 — Vision Alignment</div>
+        <div style="font-size:13px;border:1.5px solid #A78BFA;background:#F3F0FF;padding:10px 14px;border-radius:6px;">"${d.custom_g1_question}"</div>
+        <div style="font-size:11px;color:var(--d-mid);margin-top:3px;">Generated ${diagFormatDate(d.custom_g1_generated_at)}</div>
+      </div>` : `
+      <div class="dalert dalert-amber" style="margin-bottom:8px;">
+        <span class="dalert-icon">⚡</span>
+        <div>G1 not yet generated. <button class="dbtn dbtn-outline dbtn-sm" onclick="generateG1()">Generate G1 →</button>
+          <span style="font-size:11px;color:var(--d-mid);margin-left:8px;">${_g1AttemptsUsed()} of ${G1_MAX_ATTEMPTS} used</span></div>
+      </div>`}
+      ${d.self_assessment_completed_at ? (d.custom_g2_question ? `
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--d-mid);margin-bottom:3px;">G2 — Leadership Gap Probe</div>
+        <div style="font-size:13px;border:1.5px solid #93C5FD;background:#EFF6FF;padding:10px 14px;border-radius:6px;">"${d.custom_g2_question}"</div>
+        <div style="font-size:11px;color:var(--d-mid);margin-top:3px;">Generated ${diagFormatDate(d.custom_g2_generated_at)} · <button class="dbtn dbtn-outline dbtn-sm" style="font-size:10px;padding:1px 7px;" onclick="generateG2()">Regenerate</button></div>
+      </div>` : `
+      <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--d-mid);">
+        <button class="dbtn dbtn-outline dbtn-sm" onclick="generateG2()">Generate G2 (GPS gap probe) →</button>
+      </div>`) : ''}
+    </div>
   </div>` : '';
 
   const oc = document.getElementById('overview-content');
@@ -5253,6 +5265,8 @@ function renderReportTab() {
       <button class="dbtn dbtn-gold" onclick="openReportPreview()">👁 Preview &amp; Finalize Report</button>` : ''}
       ${d.debrief_completed_at ? '' : d.report_finalized_at ? `
       <button class="dbtn dbtn-outline" onclick="markDebriefComplete()">Mark Debrief Complete →</button>` : ''}
+      ${surveyUnlocked && done > 0 ? `
+      <button class="dbtn dbtn-outline dbtn-sm" style="margin-left:auto;" onclick="exportDiagnosticResponses()">⬇ Export Responses (Excel)</button>` : ''}
     </div>
   </div>
   <div class="card">
@@ -5473,6 +5487,36 @@ async function generateG1() {
   }
 }
 
+async function generateG2() {
+  if (!DIAG_SEL.self_assessment_completed_at) {
+    alert('Self-assessment must be complete before generating G2.');
+    return;
+  }
+  if (DIAG_SEL.custom_g2_question) {
+    if (!confirm('Replace the existing G2 question with a new AI-generated one?')) return;
+  }
+
+  const btn = event?.target;
+  if (btn) { btn.disabled = true; btn.textContent = '⚙ Generating…'; }
+
+  try {
+    const resp = await fetch('/api/diagnostic?action=generate-g2-question', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ diagnostic_id: DIAG_SEL.id }),
+    });
+    if (!resp.ok) {
+      const errData = await resp.json().catch(() => ({}));
+      throw new Error(errData.error || resp.statusText);
+    }
+    const { question } = await resp.json();
+    await updateDiag({ custom_g2_question: question, custom_g2_generated_at: new Date().toISOString() });
+    await refreshSelected();
+  } catch(e) {
+    alert('Error generating G2: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = DIAG_SEL.custom_g2_question ? 'Regenerate' : 'Generate G2 (GPS gap probe) →'; }
+  }
+}
+
 async function generateReport(e) {
   const btn = e ? e.currentTarget : null;
   if (btn) { btn.disabled = true; btn.textContent = '⚙ Generating…'; }
@@ -5490,6 +5534,59 @@ async function generateReport(e) {
   }
 }
 
+
+async function exportDiagnosticResponses() {
+  const d = DIAG_SEL;
+  if (!d) return;
+  try {
+    // 1. Fetch all raters
+    const ratersResp = await fetch(
+      `https://pbnkefuqpoztcxfagiod.supabase.co/rest/v1/diagnostic_raters?diagnostic_id=eq.${d.id}&select=id,name,email,relationship,is_self,completed_at`,
+      { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` } }
+    );
+    const raters = await ratersResp.json();
+    const raterMap = Object.fromEntries(raters.map(r => [r.id, r]));
+
+    // 2. Fetch all responses
+    const respResp = await fetch(
+      `https://pbnkefuqpoztcxfagiod.supabase.co/rest/v1/diagnostic_responses?diagnostic_id=eq.${d.id}&select=rater_id,question_code,score,text_response`,
+      { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` } }
+    );
+    const responses = await respResp.json();
+    if (!Array.isArray(responses) || responses.length === 0) {
+      alert('No responses found for this diagnostic.');
+      return;
+    }
+
+    // 3. Pivot: one row per rater, one column per question
+    const allCodes = [...new Set(responses.map(r => r.question_code))].sort();
+    const rows = [];
+    for (const rater of raters) {
+      const raterResps = responses.filter(r => r.rater_id === rater.id);
+      const row = {
+        'Rater Name':         rater.name || '',
+        'Email':              rater.email || '',
+        'Relationship':       rater.relationship || '',
+        'Self-Assessment':    rater.is_self ? 'Yes' : 'No',
+        'Completed':          rater.completed_at ? new Date(rater.completed_at).toLocaleDateString() : 'No',
+      };
+      for (const code of allCodes) {
+        const ans = raterResps.find(r => r.question_code === code);
+        row[code] = ans ? (ans.score ?? ans.text_response ?? '') : '';
+      }
+      rows.push(row);
+    }
+
+    // 4. Build XLSX
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, 'Survey Responses');
+    const safe = (d.client_name || 'diagnostic').replace(/[^a-zA-Z0-9]/g, '_');
+    XLSX.writeFile(wb, `${safe}_diagnostic_responses.xlsx`);
+  } catch(err) {
+    alert('Export failed: ' + err.message);
+  }
+}
 
 async function generateReportOverride() {
   const d = DIAG_SEL;

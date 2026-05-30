@@ -138,12 +138,13 @@ export default async function handler(req, res) {
     case 'send-invites':         return handleSendInvites(req, res);
     case 'send-leader-link':     return handleSendLeaderLink(req, res);
     case 'generate-question':    return handleGenerateQuestion(req, res);
+    case 'generate-g2-question': return handleGenerateG2Question(req, res);
     case 'generate-report':      return handleGenerateReport(req, res);
     case 'generate-team-report': return handleGenerateTeamReport(req, res);
     case 'finalize-report':      return handleFinalizeReport(req, res);
     case 'reminders':            return handleReminders(req, res);
     default:
-      return res.status(400).json({ error: `Unknown action: "${action}". Valid: send-invites, generate-question, generate-report, generate-team-report, finalize-report, reminders` });
+      return res.status(400).json({ error: `Unknown action: "${action}". Valid: send-invites, send-leader-link, generate-question, generate-g2-question, generate-report, generate-team-report, finalize-report, reminders` });
   }
 }
 
@@ -157,9 +158,8 @@ export default async function handler(req, res) {
 function buildInviteEmail({ raterName, leaderName, leaderTitle, leaderOrg, surveyLink, closeDate, calendarLink }) {
   const firstName  = (raterName || '').split(' ')[0] || 'there';
   const leaderFull = [leaderName, leaderTitle, leaderOrg].filter(Boolean).join(' — ');
-  const closeFmt   = closeDate
-    ? new Date(closeDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
-    : 'the survey deadline';
+  // closeDate is already a formatted string (e.g. "June 12, 2026") — use directly
+  const closeFmt = closeDate || 'the survey deadline';
 
   // Optional interview booking section (appended when calendarLink is provided)
   const interviewSection = calendarLink ? `
@@ -419,17 +419,21 @@ Your job is to write a single, high-quality behavioral feedback question for a l
 
 The question must:
 1. Be specific to the leader's stated 3-year vision and future direction — not generic
-2. Be written in third person, starting with "[Leader name]" as a placeholder
+2. Start with the leader's first name as provided in the input — no placeholders, no brackets
 3. Evaluate whether current behaviors align with where the leader says they want to go
 4. Be answerable from observable behavior, not speculation about intentions
 5. Be one sentence, direct, and unambiguous — raters should know exactly what to evaluate
 6. Be at the same difficulty level as the other survey questions (not a softball, not a trick)
 
+CRITICAL RULES:
+- Use the leader's first name at the start of the question. Example: "Alex consistently..." or "Vanessa demonstrates..."
+- NEVER use gendered pronouns (he/she/his/her/him). If you must refer to the leader again in the sentence, use their first name or "this leader" — never "she" or "her" or "he" or "him".
+- Do NOT use brackets, placeholders, or template variables of any kind.
+
 Format: Return ONLY the question text. No preamble, no explanation, no quotation marks.
-Use [Leader] as the placeholder for the leader's name.
 
 Example output (do not copy this — write something specific to the input):
-[Leader] demonstrates the leadership behaviors required to transition the business from an operator-led model to a team-led model.`;
+Alex demonstrates the leadership behaviors required to transition the business from an operator-led model to a team-led model.`;
 
 async function handleGenerateQuestion(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -458,14 +462,16 @@ async function handleGenerateQuestion(req, res) {
       }
     }
 
-    const userPrompt = `Leader name: ${diag.client_name}
+    const leaderFirstName = (diag.client_name || '').split(' ')[0];
+    const userPrompt = `Leader full name: ${diag.client_name}
+Leader first name (use this to start the question): ${leaderFirstName}
 
 3-Year Vision:
 ${diag.self_three_year_vision}
 
 ${diag.self_future_self_capabilities ? `Future self / capabilities they want to develop:\n${diag.self_future_self_capabilities}` : ''}
 
-Write the G1 question for this leader.`;
+Write the G1 question for this leader. Start the sentence with "${leaderFirstName}" and do not use any gendered pronouns.`;
 
     const question = await callClaude(G1_SYSTEM_PROMPT, userPrompt, 512);
     if (!question) return res.status(500).json({ error: 'Claude returned an empty response' });
@@ -482,6 +488,108 @@ Write the G1 question for this leader.`;
 
   } catch (err) {
     console.error('[diagnostic/generate-question] error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ACTION: generate-g2-question
+// POST /api/diagnostic?action=generate-g2-question
+// Body: { diagnostic_id }
+// Generates a second custom survey question (G2) drawn from the leader's full
+// self-assessment. The question is designed to surface a behavioral pattern that
+// a GPS leadership engagement directly addresses — without being obviously about
+// coaching. Raters score it 1–5 without knowing its intent.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const G2_SYSTEM_PROMPT = `You are an executive leadership assessment specialist working for GPS Leadership Solutions.
+
+GPS Leadership Solutions installs leadership operating systems for CEOs and senior leaders — the infrastructure of delegation, accountability, decision-making, and team autonomy that allows a business to grow without the leader being the bottleneck.
+
+Your job is to write a second custom behavioral survey question (called G2) for a leadership diagnostic. This question will be answered by raters on a 1–5 scale (1 = Strongly Disagree, 5 = Strongly Agree).
+
+The question should subtly surface one of the most common leadership gaps that GPS directly addresses:
+- Leaders who make too many decisions themselves (not building decision infrastructure)
+- Leaders whose teams can't operate without them (bottleneck leaders)
+- Leaders who say they delegate but pull decisions back up
+- Leaders who don't build accountability systems — relying on follow-up instead
+- Leaders who aren't developing the next level to take ownership
+
+Read the leader's self-assessment responses carefully. Identify ONE specific behavioral pattern revealed there — something the leader said or implied — that connects to one of the above gaps. Write the question to surface whether that specific gap exists, based on observable rater experience.
+
+CRITICAL RULES:
+- Use the leader's first name to start the question — no placeholders, no brackets
+- NEVER use gendered pronouns (he/she/his/her/him). Use the leader's first name or "this leader" if needed again.
+- The question must be behavioral and observable — raters can answer from direct experience
+- Do NOT mention coaching, GPS Leadership, or consulting in any way
+- Do NOT make the question obviously about "needing help" — make it about behavior
+- One sentence, direct, specific. Not a softball.
+
+Format: Return ONLY the question text. No preamble, no explanation, no quotation marks.
+
+Example (do not copy — write something grounded in the actual input):
+Marcus creates the conditions for the team to make decisions without escalating to Marcus first.`;
+
+async function handleGenerateG2Question(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured' });
+
+  const { diagnostic_id } = req.body || {};
+  if (!diagnostic_id) return res.status(400).json({ error: 'diagnostic_id is required' });
+
+  try {
+    const diagRes = await sb(
+      `/rest/v1/diagnostics?id=eq.${diagnostic_id}&select=id,client_name,self_three_year_vision,self_future_self_capabilities,self_immediate_successor_view,self_successor_candidates,self_successor_development_actions,self_assessment_completed_at,custom_g2_generated_at&limit=1`
+    );
+    const diags = await diagRes.json();
+    if (!Array.isArray(diags) || diags.length === 0) return res.status(404).json({ error: 'Diagnostic not found' });
+    const diag = diags[0];
+
+    if (!diag.self_assessment_completed_at) {
+      return res.status(400).json({ error: 'Leader has not completed the self-assessment. G2 requires self-assessment data.' });
+    }
+
+    // Debounce: 30 seconds between regenerations
+    if (diag.custom_g2_generated_at) {
+      const secondsSince = (Date.now() - new Date(diag.custom_g2_generated_at).getTime()) / 1000;
+      if (secondsSince < 30) {
+        return res.status(429).json({ error: `Please wait ${Math.ceil(30 - secondsSince)} seconds before regenerating.` });
+      }
+    }
+
+    const leaderFirstName = (diag.client_name || '').split(' ')[0];
+    const selfData = [
+      diag.self_three_year_vision          ? `3-Year Vision:\n${diag.self_three_year_vision}` : '',
+      diag.self_future_self_capabilities   ? `Future capabilities / who they want to become:\n${diag.self_future_self_capabilities}` : '',
+      diag.self_immediate_successor_view   ? `Immediate successor view:\n${diag.self_immediate_successor_view}` : '',
+      diag.self_successor_candidates       ? `Successor candidates:\n${diag.self_successor_candidates}` : '',
+      diag.self_successor_development_actions ? `Successor development actions:\n${diag.self_successor_development_actions}` : '',
+    ].filter(Boolean).join('\n\n');
+
+    const userPrompt = `Leader full name: ${diag.client_name}
+Leader first name (use this to start the question): ${leaderFirstName}
+
+Self-Assessment Responses:
+${selfData || '(No self-assessment data available)'}
+
+Write the G2 question for this leader. Start with "${leaderFirstName}" and do not use gendered pronouns.`;
+
+    const question = await callClaude(G2_SYSTEM_PROMPT, userPrompt, 512);
+    if (!question) return res.status(500).json({ error: 'Claude returned an empty response' });
+
+    const now = new Date().toISOString();
+    await sb(
+      `/rest/v1/diagnostics?id=eq.${diagnostic_id}`,
+      'PATCH',
+      { custom_g2_question: question, custom_g2_generated_at: now, updated_at: now },
+      { Prefer: 'return=minimal' }
+    );
+
+    return res.status(200).json({ question, generated_at: now });
+
+  } catch (err) {
+    console.error('[diagnostic/generate-g2-question] error:', err);
     return res.status(500).json({ error: err.message });
   }
 }
@@ -564,6 +672,7 @@ function buildScoreSummary(responses) {
   const impactScore       = qAvg(['D1']);
   const benchScore        = qAvg(['F1','F2']);
   const g1Score           = qAvg(['G1']);
+  const g2Score           = qAvg(['G2']);
   const tp3Index          = avg([trustScore, proactivityScore, productivityScore].filter(s => s != null));
 
   const perQuestion = {};
@@ -573,18 +682,21 @@ function buildScoreSummary(responses) {
 
   return {
     trustScore, proactivityScore, productivityScore,
-    tp3Index, impactScore, benchScore, g1Score,
+    tp3Index, impactScore, benchScore, g1Score, g2Score,
     perQuestion,
     raterCount: new Set(responses.map(r => r.rater_id)).size,
   };
 }
 
-function collectVerbatims(responses) {
+function collectVerbatims(responses, maxPerCode = 4) {
   const verbatims = {};
   for (const r of responses) {
     if (!r.text_response?.trim()) continue;
     if (!verbatims[r.question_code]) verbatims[r.question_code] = [];
-    verbatims[r.question_code].push(r.text_response.trim());
+    // Cap verbatims per question code to limit prompt size and stay within function timeout
+    if (verbatims[r.question_code].length < maxPerCode) {
+      verbatims[r.question_code].push(r.text_response.trim());
+    }
   }
   return verbatims;
 }
@@ -610,7 +722,8 @@ function formatScoresForPrompt(scores) {
   lines.push(`\nBench / Succession Readiness (F1-F2, scale 1-5):`);
   lines.push(`  F1: ${perQuestion['F1']?.avg?.toFixed(2) ?? 'n/a'}/5.0 — ${label(perQuestion['F1']?.avg)}`);
   lines.push(`  F2: ${perQuestion['F2']?.avg?.toFixed(2) ?? 'n/a'}/5.0 — ${label(perQuestion['F2']?.avg)}`);
-  if (scores.g1Score != null) lines.push(`\nCustom Question (G1, scale 1-5): ${scores.g1Score?.toFixed(2) ?? 'n/a'}/5.0`);
+  if (scores.g1Score != null) lines.push(`\nCustom Question G1 (vision alignment, scale 1-5): ${scores.g1Score?.toFixed(2) ?? 'n/a'}/5.0`);
+  if (scores.g2Score != null) lines.push(`Custom Question G2 (GPS gap probe, scale 1-5): ${scores.g2Score?.toFixed(2) ?? 'n/a'}/5.0`);
   lines.push(`\nSummary:\n  TP3 Index: ${scores.tp3Index?.toFixed(2) ?? 'n/a'}/5.0\n  Overall Impact: ${scores.impactScore?.toFixed(2) ?? 'n/a'}/10.0\n  Total raters (others): ${scores.raterCount}`);
   return lines.join('\n');
 }
@@ -675,7 +788,7 @@ REQUIRED OUTPUT FORMAT — respond with a valid JSON object and nothing else:
     { "rank": 2 },
     { "rank": 3 }
   ],
-  "full_narrative": "string — full HTML report body (~600-900 words). Use <h2>, <p>, <ul> tags. No inline styles. This is for direct display in the coach portal."
+  "full_narrative": "string — HTML report body (~350-500 words). Use <h2>, <p>, <ul> tags. No inline styles. Direct, punchy — no padding. For coach review in the portal."
 }`;
 
 async function handleGenerateReport(req, res) {
@@ -687,7 +800,7 @@ async function handleGenerateReport(req, res) {
 
   try {
     const diagRes = await sb(
-      `/rest/v1/diagnostics?id=eq.${diagnostic_id}&select=id,client_name,client_title,client_org,close_date,tier,custom_g1_question,self_three_year_vision,self_future_self_capabilities,self_immediate_successor_view,self_successor_candidates,self_successor_development_actions,intake_notes,coaching_notes,interview_notes&limit=1`
+      `/rest/v1/diagnostics?id=eq.${diagnostic_id}&select=id,client_name,client_title,client_org,close_date,tier,custom_g1_question,custom_g2_question,self_three_year_vision,self_future_self_capabilities,self_immediate_successor_view,self_successor_candidates,self_successor_development_actions,intake_notes,coaching_notes,interview_notes&limit=1`
     );
     const diags = await diagRes.json();
     if (!Array.isArray(diags) || diags.length === 0) return res.status(404).json({ error: 'Diagnostic not found' });
@@ -761,11 +874,12 @@ Future self / capabilities: ${diag.self_future_self_capabilities || 'Not provide
 Immediate successor view: ${diag.self_immediate_successor_view || 'Not provided'}
 Successor candidates: ${diag.self_successor_candidates || 'Not provided'}
 Successor development actions: ${diag.self_successor_development_actions || 'Not provided'}
-${diag.custom_g1_question ? `\nCustom G1 Question (used in survey): "${diag.custom_g1_question}"` : ''}${coachNotesSection}
+${diag.custom_g1_question ? `\nCustom G1 Question (vision alignment, used in survey): "${diag.custom_g1_question}"` : ''}${diag.custom_g2_question ? `\nCustom G2 Question (GPS gap probe, used in survey): "${diag.custom_g2_question}"` : ''}${coachNotesSection}
 
 Generate the diagnostic report JSON now.`.trim();
 
-    const raw = await callClaude(REPORT_SYSTEM_PROMPT, userPrompt, 8192);
+    // maxTokens 4096 keeps the call under Vercel Hobby's 60s function timeout
+    const raw = await callClaude(REPORT_SYSTEM_PROMPT, userPrompt, 4096);
 
     let reportJson;
     try {
