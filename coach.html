@@ -5635,16 +5635,15 @@ async function openReportPreview() {
   // Open modal immediately so coach sees it loading
   document.getElementById('report-preview-modal').classList.add('open');
 
-  // Fetch latest report draft
+  // Fetch latest report draft — use raw fetch (same as server sb()) to avoid RLS issues with anon JS client
   try {
-    const { data: drafts, error } = await db
-      .from('diagnostic_report_drafts')
-      .select('*')
-      .eq('diagnostic_id', d.id)
-      .order('generated_at', { ascending: false })
-      .limit(1);
+    const draftRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/diagnostic_report_drafts?diagnostic_id=eq.${d.id}&select=*&order=generated_at.desc&limit=1`,
+      { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` } }
+    );
+    const drafts = await draftRes.json();
 
-    if (error || !drafts || drafts.length === 0) {
+    if (!Array.isArray(drafts) || drafts.length === 0) {
       bodyEl.innerHTML = `<div class="rp-loading" style="color:#dc2626;">
         No report draft found. Generate the report first, then return here to finalize.
       </div>`;
