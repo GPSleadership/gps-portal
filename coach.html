@@ -634,6 +634,11 @@
     .rp-send-btn:disabled { opacity: .45; cursor: not-allowed; }
     .rp-send-btn:not(:disabled):hover { background: #A88520; }
     .rp-loading { text-align: center; padding: 48px 24px; color: var(--d-mid); font-size: 14px; }
+    .rp-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 24px; background: #f0f2f5; border-bottom: 1px solid var(--d-border); flex-shrink: 0; }
+    .rp-tool-btn { padding: 5px 14px; font-size: 12px; font-weight: 600; color: var(--d-blue); background: #fff; border: 1px solid var(--d-border); border-radius: 6px; cursor: pointer; transition: background .15s, color .15s; }
+    .rp-tool-btn:hover { background: var(--d-blue); color: #fff; border-color: var(--d-blue); }
+    .rp-tool-btn.editing-active { background: var(--d-gold); color: var(--d-dark); border-color: var(--d-gold); }
+    .rp-body[contenteditable="true"] { background: #fffef8; outline: 2px dashed #f5c84a; outline-offset: -6px; }
 
     /* Diagnostic modals — override coach.html's .modal padding/border */
     #new-diag-modal .modal,#send-invites-modal .modal,#team-report-modal .modal{padding:0;max-width:580px;border-top:none;border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,.2);}
@@ -1332,6 +1337,13 @@
         <div class="rp-meta" id="rp-meta-line">Loading report…</div>
       </div>
       <button class="dclose-btn" onclick="closeDiagModal('report-preview-modal')">✕</button>
+    </div>
+    <div class="rp-toolbar" id="rp-toolbar">
+      <button class="rp-tool-btn" id="rp-edit-btn" onclick="toggleReportEdit()">✏ Edit</button>
+      <button class="rp-tool-btn" id="rp-save-btn" onclick="saveReportEdits()" style="display:none;">Save Edits</button>
+      <div style="flex:1;"></div>
+      <button class="rp-tool-btn" onclick="downloadReportWord()">⬇ Word</button>
+      <button class="rp-tool-btn" onclick="downloadReportPdf()">⬇ PDF</button>
     </div>
     <div class="rp-body" id="rp-body">
       <div class="rp-loading">Loading report draft…</div>
@@ -5620,6 +5632,8 @@ async function generateReportOverride() {
 
 // ── Report preview + three-layer finalize gate ───────────────────────────
 
+let CURRENT_DRAFT_ID = null; // tracks which draft is loaded for inline edit / save
+
 async function openReportPreview() {
   const d = DIAG_SEL;
   if (!d) return;
@@ -5631,10 +5645,17 @@ async function openReportPreview() {
   const sendBtn     = document.getElementById('rp-send-btn');
   const nameLabel   = document.getElementById('rp-client-name-label');
   const sendNameEl  = document.getElementById('rp-send-name');
+  const editBtn     = document.getElementById('rp-edit-btn');
+  const saveBtn     = document.getElementById('rp-save-btn');
 
-  checkEl.checked  = false;
-  sendBtn.disabled = true;
-  bodyEl.innerHTML = '<div class="rp-loading">Loading report draft…</div>';
+  checkEl.checked          = false;
+  sendBtn.disabled         = true;
+  bodyEl.innerHTML         = '<div class="rp-loading">Loading report draft…</div>';
+  bodyEl.contentEditable   = 'false';
+  CURRENT_DRAFT_ID         = null;
+  editBtn.textContent      = '✏ Edit';
+  editBtn.classList.remove('editing-active');
+  saveBtn.style.display    = 'none';
 
   // Populate client identity in footer
   const clientLabel = [d.client_name, d.client_org].filter(Boolean).join(' at ');
@@ -5661,6 +5682,7 @@ async function openReportPreview() {
     }
 
     const draft = drafts[0];
+    CURRENT_DRAFT_ID = draft.id;
 
     // Option B reports store full HTML in raw_markdown; legacy reports use content_json
     if (draft.raw_markdown) {
@@ -5699,6 +5721,125 @@ function buildCoachReportFallback(r) {
 function toggleFinalizeBtn() {
   const checked = document.getElementById('rp-review-check').checked;
   document.getElementById('rp-send-btn').disabled = !checked;
+}
+
+// ── Inline report editing ─────────────────────────────────────────────────
+function toggleReportEdit() {
+  const bodyEl  = document.getElementById('rp-body');
+  const editBtn = document.getElementById('rp-edit-btn');
+  const saveBtn = document.getElementById('rp-save-btn');
+  const isEditing = bodyEl.contentEditable === 'true';
+  if (isEditing) {
+    bodyEl.contentEditable = 'false';
+    editBtn.textContent    = '✏ Edit';
+    editBtn.classList.remove('editing-active');
+    saveBtn.style.display  = 'none';
+  } else {
+    bodyEl.contentEditable = 'true';
+    bodyEl.focus();
+    editBtn.textContent    = 'Cancel';
+    editBtn.classList.add('editing-active');
+    saveBtn.style.display  = '';
+  }
+}
+
+async function saveReportEdits() {
+  if (!CURRENT_DRAFT_ID) { alert('No draft loaded — cannot save.'); return; }
+  const bodyEl  = document.getElementById('rp-body');
+  const saveBtn = document.getElementById('rp-save-btn');
+  const editBtn = document.getElementById('rp-edit-btn');
+  const newHtml = bodyEl.innerHTML;
+  saveBtn.textContent = 'Saving…';
+  saveBtn.disabled    = true;
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/diagnostic_report_drafts?id=eq.${CURRENT_DRAFT_ID}`,
+      {
+        method:  'PATCH',
+        headers: {
+          apikey:         SUPABASE_ANON,
+          Authorization:  `Bearer ${SUPABASE_ANON}`,
+          'Content-Type': 'application/json',
+          Prefer:         'return=minimal',
+        },
+        body: JSON.stringify({ raw_markdown: newHtml }),
+      }
+    );
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    bodyEl.contentEditable = 'false';
+    editBtn.textContent    = '✏ Edit';
+    editBtn.classList.remove('editing-active');
+    saveBtn.style.display  = 'none';
+  } catch (err) {
+    alert('Error saving edits: ' + err.message);
+  } finally {
+    saveBtn.textContent = 'Save Edits';
+    saveBtn.disabled    = false;
+  }
+}
+
+// ── Report downloads ──────────────────────────────────────────────────────
+function downloadReportPdf() {
+  const bodyEl   = document.getElementById('rp-body');
+  const metaText = document.getElementById('rp-meta-line').textContent;
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<title>GPS Leadership Report — ${metaText}</title>
+<style>
+  body{font-family:Georgia,serif;font-size:13px;line-height:1.75;color:#1a1a1a;max-width:740px;margin:36px auto;padding:0 24px;}
+  h2{font-size:16px;font-weight:700;color:#1e3a6e;border-bottom:2px solid #e5e7eb;padding-bottom:5px;margin:28px 0 8px;}
+  h3{font-size:14px;font-weight:700;color:#1e3a6e;margin:18px 0 6px;}
+  p{margin:0 0 12px;}
+  ul{padding-left:20px;margin:0 0 12px;}
+  li{margin-bottom:5px;}
+  table.report-table{width:100%;border-collapse:collapse;margin:14px 0;font-size:12px;}
+  table.report-table th{background:#1e3a6e;color:#fff;padding:6px 8px;text-align:left;font-weight:700;}
+  table.report-table td{padding:5px 8px;border-bottom:1px solid #e5e7eb;vertical-align:top;}
+  table.report-table tr:nth-child(even) td{background:#f7f9fc;}
+  blockquote.rater-quote{border-left:3px solid #0d9488;background:#f0f9f9;margin:12px 0;padding:10px 16px;font-style:italic;font-size:13px;border-radius:0 5px 5px 0;}
+  .insight-callout{background:#fff8ec;border:1px solid #f5c84a;border-left:4px solid #d4a017;padding:10px 14px;border-radius:5px;margin:12px 0;}
+  .rp-highlight{background:#f5f7fa;border-left:4px solid #C8A84B;padding:10px 14px;margin:12px 0;}
+  ul.report-list{padding-left:20px;margin:8px 0 14px;}
+  ul.report-list li{margin-bottom:6px;}
+  @media print{body{margin:0;padding:16px;}@page{margin:0.75in;}}
+</style>
+</head><body>${bodyEl.innerHTML}</body></html>`);
+  win.document.close();
+  setTimeout(() => { win.focus(); win.print(); }, 500);
+}
+
+function downloadReportWord() {
+  const bodyEl   = document.getElementById('rp-body');
+  const metaText = document.getElementById('rp-meta-line').textContent;
+  const safeName = metaText.replace(/[^a-zA-Z0-9\s]/g, '').trim().replace(/\s+/g, '_').slice(0, 50);
+  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+       xmlns:w="urn:schemas-microsoft-com:office:word"
+       xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8">
+<title>GPS Leadership Report — ${metaText}</title>
+<style>
+  body{font-family:Calibri,Arial,sans-serif;font-size:11pt;line-height:1.6;color:#1a1a1a;margin:1in;}
+  h2{font-size:14pt;font-weight:bold;color:#1e3a6e;}
+  h3{font-size:12pt;font-weight:bold;color:#1e3a6e;}
+  p{margin:0 0 10pt;}
+  table{width:100%;border-collapse:collapse;}
+  th{background:#1e3a6e;color:#fff;padding:5pt 7pt;font-weight:bold;}
+  td{padding:4pt 7pt;border:1pt solid #ccc;vertical-align:top;}
+  blockquote{background:#f0f9f9;border-left:3pt solid #0d9488;padding:8pt 14pt;font-style:italic;}
+  .insight-callout{background:#fff8ec;border-left:4pt solid #d4a017;padding:8pt 14pt;}
+</style>
+</head><body>${bodyEl.innerHTML}</body></html>`;
+  const blob = new Blob([html], { type: 'application/msword' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `GPS_Report_${safeName}.doc`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 async function confirmAndFinalize() {

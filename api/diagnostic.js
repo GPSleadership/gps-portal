@@ -753,6 +753,16 @@ function buildRaterGroupData(responses, allRaters) {
   const OPEN   = ['A8','A9','A10','B7','B8','B9','B10','C7','C8','C9','D2','F3'];
   const GKEYS  = ['direct_report','peer','supervisor','internal_partner'];
 
+  // Normalize DB relationship values to GKEYS — DB may store title-case ("Peer", "Direct Report")
+  // or legacy values ("Manager"). Match case-insensitively, then map to snake_case keys.
+  const normalizeRel = (rel) => {
+    if (!rel) return null;
+    const n = rel.toLowerCase().replace(/[\s\-]+/g, '_');
+    if (n === 'manager') return 'supervisor';     // legacy alias
+    if (n === 'other' || n === 'board') return null; // no bucket for these
+    return GKEYS.includes(n) ? n : null;
+  };
+
   const mkBucket = () => ({
     raterIds:  new Set(),
     scores:    Object.fromEntries(RATED.map(c => [c, []])),
@@ -770,7 +780,7 @@ function buildRaterGroupData(responses, allRaters) {
   for (const resp of responses) {
     const meta = raterMetaMap.get(resp.rater_id);
     if (!meta) continue;
-    const key = meta.is_self ? 'self' : (GKEYS.includes(meta.relationship) ? meta.relationship : null);
+    const key = meta.is_self ? 'self' : normalizeRel(meta.relationship);
     if (!key) continue;
     buckets[key].raterIds.add(resp.rater_id);
     if (!meta.is_self) buckets.all_others.raterIds.add(resp.rater_id);
