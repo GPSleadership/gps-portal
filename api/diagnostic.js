@@ -25,7 +25,8 @@ const PORTAL_BASE       = process.env.PORTAL_BASE_URL     || 'https://portal.gps
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const COACH_EMAIL       = process.env.COACH_ALERT_EMAIL   || 'alex@gpsleadership.org';
 const CRON_SECRET       = process.env.CRON_SECRET;
-const CLAUDE_MODEL      = 'claude-sonnet-4-6';
+const CLAUDE_MODEL        = 'claude-sonnet-4-6';
+const CLAUDE_REPORT_MODEL = 'claude-haiku-4-5-20251001'; // Faster for long report generation — stays under 60s Vercel timeout
 
 // ── Supabase fetch helper ────────────────────────────────────────────────────
 function sb(path, method = 'GET', body = null, extra = {}) {
@@ -42,7 +43,7 @@ function sb(path, method = 'GET', body = null, extra = {}) {
 }
 
 // ── Call Claude API (with retry) ─────────────────────────────────────────────
-async function callClaude(systemPrompt, userPrompt, maxTokens = 512, { retries = 2, retryDelayMs = 3000 } = {}) {
+async function callClaude(systemPrompt, userPrompt, maxTokens = 512, { retries = 2, retryDelayMs = 3000, model = CLAUDE_MODEL } = {}) {
   let lastErr;
   for (let attempt = 0; attempt <= retries; attempt++) {
     if (attempt > 0) {
@@ -58,7 +59,7 @@ async function callClaude(systemPrompt, userPrompt, maxTokens = 512, { retries =
           'Content-Type':      'application/json',
         },
         body: JSON.stringify({
-          model:      CLAUDE_MODEL,
+          model:      model,
           max_tokens: maxTokens,
           system:     systemPrompt,
           messages: [{ role: 'user', content: userPrompt }],
@@ -878,8 +879,9 @@ ${diag.custom_g1_question ? `\nCustom G1 Question (vision alignment, used in sur
 
 Generate the diagnostic report JSON now.`.trim();
 
-    // maxTokens 4096 keeps the call under Vercel Hobby's 60s function timeout
-    const raw = await callClaude(REPORT_SYSTEM_PROMPT, userPrompt, 4096);
+    // Use Haiku (5× faster token generation than Sonnet) + no retries to stay well under Vercel's 60s limit.
+    // 2500 tokens is enough for all JSON sections including the full_narrative (~500 words).
+    const raw = await callClaude(REPORT_SYSTEM_PROMPT, userPrompt, 2500, { retries: 0, model: CLAUDE_REPORT_MODEL });
 
     let reportJson;
     try {
