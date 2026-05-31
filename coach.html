@@ -6128,13 +6128,31 @@ const TP3_TEXT_Q_DESC = {
 async function fetchAllDiagData() {
   const d = DIAG_SEL;
   if (!d) throw new Error('No diagnostic selected');
+  if (!d.id) throw new Error('Diagnostic has no ID — try reopening the diagnostic');
+
+  // Reuse the same fetch pattern as exportDiagnosticResponses (known to work)
   const hdr = { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` };
   const base = 'https://pbnkefuqpoztcxfagiod.supabase.co/rest/v1';
-  const [rR, resR] = await Promise.all([
-    fetch(`${base}/diagnostic_raters?diagnostic_id=eq.${d.id}&select=id,name,email,relationship,is_self,invited_at,completed_at`, { headers: hdr }),
-    fetch(`${base}/diagnostic_responses?diagnostic_id=eq.${d.id}&select=rater_id,question_code,score,text_response,submitted_at`, { headers: hdr }),
-  ]);
-  return { diag: d, raters: await rR.json(), responses: await resR.json() };
+
+  const ratersResp = await fetch(
+    `${base}/diagnostic_raters?diagnostic_id=eq.${d.id}&select=id,name,email,relationship,is_self,invited_at,completed_at`,
+    { headers: hdr }
+  );
+  const raters = await ratersResp.json();
+  if (!Array.isArray(raters)) {
+    throw new Error(`Could not load raters (${ratersResp.status}): ${JSON.stringify(raters).slice(0, 150)}`);
+  }
+
+  const responsesResp = await fetch(
+    `${base}/diagnostic_responses?diagnostic_id=eq.${d.id}&select=rater_id,question_code,score,text_response`,
+    { headers: hdr }
+  );
+  const responses = await responsesResp.json();
+  if (!Array.isArray(responses)) {
+    throw new Error(`Could not load responses (${responsesResp.status}): ${JSON.stringify(responses).slice(0, 150)}`);
+  }
+
+  return { diag: d, raters, responses };
 }
 
 async function downloadExcelPackage(evt) {
