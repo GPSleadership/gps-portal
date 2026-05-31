@@ -2282,9 +2282,10 @@ function renderProfileSection(section, client, checkins) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function renderTestimonialsSection(client) {
-  const engTypeOpts = ['standard','vip','alumni','prospect']
-    .map(v => `<option value="${v}"${client.engagement_type === v ? ' selected' : ''}>${v.charAt(0).toUpperCase() + v.slice(1)}</option>`)
-    .join('');
+  const engTypeOpts = [
+    ['diagnostic_only',           'Diagnostic Only'],
+    ['diagnostic_plus_coaching',  'Diagnostic + Coaching'],
+  ].map(([v, label]) => `<option value="${v}"${client.engagement_type === v ? ' selected' : ''}>${label}</option>`).join('');
 
   const winMarked = !!client.first_big_win_flag;
 
@@ -2394,10 +2395,10 @@ async function loadTestimonialsForClient(clientId) {
 
   let res, json;
   try {
-    res  = await fetch('/api/testimonial?action=coach-list', {
+    res  = await fetch('/api/testimonial?action=coach-get-testimonials', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ client_id: clientId, password }),
+      body:    JSON.stringify({ client_id: clientId, coach_password: password }),
     });
     json = await res.json();
   } catch (err) {
@@ -2439,18 +2440,18 @@ async function loadTestimonialsForClient(clientId) {
       ? `<span style="background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a770;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;">Public ✓</span>`
       : '';
 
-    // Preview of first response
-    const firstResponse = Array.isArray(t.responses) && t.responses.length > 0 ? t.responses[0] : null;
-    const preview = firstResponse
-      ? `<p style="font-size:13px;color:var(--gray-600);margin:8px 0 0;font-style:italic;">"${(firstResponse.answer || '').substring(0, 120)}${(firstResponse.answer || '').length > 120 ? '…' : ''}"</p>`
+    // responses is a JSONB object { q1: "text", q2: "text", ... }
+    const respEntries = Object.entries(t.responses || {}).filter(([, v]) => v?.trim());
+    const preview = respEntries.length > 0
+      ? `<p style="font-size:13px;color:var(--gray-600);margin:8px 0 0;font-style:italic;">"${respEntries[0][1].substring(0, 120)}${respEntries[0][1].length > 120 ? '…' : ''}"</p>`
       : '';
 
     // All Q&A rows (collapsible)
-    const qaRows = Array.isArray(t.responses) && t.responses.length > 0
-      ? t.responses.map(r => `
+    const qaRows = respEntries.length > 0
+      ? respEntries.map(([k, v]) => `
           <div style="padding:8px 0;border-bottom:1px solid var(--gray-200);">
-            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.3px;color:var(--gray-600);margin-bottom:3px;">${r.question || '—'}</div>
-            <div style="font-size:13px;color:var(--text);">${r.answer || '—'}</div>
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.3px;color:var(--gray-600);margin-bottom:3px;">${k}</div>
+            <div style="font-size:13px;color:var(--text);">${v}</div>
           </div>`).join('')
       : '<p style="font-size:12px;color:var(--gray-600);font-style:italic;">No response data.</p>';
 
@@ -2491,10 +2492,10 @@ async function loadReferralsForClient(clientId) {
 
   let res, json;
   try {
-    res  = await fetch('/api/testimonial?action=coach-list-referrals', {
+    res  = await fetch('/api/testimonial?action=coach-get-referrals', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ client_id: clientId, password }),
+      body:    JSON.stringify({ client_id: clientId, coach_password: password }),
     });
     json = await res.json();
   } catch (err) {
@@ -2529,9 +2530,9 @@ async function loadReferralsForClient(clientId) {
       ? new Date(r.sent_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
       : '—';
     return `<tr>
-      <td style="font-weight:600;color:var(--navy);">${r.name || '—'}</td>
-      <td style="font-size:12px;color:var(--gray-600);">${r.email || '—'}</td>
-      <td style="font-size:12px;">${r.org || '—'}</td>
+      <td style="font-weight:600;color:var(--navy);">${r.referral_name || '—'}</td>
+      <td style="font-size:12px;color:var(--gray-600);">${r.referral_email || '—'}</td>
+      <td style="font-size:12px;">${r.referral_org || '—'}</td>
       <td>${badge}</td>
       <td style="font-size:12px;color:var(--gray-600);">${created}</td>
       <td style="font-size:12px;color:var(--gray-600);">${sent}</td>
@@ -2561,7 +2562,7 @@ async function toggleTestimonialPermission(testimonialId, currentVal) {
     const res  = await fetch('/api/testimonial?action=coach-toggle-permission', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ testimonial_id: testimonialId, permission_public_use: !currentVal, password }),
+      body:    JSON.stringify({ testimonial_id: testimonialId, permission_public_use: !currentVal, coach_password: password }),
     });
     const json = await res.json();
     if (!res.ok || json.error) {
@@ -2584,7 +2585,7 @@ async function setEngagementType(clientId, val) {
     const res  = await fetch('/api/testimonial?action=coach-set-engagement-type', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ client_id: clientId, engagement_type: val, password }),
+      body:    JSON.stringify({ client_id: clientId, engagement_type: val, coach_password: password }),
     });
     const json = await res.json();
     if (res.ok && !json.error) {
@@ -2611,7 +2612,7 @@ async function markFirstBigWin(clientId) {
     const res  = await fetch('/api/testimonial?action=coach-set-win-flag', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ client_id: clientId, first_big_win_flag: true, password }),
+      body:    JSON.stringify({ client_id: clientId, first_big_win_flag: true, coach_password: password }),
     });
     const json = await res.json();
     if (res.ok && !json.error) {
@@ -2645,7 +2646,7 @@ async function loadReferralConfig(clientId) {
 
   if (!res.ok || json.error) return;
 
-  const cfg = json.config || {};
+  const cfg = json || {}; // API returns flat object, not { config: {...} }
   ['referral_bonus_label','referral_bonus_value_display','referral_bonus_conditions_text','coaching_access_description'].forEach(key => {
     const viewEl = document.getElementById(`cfg-view-${clientId}-${key}`);
     if (viewEl) viewEl.textContent = cfg[key] || '—';
@@ -2666,7 +2667,7 @@ async function saveReferralConfig(clientId, key, value) {
     const res  = await fetch('/api/testimonial?action=coach-update-config', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ client_id: clientId, key, value, password }),
+      body:    JSON.stringify({ client_id: clientId, key, value, coach_password: password }),
     });
     const json = await res.json();
     if (res.ok && !json.error) {

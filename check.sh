@@ -162,44 +162,30 @@ fi
 
 # ── 4. Serverless function count ───────────────────────────────────────────────
 echo ""
-echo "▸ Serverless function count (Hobby plan limit: 12)"
+echo "▸ Serverless function count (Vercel Pro — no hard limit)"
 
 python3 - <<'PYEOF'
 import os, sys
 
-# Count api/*.js files
 all_funcs = [f for f in os.listdir('api') if f.endswith('.js')] if os.path.isdir('api') else []
 
-# Read .vercelignore to find excluded ones
 ignored = set()
 if os.path.exists('.vercelignore'):
     with open('.vercelignore', 'r') as f:
         for line in f:
             line = line.strip()
             if line and not line.startswith('#'):
-                # Normalize: "api/foo.js" -> "foo.js"
                 ignored.add(os.path.basename(line))
 
-deployed = [f for f in all_funcs if f not in ignored]
+deployed = sorted([f for f in all_funcs if f not in ignored])
 count = len(deployed)
-limit = 12
 
-if count > limit:
-    print(f"  ✗ {count}/{limit} functions — OVER Hobby plan limit. Deployment will fail.")
-    print(f"    Deployed: {', '.join(sorted(deployed))}")
-    sys.exit(1)
-elif count >= 11:
-    print(f"  ⚠  {count}/{limit} functions — approaching Hobby plan limit")
-    print(f"    One more api/*.js file will hit the cap")
-else:
-    print(f"  ✓ {count}/{limit} functions deployed")
+print(f"  ✓ {count} functions deployed: {', '.join(deployed)}")
 PYEOF
 
 FUNC_EXIT=$?
-if [ $FUNC_EXIT -eq 1 ]; then
+if [ $FUNC_EXIT -ne 0 ]; then
   ERRORS=$((ERRORS + 1))
-elif [ $FUNC_EXIT -eq 2 ]; then
-  WARNINGS=$((WARNINGS + 1))
 fi
 
 # ── 5. Check for uncommitted files that should be committed ───────────────────
