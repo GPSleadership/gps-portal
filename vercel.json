@@ -117,6 +117,9 @@
     "api/diagnostic.js": {
       "maxDuration": 300
     },
+    "api/testimonial.js": {
+      "maxDuration": 30
+    },
     "api/ask.js": {
       "maxDuration": 60
     },

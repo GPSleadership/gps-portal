@@ -1934,6 +1934,172 @@
   }
   .coach-modal-cta:hover { background: var(--navy-dark); }
 
+    /* ── Testimonial & Referral Flywheel ── */
+    .testimonial-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .testimonial-overlay.active { display: flex; }
+    .testimonial-card {
+      background: #fff;
+      max-width: 540px;
+      width: 90%;
+      border-radius: 12px;
+      padding: 32px;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.22);
+      max-height: 92vh;
+      overflow-y: auto;
+    }
+    .testimonial-card h2 {
+      font-size: 20px;
+      color: #004369;
+      margin-bottom: 8px;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+    }
+    .testimonial-card p.t-sub {
+      color: #555;
+      font-size: 14px;
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+    .t-step {
+      font-size: 11px;
+      color: #999;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .t-question {
+      font-size: 13px;
+      font-weight: 600;
+      color: #004369;
+      margin: 14px 0 4px;
+    }
+    .t-textarea {
+      width: 100%;
+      min-height: 80px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 10px;
+      font-size: 13px;
+      font-family: 'Open Sans', sans-serif;
+      resize: vertical;
+      color: #1a1a1a;
+      transition: border-color 0.2s;
+    }
+    .t-textarea:focus { outline: none; border-color: #01949A; }
+    .nps-grid {
+      display: grid;
+      grid-template-columns: repeat(11, 1fr);
+      gap: 4px;
+      margin: 12px 0;
+    }
+    .nps-btn {
+      aspect-ratio: 1;
+      border: 2px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      background: white;
+      color: #1a1a1a;
+      transition: all 0.15s;
+      padding: 0;
+    }
+    .nps-btn.selected { background: #004369; color: white; border-color: #004369; }
+    .nps-btn:hover:not(.selected) { background: #E5DDC8; border-color: #01949A; }
+    .t-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .t-btn-primary {
+      background: #004369;
+      color: white;
+      padding: 10px 24px;
+      border-radius: 6px;
+      border: none;
+      font-size: 14px;
+      cursor: pointer;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      transition: background 0.15s;
+    }
+    .t-btn-primary:hover { background: #002D47; }
+    .t-btn-primary:disabled { background: #aaa; cursor: not-allowed; }
+    .t-btn-secondary {
+      background: transparent;
+      border: 2px solid #004369;
+      color: #004369;
+      padding: 10px 24px;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      transition: all 0.15s;
+    }
+    .t-btn-secondary:hover { background: #f0f4f7; }
+    .referral-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 10px;
+      align-items: end;
+    }
+    .referral-email-card {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 14px;
+      background: #fafafa;
+    }
+    .referral-email-card h4 {
+      font-size: 13px;
+      color: #004369;
+      margin-bottom: 8px;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+    }
+    .referral-email-meta {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 8px;
+      line-height: 1.6;
+    }
+    .referral-email-body {
+      width: 100%;
+      min-height: 160px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 10px;
+      font-size: 12px;
+      font-family: monospace;
+      resize: vertical;
+      color: #1a1a1a;
+    }
+    .referral-email-body:focus { outline: none; border-color: #01949A; }
+    .referral-include-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      font-size: 13px;
+      color: #004369;
+      font-weight: 600;
+    }
+    @media (max-width: 520px) {
+      .referral-row { grid-template-columns: 1fr; }
+      .nps-grid { grid-template-columns: repeat(6, 1fr); }
+    }
+
   </style>
 </head>
 <body>
@@ -2118,6 +2284,154 @@
 
     <div class="sc-err" id="scErr"></div>
     <button class="sc-submit-btn" id="scSubmitBtn" onclick="submitSelfCheck()">Submit &amp; View Results</button>
+  </div>
+</div>
+
+<!-- ── TESTIMONIAL & REFERRAL FLYWHEEL OVERLAY ── -->
+<div id="testimonialOverlay" class="testimonial-overlay">
+  <div class="testimonial-card">
+
+    <!-- Screen 1: Questions (source-adaptive) -->
+    <div id="t-screen-questions">
+      <div class="t-step" id="t-step-label">STEP 1 OF 2</div>
+      <h2 id="t-heading">A quick reflection</h2>
+      <p class="t-sub" id="t-subheading">Takes about 3 minutes.</p>
+
+      <div id="t-q1-group">
+        <div class="t-question" id="t-q1-label">Q1</div>
+        <textarea class="t-textarea" id="t-q1" placeholder="Your answer…"></textarea>
+      </div>
+      <div id="t-q2-group">
+        <div class="t-question" id="t-q2-label">What, specifically, did this process reveal that you weren't fully seeing before?</div>
+        <textarea class="t-textarea" id="t-q2" placeholder="Your answer…"></textarea>
+      </div>
+      <div id="t-q3-group">
+        <div class="t-question" id="t-q3-label">Q3</div>
+        <textarea class="t-textarea" id="t-q3" placeholder="Your answer…"></textarea>
+      </div>
+
+      <div class="t-actions">
+        <button class="t-btn-secondary" onclick="dismissTestimonial()">Maybe later</button>
+        <button class="t-btn-primary" onclick="submitTestimonialQuestions()">Continue &#x2192;</button>
+      </div>
+    </div>
+
+    <!-- Screen 2: NPS (engagement_end only) -->
+    <div id="t-screen-nps" style="display:none;">
+      <div class="t-step">STEP 2 OF 2</div>
+      <h2>One more question</h2>
+      <p class="t-sub" id="t-nps-label">On a scale from 0&#x2013;10, how likely are you to recommend this to a peer?</p>
+      <div class="nps-grid" id="nps-grid"></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#999;margin-bottom:16px;">
+        <span>Not likely</span><span>Very likely</span>
+      </div>
+
+      <!-- Follow-up for 7-8 -->
+      <div id="t-nps-followup-78" style="display:none;">
+        <div class="t-question">What would need to improve for this to be a 10?</div>
+        <textarea class="t-textarea" id="t-nps-improve" placeholder="Your thoughts…"></textarea>
+      </div>
+      <!-- Follow-up for 0-6 -->
+      <div id="t-nps-followup-06" style="display:none;">
+        <div class="t-question">What didn&#x2019;t meet your expectations, and what would you have wanted instead?</div>
+        <textarea class="t-textarea" id="t-nps-recover" placeholder="Your thoughts…"></textarea>
+      </div>
+      <!-- Outcome question (all) -->
+      <div id="t-outcome-group" style="display:none;">
+        <div class="t-question">In your own words, what&#x2019;s been the most meaningful outcome of this work for you or your organization?</div>
+        <textarea class="t-textarea" id="t-outcome" placeholder="Your answer…"></textarea>
+      </div>
+
+      <div class="t-actions">
+        <button class="t-btn-primary" onclick="submitNPS()">Submit &#x2192;</button>
+      </div>
+    </div>
+
+    <!-- Screen 3: Thank you / referral offer (NPS 9-10 only) -->
+    <div id="t-screen-referral-offer" style="display:none;">
+      <h2>Thank you &#x2014; that means a lot.</h2>
+      <p class="t-sub" id="t-referral-offer-body">Loading&#x2026;</p>
+      <div class="t-actions">
+        <button class="t-btn-secondary" onclick="closeTestimonialOverlay()">No thanks</button>
+        <button class="t-btn-primary" onclick="showReferralForm()">Yes, I&#x2019;d like to &#x2192;</button>
+      </div>
+    </div>
+
+    <!-- Screen 4: Referral form -->
+    <div id="t-screen-referral-form" style="display:none;">
+      <h2>Introduce a peer</h2>
+      <p class="t-sub">Add up to 3 people you&#x2019;d confidently recommend. Each will receive a warm intro from you directly.</p>
+      <div id="referral-rows">
+        <div class="referral-row">
+          <div>
+            <div class="t-question">Name</div>
+            <input class="t-textarea" style="min-height:unset;height:36px;" placeholder="Full name" data-field="name" data-idx="0">
+          </div>
+          <div>
+            <div class="t-question">Email</div>
+            <input class="t-textarea" style="min-height:unset;height:36px;" placeholder="email@company.com" data-field="email" data-idx="0">
+          </div>
+          <div>
+            <div class="t-question">Organization (optional)</div>
+            <input class="t-textarea" style="min-height:unset;height:36px;" placeholder="Company name" data-field="org" data-idx="0">
+          </div>
+        </div>
+        <div class="referral-row">
+          <div>
+            <div class="t-question" style="visibility:hidden;">Name</div>
+            <input class="t-textarea" style="min-height:unset;height:36px;" placeholder="Full name" data-field="name" data-idx="1">
+          </div>
+          <div>
+            <div class="t-question" style="visibility:hidden;">Email</div>
+            <input class="t-textarea" style="min-height:unset;height:36px;" placeholder="email@company.com" data-field="email" data-idx="1">
+          </div>
+          <div>
+            <div class="t-question" style="visibility:hidden;">Org</div>
+            <input class="t-textarea" style="min-height:unset;height:36px;" placeholder="Company name" data-field="org" data-idx="1">
+          </div>
+        </div>
+        <div class="referral-row">
+          <div>
+            <div class="t-question" style="visibility:hidden;">Name</div>
+            <input class="t-textarea" style="min-height:unset;height:36px;" placeholder="Full name" data-field="name" data-idx="2">
+          </div>
+          <div>
+            <div class="t-question" style="visibility:hidden;">Email</div>
+            <input class="t-textarea" style="min-height:unset;height:36px;" placeholder="email@company.com" data-field="email" data-idx="2">
+          </div>
+          <div>
+            <div class="t-question" style="visibility:hidden;">Org</div>
+            <input class="t-textarea" style="min-height:unset;height:36px;" placeholder="Company name" data-field="org" data-idx="2">
+          </div>
+        </div>
+      </div>
+      <p style="font-size:12px;color:#999;margin-top:8px;">Only enter people you genuinely believe would welcome this introduction.</p>
+      <div class="t-actions">
+        <button class="t-btn-secondary" onclick="closeTestimonialOverlay()">Skip for now</button>
+        <button class="t-btn-primary" id="t-generate-btn" onclick="generateReferralEmails()">Generate Intro Emails &#x2192;</button>
+      </div>
+    </div>
+
+    <!-- Screen 5: Review & send emails -->
+    <div id="t-screen-referral-emails" style="display:none;">
+      <h2>Review your intro emails</h2>
+      <p class="t-sub">These will be sent from your email address to each person. Edit as needed &#x2014; they need to sound like you.</p>
+      <div id="referral-email-list"></div>
+      <div class="t-actions">
+        <button class="t-btn-secondary" onclick="closeTestimonialOverlay()">Done</button>
+        <button class="t-btn-primary" onclick="sendReferralEmails()">Send Selected &#x2192;</button>
+      </div>
+    </div>
+
+    <!-- Screen 6: Final thank you -->
+    <div id="t-screen-thankyou" style="display:none;">
+      <h2 style="text-align:center;">&#x2713; Done &#x2014; thank you.</h2>
+      <p class="t-sub" style="text-align:center;">Your introductions are on their way.</p>
+      <div class="t-actions" style="justify-content:center;">
+        <button class="t-btn-primary" onclick="closeTestimonialOverlay()">Close</button>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -2813,6 +3127,7 @@ async function loadClient() {
       renderResultsTab(surveyData || [], checkins || [], client, surveyTokenData || [], selfCheckData || []);
       renderClientStakeholderCard(client.id, stakeholderData || []);
       loadClientDiagnostic();
+      checkForPendingTestimonial(client);
     }
   } catch (e) {
     showError('Something went wrong.', 'Please refresh the page. If the problem continues, contact alex@gpsleadership.org.');
@@ -5781,6 +6096,423 @@ function showAccessEndedScreen(expiryStr) {
     </div>
   `;
 }
+
+
+// ─────────────────────────────────────────────
+// TESTIMONIAL & REFERRAL FLYWHEEL
+// ─────────────────────────────────────────────
+
+let T_SOURCE        = null;  // 'diagnostic_debrief' | 'coaching_midpoint' | 'engagement_end'
+let T_SAVED_ID      = null;  // saved testimonial id from API
+let T_NPS_SCORE     = null;  // selected NPS score (0-10)
+let T_REFERRALS     = [];    // generated referral objects from API
+let T_CLIENT_TOKEN  = null;  // client.token
+
+// All testimonial screens in order — used by _tShowScreen()
+const T_SCREENS = [
+  't-screen-questions',
+  't-screen-nps',
+  't-screen-referral-offer',
+  't-screen-referral-form',
+  't-screen-referral-emails',
+  't-screen-thankyou'
+];
+
+function _tShowScreen(id) {
+  T_SCREENS.forEach(s => {
+    const el = document.getElementById(s);
+    if (el) el.style.display = (s === id) ? '' : 'none';
+  });
+}
+
+// ── Entry point ────────────────────────────────
+async function checkForPendingTestimonial(client) {
+  try {
+    T_CLIENT_TOKEN = client.token;
+    const res = await fetch('/api/testimonial?action=get-pending-prompt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_token: client.token,
+        diagnostic_id: (window.CLIENT_DIAG && window.CLIENT_DIAG.id) || null
+      })
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data && data.pending_source) {
+      setTimeout(() => showTestimonialOverlay(data.pending_source, client), 2000);
+    }
+  } catch (e) {
+    // Never block portal load
+    console.warn('[testimonial] checkForPendingTestimonial error:', e);
+  }
+}
+
+// ── Configure and open overlay ──────────────────
+function showTestimonialOverlay(source, client) {
+  T_SOURCE = source;
+  T_NPS_SCORE = null;
+  T_SAVED_ID = null;
+  T_REFERRALS = [];
+
+  const engType = (client && client.engagement_type) || '';
+  const isDiagOnly = engType === 'diagnostic_only';
+
+  // Reset all screens to hidden; default show questions
+  _tShowScreen('t-screen-questions');
+
+  const stepLabel   = document.getElementById('t-step-label');
+  const heading     = document.getElementById('t-heading');
+  const subheading  = document.getElementById('t-subheading');
+  const q1Label     = document.getElementById('t-q1-label');
+  const q2Label     = document.getElementById('t-q2-label');
+  const q3Label     = document.getElementById('t-q3-label');
+  const q1Group     = document.getElementById('t-q1-group');
+  const q2Group     = document.getElementById('t-q2-group');
+  const q3Group     = document.getElementById('t-q3-group');
+
+  // Clear previous values
+  ['t-q1','t-q2','t-q3'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+
+  if (source === 'diagnostic_debrief') {
+    if (stepLabel) stepLabel.textContent = 'STEP 1 OF 1';
+    if (heading) heading.textContent = 'A quick reflection on your experience';
+    if (subheading) subheading.textContent = 'Takes about 3 minutes. Your honest answers help future leaders like you.';
+
+    q1Group.style.display = '';
+    q2Group.style.display = '';
+    q3Group.style.display = '';
+
+    if (q1Label) q1Label.textContent = isDiagOnly
+      ? 'Before we started this 14-Day Executive Leadership Diagnostic, what was hardest or most frustrating for you as a leader?'
+      : 'Before we started this 14-Day Executive Leadership Diagnostic and coaching work, what was hardest or most frustrating for you as a leader?';
+    if (q2Label) q2Label.textContent = 'What, specifically, did this process reveal that you weren\'t fully seeing before?';
+    if (q3Label) q3Label.textContent = 'What impact do you expect these insights to have on you and your organization?';
+
+  } else if (source === 'coaching_midpoint') {
+    if (stepLabel) stepLabel.textContent = 'STEP 1 OF 1';
+    if (heading) heading.textContent = 'A quick check-in on your progress';
+    if (subheading) subheading.textContent = 'Takes about 3 minutes. Your honest reflection shapes our next session.';
+
+    q1Group.style.display = '';
+    q2Group.style.display = '';
+    q3Group.style.display = '';
+
+    if (q1Label) q1Label.textContent = 'What has changed for you or your team since we started working together on your diagnostic and coaching plan?';
+    if (q2Label) q2Label.textContent = 'What\'s been the single most valuable part of this work so far?';
+    if (q3Label) q3Label.textContent = 'If a trusted peer asked whether this was worth it, what would you tell them?';
+
+  } else if (source === 'engagement_end') {
+    // For engagement_end: show the outcome question on screen 1, then NPS on screen 2
+    if (stepLabel) stepLabel.textContent = 'STEP 1 OF 2';
+    if (heading) heading.textContent = 'One final reflection';
+    if (subheading) subheading.textContent = 'Takes about 2 minutes. Thank you for being part of this work.';
+
+    q1Group.style.display = '';
+    q2Group.style.display = 'none';
+    q3Group.style.display = 'none';
+
+    if (q1Label) q1Label.textContent = 'In your own words, what\'s been the most meaningful outcome of this work for you or your organization?';
+  }
+
+  // Build NPS grid
+  buildNPSGrid();
+
+  // Configure the NPS prompt label
+  const npsLabel = document.getElementById('t-nps-label');
+  if (npsLabel) {
+    npsLabel.textContent = isDiagOnly
+      ? 'On a scale from 0–10, how likely are you to recommend the 14-Day Executive Leadership Diagnostic to a peer?'
+      : 'On a scale from 0–10, how likely are you to recommend this diagnostic and coaching experience to a peer?';
+  }
+
+  document.getElementById('testimonialOverlay').classList.add('active');
+}
+
+// ── NPS Grid ───────────────────────────────────
+function buildNPSGrid() {
+  const grid = document.getElementById('nps-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  for (let i = 0; i <= 10; i++) {
+    const btn = document.createElement('button');
+    btn.className = 'nps-btn';
+    btn.textContent = i;
+    btn.addEventListener('click', function() {
+      T_NPS_SCORE = i;
+      grid.querySelectorAll('.nps-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      // Show/hide follow-up blocks
+      document.getElementById('t-nps-followup-78').style.display = (i === 7 || i === 8) ? '' : 'none';
+      document.getElementById('t-nps-followup-06').style.display = (i <= 6) ? '' : 'none';
+      document.getElementById('t-outcome-group').style.display = '';
+    });
+    grid.appendChild(btn);
+  }
+}
+
+// ── Submit questions (debrief / midpoint / engagement_end screen 1) ──
+async function submitTestimonialQuestions() {
+  const q1 = (document.getElementById('t-q1').value || '').trim();
+  const q2 = (document.getElementById('t-q2').value || '').trim();
+  const q3 = (document.getElementById('t-q3').value || '').trim();
+
+  if (!q1) {
+    alert('Please share at least a brief answer to the first question.');
+    return;
+  }
+
+  const submitBtn = document.querySelector('#t-screen-questions .t-btn-primary');
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Saving…'; }
+
+  try {
+    const res = await fetch('/api/testimonial?action=save-testimonial', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_token: T_CLIENT_TOKEN,
+        source: T_SOURCE,
+        responses: { q1, q2, q3 }
+      })
+    });
+    const data = res.ok ? await res.json() : {};
+    if (data && data.id) T_SAVED_ID = data.id;
+  } catch (e) {
+    console.warn('[testimonial] save error:', e);
+    // Continue — don't block the user experience
+  }
+
+  if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Continue →'; }
+
+  if (T_SOURCE === 'engagement_end') {
+    _tShowScreen('t-screen-nps');
+  } else {
+    // Show a simple inline thank-you for debrief / midpoint
+    _tShowScreen('t-screen-thankyou');
+    // Update thank you copy for non-referral flow
+    const ty = document.getElementById('t-screen-thankyou');
+    if (ty) {
+      ty.innerHTML = `
+        <h2 style="text-align:center;">Thank you.</h2>
+        <p class="t-sub" style="text-align:center;">Your reflection has been saved. It means a lot.</p>
+        <div class="t-actions" style="justify-content:center;">
+          <button class="t-btn-primary" onclick="closeTestimonialOverlay()">Close</button>
+        </div>
+      `;
+    }
+  }
+}
+
+// ── Submit NPS (engagement_end flow) ───────────
+async function submitNPS() {
+  if (T_NPS_SCORE === null) {
+    alert('Please select a score before submitting.');
+    return;
+  }
+
+  const submitBtn = document.querySelector('#t-screen-nps .t-btn-primary');
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Saving…'; }
+
+  const responses = { nps_score: T_NPS_SCORE };
+  if (T_NPS_SCORE >= 7 && T_NPS_SCORE <= 8) {
+    responses.nps_improve = (document.getElementById('t-nps-improve').value || '').trim();
+  }
+  if (T_NPS_SCORE <= 6) {
+    responses.nps_recover = (document.getElementById('t-nps-recover').value || '').trim();
+  }
+  responses.outcome = (document.getElementById('t-outcome').value || '').trim();
+
+  try {
+    const res = await fetch('/api/testimonial?action=save-testimonial', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_token: T_CLIENT_TOKEN,
+        source: T_SOURCE,
+        rating_nps: T_NPS_SCORE,
+        testimonial_id: T_SAVED_ID || null,
+        responses
+      })
+    });
+    const data = res.ok ? await res.json() : {};
+    if (data && data.id) T_SAVED_ID = data.id;
+  } catch (e) {
+    console.warn('[testimonial] NPS save error:', e);
+  }
+
+  if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Submit →'; }
+
+  if (T_NPS_SCORE >= 9) {
+    // Fetch referral config copy or use defaults
+    let offerBody = 'Would you be willing to introduce one or two peers who might benefit from this kind of work? I\'ll generate a warm, personalized intro email you can send directly.';
+    try {
+      const r = await fetch('/api/testimonial?action=get-referral-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_token: T_CLIENT_TOKEN })
+      });
+      if (r.ok) {
+        const cfg = await r.json();
+        if (cfg && cfg.offer_body) offerBody = cfg.offer_body;
+      }
+    } catch (e) { /* use default */ }
+
+    const offerEl = document.getElementById('t-referral-offer-body');
+    if (offerEl) offerEl.textContent = offerBody;
+    _tShowScreen('t-screen-referral-offer');
+  } else {
+    // Show thank you without referral offer
+    const ty = document.getElementById('t-screen-thankyou');
+    if (ty) {
+      ty.innerHTML = `
+        <h2 style="text-align:center;">Thank you.</h2>
+        <p class="t-sub" style="text-align:center;">Your feedback has been recorded and will help shape future engagements.</p>
+        <div class="t-actions" style="justify-content:center;">
+          <button class="t-btn-primary" onclick="closeTestimonialOverlay()">Close</button>
+        </div>
+      `;
+    }
+    _tShowScreen('t-screen-thankyou');
+  }
+}
+
+// ── Show referral form ─────────────────────────
+function showReferralForm() {
+  // Clear referral inputs
+  document.querySelectorAll('#referral-rows input').forEach(inp => { inp.value = ''; });
+  _tShowScreen('t-screen-referral-form');
+}
+
+// ── Generate referral emails via API ──────────
+async function generateReferralEmails() {
+  const rows = [];
+  for (let i = 0; i <= 2; i++) {
+    const name  = (document.querySelector(`input[data-field="name"][data-idx="${i}"]`) || {}).value || '';
+    const email = (document.querySelector(`input[data-field="email"][data-idx="${i}"]`) || {}).value || '';
+    const org   = (document.querySelector(`input[data-field="org"][data-idx="${i}"]`) || {}).value || '';
+    if (name.trim() && email.trim()) {
+      rows.push({ name: name.trim(), email: email.trim(), org: org.trim() });
+    }
+  }
+
+  if (rows.length === 0) {
+    alert('Please enter at least one referral (name and email required).');
+    return;
+  }
+
+  const btn = document.getElementById('t-generate-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
+
+  try {
+    const res = await fetch('/api/testimonial?action=save-referrals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_token: T_CLIENT_TOKEN,
+        testimonial_id: T_SAVED_ID || null,
+        referrals: rows
+      })
+    });
+    if (!res.ok) throw new Error('API error');
+    const data = await res.json();
+    T_REFERRALS = (data && data.referrals) ? data.referrals : rows.map((r, idx) => ({
+      ...r,
+      subject: `I wanted to introduce you to someone`,
+      body: `Hi ${r.name},\n\nI wanted to reach out and introduce you to Alex Tremble at GPS Leadership Solutions. I recently went through his executive leadership work and found it genuinely useful — the kind of thing I wish I'd done earlier.\n\nI thought of you because I think you'd get a lot out of it too.\n\nI'll let Alex share more, but wanted to give you the warm intro first.\n\n[Your name]`
+    }));
+  } catch (e) {
+    console.warn('[testimonial] generate referrals error:', e);
+    // Fall back to client-side placeholder emails
+    T_REFERRALS = rows.map(r => ({
+      ...r,
+      subject: 'Connecting you with Alex Tremble — GPS Leadership',
+      body: `Hi ${r.name},\n\nI wanted to introduce you to Alex Tremble at GPS Leadership Solutions. I recently completed his 14-Day Executive Leadership Diagnostic and it surfaced things about my leadership I hadn't been seeing clearly.\n\nI think you'd find real value in it too — especially given the kind of work you're doing.\n\nHappy to share more if you want to talk before reaching out.\n\n[Your name]`
+    }));
+  }
+
+  if (btn) { btn.disabled = false; btn.textContent = 'Generate Intro Emails →'; }
+
+  renderReferralEmailCards();
+  _tShowScreen('t-screen-referral-emails');
+}
+
+// ── Render editable email cards ────────────────
+function renderReferralEmailCards() {
+  const container = document.getElementById('referral-email-list');
+  if (!container) return;
+  container.innerHTML = '';
+
+  T_REFERRALS.forEach((ref, idx) => {
+    const card = document.createElement('div');
+    card.className = 'referral-email-card';
+    card.innerHTML = `
+      <div class="referral-include-row">
+        <input type="checkbox" id="t-ref-include-${idx}" checked style="width:16px;height:16px;cursor:pointer;">
+        <label for="t-ref-include-${idx}" style="cursor:pointer;">Include ${ref.name}</label>
+      </div>
+      <div class="referral-email-meta">
+        <strong>To:</strong> ${_escHtml(ref.email)}<br>
+        <strong>CC:</strong> alex@gpsleadership.org<br>
+        <strong>Subject:</strong> ${_escHtml(ref.subject || 'Introduction')}
+      </div>
+      <textarea class="referral-email-body" id="t-ref-body-${idx}">${_escHtml(ref.body || '')}</textarea>
+    `;
+    container.appendChild(card);
+  });
+}
+
+function _escHtml(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Send emails via mailto ─────────────────────
+async function sendReferralEmails() {
+  const sent = [];
+
+  T_REFERRALS.forEach((ref, idx) => {
+    const checkbox = document.getElementById(`t-ref-include-${idx}`);
+    if (!checkbox || !checkbox.checked) return;
+
+    const bodyEl = document.getElementById(`t-ref-body-${idx}`);
+    const body   = bodyEl ? bodyEl.value : (ref.body || '');
+    const subject = ref.subject || 'Introduction';
+
+    const mailto = `mailto:${encodeURIComponent(ref.email)}?cc=${encodeURIComponent('alex@gpsleadership.org')}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.open(mailto, '_blank');
+    sent.push(ref);
+  });
+
+  if (sent.length === 0) {
+    alert('Please check at least one referral to send.');
+    return;
+  }
+
+  // Fire-and-forget: mark as sent
+  sent.forEach(ref => {
+    fetch('/api/testimonial?action=mark-referral-sent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_token: T_CLIENT_TOKEN, testimonial_id: T_SAVED_ID, referral_email: ref.email })
+    }).catch(() => {});
+  });
+
+  _tShowScreen('t-screen-thankyou');
+}
+
+// ── Dismiss / Close ────────────────────────────
+function dismissTestimonial() {
+  document.getElementById('testimonialOverlay').classList.remove('active');
+}
+
+function closeTestimonialOverlay() {
+  document.getElementById('testimonialOverlay').classList.remove('active');
+  T_SOURCE       = null;
+  T_SAVED_ID     = null;
+  T_NPS_SCORE    = null;
+  T_REFERRALS    = [];
+}
+
+// ─────────────────────────────────────────────
 
 
 </script>

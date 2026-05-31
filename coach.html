@@ -763,6 +763,7 @@
       <div class="profile-nav-item"        id="profNav-surveys"      onclick="switchProfileNav('surveys')">👥 Surveys &amp; Stakeholders</div>
       <div class="profile-nav-item"        id="profNav-diagnostics"  onclick="switchProfileNav('diagnostics')">🔬 Diagnostics</div>
       <div class="profile-nav-item"        id="profNav-settings"     onclick="switchProfileNav('settings')">⚙️ Settings</div>
+      <div class="profile-nav-item"        id="profNav-testimonials" onclick="switchProfileNav('testimonials')">⭐ Testimonials</div>
     </div>
     <div class="profile-content" id="profileContent">
     </div>
@@ -2270,7 +2271,435 @@ function renderProfileSection(section, client, checkins) {
       loadAskAlexStats(client.id);
       loadAskAlexLog(client.id);
     }
+  } else if (section === 'testimonials') {
+    el.innerHTML = renderTestimonialsSection(client);
+    loadReferralConfig(client.id);
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TESTIMONIALS & REFERRAL FLYWHEEL — Coach-side
+// ─────────────────────────────────────────────────────────────────────────────
+
+function renderTestimonialsSection(client) {
+  const engTypeOpts = ['standard','vip','alumni','prospect']
+    .map(v => `<option value="${v}"${client.engagement_type === v ? ' selected' : ''}>${v.charAt(0).toUpperCase() + v.slice(1)}</option>`)
+    .join('');
+
+  const winMarked = !!client.first_big_win_flag;
+
+  return `
+    <div class="profile-section-title">Testimonials &amp; Referral Flywheel</div>
+
+    <!-- ── Section 1: Engagement Type & Controls ── -->
+    <div class="detail-section">
+      <h4>Engagement Controls</h4>
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--gray-600);display:block;margin-bottom:5px;">Engagement Type</label>
+          <select id="engType-${client.id}"
+            onchange="setEngagementType('${client.id}', this.value)"
+            style="padding:7px 12px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;color:var(--text);"
+            onfocus="this.style.borderColor='var(--teal)'"
+            onblur="this.style.borderColor='var(--gray-300)'">
+            <option value="">— Not set —</option>
+            ${engTypeOpts}
+          </select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--gray-600);">First Big Win</label>
+          ${winMarked
+            ? `<button disabled style="padding:7px 18px;background:#2e7d32;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:not-allowed;opacity:0.85;">Win Marked ✓</button>`
+            : `<button onclick="markFirstBigWin('${client.id}')" id="firstWinBtn-${client.id}"
+                style="padding:7px 18px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;">
+                Mark First Big Win ✓
+               </button>`
+          }
+        </div>
+      </div>
+      <div id="engControlMsg-${client.id}" style="font-size:12px;margin-top:8px;min-height:16px;"></div>
+    </div>
+
+    <!-- ── Section 2: Testimonials ── -->
+    <div class="detail-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h4 style="margin:0;">Testimonials</h4>
+        <button onclick="loadTestimonialsForClient('${client.id}')"
+          style="padding:5px 14px;background:var(--navy);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">
+          Load Testimonials
+        </button>
+      </div>
+      <div id="testimonials-list-${client.id}">
+        <p style="font-size:13px;color:var(--gray-600);font-style:italic;">Click "Load Testimonials" to fetch responses.</p>
+      </div>
+    </div>
+
+    <!-- ── Section 3: Referrals ── -->
+    <div class="detail-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h4 style="margin:0;">Referrals</h4>
+        <button onclick="loadReferralsForClient('${client.id}')"
+          style="padding:5px 14px;background:var(--navy);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">
+          Load Referrals
+        </button>
+      </div>
+      <div id="referrals-list-${client.id}">
+        <p style="font-size:13px;color:var(--gray-600);font-style:italic;">Click "Load Referrals" to fetch entries.</p>
+      </div>
+    </div>
+
+    <!-- ── Section 4: Referral Config ── -->
+    <div class="detail-section">
+      <h4>Referral Config</h4>
+      <p style="font-size:12px;color:var(--gray-600);margin-bottom:12px;">These values appear in the referral email sent to this client's contacts.</p>
+      <div id="referral-config-fields-${client.id}">
+        ${['referral_bonus_label','referral_bonus_value_display','referral_bonus_conditions_text','coaching_access_description'].map(key => `
+          <div style="margin-bottom:14px;" id="cfg-row-${client.id}-${key}">
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--gray-600);display:block;margin-bottom:4px;">${key.replace(/_/g,' ')}</label>
+            <div style="display:flex;align-items:flex-start;gap:8px;">
+              <div id="cfg-view-${client.id}-${key}"
+                style="flex:1;font-size:13px;color:var(--text);background:var(--gray-100);border-radius:6px;padding:8px 12px;min-height:36px;word-break:break-word;">
+                —
+              </div>
+              <button onclick="openCfgEdit('${client.id}','${key}')"
+                style="padding:6px 12px;background:none;border:1px solid var(--teal);color:var(--teal);border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">
+                Edit
+              </button>
+            </div>
+            <div id="cfg-edit-${client.id}-${key}" style="display:none;margin-top:6px;">
+              <textarea id="cfg-ta-${client.id}-${key}" rows="2"
+                style="width:100%;padding:8px 10px;border:2px solid var(--teal);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;resize:vertical;"></textarea>
+              <div style="display:flex;gap:8px;margin-top:6px;align-items:center;">
+                <button onclick="saveCfgEdit('${client.id}','${key}')"
+                  style="padding:6px 16px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Save</button>
+                <button onclick="cancelCfgEdit('${client.id}','${key}')"
+                  style="padding:6px 12px;background:none;border:1px solid var(--gray-300);border-radius:6px;font-size:12px;cursor:pointer;color:var(--gray-600);">Cancel</button>
+                <span id="cfg-msg-${client.id}-${key}" style="font-size:11px;color:var(--gray-600);"></span>
+              </div>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// ── Load Testimonials ─────────────────────────────────────────────────────────
+async function loadTestimonialsForClient(clientId) {
+  const el = document.getElementById('testimonials-list-' + clientId);
+  if (!el) return;
+  el.innerHTML = '<p style="font-size:13px;color:var(--gray-600);">Loading…</p>';
+
+  const { data: pwData } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
+  const password = pwData?.value || 'GPS2026';
+
+  let res, json;
+  try {
+    res  = await fetch('/api/testimonial?action=coach-list', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ client_id: clientId, password }),
+    });
+    json = await res.json();
+  } catch (err) {
+    el.innerHTML = `<p style="color:var(--red);font-size:13px;">Network error: ${err.message}</p>`;
+    return;
+  }
+
+  if (!res.ok || json.error) {
+    el.innerHTML = `<p style="color:var(--red);font-size:13px;">Error: ${json.error || res.status}</p>`;
+    return;
+  }
+
+  const rows = json.testimonials || [];
+  if (rows.length === 0) {
+    el.innerHTML = '<p style="font-size:13px;color:var(--gray-600);font-style:italic;">No testimonials found for this client.</p>';
+    return;
+  }
+
+  el.innerHTML = rows.map((t, i) => {
+    const uid    = `test-${clientId}-${i}`;
+    const date   = t.submitted_at ? new Date(t.submitted_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—';
+
+    // Source badge
+    const srcColors = { Debrief: '#1565c0', Midpoint: '#e65100', End: '#2e7d32' };
+    const srcColor  = srcColors[t.source] || '#666';
+    const srcBadge  = `<span style="background:${srcColor}18;color:${srcColor};border:1px solid ${srcColor}40;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;">${t.source || 'Unknown'}</span>`;
+
+    // NPS badge
+    let npsBadge = '';
+    if (t.rating_nps != null) {
+      const npsScore = parseInt(t.rating_nps, 10);
+      const npsColor = npsScore >= 9 ? '#2e7d32' : npsScore >= 7 ? '#e65100' : '#DB1F48';
+      const npsBg    = npsScore >= 9 ? '#e8f5e9' : npsScore >= 7 ? '#fff3e0' : '#ffebee';
+      npsBadge = `<span style="background:${npsBg};color:${npsColor};border:1px solid ${npsColor}40;font-size:11px;font-weight:800;padding:2px 9px;border-radius:10px;font-family:'Montserrat',sans-serif;">NPS ${npsScore}</span>`;
+    }
+
+    // Public badge
+    const pubBadge = t.permission_public_use
+      ? `<span style="background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a770;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;">Public ✓</span>`
+      : '';
+
+    // Preview of first response
+    const firstResponse = Array.isArray(t.responses) && t.responses.length > 0 ? t.responses[0] : null;
+    const preview = firstResponse
+      ? `<p style="font-size:13px;color:var(--gray-600);margin:8px 0 0;font-style:italic;">"${(firstResponse.answer || '').substring(0, 120)}${(firstResponse.answer || '').length > 120 ? '…' : ''}"</p>`
+      : '';
+
+    // All Q&A rows (collapsible)
+    const qaRows = Array.isArray(t.responses) && t.responses.length > 0
+      ? t.responses.map(r => `
+          <div style="padding:8px 0;border-bottom:1px solid var(--gray-200);">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.3px;color:var(--gray-600);margin-bottom:3px;">${r.question || '—'}</div>
+            <div style="font-size:13px;color:var(--text);">${r.answer || '—'}</div>
+          </div>`).join('')
+      : '<p style="font-size:12px;color:var(--gray-600);font-style:italic;">No response data.</p>';
+
+    return `
+      <div style="border:1px solid var(--gray-200);border-radius:8px;padding:14px 16px;margin-bottom:10px;background:#fff;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+          ${srcBadge} ${npsBadge} ${pubBadge}
+          <span style="font-size:11px;color:var(--gray-600);margin-left:auto;">${date}</span>
+        </div>
+        ${preview}
+        <div style="display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;font-weight:600;color:var(--navy);">
+            <input type="checkbox" ${t.permission_public_use ? 'checked' : ''}
+              onchange="toggleTestimonialPermission('${t.id}', ${!!t.permission_public_use})"
+              style="width:14px;height:14px;accent-color:var(--teal);cursor:pointer;" />
+            Allow public use
+          </label>
+          <button onclick="document.getElementById('${uid}-qa').style.display=document.getElementById('${uid}-qa').style.display==='none'?'block':'none'"
+            style="background:none;border:1px solid var(--gray-300);border-radius:5px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;color:var(--gray-600);">
+            Show / Hide Responses
+          </button>
+        </div>
+        <div id="${uid}-qa" style="display:none;margin-top:12px;border-top:1px solid var(--gray-200);padding-top:10px;">
+          ${qaRows}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── Load Referrals ────────────────────────────────────────────────────────────
+async function loadReferralsForClient(clientId) {
+  const el = document.getElementById('referrals-list-' + clientId);
+  if (!el) return;
+  el.innerHTML = '<p style="font-size:13px;color:var(--gray-600);">Loading…</p>';
+
+  const { data: pwData } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
+  const password = pwData?.value || 'GPS2026';
+
+  let res, json;
+  try {
+    res  = await fetch('/api/testimonial?action=coach-list-referrals', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ client_id: clientId, password }),
+    });
+    json = await res.json();
+  } catch (err) {
+    el.innerHTML = `<p style="color:var(--red);font-size:13px;">Network error: ${err.message}</p>`;
+    return;
+  }
+
+  if (!res.ok || json.error) {
+    el.innerHTML = `<p style="color:var(--red);font-size:13px;">Error: ${json.error || res.status}</p>`;
+    return;
+  }
+
+  const rows = json.referrals || [];
+  if (rows.length === 0) {
+    el.innerHTML = '<p style="font-size:13px;color:var(--gray-600);font-style:italic;">No referrals found for this client.</p>';
+    return;
+  }
+
+  const statusStyle = {
+    draft:     { bg: '#f3f4f6', color: '#666' },
+    sent:      { bg: '#e3edf9', color: '#1565c0' },
+    responded: { bg: '#e8f5e9', color: '#2e7d32' },
+    converted: { bg: '#fffbe6', color: '#b7860c' },
+  };
+
+  const tableRows = rows.map(r => {
+    const st    = (r.status || 'draft').toLowerCase();
+    const sty   = statusStyle[st] || { bg: '#f3f4f6', color: '#666' };
+    const badge = `<span style="background:${sty.bg};color:${sty.color};font-size:10px;font-weight:700;padding:2px 9px;border-radius:10px;">${st.charAt(0).toUpperCase() + st.slice(1)}</span>`;
+    const created = r.created_at ? new Date(r.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—';
+    const sent    = (st === 'sent' || st === 'responded' || st === 'converted') && r.sent_at
+      ? new Date(r.sent_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
+      : '—';
+    return `<tr>
+      <td style="font-weight:600;color:var(--navy);">${r.name || '—'}</td>
+      <td style="font-size:12px;color:var(--gray-600);">${r.email || '—'}</td>
+      <td style="font-size:12px;">${r.org || '—'}</td>
+      <td>${badge}</td>
+      <td style="font-size:12px;color:var(--gray-600);">${created}</td>
+      <td style="font-size:12px;color:var(--gray-600);">${sent}</td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div style="overflow-x:auto;">
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>Name</th><th>Email</th><th>Organization</th>
+            <th>Status</th><th>Created</th><th>Sent</th>
+          </tr>
+        </thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+    </div>`;
+}
+
+// ── Toggle Testimonial Permission ─────────────────────────────────────────────
+async function toggleTestimonialPermission(testimonialId, currentVal) {
+  const { data: pwData } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
+  const password = pwData?.value || 'GPS2026';
+
+  try {
+    const res  = await fetch('/api/testimonial?action=coach-toggle-permission', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ testimonial_id: testimonialId, permission_public_use: !currentVal, password }),
+    });
+    const json = await res.json();
+    if (!res.ok || json.error) {
+      alert('Error updating permission: ' + (json.error || res.status));
+    }
+  } catch (err) {
+    alert('Network error: ' + err.message);
+  }
+}
+
+// ── Set Engagement Type ───────────────────────────────────────────────────────
+async function setEngagementType(clientId, val) {
+  const msgEl = document.getElementById('engControlMsg-' + clientId);
+  if (msgEl) msgEl.textContent = 'Saving…';
+
+  const { data: pwData } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
+  const password = pwData?.value || 'GPS2026';
+
+  try {
+    const res  = await fetch('/api/testimonial?action=coach-set-engagement-type', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ client_id: clientId, engagement_type: val, password }),
+    });
+    const json = await res.json();
+    if (res.ok && !json.error) {
+      if (msgEl) { msgEl.textContent = 'Saved ✓'; msgEl.style.color = '#2e7d32'; setTimeout(() => { if (msgEl) { msgEl.textContent = ''; msgEl.style.color = ''; } }, 2500); }
+      allClients = allClients.map(c => c.id === clientId ? { ...c, engagement_type: val } : c);
+    } else {
+      if (msgEl) { msgEl.textContent = 'Error: ' + (json.error || res.status); msgEl.style.color = 'var(--red)'; }
+    }
+  } catch (err) {
+    if (msgEl) { msgEl.textContent = 'Network error.'; msgEl.style.color = 'var(--red)'; }
+  }
+}
+
+// ── Mark First Big Win ────────────────────────────────────────────────────────
+async function markFirstBigWin(clientId) {
+  const btn   = document.getElementById('firstWinBtn-' + clientId);
+  const msgEl = document.getElementById('engControlMsg-' + clientId);
+  if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
+
+  const { data: pwData } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
+  const password = pwData?.value || 'GPS2026';
+
+  try {
+    const res  = await fetch('/api/testimonial?action=coach-set-win-flag', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ client_id: clientId, first_big_win_flag: true, password }),
+    });
+    const json = await res.json();
+    if (res.ok && !json.error) {
+      allClients = allClients.map(c => c.id === clientId ? { ...c, first_big_win_flag: true } : c);
+      if (btn) { btn.textContent = 'Win Marked ✓'; btn.style.background = '#2e7d32'; btn.disabled = true; btn.style.cursor = 'not-allowed'; }
+      if (msgEl) { msgEl.textContent = 'First big win recorded.'; msgEl.style.color = '#2e7d32'; setTimeout(() => { if (msgEl) { msgEl.textContent = ''; msgEl.style.color = ''; } }, 3000); }
+    } else {
+      if (btn) { btn.textContent = 'Mark First Big Win ✓'; btn.disabled = false; }
+      if (msgEl) { msgEl.textContent = 'Error: ' + (json.error || res.status); msgEl.style.color = 'var(--red)'; }
+    }
+  } catch (err) {
+    if (btn) { btn.textContent = 'Mark First Big Win ✓'; btn.disabled = false; }
+    if (msgEl) { msgEl.textContent = 'Network error.'; msgEl.style.color = 'var(--red)'; }
+  }
+}
+
+// ── Referral Config: Load ─────────────────────────────────────────────────────
+async function loadReferralConfig(clientId) {
+  const { data: pwData } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
+  const password = pwData?.value || 'GPS2026';
+
+  let res, json;
+  try {
+    res  = await fetch('/api/testimonial?action=get-referral-config', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ client_id: clientId, password }),
+    });
+    json = await res.json();
+  } catch (err) { return; }
+
+  if (!res.ok || json.error) return;
+
+  const cfg = json.config || {};
+  ['referral_bonus_label','referral_bonus_value_display','referral_bonus_conditions_text','coaching_access_description'].forEach(key => {
+    const viewEl = document.getElementById(`cfg-view-${clientId}-${key}`);
+    if (viewEl) viewEl.textContent = cfg[key] || '—';
+    const taEl = document.getElementById(`cfg-ta-${clientId}-${key}`);
+    if (taEl) taEl.value = cfg[key] || '';
+  });
+}
+
+// ── Referral Config: Save ─────────────────────────────────────────────────────
+async function saveReferralConfig(clientId, key, value) {
+  const msgEl = document.getElementById(`cfg-msg-${clientId}-${key}`);
+  if (msgEl) { msgEl.textContent = 'Saving…'; msgEl.style.color = 'var(--gray-600)'; }
+
+  const { data: pwData } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
+  const password = pwData?.value || 'GPS2026';
+
+  try {
+    const res  = await fetch('/api/testimonial?action=coach-update-config', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ client_id: clientId, key, value, password }),
+    });
+    const json = await res.json();
+    if (res.ok && !json.error) {
+      if (msgEl) { msgEl.textContent = 'Saved ✓'; msgEl.style.color = '#2e7d32'; setTimeout(() => { if (msgEl) { msgEl.textContent = ''; } }, 2500); }
+      const viewEl = document.getElementById(`cfg-view-${clientId}-${key}`);
+      if (viewEl) viewEl.textContent = value || '—';
+      cancelCfgEdit(clientId, key);
+    } else {
+      if (msgEl) { msgEl.textContent = 'Error: ' + (json.error || res.status); msgEl.style.color = 'var(--red)'; }
+    }
+  } catch (err) {
+    if (msgEl) { msgEl.textContent = 'Network error.'; msgEl.style.color = 'var(--red)'; }
+  }
+}
+
+// ── Referral Config: Inline edit helpers ─────────────────────────────────────
+function openCfgEdit(clientId, key) {
+  const viewRow = document.getElementById(`cfg-view-${clientId}-${key}`).parentElement;
+  const editEl  = document.getElementById(`cfg-edit-${clientId}-${key}`);
+  const taEl    = document.getElementById(`cfg-ta-${clientId}-${key}`);
+  if (editEl) editEl.style.display = 'block';
+  if (taEl) taEl.focus();
+}
+
+function cancelCfgEdit(clientId, key) {
+  const editEl = document.getElementById(`cfg-edit-${clientId}-${key}`);
+  if (editEl) editEl.style.display = 'none';
+}
+
+function saveCfgEdit(clientId, key) {
+  const taEl = document.getElementById(`cfg-ta-${clientId}-${key}`);
+  if (!taEl) return;
+  saveReferralConfig(clientId, key, taEl.value.trim());
 }
 
 // ─────────────────────────────────────────────
