@@ -1715,6 +1715,28 @@ function renderClientCard(client, checkins) {
     ? new Date(lastCheckin.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     : '—';
 
+  // ── Archive countdown ──────────────────────────────────────────────────────
+  // Auto-archive fires at 45 days from last_active_at (or created_at if never visited)
+  const archiveRef      = client.last_active_at || client.created_at;
+  const daysSinceActive = archiveRef
+    ? Math.floor((today - new Date(archiveRef)) / (1000 * 60 * 60 * 24))
+    : null;
+  const daysUntilArchive = daysSinceActive !== null ? 45 - daysSinceActive : null;
+  const neverVisited     = !client.last_active_at;
+
+  let archiveBadge = '';
+  if (!client.is_active || client.is_archived) {
+    archiveBadge = '';
+  } else if (daysUntilArchive !== null && daysUntilArchive <= 0) {
+    archiveBadge = `<div style="font-size:10px;font-weight:700;color:#fff;background:#c62828;border-radius:4px;padding:2px 6px;white-space:nowrap;margin-top:3px;">Archives next run</div>`;
+  } else if (neverVisited) {
+    archiveBadge = `<div style="font-size:10px;color:#856404;background:#fff3cd;border-radius:4px;padding:2px 6px;white-space:nowrap;margin-top:3px;">Never visited · ${daysUntilArchive}d left</div>`;
+  } else if (daysUntilArchive !== null && daysUntilArchive <= 14) {
+    const color = daysUntilArchive <= 7 ? '#c62828' : '#856404';
+    const bg    = daysUntilArchive <= 7 ? '#fdecea' : '#fff3cd';
+    archiveBadge = `<div style="font-size:10px;font-weight:700;color:${color};background:${bg};border-radius:4px;padding:2px 6px;white-space:nowrap;margin-top:3px;">Archives in ${daysUntilArchive}d</div>`;
+  }
+
   const dotClass = !lastCheckin ? 'dot-none'
     : lastCheckin.completion_status === 'Yes' ? 'dot-yes'
     : lastCheckin.completion_status === 'Partially' ? 'dot-part'
@@ -1810,6 +1832,7 @@ function renderClientCard(client, checkins) {
         <div class="client-name-block">
           <div class="client-name">${client.name || 'Unnamed'}</div>
           <div class="client-org">${client.organization || ''} ${client.tp3_pillar ? '&nbsp;·&nbsp;<span class="pillar-badge pillar-'+pillarKey+'">'+client.tp3_pillar+'</span>' : ''}</div>
+          ${archiveBadge}
         </div>
         <div class="client-meta">
           ${currentWeek ? `<div class="meta-item"><div class="week-badge">Wk ${currentWeek}</div>${(client.current_sprint_number || 1) > 1 ? `<div style="font-size:10px;text-align:center;color:var(--teal);font-weight:700;margin-top:2px;">Sprint ${client.current_sprint_number}</div>` : ''}</div>` : '<div class="meta-item"><div style="font-size:11px;color:var(--gray-600);">No plan yet</div></div>'}
