@@ -66,7 +66,7 @@ export default async function handler(req, res) {
 async function logUsage(token, questionText, questionLength, responseText, inputTokens, outputTokens) {
   // 1. Look up client by token (also fetch current_sprint for context)
   const clientRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/clients?token=eq.${encodeURIComponent(token)}&select=id,current_sprint`,
+    `${SUPABASE_URL}/rest/v1/clients?token=eq.${encodeURIComponent(token)}&select=id,current_sprint_number`,
     {
       headers: {
         apikey: SUPABASE_SECRET,
@@ -78,7 +78,7 @@ async function logUsage(token, questionText, questionLength, responseText, input
   const clients = await clientRes.json();
   if (!clients || clients.length === 0) return;
   const clientId     = clients[0].id;
-  const sprintNumber = clients[0].current_sprint || null;
+  const sprintNumber = clients[0].current_sprint_number || null;
 
   const now = new Date().toISOString();
 
