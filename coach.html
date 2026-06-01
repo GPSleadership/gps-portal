@@ -4062,6 +4062,13 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
         ? `<span style="background:#f0e6ff;color:#6b21a8;font-size:9px;font-weight:700;padding:1px 5px;border-radius:6px;margin-left:4px;">${s.is_board_member ? 'Board' : 'Supervisor'}</span>`
         : '';
 
+      const resendBtn = (sent && !responded)
+        ? `<button id="resend-btn-${s.id}" onclick="resendSurveyToStakeholder('${clientId}','${s.id}','${tkStatus?.checkpoint || 'baseline'}',this)"
+            style="font-size:11px;color:var(--teal);background:none;border:1px solid var(--teal);border-radius:4px;padding:3px 8px;cursor:pointer;white-space:nowrap;">
+            ↺ Resend
+          </button>`
+        : '';
+
       return `
         <div class="stakeholder-row">
           <div>
@@ -4070,6 +4077,7 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
           </div>
           <span class="stakeholder-role">${roleLabel(s)}</span>
           ${statusBadge}
+          ${resendBtn}
           <button onclick="removeStakeholder('${s.id}','${clientId}','${s.name.replace(/'/g,"\\'").replace(/"/g,'\\"')}',this)"
             style="margin-left:auto;font-size:11px;color:var(--red);background:none;border:1px solid var(--red);border-radius:4px;padding:3px 8px;cursor:pointer;white-space:nowrap;">
             Remove
@@ -4328,6 +4336,41 @@ async function removeStakeholder(stakeholderId, clientId, name, btn) {
   btn.disabled = true;
   await db.from('stakeholders').update({ is_active: false }).eq('id', stakeholderId);
   loadStakeholderData(clientId);
+}
+
+async function resendSurveyToStakeholder(clientId, stakeholderId, checkpoint, btn) {
+  const name = btn.closest('.stakeholder-row')?.querySelector('.stakeholder-name')?.textContent?.trim() || 'this stakeholder';
+  if (!confirm(`Resend the ${checkpoint} survey to ${name}?\n\nThis replaces their existing survey link with a new one.`)) return;
+
+  btn.textContent = 'Sending…';
+  btn.disabled = true;
+
+  const { data: pwData } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
+  const password = pwData?.value || 'GPS2026';
+
+  try {
+    const res = await fetch('/api/survey?action=resend', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ client_id: clientId, stakeholder_id: stakeholderId, checkpoint, password })
+    });
+    const json = await res.json().catch(() => ({}));
+    if (res.ok && json.sent) {
+      btn.textContent = '✓ Resent';
+      btn.style.color = '#2e7d32';
+      btn.style.borderColor = '#2e7d32';
+      setTimeout(() => loadStakeholderData(clientId), 1500);
+    } else {
+      alert('Resend failed: ' + (json.error || `HTTP ${res.status}`));
+      btn.textContent = '↺ Resend';
+      btn.disabled = false;
+    }
+    if (_currentSection === 'emails') setTimeout(loadEmailLog, 500);
+  } catch(err) {
+    alert('Error: ' + err.message);
+    btn.textContent = '↺ Resend';
+    btn.disabled = false;
+  }
 }
 
 async function triggerBaselineSurvey(clientId, btn) {

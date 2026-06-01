@@ -14,7 +14,7 @@ const SUPABASE_URL    = process.env.SUPABASE_URL    || 'https://pbnkefuqpoztcxfa
 const SUPABASE_SECRET = process.env.SUPABASE_SECRET_KEY;
 const RESEND_API_KEY  = process.env.RESEND_API_KEY;
 const SITE_URL        = process.env.SITE_URL        || 'https://portal.gpsleadership.org';
-const FROM_EMAIL      = 'alex@gpsleadership.org';
+const FROM_EMAIL      = process.env.RESEND_FROM_EMAIL || 'noreply@portal.gpsleadership.org';
 const FROM_NAME       = 'Alex Tremble | GPS Leadership Solutions';
 const ALEX_EMAIL      = 'alex@gpsleadership.org';
 
@@ -47,9 +47,10 @@ export default async function handler(req, res) {
 
   switch (action) {
     case 'send':   return handleSend(req, res);
+    case 'resend': return handleResend(req, res);
     case 'submit': return handleSubmit(req, res);
     default:
-      return res.status(400).json({ error: `Unknown action: "${action}". Valid: send, submit` });
+      return res.status(400).json({ error: `Unknown action: "${action}". Valid: send, resend, submit` });
   }
 }
 
@@ -283,6 +284,83 @@ async function handleSend(req, res) {
 
     return res.status(200).json(results);
 
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ACTION: resend
+// POST /api/survey?action=resend
+// Body: { client_id, stakeholder_id, checkpoint, password }
+// Deletes existing unused token for this stakeholder+checkpoint, creates a new
+// one, and resends the survey email. Used for individual resend from coach dashboard.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function handleResend(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  try {
+    const { client_id, stakeholder_id, checkpoint = 'baseline', password } = req.body || {};
+    if (!client_id || !stakeholder_id) return res.status(400).json({ error: 'client_id and stakeholder_id are required' });
+
+    const authOk = await verifyPassword(password);
+    if (!authOk) return res.status(401).json({ error: 'Invalid password' });
+
+    // Load client
+    const clientRes = await sbFetch(`/rest/v1/clients?id=eq.${client_id}&select=id,name,email,behavior_1,start_behavior,current_sprint_number`);
+    const clients = clientRes.ok ? await clientRes.json() : [];
+    if (!clients.length) return res.status(404).json({ error: 'Client not found' });
+    const client = clients[0];
+    const priorityBehavior = (client.behavior_1 || client.start_behavior || '').trim();
+    if (!priorityBehavior) return res.status(400).json({ error: 'No priority behavior on file for this client' });
+    const sprintNumber = client.current_sprint_number || 1;
+
+    // Load stakeholder
+    const sRes = await sbFetch(`/rest/v1/stakeholders?id=eq.${stakeholder_id}&client_id=eq.${client_id}&select=*`);
+    const stakeholders = sRes.ok ? await sRes.json() : [];
+    if (!stakeholders.length) return res.status(404).json({ error: 'Stakeholder not found' });
+    const stakeholder = stakeholders[0];
+
+    // Delete any existing unused token for this stakeholder+checkpoint so we can resend fresh
+    await sbFetch(
+      `/rest/v1/survey_tokens?client_id=eq.${client_id}&stakeholder_id=eq.${stakeholder_id}&checkpoint=eq.${checkpoint}&is_used=eq.false`,
+      'DELETE', null, { Prefer: 'return=minimal' }
+    );
+
+    // Create new token
+    const token   = generateToken();
+    const now     = new Date().toISOString();
+    const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const tokenInsert = await sbFetch('/rest/v1/survey_tokens', 'POST', {
+      token, client_id, stakeholder_id, checkpoint,
+      priority_behavior: priorityBehavior, client_first_name: (client.name || '').split(' ')[0],
+      sprint_number: sprintNumber, sent_at: now, expires_at: expires, is_used: false
+    }, { Prefer: 'return=minimal' });
+    if (!tokenInsert.ok) return res.status(500).json({ error: 'Failed to create survey token' });
+
+    // Send email
+    const surveyLink = `${SITE_URL}/survey?t=${token}`;
+    const emailRes = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from:    `${FROM_NAME} <${FROM_EMAIL}>`,
+        to:      [stakeholder.email],
+        cc:      client.email ? [client.email] : [],
+        subject: buildSendSubjectLine(client.name, checkpoint),
+        html:    buildSendEmailHtml(stakeholder.name, client.name, checkpoint, priorityBehavior, surveyLink)
+      })
+    });
+
+    const emailData = await emailRes.json();
+    if (emailRes.ok) {
+      await logEmail({ client_id, recipient_email: stakeholder.email, recipient_name: stakeholder.name, email_type: `survey_${checkpoint}_resend`, subject: buildSendSubjectLine(client.name, checkpoint), status: 'sent', resend_id: emailData.id || null });
+      return res.status(200).json({ sent: true, name: stakeholder.name, email: stakeholder.email });
+    } else {
+      await logEmail({ client_id, recipient_email: stakeholder.email, recipient_name: stakeholder.name, email_type: `survey_${checkpoint}_resend`, subject: buildSendSubjectLine(client.name, checkpoint), status: 'error', error_details: JSON.stringify(emailData).slice(0, 500) });
+      return res.status(500).json({ error: 'Email delivery failed', detail: emailData });
+    }
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
