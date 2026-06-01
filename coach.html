@@ -127,6 +127,7 @@
       border-left: 5px solid var(--teal);
       overflow: hidden;
       box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+      position: relative;
     }
     .client-card.pillar-trust       { border-left-color: #1565c0; }
     .client-card.pillar-proactivity { border-left-color: #2e7d32; }
@@ -877,6 +878,19 @@
         <option value="Other">Other</option>
       </select>
       <button onclick="clearClientFilters()" style="padding:7px 12px;background:none;border:1px solid var(--gray-300);border-radius:6px;font-size:12px;cursor:pointer;color:var(--gray-600);font-family:'Open Sans',sans-serif;white-space:nowrap;">✕ Clear</button>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray-600);cursor:pointer;white-space:nowrap;margin-left:4px;">
+        <input type="checkbox" id="selectAllClients" onchange="toggleSelectAll(this)" style="width:14px;height:14px;cursor:pointer;accent-color:var(--navy);">
+        Select all
+      </label>
+    </div>
+
+    <!-- Bulk action bar — visible only when ≥1 client selected -->
+    <div id="bulkActionBar" style="display:none;background:var(--navy);color:#fff;border-radius:8px;padding:10px 16px;margin-bottom:12px;align-items:center;gap:10px;flex-wrap:wrap;">
+      <span id="bulkCount" style="font-weight:700;font-size:13px;flex:1;"></span>
+      <button onclick="bulkSendInvite()" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">📧 Send Invite</button>
+      <button onclick="bulkArchive()" style="background:#e65100;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">📦 Archive</button>
+      <button onclick="bulkDelete()" style="background:#c62828;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">🗑 Delete</button>
+      <button onclick="clearSelection()" style="background:none;border:1px solid rgba(255,255,255,0.4);color:#fff;border-radius:6px;padding:7px 12px;font-size:12px;cursor:pointer;font-family:'Montserrat',sans-serif;">✕ Clear</button>
     </div>
 
     <div id="clientList">
@@ -1606,7 +1620,104 @@ function clearClientFilters() {
   renderClients();
 }
 
+// ── Multi-select + bulk actions ───────────────────────────────────────────────
+let _selectedClients = new Set();
+
+function toggleClientSelect(id, checked) {
+  if (checked) _selectedClients.add(id);
+  else _selectedClients.delete(id);
+  updateBulkBar();
+}
+
+function toggleSelectAll(cb) {
+  document.querySelectorAll('.client-select-cb').forEach(el => {
+    el.checked = cb.checked;
+    if (cb.checked) _selectedClients.add(el.dataset.id);
+    else _selectedClients.delete(el.dataset.id);
+  });
+  updateBulkBar();
+}
+
+function updateBulkBar() {
+  const bar   = document.getElementById('bulkActionBar');
+  const count = document.getElementById('bulkCount');
+  const n     = _selectedClients.size;
+  if (!bar) return;
+  if (n === 0) {
+    bar.style.display = 'none';
+    const sa = document.getElementById('selectAllClients');
+    if (sa) sa.checked = false;
+  } else {
+    bar.style.display = 'flex';
+    if (count) count.textContent = `${n} client${n !== 1 ? 's' : ''} selected`;
+  }
+}
+
+function clearSelection() {
+  _selectedClients.clear();
+  document.querySelectorAll('.client-select-cb').forEach(el => el.checked = false);
+  const sa = document.getElementById('selectAllClients');
+  if (sa) sa.checked = false;
+  updateBulkBar();
+}
+
+async function bulkArchive() {
+  const ids = [..._selectedClients];
+  const names = allClients.filter(c => ids.includes(c.id)).map(c => c.name).join(', ');
+  if (!confirm(`Archive ${ids.length} client${ids.length !== 1 ? 's' : ''}?\n\n${names}\n\nThey'll be hidden from your dashboard but all data is preserved.`)) return;
+  await Promise.all(ids.map(id => db.from('clients').update({ is_archived: true }).eq('id', id)));
+  allClients = allClients.map(c => ids.includes(c.id) ? { ...c, is_archived: true } : c);
+  clearSelection();
+  renderClients();
+}
+
+async function bulkDelete() {
+  const ids   = [..._selectedClients];
+  const names = allClients.filter(c => ids.includes(c.id)).map(c => c.name).join(', ');
+  const typed = prompt(
+    `Permanently delete ${ids.length} client${ids.length !== 1 ? 's' : ''} and ALL their data?\n\n${names}\n\nThis cannot be undone. Type DELETE to confirm:`
+  );
+  if ((typed || '').trim().toUpperCase() !== 'DELETE') { alert('Cancelled — nothing was deleted.'); return; }
+  await Promise.all(ids.map(id => db.from('clients').delete().eq('id', id)));
+  allClients = allClients.filter(c => !ids.includes(c.id));
+  clearSelection();
+  renderClients();
+}
+
+async function bulkSendInvite() {
+  const ids     = [..._selectedClients];
+  const targets = allClients.filter(c => ids.includes(c.id) && c.email && c.token);
+  if (targets.length === 0) { alert('No selected clients have an email and portal link on file.'); return; }
+  if (!confirm(`Send portal invite email to ${targets.length} client${targets.length !== 1 ? 's' : ''}?\n\n${targets.map(c=>c.name).join(', ')}`)) return;
+
+  let sent = 0, failed = 0;
+  for (const c of targets) {
+    try {
+      const r = await fetch('/api/notify', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type:        'welcome_email',
+          clientEmail: c.email,
+          clientName:  c.name,
+          portalURL:   `${PORTAL_BASE_URL}?token=${c.token}`
+        })
+      });
+      r.ok ? sent++ : failed++;
+    } catch(_) { failed++; }
+  }
+  clearSelection();
+  alert(sent > 0
+    ? `✓ Invite sent to ${sent} client${sent !== 1 ? 's' : ''}${failed > 0 ? ` · ${failed} failed (check Emails tab)` : ''}.`
+    : `All ${failed} invites failed — check the Emails tab for details.`
+  );
+}
+
 function renderClients() {
+  // Reset selection state when list re-renders (filter/sort change)
+  _selectedClients.clear();
+  updateBulkBar();
+
   const search    = (document.getElementById('clientSearch')?.value           || '').toLowerCase();
   const sort      =  document.getElementById('clientSort')?.value             || 'newest';
   const compF     =  document.getElementById('clientCompFilter')?.value       || 'all';
@@ -1827,7 +1938,12 @@ function renderClientCard(client, checkins) {
 
   return `
     <div class="client-card ${pillarClass} ${!client.is_active ? 'inactive' : ''}" id="card-${client.id}">
-      <div class="client-header" onclick="openClientProfile('${client.id}')">
+      <label style="position:absolute;top:10px;left:10px;z-index:2;cursor:pointer;" onclick="event.stopPropagation()">
+        <input type="checkbox" class="client-select-cb" data-id="${client.id}"
+          onchange="toggleClientSelect('${client.id}', this.checked)"
+          style="width:15px;height:15px;cursor:pointer;accent-color:var(--navy);">
+      </label>
+      <div class="client-header" style="padding-left:32px;" onclick="openClientProfile('${client.id}')">
         <div class="client-avatar" style="${avatarRingStyle}" title="${completionPct !== null ? completionPct + '% follow-through rate' : 'No check-ins yet'}">${initials}</div>
         <div class="client-name-block">
           <div class="client-name">${client.name || 'Unnamed'}</div>
