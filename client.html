@@ -2224,6 +2224,13 @@
       <span class="qa-typing-label">Thinking…</span>
     </div>
     <div class="qa-ec" id="qa-ec"></div>
+
+    <!-- Recent Ask Alex history -->
+    <div id="qa-history" style="display:none;margin-top:32px;padding-top:24px;border-top:1px solid var(--gray-200);">
+      <div style="font-size:12px;font-weight:700;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:14px;">Recent Sessions</div>
+      <div id="qa-history-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+    </div>
+
     <div style="height:40px;"></div>
   </div>
   <div class="qa-input-area">
@@ -4740,6 +4747,7 @@ function activateQATab() {
   if (tabDiag)    tabDiag.classList.remove('active');
   const qaQi = document.getElementById('qa-qi');
   if (qaQi) setTimeout(() => qaQi.focus(), 100);
+  loadAskAlexHistory();
 }
 
 function openTermsModal(readOnly) {
@@ -5025,6 +5033,70 @@ const QA_CRISIS_PHRASES = [
   'not worth living',"life isn't worth",'life is not worth',
   "can't go on",'cannot go on','giving up on life','no reason to live'
 ];
+// ── Ask Alex history — last 7 sessions, read-only view ───────────────────────
+async function loadAskAlexHistory() {
+  const historyEl = document.getElementById('qa-history');
+  const listEl    = document.getElementById('qa-history-list');
+  if (!historyEl || !listEl || !currentClient?.id) return;
+
+  try {
+    const { data, error } = await db
+      .from('ask_alex_log')
+      .select('id, asked_at, question_text, response_text')
+      .eq('client_id', currentClient.id)
+      .order('asked_at', { ascending: false })
+      .limit(7);
+
+    if (error || !data || data.length === 0) {
+      historyEl.style.display = 'none';
+      return;
+    }
+
+    listEl.innerHTML = data.map((entry, i) => {
+      const dateStr  = new Date(entry.asked_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const timeStr  = new Date(entry.asked_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      const qShort   = (entry.question_text || '').slice(0, 90) + ((entry.question_text || '').length > 90 ? '…' : '');
+      const qFull    = escH(entry.question_text || '');
+      const rFull    = escH(entry.response_text || '');
+      const uid      = `qa-hist-${i}`;
+      return `
+        <div style="border:1px solid var(--gray-200);border-radius:8px;overflow:hidden;">
+          <button onclick="toggleHistoryEntry('${uid}')"
+            style="width:100%;text-align:left;background:var(--gray-100);border:none;padding:11px 14px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:13px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escH(qShort)}</div>
+              <div style="font-size:11px;color:var(--gray-600);margin-top:2px;">${dateStr} · ${timeStr}</div>
+            </div>
+            <span id="${uid}-chevron" style="font-size:12px;color:var(--gray-600);flex-shrink:0;">▼</span>
+          </button>
+          <div id="${uid}" style="display:none;padding:14px;background:#fff;">
+            <div style="font-size:12px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;">Your Question</div>
+            <div style="font-size:13px;color:var(--navy);line-height:1.6;margin-bottom:14px;white-space:pre-wrap;">${qFull}</div>
+            <div style="font-size:12px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;">Alex's Response</div>
+            <div style="font-size:13px;color:#333;line-height:1.65;white-space:pre-wrap;">${rFull}</div>
+            <button onclick="navigator.clipboard.writeText(${JSON.stringify(entry.response_text || '')})"
+              style="margin-top:12px;background:none;border:1px solid var(--gray-300);border-radius:5px;padding:5px 12px;font-size:11px;color:var(--gray-600);cursor:pointer;font-family:'Open Sans',sans-serif;">
+              Copy Response
+            </button>
+          </div>
+        </div>`;
+    }).join('');
+
+    historyEl.style.display = 'block';
+  } catch(_) {
+    historyEl.style.display = 'none';
+  }
+}
+
+function toggleHistoryEntry(uid) {
+  const el      = document.getElementById(uid);
+  const chevron = document.getElementById(uid + '-chevron');
+  if (!el) return;
+  const open = el.style.display !== 'none';
+  el.style.display      = open ? 'none' : 'block';
+  if (chevron) chevron.textContent = open ? '▼' : '▲';
+}
+
 function qaCrisisDetect(text) {
   const lower = text.toLowerCase();
   return QA_CRISIS_PHRASES.some(p => lower.includes(p));
@@ -6134,7 +6206,9 @@ async function checkForPendingTestimonial(client) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         client_token: client.token,
-        diagnostic_id: (window.CLIENT_DIAG && window.CLIENT_DIAG.id) || null
+        diagnostic_id: (window.CLIENT_DIAG && window.CLIENT_DIAG.id) || null,
+        // ?t=end in URL forces the end-of-engagement prompt (for testing)
+        force_end_prompt: new URLSearchParams(window.location.search).get('t') === 'end' ? 'true' : undefined,
       })
     });
     if (!res.ok) return;
