@@ -5741,6 +5741,17 @@ function renderReportTab() {
   </div>
 
   <div class="card">
+    <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:4px;">Upload Rater Responses (Offline Backup)</div>
+    <div style="font-size:12px;color:var(--d-mid);margin-bottom:12px;">If a client's IT blocks the survey portal, collect rater responses in the Excel template and upload it here. The report generates from the uploaded data — no portal access required from raters.</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+      <button class="dbtn dbtn-outline" onclick="downloadOfflineTemplate(event)">⬇ Download Rater Template</button>
+      <button class="dbtn dbtn-outline" onclick="document.getElementById('offline-upload-file').click()">⬆ Upload Completed Responses</button>
+      <input type="file" id="offline-upload-file" accept=".xlsx,.xls" style="display:none;" onchange="handleOfflineExcelUpload(this)">
+      <span id="offline-upload-msg" style="font-size:12px;color:var(--d-mid);"></span>
+    </div>
+  </div>
+
+  <div class="card">
     <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:4px;">Data Package Export</div>
     <div style="font-size:12px;color:var(--d-mid);margin-bottom:12px;">Download everything verbatim — intake notes, coaching notes, interview notes, self-assessment, all rater scores, and all open-text responses. Nothing summarized or cut.</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
@@ -5751,7 +5762,7 @@ function renderReportTab() {
 
   <div class="card">
     <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:4px;">Upload Draft Report</div>
-    <div style="font-size:12px;color:var(--d-mid);margin-bottom:12px;">Paste your AI-drafted report or upload a .docx. The portal wraps it in GPS branding — then you can edit it inline and export as PDF.</div>
+    <div style="font-size:12px;color:var(--d-mid);margin-bottom:12px;">Paste your AI-drafted report, upload a .docx, or upload a PDF. PDFs display as-is in the preview; .docx files are converted to editable HTML.</div>
     <div class="dform-group">
       <label style="font-size:12px;">Paste draft text or HTML</label>
       <textarea id="draft-paste-field" style="min-height:120px;font-family:monospace;font-size:11px;" placeholder="Paste your drafted report here…"></textarea>
@@ -5759,8 +5770,8 @@ function renderReportTab() {
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px;">
       <button class="dbtn dbtn-primary" onclick="formatAndPreviewDraft(event)">Format &amp; Preview →</button>
       <span style="color:var(--d-mid);font-size:12px;">— or —</span>
-      <button class="dbtn dbtn-outline" onclick="document.getElementById('draft-upload-file').click()">⬆ Upload .docx</button>
-      <input type="file" id="draft-upload-file" accept=".docx" style="display:none;" onchange="handleDraftUpload(this)">
+      <button class="dbtn dbtn-outline" onclick="document.getElementById('draft-upload-file').click()">⬆ Upload PDF or .docx</button>
+      <input type="file" id="draft-upload-file" accept=".pdf,.docx" style="display:none;" onchange="handleDraftUpload(this)">
       <span id="draft-upload-msg" style="font-size:12px;color:var(--d-mid);"></span>
     </div>
   </div>
@@ -6333,28 +6344,278 @@ async function downloadWordPackage(evt) {
   finally { btn.disabled=false; btn.innerHTML='⬇ Word Doc — Notes &amp; Verbatims'; }
 }
 
+// ── Offline Rater Template + Upload ──────────────────────────────────────────
+
+const OFFLINE_SCORED_QS = [
+  { code:'A1', label:'Trust',       text:'Follows through on commitments and does what they say they will do.' },
+  { code:'A2', label:'Trust',       text:'Communicates decisions and direction clearly — people know what to expect.' },
+  { code:'A3', label:'Trust',       text:'Addresses conflict and difficult conversations directly rather than avoiding them.' },
+  { code:'A4', label:'Trust',       text:'Invests time in developing the people on their team.' },
+  { code:'A5', label:'Trust',       text:'Builds trust and collaboration across teams and functions.' },
+  { code:'A6', label:'Trust',       text:'Holds people accountable without creating fear or shutting down communication.' },
+  { code:'A7', label:'Trust',       text:'Sets clear expectations so people can make decisions without checking in.' },
+  { code:'B1', label:'Proactivity', text:'Anticipates problems and addresses them before they become crises.' },
+  { code:'B2', label:'Proactivity', text:'Proactively influences positive change rather than waiting for direction.' },
+  { code:'B3', label:'Proactivity', text:'Inspires others to take initiative and raise the standard.' },
+  { code:'B4', label:'Proactivity', text:'Takes initiative to identify and address emerging issues before being asked.' },
+  { code:'B5', label:'Proactivity', text:'Encourages the team to bring forward solutions, not just problems.' },
+  { code:'B6', label:'Proactivity', text:'Actively invests in their own leadership growth and development.' },
+  { code:'C1', label:'Productivity','text':'Creates conditions for high team productivity — clear priorities, right resources, minimal blockers.' },
+  { code:'C2', label:'Productivity','text':'Balances short-term execution with longer-term strategic investment.' },
+  { code:'C3', label:'Productivity','text':'Leads effectively under pressure without creating chaos or reactive energy.' },
+  { code:'C4', label:'Productivity','text':'Prioritizes and focuses the team on the highest-impact work consistently.' },
+  { code:'C5', label:'Productivity','text':'Team can operate effectively and make decisions without direct involvement.' },
+  { code:'C6', label:'Productivity','text':'Runs meetings efficiently — on time, focused, ends with clear next steps.' },
+  { code:'D1', label:'Impact',      text:'Overall leadership impact on the organization. (Scale 1–10)' },
+  { code:'F1', label:'Succession',  text:'Team would continue to operate effectively if leader stepped away for 6–12 months.' },
+  { code:'F2', label:'Succession',  text:'Actively develops people to take on bigger responsibilities over the next 1–3 years.' },
+  { code:'G1', label:'Custom',      text:'[See G1 Question on Overview tab — leave blank if not generated yet]' },
+];
+
+const OFFLINE_TEXT_QS = [
+  { code:'A8',  prompt:'TRUST — What is one thing [Leader] could START doing to build greater trust?' },
+  { code:'A9',  prompt:'TRUST — What is one communication habit you would ask [Leader] to STOP?' },
+  { code:'A10', prompt:'TRUST — What trust-building behavior should [Leader] CONTINUE?' },
+  { code:'B7',  prompt:'PROACTIVITY — What is one thing [Leader] could START doing to be more proactive?' },
+  { code:'B8',  prompt:'PROACTIVITY — What is one reactive habit you would ask [Leader] to STOP?' },
+  { code:'B9',  prompt:'PROACTIVITY — What proactive behavior should [Leader] CONTINUE?' },
+  { code:'C7',  prompt:'PRODUCTIVITY — What is one thing [Leader] could START doing to increase team productivity?' },
+  { code:'C8',  prompt:'PRODUCTIVITY — What is one habit that slows the team down — ask them to STOP?' },
+  { code:'C9',  prompt:'PRODUCTIVITY — What do they already do to drive productivity that should CONTINUE?' },
+  { code:'D2',  prompt:'OVERALL — In 3–5 words, describe their leadership style and presence.' },
+  { code:'F3',  prompt:'SUCCESSION — What could they do to better prepare the team to succeed without them?' },
+];
+
+function downloadOfflineTemplate(evt) {
+  const d = DIAG_SEL;
+  if (!d) return;
+  const btn = evt.currentTarget; btn.disabled = true; btn.textContent = 'Building…';
+  try {
+    const leader = d.client_name || 'Leader';
+    const wb = XLSX.utils.book_new();
+
+    // ── Sheet 1: Instructions ──────────────────────────────────────────────────
+    const instrRows = [
+      [`GPS Leadership Solutions — Offline Rater Response Template`],
+      [`Leader: ${leader}${d.client_title ? ' · ' + d.client_title : ''}${d.client_org ? ' · ' + d.client_org : ''}`],
+      [`Generated: ${new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}`],
+      [],
+      ['HOW TO USE THIS TEMPLATE'],
+      ['1. Fill in the "SCORES" sheet — enter a score (1–5) for each rated question for each rater column.'],
+      ['   D1 (Overall Impact) uses a 1–10 scale. All others use 1–5.'],
+      ['   Self column = the leader\'s own self-assessment. Remaining columns = individual raters.'],
+      ['   Replace "Rater 2", "Rater 3" etc. in Row 2 with actual names. Enter their relationship in Row 3.'],
+      ['   Set Row 4 (Is Self): "Yes" for the leader\'s own column, "No" for all others.'],
+      ['2. Fill in the "OPEN-ENDED" sheet — type each rater\'s verbatim response to each question.'],
+      ['   Leave a cell blank if the rater did not respond.'],
+      ['3. Save the file and upload it using the "Upload Completed Responses" button in the portal.'],
+      [],
+      ['SCORING SCALE (for all scored questions except D1):'],
+      ['  1 = Strongly Disagree'],
+      ['  2 = Disagree'],
+      ['  3 = Neutral / Somewhat Agree'],
+      ['  4 = Agree'],
+      ['  5 = Strongly Agree'],
+      ['D1 uses a 1–10 scale (1 = no impact, 10 = exceptional impact).'],
+      [],
+      ['IMPORTANT: Do not change column headers in the SCORES sheet (A1, A2, etc.) — the portal parses them.'],
+    ];
+    const wsInstr = XLSX.utils.aoa_to_sheet(instrRows);
+    wsInstr['!cols'] = [{ wch: 80 }];
+    XLSX.utils.book_append_sheet(wb, wsInstr, 'Instructions');
+
+    // ── Sheet 2: Scores ────────────────────────────────────────────────────────
+    const raterCols = ['Self','Rater 2','Rater 3','Rater 4','Rater 5','Rater 6','Rater 7','Rater 8'];
+    const scoresHdr1 = ['Question Code', 'Pillar', 'Question (for reference)', 'Scale', ...raterCols];
+    const row2 = ['Rater Name →', '', '', '', ...raterCols.map((_, i) => i === 0 ? leader : `[Enter Name]`)];
+    const row3 = ['Relationship →', '', '', '', 'Self', 'Direct Report', 'Direct Report', 'Peer', 'Peer', 'Supervisor', '[Relationship]', '[Relationship]'];
+    const row4 = ['Is Self →', '', '', '', 'Yes', 'No', 'No', 'No', 'No', 'No', 'No', 'No'];
+    const scoreDataRows = OFFLINE_SCORED_QS.map(q => [
+      q.code, q.label, q.text.replace('[Leader]', leader.split(' ')[0]),
+      q.code === 'D1' ? '1–10' : '1–5',
+      ...raterCols.map(() => ''),
+    ]);
+    const wsScores = XLSX.utils.aoa_to_sheet([scoresHdr1, row2, row3, row4, ...scoreDataRows]);
+    wsScores['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 56 }, { wch: 7 }, ...raterCols.map(() => ({ wch: 14 }))];
+    XLSX.utils.book_append_sheet(wb, wsScores, 'SCORES');
+
+    // ── Sheet 3: Open-Ended ────────────────────────────────────────────────────
+    const oeHdr = ['Question Code', 'Question Prompt', ...raterCols];
+    const oeRows = OFFLINE_TEXT_QS.map(q => [
+      q.code,
+      q.prompt.replace('[Leader]', leader.split(' ')[0]),
+      ...raterCols.map(() => ''),
+    ]);
+    const wsOE = XLSX.utils.aoa_to_sheet([oeHdr, ...oeRows]);
+    wsOE['!cols'] = [{ wch: 12 }, { wch: 62 }, ...raterCols.map(() => ({ wch: 20 }))];
+    XLSX.utils.book_append_sheet(wb, wsOE, 'OPEN-ENDED');
+
+    const safe = leader.replace(/[^a-zA-Z0-9]/g,'_');
+    XLSX.writeFile(wb, `${safe}_GPS_Rater_Template.xlsx`);
+  } catch(err) { alert('Error building template: ' + err.message); }
+  finally { btn.disabled = false; btn.textContent = '⬇ Download Rater Template'; }
+}
+
+async function handleOfflineExcelUpload(inputEl) {
+  const file = inputEl.files[0];
+  if (!file) return;
+  const msg = document.getElementById('offline-upload-msg');
+  msg.style.color = 'var(--d-mid)'; msg.textContent = 'Parsing responses…';
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+
+    // ── Parse SCORES sheet ────────────────────────────────────────────────────
+    const scoresWs = wb.Sheets['SCORES'] || wb.Sheets[wb.SheetNames[0]];
+    const scoresData = XLSX.utils.sheet_to_json(scoresWs, { header: 1, defval: '' });
+    // Row 0 = column headers (Question Code, Pillar, Question, Scale, rater1, rater2...)
+    // Row 1 = rater names, Row 2 = relationships, Row 3 = Is Self, Row 4+ = question data
+    if (scoresData.length < 5) throw new Error('SCORES sheet appears empty or malformed.');
+    const hdrRow       = scoresData[0]; // ['Question Code','Pillar','Question','Scale','Self','Rater 2',...]
+    const nameRow      = scoresData[1];
+    const relRow       = scoresData[2];
+    const isSelfRow    = scoresData[3];
+    const raterStartCol = 4; // columns 0-3 are code/pillar/question/scale
+    const numRaterCols  = hdrRow.length - raterStartCol;
+
+    // Build rater metadata (skip columns where name is blank or placeholder)
+    const raterMeta = [];
+    for (let ci = 0; ci < numRaterCols; ci++) {
+      const name = String(nameRow[raterStartCol + ci] || '').trim();
+      const rel  = String(relRow[raterStartCol + ci] || '').trim();
+      if (!name || name.startsWith('[Enter') || name === '') continue;
+      raterMeta.push({
+        colIdx:       raterStartCol + ci,
+        name,
+        relationship: rel || 'Rater',
+        is_self:      String(isSelfRow[raterStartCol + ci] || '').trim().toLowerCase() === 'yes',
+        scores: {},
+        texts:  {},
+      });
+    }
+    if (raterMeta.length === 0) throw new Error('No rater names found. Fill in Row 2 (Rater Name) of the SCORES sheet.');
+
+    // Extract scored responses
+    for (let ri = 4; ri < scoresData.length; ri++) {
+      const row  = scoresData[ri];
+      const code = String(row[0] || '').trim().toUpperCase();
+      if (!code) continue;
+      const scaleStr = String(row[3] || '').trim();
+      const maxScale = scaleStr.includes('10') ? 10 : 5;
+      for (const rater of raterMeta) {
+        const raw = String(row[rater.colIdx] || '').trim();
+        if (!raw) continue;
+        const n = Number(raw);
+        if (!isNaN(n) && n >= 1 && n <= maxScale) rater.scores[code] = n;
+      }
+    }
+
+    // ── Parse OPEN-ENDED sheet ────────────────────────────────────────────────
+    const oeWs = wb.Sheets['OPEN-ENDED'] || wb.Sheets['Open-Ended Responses'];
+    if (oeWs) {
+      const oeData = XLSX.utils.sheet_to_json(oeWs, { header: 1, defval: '' });
+      // Row 0 = headers: [Question Code, Question Prompt, rater1, rater2, ...]
+      for (let ri = 1; ri < oeData.length; ri++) {
+        const row  = oeData[ri];
+        const code = String(row[0] || '').trim().toUpperCase();
+        if (!code) continue;
+        for (const rater of raterMeta) {
+          // Column index in OE sheet matches same rater column offset
+          const ci = rater.colIdx; // same column positions as SCORES sheet
+          const text = String(row[ci] || '').trim();
+          if (text) rater.texts[code] = text;
+        }
+      }
+    }
+
+    // Validate: at least 3 raters with some scores
+    const ratersWithScores = raterMeta.filter(r => Object.keys(r.scores).length > 0);
+    if (ratersWithScores.length < 2) throw new Error('Found fewer than 2 raters with scores. Check that scores are filled in.');
+
+    msg.textContent = `Parsed ${ratersWithScores.length} raters — importing to portal…`;
+
+    // ── POST to import-survey-data ────────────────────────────────────────────
+    const importResp = await fetch('/api/diagnostic?action=import-survey-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        diagnostic_id: DIAG_SEL.id,
+        raters: ratersWithScores.map(({ name, relationship, is_self, scores, texts }) =>
+          ({ name, email: `offline-${name.toLowerCase().replace(/\s+/g,'.')}_${DIAG_SEL.id.slice(0,6)}@offline.gpsleadership.org`, relationship, is_self, scores, texts })
+        ),
+      }),
+    });
+    const importData = await importResp.json();
+    if (!importResp.ok) throw new Error(importData.error || 'Import failed');
+
+    msg.textContent = `✓ ${importData.rater_count} raters imported (${importData.response_count} responses) — generating report…`;
+    msg.style.color = 'var(--d-mid)';
+
+    // Refresh raters so generate-report sees the correct count
+    await refreshSelected();
+
+    // ── Generate report from the just-imported data ───────────────────────────
+    const genResp = await fetch('/api/diagnostic?action=generate-report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ diagnostic_id: DIAG_SEL.id }),
+    });
+    if (!genResp.ok) {
+      const ge = await genResp.json().catch(() => ({}));
+      throw new Error(ge.error || 'Report generation failed after import');
+    }
+
+    await updateDiag({ status: 'report_draft', report_generated_at: new Date().toISOString() });
+    await refreshSelected();
+    msg.style.color = 'var(--d-green)';
+    msg.textContent = `✓ Report generated from ${importData.rater_count} offline raters`;
+    openReportPreview();
+  } catch(err) {
+    msg.style.color = 'var(--d-red)';
+    msg.textContent = 'Error: ' + err.message;
+    console.error('[offline upload]', err);
+  }
+  inputEl.value = '';
+}
+
 // ── Draft Report Upload → Format → Preview ───────────────────────────────────
 
 async function handleDraftUpload(inputEl) {
   const file = inputEl.files[0];
   if (!file) return;
   const msg = document.getElementById('draft-upload-msg');
+  const isPDF = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
   msg.style.color = 'var(--d-mid)'; msg.textContent = 'Reading file…';
   try {
-    if (!window.mammoth) {
-      await new Promise((res, rej) => {
-        const s = document.createElement('script');
-        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';
-        s.onload = res; s.onerror = rej;
-        document.head.appendChild(s);
-      });
+    if (isPDF) {
+      // Read PDF as base64 and store with marker — preview modal renders it in an iframe
+      const buf = await file.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      let binary = '';
+      const chunkSize = 8192;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+      }
+      document.getElementById('draft-paste-field').value = 'PDF_UPLOAD:' + btoa(binary);
+      msg.style.color = 'var(--d-green)';
+      msg.textContent = `✓ ${file.name} ready — click Format & Preview to save`;
+    } else {
+      // .docx — convert to HTML with mammoth
+      if (!window.mammoth) {
+        await new Promise((res, rej) => {
+          const s = document.createElement('script');
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';
+          s.onload = res; s.onerror = rej;
+          document.head.appendChild(s);
+        });
+      }
+      const buf = await file.arrayBuffer();
+      const result = await mammoth.convertToHtml({ arrayBuffer: buf });
+      if (!result.value?.trim()) throw new Error('No content found in file');
+      document.getElementById('draft-paste-field').value = result.value;
+      msg.style.color = 'var(--d-green)';
+      msg.textContent = `✓ ${file.name} loaded — click Format & Preview to continue`;
     }
-    const buf = await file.arrayBuffer();
-    const result = await mammoth.convertToHtml({ arrayBuffer: buf });
-    if (!result.value?.trim()) throw new Error('No content found in file');
-    document.getElementById('draft-paste-field').value = result.value;
-    msg.style.color = 'var(--d-green)';
-    msg.textContent = `✓ ${file.name} loaded — click Format & Preview to continue`;
   } catch(err) {
     msg.style.color = 'var(--d-red)';
     msg.textContent = 'Error: ' + err.message;
@@ -6366,16 +6627,22 @@ async function formatAndPreviewDraft(evt) {
   const d = DIAG_SEL;
   if (!d) return;
   const raw = (document.getElementById('draft-paste-field').value || '').trim();
-  if (!raw) { alert('Paste your draft text or upload a .docx file first.'); return; }
-  const btn = evt.currentTarget; btn.disabled = true; btn.textContent = 'Formatting…';
+  if (!raw) { alert('Paste your draft text, upload a .docx, or upload a PDF first.'); return; }
+  const btn = evt.currentTarget; btn.disabled = true; btn.textContent = 'Uploading…';
+  const isPDFUpload = raw.startsWith('PDF_UPLOAD:');
   try {
     const hdr = { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` };
     const base = 'https://pbnkefuqpoztcxfagiod.supabase.co/rest/v1';
 
-    // Branded cover — same as generate-report endpoint
-    const reportDate = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-    const clientLine = [d.client_name, d.client_title, d.client_org].filter(Boolean).join(' · ');
-    const cover = `<div class="report-cover">
+    let reportHtml;
+    if (isPDFUpload) {
+      // PDF: store as-is — the preview modal detects the PDF_UPLOAD: prefix and renders an iframe
+      reportHtml = raw;
+    } else {
+      // HTML / .docx: wrap in GPS branded cover
+      const reportDate = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+      const clientLine = [d.client_name, d.client_title, d.client_org].filter(Boolean).join(' · ');
+      const cover = `<div class="report-cover">
   <div class="report-cover-logo">GPS LEADERSHIP SOLUTIONS</div>
   <div class="report-cover-subtitle">14-Day Executive Leadership Diagnostic Report</div>
   <div class="report-cover-client">${clientLine}</div>
@@ -6385,7 +6652,8 @@ async function formatAndPreviewDraft(evt) {
     <span class="report-confidential-badge">CONFIDENTIAL</span>
   </div>
 </div><hr class="report-cover-divider">`;
-    const reportHtml = cover + '\n' + raw;
+      reportHtml = cover + '\n' + raw;
+    }
 
     // Next version number
     const vR = await fetch(`${base}/diagnostic_report_drafts?diagnostic_id=eq.${d.id}&select=version&order=version.desc&limit=1`, { headers: hdr });
@@ -6400,7 +6668,7 @@ async function formatAndPreviewDraft(evt) {
         diagnostic_id: d.id,
         version: nextVer,
         raw_markdown: reportHtml,
-        content_json: { report_format: 'html_v2', source: 'manual_upload', uploaded_at: new Date().toISOString() },
+        content_json: { report_format: isPDFUpload ? 'pdf_upload' : 'html_v2', source: 'manual_upload', uploaded_at: new Date().toISOString() },
         generated_at: new Date().toISOString(),
       }),
     });
@@ -6497,7 +6765,13 @@ async function openReportPreview() {
     CURRENT_DRAFT_ID = draft.id;
 
     // Option B reports store full HTML in raw_markdown; legacy reports use content_json
-    if (draft.raw_markdown) {
+    // PDF uploads are stored as PDF_UPLOAD:<base64> — render in an iframe, not innerHTML
+    if (draft.raw_markdown && draft.raw_markdown.startsWith('PDF_UPLOAD:')) {
+      const b64 = draft.raw_markdown.slice('PDF_UPLOAD:'.length);
+      bodyEl.contentEditable = 'false'; // PDFs can't be edited inline
+      bodyEl.innerHTML = `<iframe src="data:application/pdf;base64,${b64}"
+        style="width:100%;height:680px;border:none;border-radius:6px;" title="Uploaded Report PDF"></iframe>`;
+    } else if (draft.raw_markdown) {
       bodyEl.innerHTML = draft.raw_markdown;
     } else {
       const report = draft.content_json || {};
