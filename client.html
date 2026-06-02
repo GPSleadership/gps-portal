@@ -2707,11 +2707,34 @@ function renderDiagReportMode(d, reportDraft) {
   const el = document.getElementById('diag-content');
   if (!el) return;
 
-  const report = reportDraft && reportDraft.content_json ? reportDraft.content_json : null;
+  const report    = reportDraft && reportDraft.content_json ? reportDraft.content_json : null;
   const narrative = report && report.full_narrative ? report.full_narrative : null;
+  const isPdfUpload = report && report.report_type === 'pdf_upload' && report.pdf_base64;
 
-  const leaderName = d.leader_name || currentClient && currentClient.name || '';
+  const leaderName = d.leader_name || (currentClient && currentClient.name) || '';
   const finDate    = diagFormatDateClient(d.report_finalized_at);
+
+  if (isPdfUpload) {
+    el.innerHTML = `
+      <div class="dc-report-header">
+        <h2>TP3™ Leadership Diagnostic Report</h2>
+        <div class="dc-rh-meta">${escD(leaderName)}${finDate ? ' · Finalized ' + finDate : ''}</div>
+      </div>
+      <div style="text-align:center;margin-bottom:16px;">
+        <a href="${report.pdf_base64}" download="GPS_Diagnostic_Report.pdf"
+          style="display:inline-flex;align-items:center;gap:7px;padding:10px 22px;background:var(--navy);color:#fff;border-radius:7px;font-family:'Montserrat',sans-serif;font-size:13px;font-weight:700;text-decoration:none;margin-bottom:12px;">
+          ⬇ Download Report (PDF)
+        </a>
+      </div>
+      <div style="width:100%;border-radius:8px;overflow:hidden;border:1px solid var(--gray-300);background:#f5f5f5;">
+        <iframe src="${report.pdf_base64}" style="width:100%;min-height:800px;border:none;display:block;" title="GPS Diagnostic Report"></iframe>
+      </div>
+      <div style="text-align:center;padding:24px 0 32px;">
+        <p style="font-size:13px;color:#6b7280;">Questions about your results? Reach out to Alex directly.</p>
+        <a href="mailto:alex@gpsleadership.org" class="dc-btn dc-btn-outline" style="text-decoration:none;display:inline-block;">Contact Alex →</a>
+      </div>`;
+    return;
+  }
 
   el.innerHTML = `
     <div class="dc-report-header">
