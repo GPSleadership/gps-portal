@@ -91,7 +91,7 @@ done
 echo ""
 echo "▸ Known syntax hazards"
 
-declare -A HAZARD_BASELINE=( ["coach.html"]=2 ["client.html"]=0 )
+declare -A HAZARD_BASELINE=( ["coach.html"]=0 ["client.html"]=0 )
 HAZARD_FOUND=0
 
 for f in "${!HAZARD_BASELINE[@]}"; do

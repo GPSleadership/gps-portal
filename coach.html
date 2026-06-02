@@ -5318,19 +5318,19 @@ function renderReportTab() {
       <button class="dbtn dbtn-outline" onclick="markDebriefComplete()">Mark Debrief Complete →</button>` : ''}
     </div>
   </div>
-  <div class="card">
-    <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:12px;">90-Day Plan</div>
-    <div class="dform-group">
-      <label>Plan Content</label>
-      <textarea id="plan-content-field" style="min-height:120px;" placeholder="Enter the leader's 90-day focus after the debrief session…">${d.plan_draft_content||''}</textarea>
+  <div class="card" style="margin-top:16px;">
+    <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:4px;">Upload Final Report PDF</div>
+    <div style="font-size:12px;color:var(--d-mid);margin-bottom:14px;">Upload the finished PDF. Client can view it in their portal as soon as you finalize.</div>
+    ${d.report_pdf_url ? `<div class="dalert dalert-green" style="margin-bottom:12px;"><span class="dalert-icon">✓</span><div>Report on file — finalized ${diagFormatDate(d.report_finalized_at)}. <a href="${d.report_pdf_url}" target="_blank" style="color:var(--d-green);font-weight:700;">View PDF</a> — upload a new file below to replace it.</div></div>` : ''}
+    <div id="upload-report-msg" style="font-size:12px;margin-bottom:8px;display:none;"></div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <label style="display:inline-flex;align-items:center;gap:8px;padding:9px 18px;background:var(--d-light);border:1.5px solid var(--d-border);border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;color:var(--d-dark);">
+        Choose PDF
+        <input type="file" id="finalReportFile" accept=".pdf" style="display:none;" onchange="previewFinalReport(this)">
+      </label>
+      <span id="finalReportFilename" style="font-size:12px;color:var(--d-mid);">No file selected</span>
+      <button class="dbtn dbtn-primary" id="finalReportSaveBtn" style="display:none;" onclick="uploadFinalReport()">Upload &amp; Finalize Report</button>
     </div>
-    <div style="display:flex;gap:8px;">
-      <button class="dbtn dbtn-outline dbtn-sm" onclick="savePlanContent()">Save Plan</button>
-      ${d.debrief_completed_at && d.plan_status !== 'locked'
-        ? `<button class="dbtn dbtn-gold dbtn-sm" onclick="lockPlan()">Lock Plan (Manual)</button>` : ''}
-      ${d.plan_status === 'locked' ? `<span style="font-size:12px;color:var(--d-green);">✓ Plan locked ${diagFormatDate(d.plan_locked_at)}</span>` : ''}
-    </div>
-    <div class="dhint" style="margin-top:6px;">Plan auto-locks 24 hours after debrief is marked complete.</div>
   </div>`;
 }
 
@@ -5697,8 +5697,65 @@ async function lockPlan() {
 }
 
 async function savePlanContent() {
-  const val = document.getElementById('plan-content-field').value;
-  await updateDiag({ plan_draft_content: val });
+  const val = document.getElementById('plan-content-field') ? document.getElementById('plan-content-field').value : '';
+  if (val !== '') await updateDiag({ plan_draft_content: val });
+}
+
+// ── PDF Report Upload ─────────────────────────────────────────────────────────
+let _finalReportFile = null;
+
+function previewFinalReport(input) {
+  const file = input.files[0];
+  const nameEl  = document.getElementById('finalReportFilename');
+  const saveBtn = document.getElementById('finalReportSaveBtn');
+  const msg     = document.getElementById('upload-report-msg');
+  if (!file) return;
+  if (file.size > 30 * 1024 * 1024) {
+    if (nameEl) nameEl.textContent = 'File too large — max 30 MB.';
+    if (saveBtn) saveBtn.style.display = 'none';
+    _finalReportFile = null;
+    return;
+  }
+  _finalReportFile = file;
+  if (nameEl) nameEl.textContent = file.name + ' (' + (file.size / 1024 / 1024).toFixed(1) + ' MB)';
+  if (msg) { msg.style.display = 'none'; msg.textContent = ''; }
+  if (saveBtn) saveBtn.style.display = 'inline-flex';
+}
+
+async function uploadFinalReport() {
+  if (!_finalReportFile || !DIAG_SEL) return;
+  const btn = document.getElementById('finalReportSaveBtn');
+  const msg = document.getElementById('upload-report-msg');
+  if (btn) { btn.disabled = true; btn.textContent = 'Uploading...'; }
+  if (msg) { msg.style.display = 'none'; }
+
+  const path = DIAG_SEL.id + '/report.pdf';
+  const { error: upErr } = await db.storage
+    .from('diagnostic-reports')
+    .upload(path, _finalReportFile, { contentType: 'application/pdf', upsert: true });
+
+  if (upErr) {
+    if (msg) { msg.style.display = 'block'; msg.style.color = 'var(--d-red)'; msg.textContent = 'Upload failed: ' + upErr.message; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Upload & Finalize Report'; }
+    return;
+  }
+
+  const { data: urlData } = db.storage.from('diagnostic-reports').getPublicUrl(path);
+  const pdfUrl = urlData.publicUrl;
+  const now = new Date().toISOString();
+
+  await updateDiag({ report_pdf_url: pdfUrl, report_finalized_at: now, status: 'report_final' });
+
+  if (DIAG_SEL.client_id) {
+    await db.from('clients').update({ diagnostic_report_url: pdfUrl }).eq('id', DIAG_SEL.client_id);
+  }
+
+  _finalReportFile = null;
+  if (msg) { msg.style.display = 'block'; msg.style.color = 'var(--d-green)'; msg.textContent = 'Report uploaded and finalized. Client can view it in their portal now.'; }
+  if (btn) { btn.disabled = false; btn.style.display = 'none'; }
+  const nameEl = document.getElementById('finalReportFilename');
+  if (nameEl) nameEl.textContent = 'No file selected';
+  await refreshSelected();
 }
 
 async function saveIntakeNotes(val) {

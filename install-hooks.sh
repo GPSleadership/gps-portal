@@ -34,14 +34,45 @@ bash "$CHECK_SCRIPT"
 exit $?
 HOOK
 
+# Write the pre-commit hook — catches escaped backtick bugs before they're even committed
+cat > "$HOOKS_DIR/pre-commit" << 'HOOK'
+#!/bin/bash
+# GPS Portal pre-commit hook — blocks commits with escaped backtick (\\`) syntax errors
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT" || exit 1
+
+ERRORS=0
+for f in coach.html client.html diagnostic-leader.html; do
+  [ -f "$f" ] || continue
+  COUNT=$(python3 -c "
+with open('$f', 'r', encoding='utf-8') as fh:
+    c = fh.read()
+print(c.count(chr(92) + chr(96)))
+" 2>/dev/null)
+  if [ "$COUNT" -gt "0" ]; then
+    echo "  ✗ pre-commit blocked: $f contains $COUNT escaped backtick(s) — JS syntax error"
+    echo "    Search for \\\\\` in the file and replace with plain backtick inside template expressions."
+    ERRORS=$((ERRORS + 1))
+  fi
+done
+
+if [ "$ERRORS" -gt "0" ]; then
+  echo ""
+  echo "  Commit blocked. Fix the escaped backtick(s) above before committing."
+  exit 1
+fi
+exit 0
+HOOK
+
 chmod +x "$HOOKS_DIR/pre-push"
+chmod +x "$HOOKS_DIR/pre-commit"
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  Git hooks installed."
 echo ""
-echo "  Every 'git push' now runs check.sh"
-echo "  automatically. Push blocked if checks"
-echo "  fail. Nothing else changes."
+echo "  pre-commit: blocks escaped backtick bugs"
+echo "  pre-push:   runs full check.sh validation"
+echo "  Both hooks block if checks fail."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
