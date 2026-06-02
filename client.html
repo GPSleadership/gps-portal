@@ -3124,6 +3124,60 @@ function wizRenderStep(step) {
 }
 
 // ── Escape helper ──────────────────────────────────────────────────────────
+// ── Inline goal prefill (fires as user types in goal90 field) ────────────────
+let _wizGoal90Timer = null;
+let _wizGoal90LastFired = '';
+
+function wizGoal90Typed() {
+  // Only fire for new clients without diagnostic prefill, and not in edit mode
+  if (wizIsEdit || wizPlan.hasDiag) return;
+  clearTimeout(_wizGoal90Timer);
+  _wizGoal90Timer = setTimeout(wizGoal90TriggerPrefill, 1200);
+}
+
+async function wizGoal90TriggerPrefill() {
+  const goalEl   = document.getElementById('wizGoal90');
+  const statusEl = document.getElementById('wizGoal90Status');
+  const goal30El = document.getElementById('wizGoal30');
+  const hint30El = document.getElementById('wizGoal30Hint');
+  if (!goalEl) return;
+
+  const goal = goalEl.value.trim();
+  const words = goal.split(/\s+/).filter(Boolean).length;
+  if (words < 8 || goal === _wizGoal90LastFired) return;
+  _wizGoal90LastFired = goal;
+
+  if (statusEl) statusEl.textContent = '✦ Generating suggestions…';
+
+  try {
+    const resp = await fetch('/api/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'prefill', goal90: goal, goal30: (goal30El?.value || '').trim(), pillar: wizPlan.pillar || '' })
+    });
+    const data = await resp.json();
+    const pf = data?.prefill || {};
+
+    // Fill 30-day goal directly in the DOM if the field is still blank
+    if (pf.goal30 && goal30El && !goal30El.value.trim()) {
+      goal30El.value = pf.goal30;
+      wizPlan.goal30 = pf.goal30;
+      if (hint30El) hint30El.textContent = '✦ Suggested based on your goal — edit as needed';
+    }
+
+    // Store the rest in wizPlan for later steps
+    if (pf.behavior1)       wizPlan.behavior1 = pf.behavior1;
+    if (pf.behavior2)       wizPlan.behavior2 = pf.behavior2;
+    if (pf.metric1Name)     wizPlan.metric1 = { ...(wizPlan.metric1||{}), name: pf.metric1Name };
+    if (pf.metric2Question) wizPlan.metric2 = { ...(wizPlan.metric2||{}), question: pf.metric2Question };
+    wizPlan.aiPrefilled = true;
+
+    if (statusEl) statusEl.textContent = pf.goal30 ? '✦ 30-day goal suggested below — edit as needed' : '';
+  } catch(e) {
+    if (statusEl) statusEl.textContent = '';
+  }
+}
+
 function wizSetEditChoice(choice) {
   wizEditChoice = choice;
   const c = wizEditClientSnapshot;
@@ -3299,15 +3353,16 @@ function wizS2() {
       <div class="form-group">
         <label>90-Day Goal <span style="color:var(--red)">*</span></label>
         <div class="hint">First person. Specific behavior change. Written as if day 90 has arrived.</div>
-        <textarea id="wizGoal90" rows="3">${wizEsc(wizPlan.goal90)}</textarea>
+        <textarea id="wizGoal90" rows="3" oninput="wizGoal90Typed()" ${!wizIsEdit && !wizPlan.hasDiag ? '' : ''}>${wizEsc(wizPlan.goal90)}</textarea>
         ${hasPre && wizPlan.goal90 ? '<div class="wiz-prefilled">✦ Pre-filled from your diagnostic</div>' : ''}
+        <div id="wizGoal90Status" style="font-size:11px;color:var(--teal);font-weight:600;margin-top:5px;min-height:16px;"></div>
       </div>
       <div style="height:1px;background:var(--gray-200);margin:16px 0;"></div>
       <div class="form-group">
         <label>30-Day Goal <span style="color:var(--red)">*</span></label>
         <div class="hint">What specific, observable progress will you point to at day 30? Not a feeling — a fact.</div>
         <textarea id="wizGoal30" rows="3">${wizEsc(wizPlan.goal30)}</textarea>
-        ${hasPre && wizPlan.goal30 ? '<div class="wiz-prefilled">✦ Pre-filled working backwards from your 90-day goal</div>' : ''}
+        <div id="wizGoal30Hint" style="font-size:11px;color:var(--teal);font-weight:600;margin-top:5px;min-height:16px;">${wizPlan.aiPrefilled && wizPlan.goal30 ? '✦ Suggested based on your goal — edit as needed' : (hasPre && wizPlan.goal30 ? '✦ Pre-filled working backwards from your 90-day goal' : '')}</div>
       </div>
       <div class="form-group">
         <label>Plan Start Date <span style="color:var(--red)">*</span></label>
@@ -3652,40 +3707,6 @@ function wizValidate(step) {
 async function wizNext() {
   if (!wizValidate(wizStep)) return;
   if (wizStep === 7) { wizLockIn(); return; }
-
-  // ── Goal prefill: trigger on Goals step → Metrics step ─────────────────
-  // Only runs when: not edit mode, no diagnostic prefill already, goal is substantial, not already AI-prefilled
-  if (wizStep === 2 && !wizIsEdit && !wizPlan.hasDiag && !wizPlan.aiPrefilled) {
-    const goal = (wizPlan.goal90 || '').trim();
-    const wordCount = goal.split(/\s+/).filter(Boolean).length;
-    if (wordCount >= 20) {
-      const btn = document.getElementById('wizBtnNext');
-      btn.disabled = true;
-      btn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:8px;"><span style="width:14px;height:14px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;display:inline-block;animation:spin .7s linear infinite;"></span>Generating suggestions…</span>';
-
-      try {
-        const resp = await fetch('/api/ask', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'prefill', goal90: wizPlan.goal90, goal30: wizPlan.goal30 || '', pillar: wizPlan.pillar || '' })
-        });
-        const data = await resp.json();
-        const pf = data?.prefill || {};
-
-        if (pf.behavior1)     wizPlan.behavior1 = pf.behavior1;
-        if (pf.behavior2)     wizPlan.behavior2 = pf.behavior2;
-        if (pf.metric1Name)   wizPlan.metric1 = { ...wizPlan.metric1, name: pf.metric1Name };
-        if (pf.metric2Question) wizPlan.metric2 = { ...wizPlan.metric2, question: pf.metric2Question };
-        if (pf.goal30 && !wizPlan.goal30) wizPlan.goal30 = pf.goal30;
-        wizPlan.aiPrefilled = true;
-      } catch(e) {
-        // Prefill failed silently — user just gets blank fields
-      }
-
-      btn.disabled = false;
-      btn.innerHTML = 'Continue &rarr;';
-    }
-  }
 
   wizStep++;
   wizRender();
