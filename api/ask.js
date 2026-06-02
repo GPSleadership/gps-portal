@@ -17,6 +17,52 @@ export default async function handler(req, res) {
   }
 
   try {
+    // ── Wizard goal-prefill route ──────────────────────────────────────────
+    if (req.body.action === 'prefill') {
+      const { goal90, goal30, pillar } = req.body;
+      if (!goal90) return res.status(400).json({ error: 'goal90 required' });
+
+      const prefillPrompt = `You are helping a leader build a 90-day leadership development plan.
+
+Focus pillar: ${pillar || 'not specified'}
+90-day goal: ${goal90}
+30-day goal: ${goal30 || '(not provided)'}
+
+Generate concrete, specific suggestions. Return ONLY valid JSON — no markdown, no explanation.
+
+{
+  "behavior1": "A specific observable behavior they should start or increase, written as an action statement",
+  "behavior2": "A second distinct behavior from a different angle than behavior1",
+  "metric1Name": "Count-based metric phrased as '# of times I [specific behavior] this week' — tied directly to behavior1",
+  "metric2Question": "A stakeholder perception question rated 1-10, e.g. 'On a scale of 1-10, to what degree does [Name] delegate decisions to the right level?'",
+  "goal30": "A concrete 30-day checkpoint — a specific observable fact proving early progress. Use empty string if the provided 30-day goal is already solid."
+}`;
+
+      const prefillResp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': process.env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 600,
+          messages: [{ role: 'user', content: prefillPrompt }]
+        })
+      });
+
+      const prefillData = await prefillResp.json();
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      const raw = prefillData?.content?.[0]?.text || '{}';
+      const jsonStr = raw.replace(/^```json?\n?/,'').replace(/\n?```$/,'').trim();
+      try {
+        return res.status(200).json({ prefill: JSON.parse(jsonStr) });
+      } catch {
+        return res.status(200).json({ prefill: {} });
+      }
+    }
+
     const { messages, system, token } = req.body;
 
     // ── Call Anthropic ──────────────────────────────────────────────────────

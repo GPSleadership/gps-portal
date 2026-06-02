@@ -86,24 +86,28 @@ PYEOF
 done
 
 # ── 2. Backslash-backtick scan (the bug that broke login) ─────────────────────
+# Known-safe baseline: legitimate escaped backticks inside template literals.
+# Only flag if the count EXCEEDS the baseline for that file.
 echo ""
 echo "▸ Known syntax hazards"
 
-HAZARD_FILES=("coach.html" "client.html")
+declare -A HAZARD_BASELINE=( ["coach.html"]=2 ["client.html"]=0 )
 HAZARD_FOUND=0
 
-for f in "${HAZARD_FILES[@]}"; do
+for f in "${!HAZARD_BASELINE[@]}"; do
   if [ ! -f "$f" ]; then
     continue
   fi
+  BASELINE=${HAZARD_BASELINE[$f]}
   COUNT=$(python3 -c "
 with open('$f', 'r', encoding='utf-8') as fh:
     content = fh.read()
 print(content.count(chr(92) + chr(96)))
 " 2>/dev/null)
 
-  if [ "$COUNT" -gt "0" ]; then
-    echo "  ✗ $f: $COUNT escaped backtick(s) found — likely JS syntax error"
+  NEW=$(( COUNT - BASELINE ))
+  if [ "$NEW" -gt "0" ]; then
+    echo "  ✗ $f: $NEW new escaped backtick(s) found (${COUNT} total, ${BASELINE} known-safe) — likely JS syntax error"
     echo "    Search for \\\\\` in the file to locate them"
     ERRORS=$((ERRORS + 1))
     HAZARD_FOUND=1

@@ -2974,6 +2974,8 @@ let wizPlan = {};
 let wizClientId = '';
 let wizClientName = '';
 let wizIsEdit = false;
+let wizEditChoice = 'keep'; // 'keep' | 'fresh' — set on the welcome screen in edit mode
+let wizEditClientSnapshot = {}; // original client data, saved so we can restore if they switch back to 'keep'
 
 const WIZ_STEPS = [
   { id:0, label:'Welcome'   },
@@ -2991,6 +2993,9 @@ function initWizard(client) {
   wizClientId   = client.id;
   wizClientName = client.name || '';
   wizIsEdit     = !!(client.plan_submitted_at && client.allow_plan_edit);
+  wizEditChoice = 'keep'; // default: keep existing answers
+  // Save a snapshot of client data so we can restore pre-fills if they switch from 'fresh' back to 'keep'
+  if (wizIsEdit) wizEditClientSnapshot = { ...client };
 
   const p      = client.diagnostic_prefill || null;
   const scores = p ? p.scores : null;
@@ -3080,6 +3085,38 @@ function wizRenderStep(step) {
 }
 
 // ── Escape helper ──────────────────────────────────────────────────────────
+function wizSetEditChoice(choice) {
+  wizEditChoice = choice;
+  const c = wizEditClientSnapshot;
+  if (choice === 'fresh') {
+    // Clear all plan fields so every step starts blank
+    wizPlan.pillar     = '';
+    wizPlan.goal90     = '';
+    wizPlan.goal30     = '';
+    wizPlan.behavior1  = '';
+    wizPlan.behavior2  = '';
+    wizPlan.metric1    = { name:'', baseline:'', target:'' };
+    wizPlan.metric2    = { question:'', targetAvg:4.0 };
+    wizPlan.stakeholders = [];
+    wizPlan.reward30   = '';
+    wizPlan.reward90   = '';
+  } else {
+    // Restore pre-fills from the saved client snapshot
+    wizPlan.pillar     = c.tp3_pillar || '';
+    wizPlan.goal90     = c.goal_statement || '';
+    wizPlan.goal30     = c.goal_30_day || '';
+    wizPlan.behavior1  = c.behavior_1 || c.start_behavior || '';
+    wizPlan.behavior2  = c.behavior_2 || '';
+    wizPlan.metric1    = { name: c.metric_1_name || c.metric_name || '', baseline: c.metric_1_baseline ?? c.metric_baseline ?? '', target: c.metric_1_target ?? c.metric_target ?? '' };
+    wizPlan.metric2    = { question: c.metric_2_question || '', targetAvg: c.metric_2_target_avg ?? 4.0 };
+    wizPlan.stakeholders = [];
+    wizPlan.reward30   = c.reward_30_day || '';
+    wizPlan.reward90   = c.reward_90_day || '';
+  }
+  // Re-render welcome step so choice cards update visually
+  document.getElementById('wizStepBody').innerHTML = wizS0();
+}
+
 function wizEsc(v) {
   return (v||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
@@ -3116,6 +3153,25 @@ function wizS0() {
       ).join('')}
     </div>` : '';
 
+  const editChoiceHtml = wizIsEdit ? `
+    <div style="margin-bottom:16px;">
+      <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:10px;">How do you want to start?</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div id="wizEditChoiceKeep"
+          onclick="wizSetEditChoice('keep')"
+          style="cursor:pointer;padding:14px 16px;border-radius:8px;border:2px solid ${wizEditChoice==='keep'?'var(--teal)':'var(--gray-300)'};background:${wizEditChoice==='keep'?'#E8F7F7':'#fff'};transition:all .15s;">
+          <div style="font-size:14px;font-weight:700;color:var(--navy);margin-bottom:4px;">✓ Keep my answers</div>
+          <div style="font-size:12px;color:var(--gray-600);line-height:1.5;">Pre-fills every step with what you already submitted. Only edit what's changing.</div>
+        </div>
+        <div id="wizEditChoiceFresh"
+          onclick="wizSetEditChoice('fresh')"
+          style="cursor:pointer;padding:14px 16px;border-radius:8px;border:2px solid ${wizEditChoice==='fresh'?'var(--red)':'var(--gray-300)'};background:${wizEditChoice==='fresh'?'#FFF0F3':'#fff'};transition:all .15s;">
+          <div style="font-size:14px;font-weight:700;color:var(--navy);margin-bottom:4px;">↺ Start fresh</div>
+          <div style="font-size:12px;color:var(--gray-600);line-height:1.5;">Clears everything so you can rebuild your plan from scratch.</div>
+        </div>
+      </div>
+    </div>` : '';
+
   return `
     <div class="card navy-top">
       <div class="wiz-step-badge">${wizIsEdit ? 'Editing Your Plan' : 'Welcome'}</div>
@@ -3130,10 +3186,11 @@ function wizS0() {
     </div>
     <div class="card">
       ${scoreHtml}
-      ${hasDiag ? `<div class="card-title" style="font-size:14px;margin-bottom:12px;">What\'s Pre-Built For You</div>${prefillList}` : ''}
-      <div style="background:#fff8ec;border:1px solid #fcd88a;border-radius:8px;padding:12px 14px;font-size:13px;color:#1a1a1a;line-height:1.6;">
-        <strong>${hasDiag ? 'Every field is editable.' : 'All fields start blank.'}</strong> ${wizIsEdit ? 'Update anything that needs to change.' : (hasDiag ? 'Your coach has reviewed the draft. This takes about 10 minutes.' : 'Pull out notes from your debrief conversation. This takes about 10 minutes.')}
-      </div>
+      ${hasDiag && !wizIsEdit ? `<div class="card-title" style="font-size:14px;margin-bottom:12px;">What\'s Pre-Built For You</div>${prefillList}` : ''}
+      ${editChoiceHtml}
+      ${!wizIsEdit ? `<div style="background:#fff8ec;border:1px solid #fcd88a;border-radius:8px;padding:12px 14px;font-size:13px;color:#1a1a1a;line-height:1.6;">
+        <strong>${hasDiag ? 'Every field is editable.' : 'All fields start blank.'}</strong> ${hasDiag ? 'Your coach has reviewed the draft. This takes about 10 minutes.' : 'Pull out notes from your debrief conversation. This takes about 10 minutes.'}
+      </div>` : ''}
       ${!wizIsEdit ? `
       <div class="form-group" style="margin-top:16px;margin-bottom:0;">
         <label>Your Time Zone</label>
@@ -3240,7 +3297,7 @@ function wizS3() {
         <label>What you\'re counting <span style="color:var(--red)">*</span></label>
         <div class="hint">Phrase it as "# of times I did [behavior] this week."</div>
         <input type="text" id="wizM1Name" value="${wizEsc(m1.name)}" placeholder="e.g. # of times I asked for options before giving my view" />
-        ${m1.name && wizPlan.hasDiag ? '<div class="wiz-prefilled">✦ Pre-filled from Behavior 1</div>' : ''}
+        ${m1.name && wizPlan.hasDiag ? '<div class="wiz-prefilled">✦ Pre-filled from your diagnostic</div>' : (m1.name && wizPlan.aiPrefilled ? '<div class="wiz-prefilled">✦ Suggested based on your goal — edit as needed</div>' : '')}
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -3265,7 +3322,7 @@ function wizS3() {
         <label>Survey Question <span style="color:var(--red)">*</span></label>
         <div class="hint">Write from your stakeholder\'s point of view. Answerable on a 1–5 agreement scale. Scores of 4 or 5 = meets the bar.</div>
         <textarea id="wizM2Q" rows="2">${wizEsc(m2.question)}</textarea>
-        ${m2.question && wizPlan.hasDiag ? '<div class="wiz-prefilled">✦ Pre-filled based on your pillar and behavior</div>' : ''}
+        ${m2.question && wizPlan.hasDiag ? '<div class="wiz-prefilled">✦ Pre-filled based on your pillar and behavior</div>' : (m2.question && wizPlan.aiPrefilled ? '<div class="wiz-prefilled">✦ Suggested based on your goal — edit as needed</div>' : '')}
       </div>
       <div class="form-group">
         <label>Target Average Score</label>
@@ -3294,14 +3351,14 @@ function wizS4() {
       <div class="form-group">
         <label>Behavior 1 — Required <span style="color:var(--red)">*</span></label>
         <textarea id="wizB1" rows="3">${wizEsc(wizPlan.behavior1)}</textarea>
-        ${wizPlan.behavior1 && wizPlan.hasDiag ? '<div class="wiz-prefilled">✦ Pre-filled from your diagnostic — edit to make it yours</div>' : ''}
+        ${wizPlan.behavior1 && wizPlan.hasDiag ? '<div class="wiz-prefilled">✦ Pre-filled from your diagnostic — edit to make it yours</div>' : (wizPlan.behavior1 && wizPlan.aiPrefilled ? '<div class="wiz-prefilled">✦ Suggested based on your goal — edit to make it yours</div>' : '')}
       </div>
       <div style="height:1px;background:var(--gray-200);margin:14px 0;"></div>
       <div class="form-group" style="margin-bottom:0;">
         <label>Behavior 2 — Optional</label>
         <div class="hint">A second behavior that supports the same objective. Leave blank to keep the focus tight.</div>
         <textarea id="wizB2" rows="2">${wizEsc(wizPlan.behavior2)}</textarea>
-        ${wizPlan.behavior2 && wizPlan.hasDiag ? '<div class="wiz-prefilled">✦ Pre-filled — delete if not relevant</div>' : ''}
+        ${wizPlan.behavior2 && wizPlan.hasDiag ? '<div class="wiz-prefilled">✦ Pre-filled — delete if not relevant</div>' : (wizPlan.behavior2 && wizPlan.aiPrefilled ? '<div class="wiz-prefilled">✦ Suggested — delete if not relevant</div>' : '')}
       </div>
     </div>`;
 }
@@ -3553,9 +3610,44 @@ function wizValidate(step) {
 }
 
 // ── Navigation ─────────────────────────────────────────────────────────────
-function wizNext() {
+async function wizNext() {
   if (!wizValidate(wizStep)) return;
   if (wizStep === 7) { wizLockIn(); return; }
+
+  // ── Goal prefill: trigger on Goals step → Metrics step ─────────────────
+  // Only runs when: not edit mode, no diagnostic prefill already, goal is substantial, not already AI-prefilled
+  if (wizStep === 2 && !wizIsEdit && !wizPlan.hasDiag && !wizPlan.aiPrefilled) {
+    const goal = (wizPlan.goal90 || '').trim();
+    const wordCount = goal.split(/\s+/).filter(Boolean).length;
+    if (wordCount >= 20) {
+      const btn = document.getElementById('wizBtnNext');
+      btn.disabled = true;
+      btn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:8px;"><span style="width:14px;height:14px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;display:inline-block;animation:spin .7s linear infinite;"></span>Generating suggestions…</span>';
+
+      try {
+        const resp = await fetch('/api/ask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'prefill', goal90: wizPlan.goal90, goal30: wizPlan.goal30 || '', pillar: wizPlan.pillar || '' })
+        });
+        const data = await resp.json();
+        const pf = data?.prefill || {};
+
+        if (pf.behavior1)     wizPlan.behavior1 = pf.behavior1;
+        if (pf.behavior2)     wizPlan.behavior2 = pf.behavior2;
+        if (pf.metric1Name)   wizPlan.metric1 = { ...wizPlan.metric1, name: pf.metric1Name };
+        if (pf.metric2Question) wizPlan.metric2 = { ...wizPlan.metric2, question: pf.metric2Question };
+        if (pf.goal30 && !wizPlan.goal30) wizPlan.goal30 = pf.goal30;
+        wizPlan.aiPrefilled = true;
+      } catch(e) {
+        // Prefill failed silently — user just gets blank fields
+      }
+
+      btn.disabled = false;
+      btn.innerHTML = 'Continue &rarr;';
+    }
+  }
+
   wizStep++;
   wizRender();
 }
