@@ -1374,6 +1374,39 @@
     }
     .qa-new-btn.v { display: inline-flex; }
     .qa-new-btn:hover { border-color: var(--teal); color: var(--navy); }
+
+    /* ── Ask Alex History ── */
+    .qa-hist-section { margin-bottom: 18px; }
+    .qa-hist-heading {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .06em; color: var(--gray-600); margin-bottom: 8px;
+    }
+    .qa-hist-item {
+      border: 1px solid var(--gray-300); border-radius: 8px;
+      margin-bottom: 6px; overflow: hidden; background: #fff;
+    }
+    .qa-hist-q {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 10px; padding: 10px 13px; cursor: pointer;
+      font-size: 13px; color: var(--navy); font-weight: 600;
+      transition: background .12s;
+    }
+    .qa-hist-q:hover { background: var(--light-sand); }
+    .qa-hist-q-text { flex: 1; line-height: 1.4; }
+    .qa-hist-toggle { font-size: 10px; color: var(--gray-600); flex-shrink: 0; transition: transform .2s; }
+    .qa-hist-a {
+      padding: 12px 14px 10px; border-top: 1px solid var(--gray-200);
+      background: #fafafa; font-size: 13px; color: var(--text); line-height: 1.7;
+      white-space: pre-wrap;
+    }
+    .qa-hist-copy {
+      display: inline-block; margin-top: 10px; padding: 5px 14px;
+      background: transparent; border: 1px solid var(--gray-300);
+      border-radius: 6px; font-size: 11px; font-weight: 700;
+      color: var(--gray-600); cursor: pointer; font-family: 'Open Sans', sans-serif;
+      transition: all .15s;
+    }
+    .qa-hist-copy:hover { border-color: var(--teal); color: var(--navy); }
     .qa-typing { display: none; padding: 8px 0; }
     .qa-typing.v { display: flex; align-items: center; gap: 10px; }
     .qa-ld { display: flex; gap: 5px; }
@@ -2154,6 +2187,12 @@
       <h3>You've reached today's limit.</h3>
       <p>You've asked 20 questions today — that's a lot of good thinking. Your questions reset tomorrow. In the meantime, <a href="mailto:alex@gpsleadership.org">reach out to Alex directly</a>.</p>
     </div>
+    <!-- ── Recent Questions History ── -->
+    <div class="qa-hist-section" id="qa-hist-section" style="display:none;">
+      <div class="qa-hist-heading">Recent Questions</div>
+      <div id="qa-hist-list"></div>
+    </div>
+
     <div class="qa-pl" id="qa-pl">Try one of these</div>
     <div class="qa-chips" id="qa-chips">
       <div class="qa-chip">My drivers and dispatchers don't trust each other. Where do I start?</div>
@@ -4967,6 +5006,66 @@ async function sendRecoveryLink() {
 // Must match CURRENT_TERMS_VERSION in api/accept-terms.js.
 const CURRENT_TERMS_VERSION = 'v1.0';
 
+// ── Ask Alex: load recent question history from ask_alex_log ─────────────────
+let qaHistoryLoaded = false;
+
+async function loadAskAlexHistory() {
+  const section = document.getElementById('qa-hist-section');
+  const list    = document.getElementById('qa-hist-list');
+  if (!section || !list || !currentClient) return;
+
+  list.innerHTML = '<div style="font-size:12px;color:var(--gray-600);padding:6px 0;">Loading…</div>';
+  section.style.display = 'block';
+
+  const { data, error } = await db
+    .from('ask_alex_log')
+    .select('id, asked_at, question_text, response_text')
+    .eq('client_id', currentClient.id)
+    .order('asked_at', { ascending: false })
+    .limit(7);
+
+  if (error || !data || data.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  list.innerHTML = data.map((entry, i) => {
+    const q = (entry.question_text || '').trim();
+    const a = (entry.response_text || '').trim();
+    const qShort = q.length > 110 ? q.substring(0, 110) + '…' : q;
+    return `<div class="qa-hist-item">
+      <div class="qa-hist-q" onclick="toggleHistItem(${i})">
+        <span class="qa-hist-q-text">${wizEsc(qShort)}</span>
+        <span class="qa-hist-toggle" id="qahi-toggle-${i}">▼</span>
+      </div>
+      <div class="qa-hist-a" id="qahi-a-${i}" style="display:none;">
+        <div class="qa-hist-a-text" id="qahi-atext-${i}">${wizEsc(a)}</div>
+        <button class="qa-hist-copy" onclick="copyHistItem(${i}, this)">Copy answer</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  qaHistoryLoaded = true;
+}
+
+function toggleHistItem(i) {
+  const a = document.getElementById('qahi-a-' + i);
+  const t = document.getElementById('qahi-toggle-' + i);
+  if (!a) return;
+  const isOpen = a.style.display !== 'none';
+  a.style.display = isOpen ? 'none' : 'block';
+  if (t) t.textContent = isOpen ? '▼' : '▲';
+}
+
+function copyHistItem(i, btn) {
+  const el = document.getElementById('qahi-atext-' + i);
+  if (!el) return;
+  navigator.clipboard.writeText(el.textContent || '').then(() => {
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = 'Copy answer'; }, 2000);
+  }).catch(() => {});
+}
+
 function showPortalTab(tab) {
   const mainContent   = document.getElementById('mainContent');
   const qaPanel       = document.getElementById('qaPanel');
@@ -5007,6 +5106,8 @@ function showPortalTab(tab) {
       return; // don't switch tabs yet — modal handles it
     }
     activateQATab();
+    // Load recent Q&A history (refresh each time tab is opened)
+    loadAskAlexHistory();
     // If a nudge question was queued (user accepted terms after prompt), send it
     if (window._pendingNudgeQuestion) {
       const q = window._pendingNudgeQuestion;
@@ -5734,6 +5835,8 @@ async function qaSend() {
     if (qaHistory.length > 8) qaHistory = qaHistory.slice(-8);
 
     typing.classList.remove('v');
+    // Refresh history panel so the new Q&A shows up immediately
+    setTimeout(loadAskAlexHistory, 800);
     if (parsed) {
       qaAppendAlexMsg(parsed, q);
     } else {
