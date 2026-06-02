@@ -3129,8 +3129,8 @@ let _wizGoal90Timer = null;
 let _wizGoal90LastFired = '';
 
 function wizGoal90Typed() {
-  // Only fire for new clients without diagnostic prefill, and not in edit mode
-  if (wizIsEdit || wizPlan.hasDiag) return;
+  // Don't fire if diagnostic already pre-filled everything
+  if (wizPlan.hasDiag) return;
   clearTimeout(_wizGoal90Timer);
   _wizGoal90Timer = setTimeout(wizGoal90TriggerPrefill, 1200);
 }
