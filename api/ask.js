@@ -22,7 +22,7 @@ export default async function handler(req, res) {
       const { goal90, goal30, pillar } = req.body;
       if (!goal90) return res.status(400).json({ error: 'goal90 required' });
 
-      const prefillPrompt = `You are helping a leader build a 90-day leadership development plan.
+      const prefillPrompt = `You are helping a leader build a 90-day leadership development plan. All suggestions must be written in FIRST PERSON using "I" — never "you" or "they".
 
 Focus pillar: ${pillar || 'not specified'}
 90-day goal: ${goal90}
@@ -31,11 +31,11 @@ Focus pillar: ${pillar || 'not specified'}
 Generate concrete, specific suggestions. Return ONLY valid JSON — no markdown, no explanation.
 
 {
-  "behavior1": "A specific observable behavior they should start or increase, written as an action statement",
-  "behavior2": "A second distinct behavior from a different angle than behavior1",
-  "metric1Name": "Count-based metric phrased as '# of times I [specific behavior] this week' — tied directly to behavior1",
+  "behavior1": "First-person action statement, e.g. 'I will hold weekly 1:1s where I ask for solutions before offering mine'",
+  "behavior2": "A second distinct first-person behavior, different domain from behavior1",
+  "metric1Name": "Count-based metric: '# of times I [specific behavior] this week' — tied directly to behavior1",
   "metric2Question": "A stakeholder perception question rated 1-10, e.g. 'On a scale of 1-10, to what degree does [Name] delegate decisions to the right level?'",
-  "goal30": "A concrete 30-day checkpoint — a specific observable fact proving early progress. Use empty string if the provided 30-day goal is already solid."
+  "goal30": "First-person 30-day checkpoint starting with 'By day 30, I will have...' — a specific observable fact proving early progress. Use empty string if the provided 30-day goal is already solid."
 }`;
 
       const prefillResp = await fetch('https://api.anthropic.com/v1/messages', {
