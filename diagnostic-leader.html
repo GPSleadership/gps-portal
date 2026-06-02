@@ -199,20 +199,35 @@ input:focus,select:focus{outline:none;border-color:var(--blue);}
         </div>
         <div class="form-group" style="margin-bottom:0;">
           <label>Relationship</label>
-          <select id="add-rel">
+          <select id="add-rel" onchange="toggleAddRelOther()">
             <option value="">Select…</option>
             <option>Direct Report</option>
             <option>Peer</option>
-            <option>Supervisor</option>
-            <option>Internal Partner</option>
-            <option>External Partner</option>
-            <option>Board / Investor</option>
-            <option>Key Customer</option>
+            <option>Supervisor / Manager</option>
+            <option>Board Member</option>
+            <option>Internal Customer</option>
+            <option>External Customer</option>
+            <option>External Stakeholder</option>
+            <option>Other</option>
           </select>
         </div>
         <div style="padding-bottom:0;">
           <button class="btn btn-primary" style="height:42px;white-space:nowrap;" onclick="addRater()">Add</button>
         </div>
+      </div>
+      <div id="add-rel-other-wrap" style="display:none;margin-top:8px;">
+        <input id="add-rel-other" type="text" placeholder="Describe the relationship (e.g. Board Advisor, Major Account Client…)"
+          style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:6px;font-size:14px;font-family:inherit;">
+      </div>
+      <div style="margin-top:10px;padding:10px 14px;background:#F7F4EE;border-radius:6px;font-size:11px;color:#555;line-height:1.7;">
+        <strong>Direct Report</strong> = someone you manage day-to-day &nbsp;·&nbsp;
+        <strong>Peer</strong> = same level, different team or function &nbsp;·&nbsp;
+        <strong>Supervisor / Manager</strong> = your direct boss or a senior leader above you &nbsp;·&nbsp;
+        <strong>Board Member</strong> = sits on your organization's board &nbsp;·&nbsp;
+        <strong>Internal Customer</strong> = a colleague or department that depends on your team's output &nbsp;·&nbsp;
+        <strong>External Customer</strong> = a client or end-user outside your organization &nbsp;·&nbsp;
+        <strong>External Stakeholder</strong> = a partner, vendor, regulator, or community member outside your org &nbsp;·&nbsp;
+        <strong>Other</strong> = describe in the field above
       </div>
       <div id="add-rater-msg" style="margin-top:10px;font-size:12px;color:var(--red);"></div>
     </div>
@@ -697,13 +712,26 @@ async function submitRaterList() {
 // ─────────────────────────────────────────────────────────────────────────────
 //  ADD RATER
 // ─────────────────────────────────────────────────────────────────────────────
-async function addRater() {
-  const name  = document.getElementById('add-name').value.trim();
-  const email = document.getElementById('add-email').value.trim();
-  const rel   = document.getElementById('add-rel').value;
-  const msgEl = document.getElementById('add-rater-msg');
+function toggleAddRelOther() {
+  const sel  = document.getElementById('add-rel');
+  const wrap = document.getElementById('add-rel-other-wrap');
+  if (wrap) wrap.style.display = sel.value === 'Other' ? 'block' : 'none';
+  if (sel.value !== 'Other') {
+    const inp = document.getElementById('add-rel-other');
+    if (inp) inp.value = '';
+  }
+}
 
-  if (!name || !email || !rel) { msgEl.textContent = 'Please fill in all fields.'; return; }
+async function addRater() {
+  const name     = document.getElementById('add-name').value.trim();
+  const email    = document.getElementById('add-email').value.trim();
+  const relSel   = document.getElementById('add-rel').value;
+  const relOther = document.getElementById('add-rel-other')?.value.trim();
+  const rel      = relSel === 'Other' ? (relOther ? `Other: ${relOther}` : 'Other') : relSel;
+  const msgEl    = document.getElementById('add-rater-msg');
+
+  if (!name || !email || !relSel) { msgEl.textContent = 'Please fill in all fields.'; return; }
+  if (relSel === 'Other' && !relOther) { msgEl.textContent = 'Please describe the relationship.'; return; }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { msgEl.textContent = 'Please enter a valid email address.'; return; }
   if (RATERS.find(r => r.email.toLowerCase() === email.toLowerCase())) {
     msgEl.textContent = 'That email is already on your rater list.'; return;
@@ -729,6 +757,10 @@ async function addRater() {
   document.getElementById('add-name').value  = '';
   document.getElementById('add-email').value = '';
   document.getElementById('add-rel').value   = '';
+  const otherInp = document.getElementById('add-rel-other');
+  if (otherInp) otherInp.value = '';
+  const otherWrap = document.getElementById('add-rel-other-wrap');
+  if (otherWrap) otherWrap.style.display = 'none';
   renderPendingRaters();
 }
 

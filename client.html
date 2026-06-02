@@ -3322,7 +3322,15 @@ function wizS5() {
       <button class="wiz-add-sh-btn" id="wizAddShBtn" onclick="wizAddStakeholder()" ${shs.length>=5?'disabled':''}>
         + Add another stakeholder ${shs.length>=5?'(max 5 reached)':`(${5-Math.max(shs.length,1)} remaining)`}
       </button>
-      <div class="hint" style="margin-top:10px;"><strong>Manager</strong> = your direct supervisor &nbsp;·&nbsp; <strong>Direct Report</strong> = someone you manage &nbsp;·&nbsp; <strong>Peer</strong> = same level, different team</div>
+      <div class="hint" style="margin-top:10px;line-height:1.8;">
+        <strong>Direct Report</strong> = someone you manage day-to-day &nbsp;·&nbsp;
+        <strong>Peer</strong> = same level, different team or function &nbsp;·&nbsp;
+        <strong>Manager</strong> = your direct boss or a senior leader above you &nbsp;·&nbsp;
+        <strong>Board Member / Investor</strong> = sits on your organization's board &nbsp;·&nbsp;
+        <strong>Internal Customer</strong> = a colleague or department that depends on your team's output &nbsp;·&nbsp;
+        <strong>External Customer</strong> = a client or end-user outside your organization &nbsp;·&nbsp;
+        <strong>Other</strong> = describe in the field that appears
+      </div>
     </div>`;
 }
 
@@ -3347,13 +3355,24 @@ function wizShRow(s, i) {
     </div>
     <div class="form-group" style="margin-bottom:0;">
       <label style="font-size:12px;">Relationship <span style="color:var(--red)">*</span></label>
-      <select id="wizShRel${i}" style="width:100%;padding:10px 13px;border:1.5px solid var(--gray-300);border-radius:7px;font-size:14px;font-family:inherit;background:#fff;">
-        <option value="Direct Report" ${s.relationship==='Direct Report'?'selected':''}>Direct Report</option>
-        <option value="Peer"          ${s.relationship==='Peer'?'selected':''}>Peer</option>
-        <option value="Manager"       ${s.relationship==='Manager'?'selected':''}>Manager</option>
+      <select id="wizShRel${i}" onchange="wizShOtherToggle(${i})" style="width:100%;padding:10px 13px;border:1.5px solid var(--gray-300);border-radius:7px;font-size:14px;font-family:inherit;background:#fff;">
+        <option value="Direct Report"          ${s.relationship==='Direct Report'?'selected':''}>Direct Report</option>
+        <option value="Peer"                     ${s.relationship==='Peer'?'selected':''}>Peer</option>
+        <option value="Manager"                  ${s.relationship==='Manager'?'selected':''}>Manager</option>
+        <option value="Board Member / Investor"  ${s.relationship==='Board Member / Investor'?'selected':''}>Board Member / Investor</option>
+        <option value="Internal Customer"        ${s.relationship==='Internal Customer'?'selected':''}>Internal Customer</option>
+        <option value="External Customer"        ${s.relationship==='External Customer'?'selected':''}>External Customer</option>
+        <option value="Other"                    ${s.relationship==='Other'||s.relationship?.startsWith('Other:')?'selected':''}>Other</option>
       </select>
+      <input type="text" id="wizShOtherText${i}" value="${s.relationship?.startsWith('Other:') ? s.relationship.replace('Other: ','') : ''}" placeholder="Describe the relationship..." style="display:${s.relationship?.startsWith('Other:') ? 'block' : 'none'};width:100%;margin-top:8px;padding:10px 13px;border:1.5px solid var(--gray-300);border-radius:7px;font-size:14px;font-family:inherit;" />
     </div>
   </div>`;
+}
+
+function wizShOtherToggle(i) {
+  const sel = document.getElementById('wizShRel'+i);
+  const inp = document.getElementById('wizShOtherText'+i);
+  if (inp) inp.style.display = sel && sel.value === 'Other' ? 'block' : 'none';
 }
 
 function wizAddStakeholder() {
@@ -3371,7 +3390,6 @@ function wizRemoveStakeholder(i) {
   wizPlan.stakeholders.splice(i,1);
   document.getElementById('wizStepBody').innerHTML = wizS5();
 }
-
 function wizSyncStakeholders() {
   const shs = wizPlan.stakeholders || [];
   shs.forEach((s,i) => {
@@ -3380,7 +3398,14 @@ function wizSyncStakeholders() {
     const r = document.getElementById('wizShRel'+i);
     if (n) s.name = n.value.trim();
     if (e) s.email = e.value.trim();
-    if (r) s.relationship = r.value;
+    if (r) {
+      if (r.value === 'Other') {
+        const ot = document.getElementById('wizShOtherText'+i);
+        s.relationship = ot && ot.value.trim() ? 'Other: ' + ot.value.trim() : 'Other';
+      } else {
+        s.relationship = r.value;
+      }
+    }
   });
 }
 
