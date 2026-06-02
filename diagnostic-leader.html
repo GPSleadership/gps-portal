@@ -377,10 +377,19 @@ function renderTopAlert() {
       </div>`;
     }
   } else if (s === 'report_final') {
-    el.innerHTML = `<div class="alert alert-green">
-      <span class="alert-icon">✓</span>
-      <div><strong>Your diagnostic report is ready.</strong> Alex will reach out to schedule your debrief session.</div>
-    </div>`;
+    const released = isReportReleased();
+    if (released) {
+      el.innerHTML = `<div class="alert alert-green">
+        <span class="alert-icon">✓</span>
+        <div><strong>Your diagnostic report is ready.</strong>${DIAGNOSTIC.debrief_date ? ' Your debrief session is scheduled for ' + formatDate(DIAGNOSTIC.debrief_date) + '.' : ''}</div>
+      </div>`;
+    } else {
+      const releaseStr = DIAGNOSTIC.report_release_at ? formatDate(DIAGNOSTIC.report_release_at) : 'the evening before your session';
+      el.innerHTML = `<div class="alert alert-blue">
+        <span class="alert-icon">📋</span>
+        <div>Your report is being finalized. It will be available by end of day on ${releaseStr} — the evening before your debrief.</div>
+      </div>`;
+    }
   } else if (s === 'plan_active') {
     el.innerHTML = `<div class="alert alert-green">
       <span class="alert-icon">✓</span>
@@ -420,7 +429,11 @@ const PIPELINE_STEPS = [
   { n:6, label:'Diagnostic report finalized',
     detail: d => d.report_finalized_at ? `Report available ${formatDate(d.report_finalized_at)}` : 'Alex reviews and finalizes your report' },
   { n:7, label:'Debrief session',
-    detail: d => d.debrief_completed_at ? `Completed ${formatDate(d.debrief_completed_at)}` : 'Alex will reach out to schedule once the report is ready' },
+    detail: d => d.debrief_completed_at
+      ? `Completed ${formatDate(d.debrief_completed_at)}`
+      : d.debrief_date
+        ? `Scheduled for ${formatDate(d.debrief_date)}`
+        : 'Session date to be confirmed — Alex will share the details' },
   { n:8, label:'90-Day implementation plan locked & active',
     detail: () => 'You\'ll have 24 hours after the debrief to finalize — then it locks automatically.' },
 ];
@@ -576,15 +589,54 @@ function renderStatusCards() {
   }
 
   if (s === 'report_final' || s === 'debrief_complete' || s === 'plan_active') {
-    html += `
-    <div class="card" style="border-top:3px solid var(--gold);">
-      <div style="display:flex;align-items:center;justify-content:space-between;">
-        <div><div class="card-title">Your Diagnostic Report</div>
-        <div class="card-sub">${DIAGNOSTIC.report_finalized_at ? 'Finalized ' + formatDate(DIAGNOSTIC.report_finalized_at) : 'Report finalized'}</div></div>
-        <span class="badge badge-open">Ready</span>
-      </div>
-      <div style="margin-top:14px;font-size:13px;color:var(--mid);line-height:1.6;">Alex will share your report directly in your debrief session. If you have questions before then, reach out at <a href="mailto:alex@gpsleadership.org" style="color:var(--blue);">alex@gpsleadership.org</a>.</div>
-    </div>`;
+    const released = isReportReleased();
+    if (released && DIAGNOSTIC.report_pdf_url) {
+      html += `
+      <div class="card" style="border-top:3px solid var(--gold);">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div><div class="card-title">Your Diagnostic Report</div>
+          <div class="card-sub">${DIAGNOSTIC.report_finalized_at ? 'Finalized ' + formatDate(DIAGNOSTIC.report_finalized_at) : 'Report ready'}</div></div>
+          <span class="badge badge-open">Ready</span>
+        </div>
+        <div style="margin-top:14px;">
+          <a href="${DIAGNOSTIC.report_pdf_url}" target="_blank"
+             style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:var(--blue);color:#fff;border-radius:6px;font-size:13px;font-weight:700;text-decoration:none;">
+            View Your Report
+          </a>
+        </div>
+        <div style="margin-top:12px;font-size:13px;color:var(--mid);line-height:1.6;">
+          Feel free to review it before your session${DIAGNOSTIC.debrief_date ? ' on ' + formatDate(DIAGNOSTIC.debrief_date) : ''} — but if you don't have time, no worries. We'll walk through it together.
+          Questions? Reach out at <a href="mailto:alex@gpsleadership.org" style="color:var(--blue);">alex@gpsleadership.org</a>.
+        </div>
+      </div>`;
+    } else if (released && !DIAGNOSTIC.report_pdf_url) {
+      html += `
+      <div class="card" style="border-top:3px solid var(--gold);">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div><div class="card-title">Your Diagnostic Report</div>
+          <div class="card-sub">Finalized — Alex will share this at your debrief</div></div>
+          <span class="badge badge-open">Ready</span>
+        </div>
+        <div style="margin-top:14px;font-size:13px;color:var(--mid);line-height:1.6;">
+          Alex will walk you through your full report at your debrief session${DIAGNOSTIC.debrief_date ? ' on ' + formatDate(DIAGNOSTIC.debrief_date) : ''}.
+          Questions beforehand? <a href="mailto:alex@gpsleadership.org" style="color:var(--blue);">alex@gpsleadership.org</a>.
+        </div>
+      </div>`;
+    } else if (!released && DIAGNOSTIC.report_release_at) {
+      const releaseDate = formatDate(DIAGNOSTIC.report_release_at);
+      html += `
+      <div class="card" style="border-top:3px solid var(--border);">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div><div class="card-title">Your Diagnostic Report</div>
+          <div class="card-sub">Available by end of day on ${releaseDate}</div></div>
+          <span class="badge" style="background:#f1f5f9;color:#64748b;">Upcoming</span>
+        </div>
+        <div style="margin-top:14px;font-size:13px;color:var(--mid);line-height:1.6;">
+          Your report will be available by end of business day Eastern on ${releaseDate} — the evening before your session${DIAGNOSTIC.debrief_date ? ' on ' + formatDate(DIAGNOSTIC.debrief_date) : ''}.
+          Feel free to review it when it arrives, or we'll walk through it together.
+        </div>
+      </div>`;
+    }
   }
 
   el.innerHTML = html;
@@ -798,6 +850,13 @@ function formatDate(str) {
   if (!str) return '';
   const d = new Date(str);
   return d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+}
+
+function isReportReleased() {
+  if (!DIAGNOSTIC) return false;
+  // If no release time set, default to released (backwards compat for finalized reports without debrief_date)
+  if (!DIAGNOSTIC.report_release_at) return true;
+  return new Date() >= new Date(DIAGNOSTIC.report_release_at);
 }
 
 function showError() {

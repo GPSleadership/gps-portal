@@ -4916,6 +4916,18 @@ function renderOverviewTab() {
         <div class="dhint">Auto-saves when you click away. Included in report generation.</div>
       </div>
 
+      <div style="margin-bottom:14px;padding-top:14px;border-top:1px solid var(--d-border);">
+        <div style="font-size:11px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Debrief Session Date</div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <input type="date" id="debrief-date-field"
+            style="width:auto;padding:7px 10px;border:1.5px solid var(--d-border);border-radius:6px;font-size:13px;"
+            value="${d.debrief_date || ''}"
+            onchange="saveDebriefDate(this.value)">
+          ${d.report_release_at ? `<span style="font-size:12px;color:var(--d-mid);">Report releases to leader: ${diagFormatDate(d.report_release_at)} at COB Eastern</span>` : ''}
+        </div>
+        <div class="dhint">Sets when the leader can view their report (released automatically at end of business day Eastern the day before).</div>
+      </div>
+
       <div style="padding-top:14px;border-top:1px solid var(--d-border);">
         ${d.status === 'intake_complete' || d.status === 'setup'
           ? `<button class="dbtn dbtn-primary dbtn-sm" onclick="markIntakeComplete()">✓ Mark Intake Complete</button>`
@@ -5755,6 +5767,20 @@ async function uploadFinalReport() {
   if (btn) { btn.disabled = false; btn.style.display = 'none'; }
   const nameEl = document.getElementById('finalReportFilename');
   if (nameEl) nameEl.textContent = 'No file selected';
+  await refreshSelected();
+}
+
+async function saveDebriefDate(dateStr) {
+  if (!dateStr) return;
+  // Compute release time: 22:00 UTC on the day before the debrief (= COB Eastern)
+  const parts = dateStr.split('-');
+  const releaseAt = new Date(Date.UTC(
+    parseInt(parts[0]),
+    parseInt(parts[1]) - 1,
+    parseInt(parts[2]) - 1,
+    22, 0, 0
+  )).toISOString();
+  await updateDiag({ debrief_date: dateStr, report_release_at: releaseAt });
   await refreshSelected();
 }
 
