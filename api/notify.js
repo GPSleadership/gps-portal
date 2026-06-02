@@ -606,6 +606,87 @@ export default async function handler(req, res) {
     }
   }
 
+  // ─── PORTAL WELCOME (sent after debrief is marked complete) ─────────────────
+  // Coaching client receives their portal link. Different from welcome_email:
+  // this is post-diagnostic, contextualized around what they learned in the debrief.
+  else if (body.type === 'portal_welcome') {
+    const { clientEmail, clientName, portalURL, debriefDate } = body;
+
+    if (!clientEmail) {
+      return res.status(400).json({ error: 'No client email provided.' });
+    }
+
+    const firstName = (clientName || '').split(' ')[0] || 'there';
+    const FROM = `Alex Tremble – GPS Leadership <${RESEND_FROM}>`;
+
+    subject = `${firstName}, here is your coaching portal`;
+
+    html = `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
+        <div style="background:#004369;padding:20px 28px;border-radius:8px 8px 0 0;">
+          <div style="color:#E5DDC8;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">GPS Leadership Solutions</div>
+          <div style="color:#ffffff;font-size:20px;font-weight:700;">Your 90-Day Leadership Portal</div>
+        </div>
+        <div style="background:#ffffff;padding:28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
+
+          <p>Hi ${firstName},</p>
+          <p>Your diagnostic debrief is done. Now the real work starts.</p>
+          <p>Your coaching portal is where you will build your 90-day leadership plan, track your weekly progress, and use Ask Alex when you need a quick framework or thinking partner between sessions.</p>
+
+          <div style="margin:28px 0;padding:20px 24px;background:#f5f9f9;border-left:4px solid #01949A;border-radius:0 6px 6px 0;">
+            <div style="font-weight:700;color:#004369;font-size:14px;margin-bottom:12px;">Access your portal here</div>
+            <div style="text-align:center;margin:16px 0;">
+              <a href="${portalURL}" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;">Open My Coaching Portal &rarr;</a>
+            </div>
+            <ul style="font-size:13px;color:#444;padding-left:20px;margin:12px 0 0;">
+              <li style="margin-bottom:8px;">This link is unique to you. Please do not share or forward it.</li>
+              <li style="margin-bottom:8px;">Bookmark it so you can get back in easily from your phone or computer.</li>
+              <li>If you ever lose the link, email <a href="mailto:team@gpsleadership.org" style="color:#004369;">team@gpsleadership.org</a> and we will send you a new one.</li>
+            </ul>
+          </div>
+
+          <div style="margin:24px 0;">
+            <div style="font-weight:700;color:#004369;font-size:15px;margin-bottom:10px;">What to do first (15 minutes)</div>
+            <table style="width:100%;border-collapse:collapse;">
+              <tr><td style="width:28px;vertical-align:top;padding:8px 10px 8px 0;font-weight:800;font-size:15px;color:#004369;">1</td><td style="padding:8px 0;border-bottom:1px solid #eee;vertical-align:top;"><div style="font-weight:700;font-size:14px;">Set your 90-day goal</div><div style="font-size:13px;color:#555;margin-top:3px;">Start with what you want to accomplish in the next 90 days based on what came out of the debrief.</div></td></tr>
+              <tr><td style="width:28px;vertical-align:top;padding:8px 10px 8px 0;font-weight:800;font-size:15px;color:#004369;">2</td><td style="padding:8px 0;border-bottom:1px solid #eee;vertical-align:top;"><div style="font-weight:700;font-size:14px;">Choose your key behavior</div><div style="font-size:13px;color:#555;margin-top:3px;">One specific action that, done consistently, will move the needle. Concrete: what, how often, with whom.</div></td></tr>
+              <tr><td style="width:28px;vertical-align:top;padding:8px 10px 8px 0;font-weight:800;font-size:15px;color:#004369;">3</td><td style="padding:8px 0;vertical-align:top;"><div style="font-weight:700;font-size:14px;">Set your success metric</div><div style="font-size:13px;color:#555;margin-top:3px;">How will you know it is working? Enter your current baseline and your 90-day target.</div></td></tr>
+            </table>
+          </div>
+
+          <div style="margin:24px 0;padding:16px 20px;background:#f7f4ee;border-radius:8px;">
+            <div style="font-weight:700;color:#004369;font-size:14px;margin-bottom:6px;">Weekly rhythm (5 minutes)</div>
+            <p style="font-size:13px;color:#444;margin:0;">Block 15 minutes once a week on your calendar. Open the portal, mark what you did on your behavior, note any friction, set your next action. That is the whole system.</p>
+          </div>
+
+          <p style="font-size:14px;color:#444;">Questions on the portal or anything from the debrief? Reply to this email. I will get back to you directly.</p>
+
+          <div style="margin-top:32px;padding-top:20px;border-top:1px solid #eee;">
+            <p style="margin:0;font-size:14px;font-weight:700;color:#004369;">Alex D. Tremble</p>
+            <p style="margin:4px 0;font-size:13px;color:#555;">Founder &amp; CEO, GPS Leadership Solutions</p>
+            <p style="margin:4px 0;font-size:13px;"><a href="https://www.GPSLeadership.org" style="color:#004369;text-decoration:none;">www.GPSLeadership.org</a></p>
+          </div>
+
+          <div style="margin-top:24px;padding-top:16px;border-top:1px solid #eee;font-size:11px;color:#999;">
+            You are receiving this because you completed a GPS Leadership 14-Day Executive Leadership Diagnostic. Questions? Reply to this email or reach out to <a href="mailto:team@gpsleadership.org" style="color:#999;">team@gpsleadership.org</a>.
+          </div>
+        </div>
+      </div>`;
+
+    try {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: FROM, to: [clientEmail], subject, html }),
+      });
+      const result = await response.json();
+      if (!response.ok) return res.status(500).json({ error: 'Email send failed', detail: result });
+      return res.status(200).json({ success: true, sent_to: clientEmail });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   else {
     return res.status(400).json({ error: 'Unknown notification type' });
   }
