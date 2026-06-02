@@ -3172,7 +3172,14 @@ async function wizGoal90TriggerPrefill() {
     if (pf.metric2Question) wizPlan.metric2 = { ...(wizPlan.metric2||{}), question: pf.metric2Question };
     wizPlan.aiPrefilled = true;
 
-    if (statusEl) statusEl.textContent = pf.goal30 ? '✦ 30-day goal suggested below — edit as needed' : '';
+    if (statusEl) statusEl.textContent = '';
+    // Fade out the intro notice once suggestions have landed
+    const notice = document.getElementById('wizPrefillNotice');
+    if (notice && (pf.goal30 || pf.behavior1)) {
+      notice.style.transition = 'opacity .5s';
+      notice.style.opacity = '0';
+      setTimeout(() => { if (notice) notice.style.display = 'none'; }, 500);
+    }
   } catch(e) {
     if (statusEl) statusEl.textContent = '';
   }
@@ -3350,10 +3357,18 @@ function wizS2() {
       <div class="card-subtitle">Write the 90-day goal first — the outcome that will be true at day 90. Then the 30-day goal: a concrete checkpoint that proves you\'re on track. Both are required.</div>
     </div>
     <div class="card">
+      ${!wizPlan.hasDiag ? `
+      <div id="wizPrefillNotice" style="display:flex;gap:11px;align-items:flex-start;background:#E8F7F7;border:1px solid #b2e0e1;border-radius:8px;padding:12px 14px;margin-bottom:18px;">
+        <span style="font-size:16px;line-height:1;margin-top:1px;">✦</span>
+        <div style="font-size:13px;color:#004369;line-height:1.6;">
+          <strong>We'll help you build this.</strong> Once your 90-day goal hits a few words, we'll suggest a 30-day goal, two behaviors, and both metrics.
+          Edit anything — it's a starting point, not a final answer.
+        </div>
+      </div>` : ''}
       <div class="form-group">
         <label>90-Day Goal <span style="color:var(--red)">*</span></label>
         <div class="hint">First person. Specific behavior change. Written as if day 90 has arrived.</div>
-        <textarea id="wizGoal90" rows="3" oninput="wizGoal90Typed()" ${!wizIsEdit && !wizPlan.hasDiag ? '' : ''}>${wizEsc(wizPlan.goal90)}</textarea>
+        <textarea id="wizGoal90" rows="3" oninput="wizGoal90Typed()">${wizEsc(wizPlan.goal90)}</textarea>
         ${hasPre && wizPlan.goal90 ? '<div class="wiz-prefilled">✦ Pre-filled from your diagnostic</div>' : ''}
         <div id="wizGoal90Status" style="font-size:11px;color:var(--teal);font-weight:600;margin-top:5px;min-height:16px;"></div>
       </div>
