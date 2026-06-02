@@ -19,11 +19,31 @@ export default async function handler(req, res) {
 
   let subject, html;
 
-  // ─── PLAN SUBMITTED (Form B) ───────────────────────────────────────────────
+  // ─── PLAN SUBMITTED (Wizard v20) ──────────────────────────────────────────
   if (body.type === 'plan_submitted') {
-    const { clientName, pillar, goalDesc, goalStatement, metricName, baseline, target, startDate, startBehavior, reward30, reward90 } = body;
+    // v20: new fields metric2Question, metric2Target, goal30Day, behavior1, behavior2
+    // Legacy fields (goalDesc, startBehavior) also accepted for backward compat
+    const {
+      clientName, pillar,
+      goalDesc, goalStatement, goal30Day,
+      behavior1, behavior2, startBehavior,
+      metricName, baseline, target,
+      metric2Question, metric2Target,
+      startDate, reward30, reward90,
+    } = body;
+
+    // Use new fields where available, fall back to legacy field names
+    const b1       = behavior1 || startBehavior || '—';
+    const b2       = behavior2 || '';
+    const g90      = goalStatement || goalDesc || '—';
+    const g30      = goal30Day || '';
+    const isNewWiz = !!metric2Question; // true = new wizard submission
 
     subject = `New 90-Day Plan: ${clientName}`;
+
+    const tdLabel = `padding:10px 14px;font-size:12px;font-weight:700;text-transform:uppercase;color:#666;width:140px;border-bottom:1px solid #eee;`;
+    const tdVal   = `padding:10px 14px;font-size:14px;color:#1a1a1a;border-bottom:1px solid #eee;`;
+    const trAlt   = `background:#fafafa;`;
 
     html = `
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
@@ -32,47 +52,23 @@ export default async function handler(req, res) {
           <div style="color:#ffffff;font-size:20px;font-weight:700;">New Plan Submitted</div>
         </div>
         <div style="background:#f5f5f5;padding:20px 28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;">
-
           <table style="width:100%;border-collapse:collapse;background:#ffffff;border-radius:6px;overflow:hidden;">
             <tr style="background:#004369;">
               <td colspan="2" style="padding:10px 14px;color:#ffffff;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">
                 ${clientName} — Plan Details
               </td>
             </tr>
-            <tr>
-              <td style="padding:10px 14px;font-size:12px;font-weight:700;text-transform:uppercase;color:#666;width:140px;border-bottom:1px solid #eee;">TP3 Pillar</td>
-              <td style="padding:10px 14px;font-size:14px;font-weight:700;color:#004369;border-bottom:1px solid #eee;">${pillar || '—'}</td>
-            </tr>
-            <tr style="background:#fafafa;">
-              <td style="padding:10px 14px;font-size:12px;font-weight:700;text-transform:uppercase;color:#666;border-bottom:1px solid #eee;">90-Day Goal</td>
-              <td style="padding:10px 14px;font-size:14px;color:#1a1a1a;border-bottom:1px solid #eee;">${goalStatement || '—'}</td>
-            </tr>
-            <tr>
-              <td style="padding:10px 14px;font-size:12px;font-weight:700;text-transform:uppercase;color:#666;border-bottom:1px solid #eee;">Goal Detail</td>
-              <td style="padding:10px 14px;font-size:14px;color:#1a1a1a;border-bottom:1px solid #eee;">${goalDesc || '—'}</td>
-            </tr>
-            <tr style="background:#fafafa;">
-              <td style="padding:10px 14px;font-size:12px;font-weight:700;text-transform:uppercase;color:#666;border-bottom:1px solid #eee;">Metric</td>
-              <td style="padding:10px 14px;font-size:14px;color:#1a1a1a;border-bottom:1px solid #eee;">${metricName || '—'} &nbsp;(Baseline: <strong>${baseline}</strong> → Target: <strong>${target}</strong>)</td>
-            </tr>
-            <tr>
-              <td style="padding:10px 14px;font-size:12px;font-weight:700;text-transform:uppercase;color:#666;border-bottom:1px solid #eee;">START Behavior</td>
-              <td style="padding:10px 14px;font-size:14px;color:#1a1a1a;border-bottom:1px solid #eee;">${startBehavior || '—'}</td>
-            </tr>
-            <tr style="background:#fafafa;">
-              <td style="padding:10px 14px;font-size:12px;font-weight:700;text-transform:uppercase;color:#666;border-bottom:1px solid #eee;">Plan Start</td>
-              <td style="padding:10px 14px;font-size:14px;color:#1a1a1a;border-bottom:1px solid #eee;">${startDate || '—'}</td>
-            </tr>
-            ${reward30 ? `<tr>
-              <td style="padding:10px 14px;font-size:12px;font-weight:700;text-transform:uppercase;color:#666;border-bottom:1px solid #eee;">30-Day Reward</td>
-              <td style="padding:10px 14px;font-size:14px;color:#1a1a1a;border-bottom:1px solid #eee;">${reward30}</td>
-            </tr>` : ''}
-            ${reward90 ? `<tr style="background:#fafafa;">
-              <td style="padding:10px 14px;font-size:12px;font-weight:700;text-transform:uppercase;color:#666;">90-Day Reward</td>
-              <td style="padding:10px 14px;font-size:14px;color:#1a1a1a;">${reward90}</td>
-            </tr>` : ''}
+            <tr><td style="${tdLabel}">TP3 Pillar</td><td style="padding:10px 14px;font-size:14px;font-weight:700;color:#004369;border-bottom:1px solid #eee;">${pillar || '—'}</td></tr>
+            <tr style="${trAlt}"><td style="${tdLabel}">90-Day Goal</td><td style="${tdVal}">${g90}</td></tr>
+            ${g30 ? `<tr><td style="${tdLabel}">30-Day Goal</td><td style="${tdVal}">${g30}</td></tr>` : ''}
+            <tr style="${trAlt}"><td style="${tdLabel}">Behavior 1</td><td style="${tdVal}">${b1}</td></tr>
+            ${b2 ? `<tr><td style="${tdLabel}">Behavior 2</td><td style="${tdVal}">${b2}</td></tr>` : ''}
+            <tr style="${trAlt}"><td style="${tdLabel}">Metric 1 (Self)</td><td style="${tdVal}">${metricName || '—'} &nbsp;<span style="font-size:12px;color:#666;">(Baseline: <strong>${baseline}</strong> → Target: <strong>${target}</strong>/week)</span></td></tr>
+            ${isNewWiz ? `<tr><td style="${tdLabel}">Metric 2 (Stakeholder)</td><td style="${tdVal}">"${metric2Question}"<br/><span style="font-size:12px;color:#666;">Target avg: ${metric2Target} / 5.0</span></td></tr>` : ''}
+            <tr style="${trAlt}"><td style="${tdLabel}">Plan Start</td><td style="${tdVal}">${startDate || '—'}</td></tr>
+            ${reward30 ? `<tr><td style="${tdLabel}">30-Day Reward</td><td style="${tdVal}">${reward30}</td></tr>` : ''}
+            ${reward90 ? `<tr style="${trAlt}"><td style="padding:10px 14px;font-size:12px;font-weight:700;text-transform:uppercase;color:#666;">90-Day Reward</td><td style="padding:10px 14px;font-size:14px;color:#1a1a1a;">${reward90}</td></tr>` : ''}
           </table>
-
           <p style="font-size:12px;color:#666;margin-top:16px;">Their 90-day engagement starts now. Week 1 check-in due in 7 days.</p>
         </div>
       </div>

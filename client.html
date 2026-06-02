@@ -383,6 +383,121 @@
     .pillar-option .pillar-name { font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: 700; color: var(--navy); }
     .pillar-option .pillar-desc { font-size: 11px; color: var(--gray-600); margin-top: 4px; }
 
+    /* ── ONBOARDING WIZARD v20 ───────────────────────────────────────────── */
+    .wiz-progress-wrap { background:#fff; border-radius:10px; box-shadow:0 2px 12px rgba(0,67,105,.08); padding:14px 18px; margin-bottom:20px; }
+    .wiz-progress-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:var(--gray-600); margin-bottom:9px; }
+    .wiz-steps { display:flex; gap:0; }
+    .wiz-step { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; position:relative; }
+    .wiz-step::before { content:''; position:absolute; top:12px; left:calc(-50% + 12px); right:calc(50% + 12px); height:2px; background:var(--gray-200); z-index:0; }
+    .wiz-step:first-child::before { display:none; }
+    .wiz-step.done::before, .wiz-step.current::before { background:var(--teal); }
+    .wiz-dot { width:24px; height:24px; border-radius:50%; background:var(--gray-200); color:var(--gray-600); font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; position:relative; z-index:1; flex-shrink:0; transition:all .2s; }
+    .wiz-step.done .wiz-dot { background:var(--teal); color:#fff; }
+    .wiz-step.current .wiz-dot { background:var(--navy); color:#fff; box-shadow:0 0 0 3px rgba(0,67,105,.15); }
+    .wiz-step-label { font-size:9px; font-weight:600; color:var(--gray-500); text-transform:uppercase; letter-spacing:0.3px; text-align:center; line-height:1.2; }
+    .wiz-step.done .wiz-step-label { color:var(--teal); }
+    .wiz-step.current .wiz-step-label { color:var(--navy); font-weight:700; }
+    @media(max-width:480px){ .wiz-step-label { display:none; } }
+
+    .wiz-step-badge { display:inline-block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.7px; color:var(--teal); background:var(--light-teal); border-radius:4px; padding:3px 8px; margin-bottom:10px; }
+    .wiz-prefilled { font-size:11px; color:var(--teal); font-weight:600; margin-top:4px; display:flex; align-items:center; gap:4px; }
+
+    /* Diagnostic score pills */
+    .wiz-diag-wrap { background:linear-gradient(135deg,#f0f4fb,#f7f9fc); border:1px solid var(--gray-200); border-radius:10px; padding:18px; margin-bottom:18px; }
+    .wiz-diag-title { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.7px; color:var(--navy); margin-bottom:12px; }
+    .wiz-scores { display:flex; gap:10px; margin-bottom:12px; }
+    .wiz-score-pill { flex:1; border-radius:8px; padding:10px 10px; text-align:center; border:2px solid transparent; }
+    .wiz-score-pill.trust { background:#eff6ff; border-color:#bfdbfe; }
+    .wiz-score-pill.proactivity { background:#f5f3ff; border-color:#ddd6fe; }
+    .wiz-score-pill.productivity { background:#ecfdf5; border-color:#a7f3d0; }
+    .wiz-score-pill.focus-area { border-width:2.5px; }
+    .wiz-score-pill.trust.focus-area { border-color:#2563eb; }
+    .wiz-score-pill.proactivity.focus-area { border-color:#7c3aed; }
+    .wiz-score-pill.productivity.focus-area { border-color:#059669; }
+    .wiz-pill-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:2px; }
+    .wiz-score-pill.trust .wiz-pill-label { color:#2563eb; }
+    .wiz-score-pill.proactivity .wiz-pill-label { color:#7c3aed; }
+    .wiz-score-pill.productivity .wiz-pill-label { color:#059669; }
+    .wiz-pill-score { font-size:20px; font-weight:800; line-height:1; }
+    .wiz-score-pill.trust .wiz-pill-score { color:#2563eb; }
+    .wiz-score-pill.proactivity .wiz-pill-score { color:#7c3aed; }
+    .wiz-score-pill.productivity .wiz-pill-score { color:#059669; }
+    .wiz-pill-max { font-size:9px; color:var(--gray-500); }
+    .wiz-focus-tag { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.2px; background:var(--navy); color:#fff; border-radius:3px; padding:1px 5px; margin-top:3px; display:inline-block; }
+    .wiz-theme { font-size:13px; color:var(--gray-600); border-left:3px solid var(--teal); padding-left:10px; font-style:italic; line-height:1.5; }
+
+    /* Wizard pillar selector */
+    .wiz-pillar-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:4px; }
+    @media(max-width:480px){ .wiz-pillar-grid { grid-template-columns:1fr; } }
+    .wiz-pillar-card { border:2px solid var(--gray-300); border-radius:10px; padding:16px 12px; cursor:pointer; transition:all .2s; text-align:center; position:relative; background:#fff; }
+    .wiz-pillar-card:hover { border-color:var(--gray-400); box-shadow:0 2px 8px rgba(0,67,105,.08); }
+    .wiz-pillar-card.selected.trust { border-color:#2563eb; background:#eff6ff; }
+    .wiz-pillar-card.selected.proactivity { border-color:#7c3aed; background:#f5f3ff; }
+    .wiz-pillar-card.selected.productivity { border-color:#059669; background:#ecfdf5; }
+    .wiz-pillar-card.auto-sel::after { content:'Auto-selected'; position:absolute; top:-10px; left:50%; transform:translateX(-50%); font-size:9px; font-weight:700; text-transform:uppercase; background:var(--navy); color:#fff; border-radius:3px; padding:2px 6px; white-space:nowrap; }
+    .wiz-pillar-icon { font-size:22px; margin-bottom:5px; }
+    .wiz-pillar-name { font-size:13px; font-weight:700; margin-bottom:3px; }
+    .wiz-pillar-card.trust .wiz-pillar-name { color:#2563eb; }
+    .wiz-pillar-card.proactivity .wiz-pillar-name { color:#7c3aed; }
+    .wiz-pillar-card.productivity .wiz-pillar-name { color:#059669; }
+    .wiz-pillar-desc { font-size:10px; color:var(--gray-500); line-height:1.4; }
+    .wiz-pillar-score { font-size:10px; font-weight:700; margin-top:5px; padding:2px 5px; border-radius:3px; display:inline-block; }
+    .wiz-pillar-card.trust .wiz-pillar-score { background:#dbeafe; color:#2563eb; }
+    .wiz-pillar-card.proactivity .wiz-pillar-score { background:#ede9fe; color:#7c3aed; }
+    .wiz-pillar-card.productivity .wiz-pillar-score { background:#d1fae5; color:#059669; }
+
+    /* Metric blocks */
+    .wiz-metric-block { background:var(--gray-100); border:1.5px solid var(--gray-200); border-radius:10px; padding:16px; margin-bottom:14px; }
+    .wiz-metric-hdr { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:10px; }
+    .wiz-metric-badge { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; border-radius:4px; padding:3px 7px; }
+    .wiz-metric-badge.self { background:#dbeafe; color:#2563eb; }
+    .wiz-metric-badge.stakeholder { background:#ede9fe; color:#7c3aed; }
+    .wiz-metric-title { font-size:13px; font-weight:700; color:var(--navy); margin-bottom:1px; }
+    .wiz-metric-desc { font-size:11px; color:var(--gray-500); }
+    .wiz-required-note { font-size:11px; color:var(--teal); font-weight:600; background:var(--light-teal); padding:6px 9px; border-radius:5px; margin-bottom:10px; }
+    .wiz-scale-row { display:flex; gap:5px; margin-top:8px; align-items:center; flex-wrap:wrap; }
+    .wiz-scale-dot { width:30px; height:30px; border-radius:50%; border:1.5px solid var(--gray-300); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:var(--gray-500); }
+    .wiz-scale-dot.target { border-color:var(--teal); color:var(--teal); background:var(--light-teal); }
+    .wiz-scale-lbl { font-size:10px; color:var(--gray-500); }
+
+    /* Stakeholder rows */
+    .wiz-sh-list { display:flex; flex-direction:column; gap:10px; }
+    .wiz-sh-row { background:var(--gray-100); border:1.5px solid var(--gray-200); border-radius:8px; padding:14px 15px; }
+    .wiz-sh-row-hdr { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+    .wiz-sh-num { font-size:10px; font-weight:700; text-transform:uppercase; color:var(--gray-500); letter-spacing:0.4px; }
+    .wiz-sh-from-diag { font-size:10px; font-weight:700; background:var(--light-teal); color:var(--teal); border-radius:3px; padding:2px 6px; }
+    .wiz-sh-remove { background:none; border:none; color:var(--red); font-size:12px; font-weight:600; cursor:pointer; padding:2px 6px; }
+    .wiz-add-sh-btn { background:none; border:1.5px dashed var(--teal); color:var(--teal); border-radius:8px; padding:9px 14px; font-size:13px; font-weight:600; cursor:pointer; width:100%; margin-top:8px; transition:all .15s; }
+    .wiz-add-sh-btn:hover { background:var(--light-teal); }
+    .wiz-add-sh-btn:disabled { opacity:.4; cursor:not-allowed; }
+
+    /* Reward blocks */
+    .wiz-reward-block { background:#fff8ec; border:1.5px solid #fcd88a; border-radius:10px; padding:16px; margin-bottom:12px; }
+    .wiz-reward-hdr { display:flex; align-items:center; gap:7px; margin-bottom:6px; }
+    .wiz-reward-icon { font-size:18px; }
+    .wiz-reward-title { font-size:13px; font-weight:700; color:var(--navy); }
+    .wiz-reward-hint { font-size:12px; color:var(--gray-600); margin-bottom:9px; }
+
+    /* Summary rows */
+    .wiz-sum-section { margin-bottom:18px; }
+    .wiz-sum-hdr { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.7px; color:var(--gray-500); margin-bottom:8px; padding-bottom:5px; border-bottom:1px solid var(--gray-200); }
+    .wiz-sum-row { display:flex; gap:10px; margin-bottom:8px; align-items:flex-start; }
+    .wiz-sum-label { font-size:11px; font-weight:700; color:var(--gray-600); min-width:110px; flex-shrink:0; }
+    .wiz-sum-val { font-size:13px; color:var(--text); line-height:1.5; }
+
+    /* Nav bar */
+    .wiz-nav { display:flex; justify-content:space-between; align-items:center; margin-top:24px; }
+    .wiz-btn-back { background:none; border:1.5px solid var(--gray-300); color:var(--gray-600); padding:10px 20px; border-radius:7px; font-size:13px; font-weight:600; cursor:pointer; transition:all .15s; }
+    .wiz-btn-back:hover { border-color:var(--gray-500); color:var(--text); }
+    .wiz-btn-next { background:var(--navy); color:#fff; border:none; padding:11px 26px; border-radius:7px; font-size:13px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:5px; transition:all .15s; box-shadow:0 2px 8px rgba(0,67,105,.2); }
+    .wiz-btn-next:hover { background:var(--navy-dark); transform:translateY(-1px); }
+    .wiz-btn-lock { background:var(--teal); box-shadow:0 2px 8px rgba(1,149,154,.3); }
+    .wiz-btn-lock:hover { background:#017a7e; }
+    .wiz-err { display:none; background:#fff0f3; border:1px solid var(--red); border-radius:7px; padding:10px 13px; font-size:13px; font-weight:600; color:var(--red); margin-top:14px; }
+    .wiz-err.show { display:block; }
+    .form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    /* ── END WIZARD STYLES ──────────────────────────────────────────────────── */
+
     /* ── BUTTONS ── */
     .btn-primary {
       background: var(--red);
@@ -1934,172 +2049,6 @@
   }
   .coach-modal-cta:hover { background: var(--navy-dark); }
 
-    /* ── Testimonial & Referral Flywheel ── */
-    .testimonial-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.6);
-      z-index: 1000;
-      align-items: center;
-      justify-content: center;
-    }
-    .testimonial-overlay.active { display: flex; }
-    .testimonial-card {
-      background: #fff;
-      max-width: 540px;
-      width: 90%;
-      border-radius: 12px;
-      padding: 32px;
-      box-shadow: 0 16px 48px rgba(0,0,0,0.22);
-      max-height: 92vh;
-      overflow-y: auto;
-    }
-    .testimonial-card h2 {
-      font-size: 20px;
-      color: #004369;
-      margin-bottom: 8px;
-      font-family: 'Montserrat', sans-serif;
-      font-weight: 700;
-    }
-    .testimonial-card p.t-sub {
-      color: #555;
-      font-size: 14px;
-      margin-bottom: 20px;
-      line-height: 1.5;
-    }
-    .t-step {
-      font-size: 11px;
-      color: #999;
-      margin-bottom: 16px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-    .t-question {
-      font-size: 13px;
-      font-weight: 600;
-      color: #004369;
-      margin: 14px 0 4px;
-    }
-    .t-textarea {
-      width: 100%;
-      min-height: 80px;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      padding: 10px;
-      font-size: 13px;
-      font-family: 'Open Sans', sans-serif;
-      resize: vertical;
-      color: #1a1a1a;
-      transition: border-color 0.2s;
-    }
-    .t-textarea:focus { outline: none; border-color: #01949A; }
-    .nps-grid {
-      display: grid;
-      grid-template-columns: repeat(11, 1fr);
-      gap: 4px;
-      margin: 12px 0;
-    }
-    .nps-btn {
-      aspect-ratio: 1;
-      border: 2px solid #ddd;
-      border-radius: 6px;
-      font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
-      background: white;
-      color: #1a1a1a;
-      transition: all 0.15s;
-      padding: 0;
-    }
-    .nps-btn.selected { background: #004369; color: white; border-color: #004369; }
-    .nps-btn:hover:not(.selected) { background: #E5DDC8; border-color: #01949A; }
-    .t-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
-      margin-top: 20px;
-    }
-    .t-btn-primary {
-      background: #004369;
-      color: white;
-      padding: 10px 24px;
-      border-radius: 6px;
-      border: none;
-      font-size: 14px;
-      cursor: pointer;
-      font-family: 'Montserrat', sans-serif;
-      font-weight: 700;
-      transition: background 0.15s;
-    }
-    .t-btn-primary:hover { background: #002D47; }
-    .t-btn-primary:disabled { background: #aaa; cursor: not-allowed; }
-    .t-btn-secondary {
-      background: transparent;
-      border: 2px solid #004369;
-      color: #004369;
-      padding: 10px 24px;
-      border-radius: 6px;
-      font-size: 14px;
-      cursor: pointer;
-      font-family: 'Montserrat', sans-serif;
-      font-weight: 700;
-      transition: all 0.15s;
-    }
-    .t-btn-secondary:hover { background: #f0f4f7; }
-    .referral-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 8px;
-      margin-bottom: 10px;
-      align-items: end;
-    }
-    .referral-email-card {
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      padding: 16px;
-      margin-bottom: 14px;
-      background: #fafafa;
-    }
-    .referral-email-card h4 {
-      font-size: 13px;
-      color: #004369;
-      margin-bottom: 8px;
-      font-family: 'Montserrat', sans-serif;
-      font-weight: 700;
-    }
-    .referral-email-meta {
-      font-size: 12px;
-      color: #666;
-      margin-bottom: 8px;
-      line-height: 1.6;
-    }
-    .referral-email-body {
-      width: 100%;
-      min-height: 160px;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      padding: 10px;
-      font-size: 12px;
-      font-family: monospace;
-      resize: vertical;
-      color: #1a1a1a;
-    }
-    .referral-email-body:focus { outline: none; border-color: #01949A; }
-    .referral-include-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 10px;
-      font-size: 13px;
-      color: #004369;
-      font-weight: 600;
-    }
-    @media (max-width: 520px) {
-      .referral-row { grid-template-columns: 1fr; }
-      .nps-grid { grid-template-columns: repeat(6, 1fr); }
-    }
-
   </style>
 </head>
 <body>
@@ -2224,13 +2173,6 @@
       <span class="qa-typing-label">Thinking…</span>
     </div>
     <div class="qa-ec" id="qa-ec"></div>
-
-    <!-- Recent Ask Alex history -->
-    <div id="qa-history" style="display:none;margin-top:32px;padding-top:24px;border-top:1px solid var(--gray-200);">
-      <div style="font-size:12px;font-weight:700;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:14px;">Recent Sessions</div>
-      <div id="qa-history-list" style="display:flex;flex-direction:column;gap:10px;"></div>
-    </div>
-
     <div style="height:40px;"></div>
   </div>
   <div class="qa-input-area">
@@ -2291,154 +2233,6 @@
 
     <div class="sc-err" id="scErr"></div>
     <button class="sc-submit-btn" id="scSubmitBtn" onclick="submitSelfCheck()">Submit &amp; View Results</button>
-  </div>
-</div>
-
-<!-- ── TESTIMONIAL & REFERRAL FLYWHEEL OVERLAY ── -->
-<div id="testimonialOverlay" class="testimonial-overlay">
-  <div class="testimonial-card">
-
-    <!-- Screen 1: Questions (source-adaptive) -->
-    <div id="t-screen-questions">
-      <div class="t-step" id="t-step-label">STEP 1 OF 2</div>
-      <h2 id="t-heading">A quick reflection</h2>
-      <p class="t-sub" id="t-subheading">Takes about 3 minutes.</p>
-
-      <div id="t-q1-group">
-        <div class="t-question" id="t-q1-label">Q1</div>
-        <textarea class="t-textarea" id="t-q1" placeholder="Your answer…"></textarea>
-      </div>
-      <div id="t-q2-group">
-        <div class="t-question" id="t-q2-label">What, specifically, did this process reveal that you weren't fully seeing before?</div>
-        <textarea class="t-textarea" id="t-q2" placeholder="Your answer…"></textarea>
-      </div>
-      <div id="t-q3-group">
-        <div class="t-question" id="t-q3-label">Q3</div>
-        <textarea class="t-textarea" id="t-q3" placeholder="Your answer…"></textarea>
-      </div>
-
-      <div class="t-actions">
-        <button class="t-btn-secondary" onclick="dismissTestimonial()">Maybe later</button>
-        <button class="t-btn-primary" onclick="submitTestimonialQuestions()">Continue &#x2192;</button>
-      </div>
-    </div>
-
-    <!-- Screen 2: NPS (engagement_end only) -->
-    <div id="t-screen-nps" style="display:none;">
-      <div class="t-step">STEP 2 OF 2</div>
-      <h2>One more question</h2>
-      <p class="t-sub" id="t-nps-label">On a scale from 0&#x2013;10, how likely are you to recommend this to a peer?</p>
-      <div class="nps-grid" id="nps-grid"></div>
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:#999;margin-bottom:16px;">
-        <span>Not likely</span><span>Very likely</span>
-      </div>
-
-      <!-- Follow-up for 7-8 -->
-      <div id="t-nps-followup-78" style="display:none;">
-        <div class="t-question">What would need to improve for this to be a 10?</div>
-        <textarea class="t-textarea" id="t-nps-improve" placeholder="Your thoughts…"></textarea>
-      </div>
-      <!-- Follow-up for 0-6 -->
-      <div id="t-nps-followup-06" style="display:none;">
-        <div class="t-question">What didn&#x2019;t meet your expectations, and what would you have wanted instead?</div>
-        <textarea class="t-textarea" id="t-nps-recover" placeholder="Your thoughts…"></textarea>
-      </div>
-      <!-- Outcome question (all) -->
-      <div id="t-outcome-group" style="display:none;">
-        <div class="t-question">In your own words, what&#x2019;s been the most meaningful outcome of this work for you or your organization?</div>
-        <textarea class="t-textarea" id="t-outcome" placeholder="Your answer…"></textarea>
-      </div>
-
-      <div class="t-actions">
-        <button class="t-btn-primary" onclick="submitNPS()">Submit &#x2192;</button>
-      </div>
-    </div>
-
-    <!-- Screen 3: Thank you / referral offer (NPS 9-10 only) -->
-    <div id="t-screen-referral-offer" style="display:none;">
-      <h2>Thank you &#x2014; that means a lot.</h2>
-      <p class="t-sub" id="t-referral-offer-body">Loading&#x2026;</p>
-      <div class="t-actions">
-        <button class="t-btn-secondary" onclick="closeTestimonialOverlay()">No thanks</button>
-        <button class="t-btn-primary" onclick="showReferralForm()">Yes, I&#x2019;d like to &#x2192;</button>
-      </div>
-    </div>
-
-    <!-- Screen 4: Referral form -->
-    <div id="t-screen-referral-form" style="display:none;">
-      <h2>Introduce a peer</h2>
-      <p class="t-sub">Add up to 3 people you&#x2019;d confidently recommend. Each will receive a warm intro from you directly.</p>
-      <div id="referral-rows">
-        <div class="referral-row">
-          <div>
-            <div class="t-question">Name</div>
-            <input class="t-textarea" style="min-height:unset;height:36px;" placeholder="Full name" data-field="name" data-idx="0">
-          </div>
-          <div>
-            <div class="t-question">Email</div>
-            <input class="t-textarea" style="min-height:unset;height:36px;" placeholder="email@company.com" data-field="email" data-idx="0">
-          </div>
-          <div>
-            <div class="t-question">Organization (optional)</div>
-            <input class="t-textarea" style="min-height:unset;height:36px;" placeholder="Company name" data-field="org" data-idx="0">
-          </div>
-        </div>
-        <div class="referral-row">
-          <div>
-            <div class="t-question" style="visibility:hidden;">Name</div>
-            <input class="t-textarea" style="min-height:unset;height:36px;" placeholder="Full name" data-field="name" data-idx="1">
-          </div>
-          <div>
-            <div class="t-question" style="visibility:hidden;">Email</div>
-            <input class="t-textarea" style="min-height:unset;height:36px;" placeholder="email@company.com" data-field="email" data-idx="1">
-          </div>
-          <div>
-            <div class="t-question" style="visibility:hidden;">Org</div>
-            <input class="t-textarea" style="min-height:unset;height:36px;" placeholder="Company name" data-field="org" data-idx="1">
-          </div>
-        </div>
-        <div class="referral-row">
-          <div>
-            <div class="t-question" style="visibility:hidden;">Name</div>
-            <input class="t-textarea" style="min-height:unset;height:36px;" placeholder="Full name" data-field="name" data-idx="2">
-          </div>
-          <div>
-            <div class="t-question" style="visibility:hidden;">Email</div>
-            <input class="t-textarea" style="min-height:unset;height:36px;" placeholder="email@company.com" data-field="email" data-idx="2">
-          </div>
-          <div>
-            <div class="t-question" style="visibility:hidden;">Org</div>
-            <input class="t-textarea" style="min-height:unset;height:36px;" placeholder="Company name" data-field="org" data-idx="2">
-          </div>
-        </div>
-      </div>
-      <p style="font-size:12px;color:#999;margin-top:8px;">Only enter people you genuinely believe would welcome this introduction.</p>
-      <div class="t-actions">
-        <button class="t-btn-secondary" onclick="closeTestimonialOverlay()">Skip for now</button>
-        <button class="t-btn-primary" id="t-generate-btn" onclick="generateReferralEmails()">Generate Intro Emails &#x2192;</button>
-      </div>
-    </div>
-
-    <!-- Screen 5: Review & send emails -->
-    <div id="t-screen-referral-emails" style="display:none;">
-      <h2>Review your intro emails</h2>
-      <p class="t-sub">These will be sent from your email address to each person. Edit as needed &#x2014; they need to sound like you.</p>
-      <div id="referral-email-list"></div>
-      <div class="t-actions">
-        <button class="t-btn-secondary" onclick="closeTestimonialOverlay()">Done</button>
-        <button class="t-btn-primary" onclick="sendReferralEmails()">Send Selected &#x2192;</button>
-      </div>
-    </div>
-
-    <!-- Screen 6: Final thank you -->
-    <div id="t-screen-thankyou" style="display:none;">
-      <h2 style="text-align:center;">&#x2713; Done &#x2014; thank you.</h2>
-      <p class="t-sub" style="text-align:center;">Your introductions are on their way.</p>
-      <div class="t-actions" style="justify-content:center;">
-        <button class="t-btn-primary" onclick="closeTestimonialOverlay()">Close</button>
-      </div>
-    </div>
-
   </div>
 </div>
 
@@ -3054,7 +2848,7 @@ async function loadClient() {
     });
 
     if (!client.plan_submitted_at || client.allow_plan_edit) {
-      renderFormB(client);
+      initWizard(client);
     } else {
       const { data: checkins } = await db
         .from('checkins')
@@ -3134,7 +2928,6 @@ async function loadClient() {
       renderResultsTab(surveyData || [], checkins || [], client, surveyTokenData || [], selfCheckData || []);
       renderClientStakeholderCard(client.id, stakeholderData || []);
       loadClientDiagnostic();
-      checkForPendingTestimonial(client);
     }
   } catch (e) {
     showError('Something went wrong.', 'Please refresh the page. If the problem continues, contact alex@gpsleadership.org.');
@@ -3172,358 +2965,737 @@ const INDUSTRY_CONFIG = {
 };
 
 // ─────────────────────────────────────────────
-// FORM B — PLAN SETUP (one-time)
+// ONBOARDING WIZARD v20 — replaces FormB
 // ─────────────────────────────────────────────
-function renderFormB(client) {
-  const today    = new Date().toISOString().split('T')[0];
-  const isEdit   = !!client.plan_submitted_at && client.allow_plan_edit;
-  const firstName = client.name ? client.name.split(' ')[0] : 'there';
-  const iCfg = INDUSTRY_CONFIG[client.industry] || {};
 
-  // Helper to safely escape values for HTML attributes/textarea content
-  const esc = v => (v || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// ── State ──────────────────────────────────────────────────────────────────
+let wizStep = 0;
+let wizPlan = {};
+let wizClientId = '';
+let wizClientName = '';
+let wizIsEdit = false;
 
+const WIZ_STEPS = [
+  { id:0, label:'Welcome'   },
+  { id:1, label:'Pillar'    },
+  { id:2, label:'Goals'     },
+  { id:3, label:'Metrics'   },
+  { id:4, label:'Behaviors' },
+  { id:5, label:'People'    },
+  { id:6, label:'Rewards'   },
+  { id:7, label:'Review'    },
+];
+
+// ── Init ───────────────────────────────────────────────────────────────────
+function initWizard(client) {
+  wizClientId   = client.id;
+  wizClientName = client.name || '';
+  wizIsEdit     = !!(client.plan_submitted_at && client.allow_plan_edit);
+
+  const p      = client.diagnostic_prefill || null;
+  const scores = p ? p.scores : null;
+  const today  = new Date().toISOString().split('T')[0];
+
+  // Determine weakest pillar from diagnostic scores
+  let weakest = null;
+  if (scores) {
+    weakest = Object.entries(scores).reduce((a, b) => scores[a] <= b[1] ? a : b[0], Object.keys(scores)[0]);
+  }
+
+  // Build plan state — prefill from diagnostic or from existing client data (edit mode)
+  wizPlan = {
+    pillar:    wizIsEdit ? (client.tp3_pillar || weakest || '') : (weakest || ''),
+    goal90:    wizIsEdit ? (client.goal_statement || '') : (p?.suggested?.goal90 || ''),
+    goal30:    wizIsEdit ? (client.goal_30_day    || '') : (p?.suggested?.goal30 || ''),
+    behavior1: wizIsEdit ? (client.behavior_1 || client.start_behavior || '') : (p?.suggested?.behavior1 || ''),
+    behavior2: wizIsEdit ? (client.behavior_2 || '') : (p?.suggested?.behavior2 || ''),
+    metric1: {
+      name:     wizIsEdit ? (client.metric_1_name || client.metric_name || '') : (p?.suggested?.metric1?.name || ''),
+      baseline: wizIsEdit ? (client.metric_1_baseline ?? client.metric_baseline ?? '') : (p?.suggested?.metric1?.baseline ?? ''),
+      target:   wizIsEdit ? (client.metric_1_target  ?? client.metric_target  ?? '') : (p?.suggested?.metric1?.target  ?? ''),
+    },
+    metric2: {
+      question:  wizIsEdit ? (client.metric_2_question  || '') : (p?.suggested?.metric2?.question  || ''),
+      targetAvg: wizIsEdit ? (client.metric_2_target_avg ?? 4.0) : (p?.suggested?.metric2?.targetAvg ?? 4.0),
+    },
+    stakeholders: (wizIsEdit ? [] : (p?.suggested?.stakeholders || []).map(s => ({ ...s, fromDiag: true }))),
+    reward30:   wizIsEdit ? (client.reward_30_day || '') : '',
+    reward90:   wizIsEdit ? (client.reward_90_day || '') : '',
+    startDate:  client.plan_start_date || today,
+    timezone:   client.timezone || 'America/New_York',
+    hasDiag:    !!p,
+    scores,
+    weakest,
+    keyTheme:   p?.key_theme || '',
+  };
+
+  // Build shell for wizard
   document.getElementById('mainContent').innerHTML = `
-    <div class="card navy-top" style="margin-top:24px;">
-      <div class="card-title">${isEdit ? `Update Your Plan, ${firstName}` : `Welcome, ${firstName}`}</div>
-      <div class="card-subtitle">${isEdit
-        ? 'Your coach has unlocked your plan for editing. Update any fields below and resubmit when ready.'
-        : "Let's lock in your 90-Day Leadership Plan. This takes about 10 minutes and only needs to be done once. Pull out your notes from your debrief conversation."
+    <div style="max-width:680px;margin:24px auto 80px;">
+      <div class="wiz-progress-wrap" id="wizProgressWrap">
+        <div class="wiz-progress-label">Plan Setup — Step <span id="wizStepNum">1</span> of 8</div>
+        <div class="wiz-steps" id="wizSteps"></div>
+      </div>
+      <div id="wizStepBody"></div>
+      <div class="wiz-nav" id="wizNav"></div>
+      <div class="wiz-err" id="wizErr"></div>
+    </div>`;
+
+  wizRender();
+}
+
+// ── Core render ────────────────────────────────────────────────────────────
+function wizRender() {
+  wizRenderProgress();
+  wizRenderStep(wizStep);
+  wizRenderNav();
+  wizClearError();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function wizRenderProgress() {
+  document.getElementById('wizStepNum').textContent = wizStep + 1;
+  document.getElementById('wizSteps').innerHTML = WIZ_STEPS.map(s => {
+    let cls = 'wiz-step';
+    if (s.id < wizStep) cls += ' done';
+    else if (s.id === wizStep) cls += ' current';
+    const icon = s.id < wizStep ? '✓' : s.id + 1;
+    return `<div class="${cls}"><div class="wiz-dot">${icon}</div><div class="wiz-step-label">${s.label}</div></div>`;
+  }).join('');
+}
+
+function wizRenderNav() {
+  const isLast = wizStep === 7;
+  document.getElementById('wizNav').innerHTML = `
+    <button class="wiz-btn-back" id="wizBtnBack" onclick="wizBack()" style="${wizStep === 0 ? 'visibility:hidden' : ''}">&larr; Back</button>
+    <button class="${'wiz-btn-next' + (isLast ? ' wiz-btn-lock' : '')}" id="wizBtnNext" onclick="wizNext()">
+      ${isLast ? '🔒 Lock In My Plan' : 'Continue &rarr;'}
+    </button>`;
+}
+
+function wizRenderStep(step) {
+  const body = document.getElementById('wizStepBody');
+  const fn = [wizS0, wizS1, wizS2, wizS3, wizS4, wizS5, wizS6, wizS7][step];
+  body.innerHTML = fn ? fn() : '';
+}
+
+// ── Escape helper ──────────────────────────────────────────────────────────
+function wizEsc(v) {
+  return (v||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Step 0: Welcome ────────────────────────────────────────────────────────
+function wizS0() {
+  const firstName = wizClientName.split(' ')[0] || 'there';
+  const hasDiag   = wizPlan.hasDiag;
+  const scores    = wizPlan.scores;
+
+  const scoreHtml = hasDiag && scores ? `
+    <div class="wiz-diag-wrap">
+      <div class="wiz-diag-title">📊 Your TP3 Diagnostic Scores</div>
+      <div class="wiz-scores">
+        ${['Trust','Proactivity','Productivity'].map(p => {
+          const key = p.toLowerCase();
+          const sc  = scores[p] ? scores[p].toFixed(1) : '—';
+          const isFocus = p === wizPlan.weakest;
+          return `<div class="wiz-score-pill ${key}${isFocus ? ' focus-area' : ''}">
+            <div class="wiz-pill-label">${p}</div>
+            <div class="wiz-pill-score">${sc}</div>
+            <div class="wiz-pill-max">/ 5.0</div>
+            ${isFocus ? '<div class="wiz-focus-tag">Focus Area</div>' : ''}
+          </div>`;
+        }).join('')}
+      </div>
+      ${wizPlan.keyTheme ? `<div class="wiz-theme">"${wizEsc(wizPlan.keyTheme)}"</div>` : ''}
+    </div>` : '';
+
+  const prefillList = hasDiag ? `
+    <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:14px;">
+      ${['Focus Pillar (lowest score)','90-Day Goal','30-Day Goal','Behavior + 2 Metrics','Stakeholders from diagnostic'].map(item =>
+        `<div style="display:flex;gap:9px;align-items:flex-start;font-size:13px;"><span style="color:var(--teal);font-weight:700;min-width:18px;">✓</span><span>${item}</span></div>`
+      ).join('')}
+    </div>` : '';
+
+  return `
+    <div class="card navy-top">
+      <div class="wiz-step-badge">${wizIsEdit ? 'Editing Your Plan' : 'Welcome'}</div>
+      <div class="card-title">${wizIsEdit ? `Update Your Plan, ${firstName}` : (hasDiag ? `Your Plan Is Already in Draft, ${firstName}.` : `Let's Build Your Plan, ${firstName}.`)}</div>
+      <div class="card-subtitle">${wizIsEdit
+        ? 'Your coach has unlocked your plan for editing. Review each step and resubmit when ready.'
+        : (hasDiag
+          ? 'Based on your diagnostic, we\'ve pre-built a starting point. You\'ll review, edit, and confirm each piece. Nothing is final until you lock it in.'
+          : 'We\'ll walk through 7 quick steps to build your 90-day plan. Takes about 10 minutes.'
+        )
       }</div>
     </div>
-
-    ${!isEdit ? `
     <div class="card">
-      <div class="card-title">Before We Start — Your Time Zone</div>
-      <div class="card-subtitle">So your weekly Monday reminder arrives at the right time.</div>
-      <div class="form-group" style="margin-bottom:0;">
-        <select id="clientTimezone" style="width:100%;padding:12px 14px;border:2px solid var(--gray-300);border-radius:8px;font-size:15px;font-family:'Open Sans',sans-serif;background:#fff;">
-          <option value="America/New_York">Eastern Time (ET)</option>
-          <option value="America/Chicago">Central Time (CT)</option>
-          <option value="America/Denver">Mountain Time (MT)</option>
-          <option value="America/Los_Angeles">Pacific Time (PT)</option>
+      ${scoreHtml}
+      ${hasDiag ? `<div class="card-title" style="font-size:14px;margin-bottom:12px;">What\'s Pre-Built For You</div>${prefillList}` : ''}
+      <div style="background:#fff8ec;border:1px solid #fcd88a;border-radius:8px;padding:12px 14px;font-size:13px;color:#1a1a1a;line-height:1.6;">
+        <strong>${hasDiag ? 'Every field is editable.' : 'All fields start blank.'}</strong> ${wizIsEdit ? 'Update anything that needs to change.' : (hasDiag ? 'Your coach has reviewed the draft. This takes about 10 minutes.' : 'Pull out notes from your debrief conversation. This takes about 10 minutes.')}
+      </div>
+      ${!wizIsEdit ? `
+      <div class="form-group" style="margin-top:16px;margin-bottom:0;">
+        <label>Your Time Zone</label>
+        <div class="hint">So your Monday reminder arrives at the right time.</div>
+        <select id="wizTimezone" style="width:100%;padding:11px 13px;border:1.5px solid var(--gray-300);border-radius:7px;font-size:14px;font-family:inherit;background:#fff;">
+          <option value="America/New_York" ${wizPlan.timezone==='America/New_York'?'selected':''}>Eastern Time (ET)</option>
+          <option value="America/Chicago"  ${wizPlan.timezone==='America/Chicago'?'selected':''}>Central Time (CT)</option>
+          <option value="America/Denver"   ${wizPlan.timezone==='America/Denver'?'selected':''}>Mountain Time (MT)</option>
+          <option value="America/Los_Angeles" ${wizPlan.timezone==='America/Los_Angeles'?'selected':''}>Pacific Time (PT)</option>
         </select>
-      </div>
-    </div>` : ''}
+      </div>` : ''}
+    </div>`;
+}
 
-    <div class="card">
-      <div class="card-title">Step 1 — Your Focus Pillar</div>
-      <div class="card-subtitle">Which pillar did you and Alex agree to focus on?</div>
-      <div class="pillar-radio-group" id="pillarGroup">
-        <div class="pillar-option" onclick="selectPillar('Trust')" id="pillar-Trust">
-          <div class="pillar-icon">🤝</div>
-          <div class="pillar-name">Trust</div>
-          <div class="pillar-desc">How your team experiences your reliability, transparency, and follow-through</div>
-        </div>
-        <div class="pillar-option" onclick="selectPillar('Proactivity')" id="pillar-Proactivity">
-          <div class="pillar-icon">⚡</div>
-          <div class="pillar-name">Proactivity</div>
-          <div class="pillar-desc">How you anticipate, initiate, and move without waiting to be told</div>
-        </div>
-        <div class="pillar-option" onclick="selectPillar('Productivity')" id="pillar-Productivity">
-          <div class="pillar-icon">🎯</div>
-          <div class="pillar-name">Productivity</div>
-          <div class="pillar-desc">How effectively you focus your team's time and energy on what moves the needle</div>
-        </div>
-      </div>
-      <input type="hidden" id="tp3Pillar" value="${esc(client.tp3_pillar)}" />
+// ── Step 1: Pillar ─────────────────────────────────────────────────────────
+function wizS1() {
+  const scores  = wizPlan.scores;
+  const pillars = ['Trust','Proactivity','Productivity'];
+  return `
+    <div class="card navy-top">
+      <div class="wiz-step-badge">Step 1 of 7 — Focus Pillar</div>
+      <div class="card-title">Confirm Your Focus Pillar</div>
+      <div class="card-subtitle">${wizPlan.weakest
+        ? `Based on your diagnostic, <strong>${wizPlan.weakest}</strong> is your lowest-scoring area. We\'ve auto-selected it. Change it if you and your coach decided on a different focus.`
+        : 'Which pillar did you and Alex agree to focus on for these 90 days?'
+      }</div>
     </div>
-
     <div class="card">
-      <div class="card-title">Step 2 — Your Goal</div>
-
-      <div class="form-group">
-        <label>Goal Description <span style="color:var(--red)">*</span></label>
-        <div class="hint">In plain language — what specific leadership behavior are you changing or building?</div>
-        <textarea id="goalDescription" placeholder="${iCfg.goalDescription || 'e.g. Stop making every decision myself. Build a weekly rhythm where my ops managers bring solutions, not just problems.'}">${esc(client.goal_description)}</textarea>
+      <div class="wiz-pillar-grid">
+        ${pillars.map(p => {
+          const key     = p.toLowerCase();
+          const isAuto  = p === wizPlan.weakest;
+          const isSel   = wizPlan.pillar === p;
+          const sc      = scores ? scores[p] : null;
+          const desc    = p==='Trust' ? 'How your team experiences your reliability, transparency, and follow-through'
+                        : p==='Proactivity' ? 'How you anticipate, initiate, and act without being told'
+                        : 'How effectively you focus your team\'s time on what moves the needle';
+          const icon    = p==='Trust'?'🤝':p==='Proactivity'?'⚡':'🎯';
+          return `<div class="wiz-pillar-card ${key}${isSel?' selected':''}${isAuto?' auto-sel':''}" onclick="wizSelectPillar('${p}')">
+            <div class="wiz-pillar-icon">${icon}</div>
+            <div class="wiz-pillar-name">${p}</div>
+            <div class="wiz-pillar-desc">${desc}</div>
+            ${sc ? `<div class="wiz-pillar-score">Diagnostic: ${sc.toFixed(1)}/5.0</div>` : ''}
+          </div>`;
+        }).join('')}
       </div>
+      <div class="hint" style="margin-top:12px;text-align:center;">Not sure? Trust the diagnostic. You can revisit with your coach.</div>
+    </div>`;
+}
 
+function wizSelectPillar(p) {
+  wizPlan.pillar = p;
+  document.querySelectorAll('.wiz-pillar-card').forEach(el => el.classList.remove('selected'));
+  document.querySelectorAll(`.wiz-pillar-card.${p.toLowerCase()}`).forEach(el => el.classList.add('selected'));
+}
+
+// ── Step 2: Goals ──────────────────────────────────────────────────────────
+function wizS2() {
+  const hasPre = wizPlan.hasDiag && (wizPlan.goal90 || wizPlan.goal30);
+  return `
+    <div class="card navy-top">
+      <div class="wiz-step-badge">Step 2 of 7 — Your Goals</div>
+      <div class="card-title">Your 90-Day and 30-Day Goals</div>
+      <div class="card-subtitle">Write the 90-day goal first — the outcome that will be true at day 90. Then the 30-day goal: a concrete checkpoint that proves you\'re on track. Both are required.</div>
+    </div>
+    <div class="card">
+      <div class="form-group">
+        <label>90-Day Goal <span style="color:var(--red)">*</span></label>
+        <div class="hint">First person. Specific behavior change. Written as if day 90 has arrived.</div>
+        <textarea id="wizGoal90" rows="3">${wizEsc(wizPlan.goal90)}</textarea>
+        ${hasPre && wizPlan.goal90 ? '<div class="wiz-prefilled">✦ Pre-filled from your diagnostic</div>' : ''}
+      </div>
+      <div style="height:1px;background:var(--gray-200);margin:16px 0;"></div>
       <div class="form-group">
         <label>30-Day Goal <span style="color:var(--red)">*</span></label>
-        <div class="hint">What specific progress will you be able to point to at 30 days? This is your first real checkpoint.</div>
-        <textarea id="goal30Day" placeholder="${iCfg.goal30Day || 'e.g. By day 30, I will have run the Monday stand-up 4 times without jumping in to solve problems for my managers.'}">${esc(client.goal_30_day)}</textarea>
+        <div class="hint">What specific, observable progress will you point to at day 30? Not a feeling — a fact.</div>
+        <textarea id="wizGoal30" rows="3">${wizEsc(wizPlan.goal30)}</textarea>
+        ${hasPre && wizPlan.goal30 ? '<div class="wiz-prefilled">✦ Pre-filled working backwards from your 90-day goal</div>' : ''}
       </div>
-
       <div class="form-group">
-        <label>90-Day Goal Statement <span style="color:var(--red)">*</span></label>
-        <div class="hint">The outcome you want to be able to say at the end of 90 days. First person, specific.</div>
-        <textarea id="goalStatement" placeholder="${iCfg.goalStatement || 'e.g. By the end of 90 days, my ops managers are running their own P&L reviews without needing me in the room.'}">${esc(client.goal_statement)}</textarea>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">Step 3 — Your Metrics</div>
-      <div class="card-subtitle">How will you know this is working? Track up to 3 numbers weekly. At least one is required.</div>
-
-      <!-- METRIC 1 (required) -->
-      <div id="metric1Block">
-        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--navy);margin-bottom:10px;">Metric 1 <span style="color:var(--red)">*</span></div>
-        <div class="form-group">
-          <label>Metric Name</label>
-          <div class="hint">What are you measuring?</div>
-          <input type="text" id="metric1Name" placeholder="${iCfg.metric1Name || 'e.g. # decisions made without my input per week'}" value="${esc(client.metric_1_name || client.metric_name)}" />
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Baseline (where you are now)</label>
-            <input type="number" id="metric1Baseline" placeholder="e.g. 2" step="any" value="${client.metric_1_baseline ?? client.metric_baseline ?? ''}" />
-          </div>
-          <div class="form-group">
-            <label>90-Day Target</label>
-            <input type="number" id="metric1Target" placeholder="e.g. 8" step="any" value="${client.metric_1_target ?? client.metric_target ?? ''}" />
-          </div>
-        </div>
-      </div>
-
-      <!-- METRIC 2 (optional) -->
-      <div id="metric2Toggle" style="${client.metric_2_name ? 'display:none;' : ''}">
-        <button type="button" onclick="showMetric(2)" style="background:none;border:1px dashed var(--teal);color:var(--teal);padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;margin-top:4px;">+ Add another metric (optional)</button>
-      </div>
-      <div id="metric2Block" style="${client.metric_2_name ? '' : 'display:none;'}">
-        <div style="border-top:1px solid var(--gray-200);margin:16px 0 12px;"></div>
-        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--navy);margin-bottom:10px;">Metric 2</div>
-        <div class="form-group">
-          <label>Metric Name</label>
-          <input type="text" id="metric2Name" placeholder="${iCfg.metric2Name || 'e.g. # direct reports who hit their weekly target'}" value="${esc(client.metric_2_name)}" />
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Baseline</label>
-            <input type="number" id="metric2Baseline" placeholder="e.g. 1" step="any" value="${client.metric_2_baseline ?? ''}" />
-          </div>
-          <div class="form-group">
-            <label>90-Day Target</label>
-            <input type="number" id="metric2Target" placeholder="e.g. 5" step="any" value="${client.metric_2_target ?? ''}" />
-          </div>
-        </div>
-      </div>
-
-      <!-- METRIC 3 (optional) -->
-      <div id="metric3Toggle" style="${client.metric_3_name ? 'display:none;' : 'display:none;'}">
-        <button type="button" onclick="showMetric(3)" style="background:none;border:1px dashed var(--teal);color:var(--teal);padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;margin-top:4px;">+ Add a third metric (optional)</button>
-      </div>
-      <div id="metric3Block" style="${client.metric_3_name ? '' : 'display:none;'}">
-        <div style="border-top:1px solid var(--gray-200);margin:16px 0 12px;"></div>
-        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--navy);margin-bottom:10px;">Metric 3</div>
-        <div class="form-group">
-          <label>Metric Name</label>
-          <input type="text" id="metric3Name" placeholder="${iCfg.metric3Name || 'e.g. Team NPS score'}" value="${esc(client.metric_3_name)}" />
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Baseline</label>
-            <input type="number" id="metric3Baseline" placeholder="e.g. 6" step="any" value="${client.metric_3_baseline ?? ''}" />
-          </div>
-          <div class="form-group">
-            <label>90-Day Target</label>
-            <input type="number" id="metric3Target" placeholder="e.g. 9" step="any" value="${client.metric_3_target ?? ''}" />
-          </div>
-        </div>
-      </div>
-
-      <div class="form-group" style="margin-top:16px;">
         <label>Plan Start Date <span style="color:var(--red)">*</span></label>
-        <div class="hint">The date your 90-day engagement officially begins.</div>
-        <input type="date" id="planStartDate" value="${client.plan_start_date || today}" required />
+        <input type="date" id="wizStartDate" value="${wizEsc(wizPlan.startDate)}" />
       </div>
+    </div>`;
+}
+
+// ── Step 3: Metrics ────────────────────────────────────────────────────────
+function wizS3() {
+  const m1 = wizPlan.metric1;
+  const m2 = wizPlan.metric2;
+  return `
+    <div class="card navy-top">
+      <div class="wiz-step-badge">Step 3 of 7 — Your Metrics</div>
+      <div class="card-title">Two Metrics — Both Required</div>
+      <div class="card-subtitle">Every plan tracks exactly two things: how often you\'re doing the behavior (self-tracked), and how others experience the change (stakeholder perception). Edit the text, not the structure.</div>
     </div>
-
-    <div class="card">
-      <div class="card-title">Step 4 — Your Behaviors</div>
-      <div class="card-subtitle">The specific things you're committing to start doing. At least one is required.</div>
-
-      <!-- BEHAVIOR 1 (required) -->
+    <div class="wiz-metric-block">
+      <div class="wiz-required-note">✦ Required — Metric 1 is always self-tracked and count-based.</div>
+      <div class="wiz-metric-hdr">
+        <div><div class="wiz-metric-title">Metric 1 — Self Behavior Metric</div><div class="wiz-metric-desc">Counts how often you execute the behavior each week.</div></div>
+        <span class="wiz-metric-badge self">Self</span>
+      </div>
       <div class="form-group">
-        <label>Behavior 1 <span style="color:var(--red)">*</span></label>
-        <div class="hint">Be specific about what it looks like in action — day, time, who's involved.</div>
-        <textarea id="behavior1" placeholder="${iCfg.behavior1 || 'e.g. Run a 20-minute Monday ops stand-up where each manager reports their top priority and any blockers — without me solving the blockers for them.'}">${esc(client.behavior_1 || client.start_behavior)}</textarea>
+        <label>What you\'re counting <span style="color:var(--red)">*</span></label>
+        <div class="hint">Phrase it as "# of times I did [behavior] this week."</div>
+        <input type="text" id="wizM1Name" value="${wizEsc(m1.name)}" placeholder="e.g. # of times I asked for options before giving my view" />
+        ${m1.name && wizPlan.hasDiag ? '<div class="wiz-prefilled">✦ Pre-filled from Behavior 1</div>' : ''}
       </div>
-
-      <!-- BEHAVIOR 2 (optional) -->
-      <div id="behavior2Toggle" style="${client.behavior_2 ? 'display:none;' : ''}">
-        <button type="button" onclick="showBehavior2()" style="background:none;border:1px dashed var(--teal);color:var(--teal);padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">+ Add another behavior (optional)</button>
-      </div>
-      <div id="behavior2Block" style="${client.behavior_2 ? '' : 'display:none;'}">
-        <div class="form-group" style="margin-top:12px;">
-          <label>Behavior 2</label>
-          <textarea id="behavior2" placeholder="${iCfg.behavior2 || 'e.g. Send a Friday 3-sentence update to my leadership team each week without fail.'}">${esc(client.behavior_2)}</textarea>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Baseline <span style="color:var(--red)">*</span></label>
+          <div class="hint">Last week\'s count.</div>
+          <input type="number" id="wizM1Base" value="${m1.baseline !== '' ? m1.baseline : ''}" min="0" placeholder="e.g. 2" />
+        </div>
+        <div class="form-group">
+          <label>90-Day Weekly Target <span style="color:var(--red)">*</span></label>
+          <div class="hint">Where you want to be by week 13.</div>
+          <input type="number" id="wizM1Target" value="${m1.target !== '' ? m1.target : ''}" min="1" placeholder="e.g. 8" />
         </div>
       </div>
     </div>
-
-    <div class="card">
-      <div class="card-title">Step 5 — Your Rewards</div>
-      <div class="card-subtitle">Optional but powerful. What's at stake for you personally?</div>
-
-      <div class="form-group">
-        <label>30-Day Reward</label>
-        <div class="hint">Something meaningful you'll give yourself if you're on track at 30 days.</div>
-        <input type="text" id="reward30" placeholder="${iCfg.reward30 || 'e.g. A full weekend off — phone down Friday night through Sunday'}" value="${esc(client.reward_30_day)}" />
+    <div class="wiz-metric-block">
+      <div class="wiz-required-note">✦ Required — Metric 2 is always a 1–5 stakeholder perception question.</div>
+      <div class="wiz-metric-hdr">
+        <div><div class="wiz-metric-title">Metric 2 — Stakeholder Perception Metric</div><div class="wiz-metric-desc">Sent to your stakeholders at day 30 and day 90 as a short survey.</div></div>
+        <span class="wiz-metric-badge stakeholder">Stakeholder</span>
       </div>
-
       <div class="form-group">
-        <label>90-Day Reward</label>
-        <div class="hint">Something bigger that represents what this change means to you.</div>
-        <input type="text" id="reward90" placeholder="${iCfg.reward90 || 'e.g. Book the trip we\'ve been putting off for two years'}" value="${esc(client.reward_90_day)}" />
+        <label>Survey Question <span style="color:var(--red)">*</span></label>
+        <div class="hint">Write from your stakeholder\'s point of view. Answerable on a 1–5 agreement scale. Scores of 4 or 5 = meets the bar.</div>
+        <textarea id="wizM2Q" rows="2">${wizEsc(m2.question)}</textarea>
+        ${m2.question && wizPlan.hasDiag ? '<div class="wiz-prefilled">✦ Pre-filled based on your pillar and behavior</div>' : ''}
+      </div>
+      <div class="form-group">
+        <label>Target Average Score</label>
+        <div class="hint">Default 4.0. A score of 4 or 5 = "meets the bar."</div>
+        <input type="number" id="wizM2Avg" value="${m2.targetAvg}" min="1" max="5" step="0.1" style="max-width:110px;" />
+      </div>
+      <div class="wiz-scale-row">
+        ${[1,2,3,4,5].map(n => `<div class="wiz-scale-dot${n>=4?' target':''}">${n}</div>`).join('')}
+        <span class="wiz-scale-lbl">← 1–3 needs work &nbsp;|&nbsp; 4–5 meets the bar →</span>
+      </div>
+    </div>`;
+}
+
+// ── Step 4: Behaviors ──────────────────────────────────────────────────────
+function wizS4() {
+  return `
+    <div class="card navy-top">
+      <div class="wiz-step-badge">Step 4 of 7 — Your Behaviors</div>
+      <div class="card-title">The Specific Things You\'re Committing to Do</div>
+      <div class="card-subtitle">A behavior is a "rule in context" — if <em>this</em> situation, then <em>this</em> action. Behavior 1 is required and is what Metric 1 tracks directly.</div>
+    </div>
+    <div class="card">
+      <div style="background:var(--light-teal);border-left:3px solid var(--teal);padding:8px 10px;border-radius:0 5px 5px 0;font-size:12px;color:var(--gray-800);margin-bottom:12px;line-height:1.5;">
+        <strong>Format:</strong> "When [situation], I [specific action] within [timeframe or cadence]."
+      </div>
+      <div class="form-group">
+        <label>Behavior 1 — Required <span style="color:var(--red)">*</span></label>
+        <textarea id="wizB1" rows="3">${wizEsc(wizPlan.behavior1)}</textarea>
+        ${wizPlan.behavior1 && wizPlan.hasDiag ? '<div class="wiz-prefilled">✦ Pre-filled from your diagnostic — edit to make it yours</div>' : ''}
+      </div>
+      <div style="height:1px;background:var(--gray-200);margin:14px 0;"></div>
+      <div class="form-group" style="margin-bottom:0;">
+        <label>Behavior 2 — Optional</label>
+        <div class="hint">A second behavior that supports the same objective. Leave blank to keep the focus tight.</div>
+        <textarea id="wizB2" rows="2">${wizEsc(wizPlan.behavior2)}</textarea>
+        ${wizPlan.behavior2 && wizPlan.hasDiag ? '<div class="wiz-prefilled">✦ Pre-filled — delete if not relevant</div>' : ''}
+      </div>
+    </div>`;
+}
+
+// ── Step 5: Stakeholders ───────────────────────────────────────────────────
+function wizS5() {
+  const shs = wizPlan.stakeholders || [];
+  return `
+    <div class="card navy-top">
+      <div class="wiz-step-badge">Step 5 of 7 — Your Stakeholders</div>
+      <div class="card-title">Who Will Rate Your Progress?</div>
+      <div class="card-subtitle">At day 30 and day 90, these people receive Metric 2 as a short survey. You need at least 1 and no more than 5.</div>
+    </div>
+    <div class="card">
+      <div class="wiz-sh-list" id="wizShList">
+        ${shs.length > 0 ? shs.map((s,i) => wizShRow(s,i)).join('') : wizShRow({name:'',email:'',relationship:'Direct Report',fromDiag:false},0)}
+      </div>
+      <button class="wiz-add-sh-btn" id="wizAddShBtn" onclick="wizAddStakeholder()" ${shs.length>=5?'disabled':''}>
+        + Add another stakeholder ${shs.length>=5?'(max 5 reached)':`(${5-Math.max(shs.length,1)} remaining)`}
+      </button>
+      <div class="hint" style="margin-top:10px;"><strong>Manager</strong> = your direct supervisor &nbsp;·&nbsp; <strong>Direct Report</strong> = someone you manage &nbsp;·&nbsp; <strong>Peer</strong> = same level, different team</div>
+    </div>`;
+}
+
+function wizShRow(s, i) {
+  return `<div class="wiz-sh-row" id="wizSh${i}">
+    <div class="wiz-sh-row-hdr">
+      <div style="display:flex;align-items:center;gap:7px;">
+        <span class="wiz-sh-num">Stakeholder ${i+1}</span>
+        ${s.fromDiag ? '<span class="wiz-sh-from-diag">From Diagnostic</span>' : ''}
+      </div>
+      ${i>0?`<button class="wiz-sh-remove" onclick="wizRemoveStakeholder(${i})">✕ Remove</button>`:''}
+    </div>
+    <div class="form-row" style="margin-bottom:10px;">
+      <div class="form-group" style="margin-bottom:0;">
+        <label style="font-size:12px;">Full Name <span style="color:var(--red)">*</span></label>
+        <input type="text" id="wizShName${i}" value="${wizEsc(s.name)}" placeholder="Full name" />
+      </div>
+      <div class="form-group" style="margin-bottom:0;">
+        <label style="font-size:12px;">Email <span style="color:var(--red)">*</span></label>
+        <input type="email" id="wizShEmail${i}" value="${wizEsc(s.email)}" placeholder="email@company.com" />
       </div>
     </div>
+    <div class="form-group" style="margin-bottom:0;">
+      <label style="font-size:12px;">Relationship <span style="color:var(--red)">*</span></label>
+      <select id="wizShRel${i}" style="width:100%;padding:10px 13px;border:1.5px solid var(--gray-300);border-radius:7px;font-size:14px;font-family:inherit;background:#fff;">
+        <option value="Direct Report" ${s.relationship==='Direct Report'?'selected':''}>Direct Report</option>
+        <option value="Peer"          ${s.relationship==='Peer'?'selected':''}>Peer</option>
+        <option value="Manager"       ${s.relationship==='Manager'?'selected':''}>Manager</option>
+      </select>
+    </div>
+  </div>`;
+}
 
-    <div id="formBError" style="display:none;color:var(--red);font-size:13px;font-weight:600;margin-bottom:12px;padding:10px 14px;background:#fff0f3;border-radius:6px;border:1px solid var(--red);"></div>
+function wizAddStakeholder() {
+  if ((wizPlan.stakeholders||[]).length >= 5) return;
+  wizPlan.stakeholders = wizPlan.stakeholders || [];
+  // Sync current fields before adding
+  wizSyncStakeholders();
+  wizPlan.stakeholders.push({ name:'', email:'', relationship:'Direct Report', fromDiag:false });
+  document.getElementById('wizStepBody').innerHTML = wizS5();
+}
 
-    <button class="btn-primary" onclick="submitFormB('${client.id}', '${client.name}')" id="submitBBtn">
-      ${isEdit ? 'Save Updates →' : 'Lock In My Plan →'}
-    </button>
-    <p style="font-size:12px;color:var(--gray-600);margin-top:10px;">${isEdit ? 'Your updates will be saved and your plan will be re-locked.' : 'Once submitted, your plan is locked. Contact Alex if anything needs to change.'}</p>
-  `;
+function wizRemoveStakeholder(i) {
+  wizSyncStakeholders();
+  if ((wizPlan.stakeholders||[]).length <= 1) return;
+  wizPlan.stakeholders.splice(i,1);
+  document.getElementById('wizStepBody').innerHTML = wizS5();
+}
 
-  // Pre-select pillar if editing
-  if (isEdit && client.tp3_pillar) {
-    setTimeout(() => selectPillar(client.tp3_pillar), 0);
+function wizSyncStakeholders() {
+  const shs = wizPlan.stakeholders || [];
+  shs.forEach((s,i) => {
+    const n = document.getElementById('wizShName'+i);
+    const e = document.getElementById('wizShEmail'+i);
+    const r = document.getElementById('wizShRel'+i);
+    if (n) s.name = n.value.trim();
+    if (e) s.email = e.value.trim();
+    if (r) s.relationship = r.value;
+  });
+}
+
+// ── Step 6: Rewards ────────────────────────────────────────────────────────
+function wizS6() {
+  return `
+    <div class="card navy-top">
+      <div class="wiz-step-badge">Step 6 of 7 — Your Rewards</div>
+      <div class="card-title">What\'s at Stake for You Personally?</div>
+      <div class="card-subtitle">Both rewards are required. Make them real. Vague rewards don\'t work. The 30-day reward should feel meaningful. The 90-day reward should feel earned.</div>
+    </div>
+    <div class="wiz-reward-block">
+      <div class="wiz-reward-hdr"><span class="wiz-reward-icon">🎯</span><span class="wiz-reward-title">30-Day Reward <span style="color:var(--red)">*</span></span></div>
+      <div class="wiz-reward-hint">Something meaningful you\'ll give yourself if you show up at day 30 — on track against your 30-day goal.</div>
+      <input type="text" id="wizR30" value="${wizEsc(wizPlan.reward30)}" placeholder="e.g. A full weekend completely offline" style="width:100%;padding:11px 13px;border:1.5px solid var(--gray-300);border-radius:7px;font-size:14px;font-family:inherit;" />
+    </div>
+    <div class="wiz-reward-block">
+      <div class="wiz-reward-hdr"><span class="wiz-reward-icon">🏆</span><span class="wiz-reward-title">90-Day Reward <span style="color:var(--red)">*</span></span></div>
+      <div class="wiz-reward-hint">Something bigger that represents what closing this out means to you. The trip. The experience. The thing you\'ve been putting off.</div>
+      <input type="text" id="wizR90" value="${wizEsc(wizPlan.reward90)}" placeholder="e.g. Book the trip we\'ve been delaying for two years" style="width:100%;padding:11px 13px;border:1.5px solid var(--gray-300);border-radius:7px;font-size:14px;font-family:inherit;" />
+    </div>
+    <div class="card" style="background:var(--gray-100);box-shadow:none;border:1px solid var(--gray-200);">
+      <div style="font-size:13px;color:var(--gray-600);line-height:1.6;"><strong>Why this matters:</strong> The rewards get anchored in the plan. Your coach references them. When week 8 is hard, you\'ll remember what you said you were working toward.</div>
+    </div>`;
+}
+
+// ── Step 7: Summary ────────────────────────────────────────────────────────
+function wizS7() {
+  const p = wizPlan;
+  const pillarColors = { Trust:'#2563eb', Proactivity:'#7c3aed', Productivity:'#059669' };
+  const pillarBgs    = { Trust:'#eff6ff', Proactivity:'#f5f3ff', Productivity:'#ecfdf5' };
+  const pc = pillarColors[p.pillar] || 'var(--navy)';
+  const pb = pillarBgs[p.pillar]   || 'var(--light-teal)';
+  const shs = (p.stakeholders||[]).filter(s=>s.name);
+
+  return `
+    <div class="card" style="border-top:4px solid var(--teal);">
+      <div class="wiz-step-badge">Final Review</div>
+      <div class="card-title">Your 90-Day Plan — Review Before Locking</div>
+      <div class="card-subtitle">This is exactly what gets saved. Once you hit "Lock In My Plan," your coach is notified and your weekly check-ins begin on your start date.</div>
+    </div>
+    <div class="card">
+      <div class="wiz-sum-section">
+        <div class="wiz-sum-hdr">Focus</div>
+        <div class="wiz-sum-row">
+          <div class="wiz-sum-label">Pillar</div>
+          <div class="wiz-sum-val"><span style="font-weight:700;padding:3px 10px;border-radius:20px;background:${pb};color:${pc};font-size:12px;">${wizEsc(p.pillar||'—')}</span></div>
+        </div>
+      </div>
+      <div class="wiz-sum-section">
+        <div class="wiz-sum-hdr">Goals</div>
+        <div class="wiz-sum-row"><div class="wiz-sum-label">90-Day Goal</div><div class="wiz-sum-val">${wizEsc(p.goal90||'—')}</div></div>
+        <div class="wiz-sum-row"><div class="wiz-sum-label">30-Day Goal</div><div class="wiz-sum-val">${wizEsc(p.goal30||'—')}</div></div>
+        <div class="wiz-sum-row"><div class="wiz-sum-label">Start Date</div><div class="wiz-sum-val">${wizEsc(p.startDate||'—')}</div></div>
+      </div>
+      <div class="wiz-sum-section">
+        <div class="wiz-sum-hdr">Behaviors</div>
+        <div class="wiz-sum-row"><div class="wiz-sum-label">Behavior 1</div><div class="wiz-sum-val">${wizEsc(p.behavior1||'—')}</div></div>
+        ${p.behavior2 ? `<div class="wiz-sum-row"><div class="wiz-sum-label">Behavior 2</div><div class="wiz-sum-val">${wizEsc(p.behavior2)}</div></div>` : ''}
+      </div>
+      <div class="wiz-sum-section">
+        <div class="wiz-sum-hdr">Metrics</div>
+        <div class="wiz-sum-row"><div class="wiz-sum-label">Self (Metric 1)</div><div class="wiz-sum-val">${wizEsc(p.metric1.name||'—')}<br/><span style="font-size:11px;color:var(--gray-500);">Baseline: ${p.metric1.baseline} → Target: ${p.metric1.target}/week</span></div></div>
+        <div class="wiz-sum-row"><div class="wiz-sum-label">Stakeholder (M2)</div><div class="wiz-sum-val">"${wizEsc(p.metric2.question||'—')}"<br/><span style="font-size:11px;color:var(--gray-500);">Target avg: ${p.metric2.targetAvg} / 5.0</span></div></div>
+      </div>
+      ${shs.length ? `
+      <div class="wiz-sum-section">
+        <div class="wiz-sum-hdr">Stakeholders</div>
+        ${shs.map(s=>`<div class="wiz-sum-row"><div class="wiz-sum-label">${wizEsc(s.name)}</div><div class="wiz-sum-val" style="font-size:12px;"><span style="background:var(--gray-200);color:var(--gray-600);border-radius:3px;padding:1px 5px;font-weight:700;font-size:10px;text-transform:uppercase;">${wizEsc(s.relationship)}</span> &nbsp;${wizEsc(s.email)}</div></div>`).join('')}
+      </div>` : ''}
+      <div class="wiz-sum-section" style="margin-bottom:0;">
+        <div class="wiz-sum-hdr">Rewards</div>
+        <div class="wiz-sum-row"><div class="wiz-sum-label">30-Day</div><div class="wiz-sum-val">${wizEsc(p.reward30||'—')}</div></div>
+        <div class="wiz-sum-row" style="margin-bottom:0;"><div class="wiz-sum-label">90-Day</div><div class="wiz-sum-val">${wizEsc(p.reward90||'—')}</div></div>
+      </div>
+    </div>
+    <div style="background:var(--light-teal);border:1px solid #a7f3d0;border-radius:8px;padding:13px 15px;font-size:13px;color:#1a1a1a;margin-bottom:16px;line-height:1.6;">
+      <strong>After you lock in:</strong> Your plan is saved. Alex gets notified. At day 30 and day 90, your stakeholders receive a short 2-question survey automatically.
+    </div>`;
+}
+
+// ── Validate & save per step ───────────────────────────────────────────────
+function wizValidate(step) {
+  wizClearError();
+  if (step === 0) {
+    const tzEl = document.getElementById('wizTimezone');
+    if (tzEl) wizPlan.timezone = tzEl.value;
+    return true;
   }
-}
-
-function selectPillar(pillar) {
-  document.querySelectorAll('.pillar-option').forEach(el => el.classList.remove('selected'));
-  document.getElementById('pillar-' + pillar).classList.add('selected');
-  document.getElementById('tp3Pillar').value = pillar;
-}
-
-function showMetric(n) {
-  document.getElementById('metric' + n + 'Toggle').style.display = 'none';
-  document.getElementById('metric' + n + 'Block').style.display = '';
-  if (n === 2) document.getElementById('metric3Toggle').style.display = '';
-}
-
-function showBehavior2() {
-  document.getElementById('behavior2Toggle').style.display = 'none';
-  document.getElementById('behavior2Block').style.display = '';
-}
-
-async function submitFormB(clientId, clientName) {
-  const btn = document.getElementById('submitBBtn');
-  const errEl = document.getElementById('formBError');
-  errEl.style.display = 'none';
-
-  const pillar        = document.getElementById('tp3Pillar').value;
-  const goalDesc      = document.getElementById('goalDescription').value.trim();
-  const goal30Day     = document.getElementById('goal30Day').value.trim();
-  const goalStatement = document.getElementById('goalStatement').value.trim();
-  const startDate     = document.getElementById('planStartDate').value;
-  const reward30      = document.getElementById('reward30').value.trim();
-  const reward90      = document.getElementById('reward90').value.trim();
-
-  // Behaviors
-  const behavior1 = document.getElementById('behavior1').value.trim();
-  const behavior2El = document.getElementById('behavior2');
-  const behavior2 = behavior2El ? behavior2El.value.trim() : '';
-
-  // Metrics
-  const metric1Name     = document.getElementById('metric1Name').value.trim();
-  const metric1Baseline = parseFloat(document.getElementById('metric1Baseline').value);
-  const metric1Target   = parseFloat(document.getElementById('metric1Target').value);
-
-  const m2Block = document.getElementById('metric2Block');
-  const metric2Visible  = m2Block && m2Block.style.display !== 'none';
-  const metric2Name     = metric2Visible ? document.getElementById('metric2Name').value.trim() : '';
-  const metric2Baseline = metric2Visible ? parseFloat(document.getElementById('metric2Baseline').value) : null;
-  const metric2Target   = metric2Visible ? parseFloat(document.getElementById('metric2Target').value) : null;
-
-  const m3Block = document.getElementById('metric3Block');
-  const metric3Visible  = m3Block && m3Block.style.display !== 'none';
-  const metric3Name     = metric3Visible ? document.getElementById('metric3Name').value.trim() : '';
-  const metric3Baseline = metric3Visible ? parseFloat(document.getElementById('metric3Baseline').value) : null;
-  const metric3Target   = metric3Visible ? parseFloat(document.getElementById('metric3Target').value) : null;
-
-  const missing = [];
-  if (!pillar)          missing.push('Focus Pillar');
-  if (!goalDesc)        missing.push('Goal Description');
-  if (!goal30Day)       missing.push('30-Day Goal');
-  if (!goalStatement)   missing.push('90-Day Goal Statement');
-  if (!startDate)       missing.push('Plan Start Date');
-  if (!metric1Name)     missing.push('Metric 1 Name');
-  if (isNaN(metric1Baseline)) missing.push('Metric 1 Baseline');
-  if (isNaN(metric1Target))   missing.push('Metric 1 Target');
-  if (!behavior1)       missing.push('Behavior 1');
-
-  if (missing.length > 0) {
-    errEl.textContent = 'Please complete: ' + missing.join(', ');
-    errEl.style.display = 'block';
-    errEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    return;
+  if (step === 1) {
+    if (!wizPlan.pillar) { wizShowError('Please select a focus pillar.'); return false; }
+    return true;
   }
+  if (step === 2) {
+    const g90 = document.getElementById('wizGoal90').value.trim();
+    const g30 = document.getElementById('wizGoal30').value.trim();
+    const sd  = document.getElementById('wizStartDate').value;
+    if (!g90) { wizShowError('Please enter your 90-day goal.'); return false; }
+    if (!g30) { wizShowError('Please enter your 30-day goal.'); return false; }
+    if (!sd)  { wizShowError('Please enter a plan start date.'); return false; }
+    wizPlan.goal90 = g90; wizPlan.goal30 = g30; wizPlan.startDate = sd;
+    return true;
+  }
+  if (step === 3) {
+    const m1n = document.getElementById('wizM1Name').value.trim();
+    const m1b = parseFloat(document.getElementById('wizM1Base').value);
+    const m1t = parseFloat(document.getElementById('wizM1Target').value);
+    const m2q = document.getElementById('wizM2Q').value.trim();
+    const m2a = parseFloat(document.getElementById('wizM2Avg').value);
+    if (!m1n)           { wizShowError('Please enter the name for Metric 1.'); return false; }
+    if (isNaN(m1b))     { wizShowError('Please enter a baseline for Metric 1.'); return false; }
+    if (isNaN(m1t))     { wizShowError('Please enter a 90-day target for Metric 1.'); return false; }
+    if (!m2q)           { wizShowError('Please enter the stakeholder survey question for Metric 2.'); return false; }
+    if (isNaN(m2a)||m2a<1||m2a>5) { wizShowError('Metric 2 target must be between 1 and 5.'); return false; }
+    wizPlan.metric1 = { name:m1n, baseline:m1b, target:m1t };
+    wizPlan.metric2 = { question:m2q, targetAvg:m2a };
+    return true;
+  }
+  if (step === 4) {
+    const b1 = document.getElementById('wizB1').value.trim();
+    const b2 = document.getElementById('wizB2').value.trim();
+    if (!b1) { wizShowError('Behavior 1 is required.'); return false; }
+    wizPlan.behavior1 = b1; wizPlan.behavior2 = b2;
+    return true;
+  }
+  if (step === 5) {
+    wizSyncStakeholders();
+    const shs = wizPlan.stakeholders||[];
+    if (shs.length === 0) { wizShowError('Please add at least one stakeholder.'); return false; }
+    for (let i=0;i<shs.length;i++) {
+      if (!shs[i].name)  { wizShowError(`Stakeholder ${i+1} is missing a name.`); return false; }
+      if (!shs[i].email) { wizShowError(`Stakeholder ${i+1} is missing an email.`); return false; }
+    }
+    return true;
+  }
+  if (step === 6) {
+    const r30 = document.getElementById('wizR30').value.trim();
+    const r90 = document.getElementById('wizR90').value.trim();
+    if (!r30) { wizShowError('Please enter your 30-day reward.'); return false; }
+    if (!r90) { wizShowError('Please enter your 90-day reward.'); return false; }
+    wizPlan.reward30 = r30; wizPlan.reward90 = r90;
+    return true;
+  }
+  return true;
+}
 
+// ── Navigation ─────────────────────────────────────────────────────────────
+function wizNext() {
+  if (!wizValidate(wizStep)) return;
+  if (wizStep === 7) { wizLockIn(); return; }
+  wizStep++;
+  wizRender();
+}
+
+function wizBack() {
+  if (wizStep === 0) return;
+  // Silent save before going back (suppress errors for required fields)
+  wizValidate(wizStep);
+  wizStep--;
+  wizRender();
+}
+
+// ── Lock In ────────────────────────────────────────────────────────────────
+async function wizLockIn() {
+  const btn = document.getElementById('wizBtnNext');
   btn.disabled = true;
   btn.textContent = 'Saving…';
 
+  const p = wizPlan;
   const updates = {
-    tp3_pillar:        pillar,
-    goal_description:  goalDesc,
-    goal_30_day:       goal30Day,
-    goal_statement:    goalStatement,
-    plan_start_date:   startDate,
-    reward_30_day:     reward30 || null,
-    reward_90_day:     reward90 || null,
+    tp3_pillar:        p.pillar,
+    goal_statement:    p.goal90,
+    goal_30_day:       p.goal30,
+    goal_description:  p.goal90, // keep legacy field in sync
+    plan_start_date:   p.startDate,
+    reward_30_day:     p.reward30 || null,
+    reward_90_day:     p.reward90 || null,
     plan_submitted_at: new Date().toISOString(),
+    allow_plan_edit:   false,
+    timezone:          p.timezone,
 
-    // Behaviors
-    behavior_1:        behavior1,
-    behavior_2:        behavior2 || null,
-    start_behavior:    behavior1, // keep old field in sync for backwards compat
+    behavior_1:        p.behavior1,
+    behavior_2:        p.behavior2 || null,
+    start_behavior:    p.behavior1,  // legacy sync
 
-    // Metrics
-    metric_1_name:     metric1Name,
-    metric_1_baseline: metric1Baseline,
-    metric_1_target:   metric1Target,
-    metric_current:    metric1Baseline,
-    metric_2_name:     metric2Name || null,
-    metric_2_baseline: !isNaN(metric2Baseline) ? metric2Baseline : null,
-    metric_2_target:   !isNaN(metric2Target)   ? metric2Target   : null,
-    metric_3_name:     metric3Name || null,
-    metric_3_baseline: !isNaN(metric3Baseline) ? metric3Baseline : null,
-    metric_3_target:   !isNaN(metric3Target)   ? metric3Target   : null,
+    metric_1_name:     p.metric1.name,
+    metric_1_baseline: p.metric1.baseline,
+    metric_1_target:   p.metric1.target,
+    metric_current:    p.metric1.baseline,
+    metric_name:       p.metric1.name,      // legacy sync
+    metric_baseline:   p.metric1.baseline,  // legacy sync
+    metric_target:     p.metric1.target,    // legacy sync
 
-    // Keep old fields in sync for backwards compat
-    metric_name:       metric1Name,
-    metric_baseline:   metric1Baseline,
-    metric_target:     metric1Target,
+    // NEW v20 Metric 2 model
+    metric_2_question:  p.metric2.question,
+    metric_2_target_avg: p.metric2.targetAvg,
+
+    // Null out old free-form metric 2/3 fields for new clients
+    // (legacy clients keep their data — this only runs for new submissions)
+    metric_2_name:     null,
+    metric_2_baseline: null,
+    metric_2_target:   null,
+    metric_3_name:     null,
+    metric_3_baseline: null,
+    metric_3_target:   null,
   };
 
-  const tzEl = document.getElementById('clientTimezone');
-  if (tzEl) updates.timezone = tzEl.value;
-
-  const { error } = await db.from('clients').update({ ...updates, allow_plan_edit: false }).eq('id', clientId);
-
-  if (error) {
-    errEl.textContent = 'Error saving. Please try again or contact alex@gpsleadership.org.';
-    errEl.style.display = 'block';
+  try {
+    const { error } = await db.from('clients').update(updates).eq('id', wizClientId);
+    if (error) throw error;
+  } catch (err) {
+    wizShowError('Error saving plan. Please try again or contact alex@gpsleadership.org.');
     btn.disabled = false;
-    btn.textContent = 'Lock In My Plan →';
+    btn.textContent = '🔒 Lock In My Plan';
     return;
   }
 
-  // Notify Alex
+  // ── Stakeholders: insert new, skip duplicates ─────────────────────────
+  try {
+    const shs = (p.stakeholders||[]).filter(s => s.name && s.email);
+    if (shs.length > 0) {
+      // Fetch existing stakeholders for this client (by email)
+      const { data: existing } = await db
+        .from('stakeholders')
+        .select('email')
+        .eq('client_id', wizClientId)
+        .eq('is_active', true);
+      const existingEmails = new Set((existing||[]).map(s => (s.email||'').toLowerCase()));
+
+      const toInsert = shs
+        .filter(s => !existingEmails.has(s.email.toLowerCase()))
+        .map(s => ({
+          client_id:       wizClientId,
+          name:            s.name,
+          email:           s.email,
+          relationship:    s.relationship,
+          is_supervisor:   s.relationship === 'Manager',
+          is_board_member: false,
+          is_active:       true,
+          added_by:        'client_wizard',
+        }));
+
+      if (toInsert.length > 0) {
+        await db.from('stakeholders').insert(toInsert);
+      }
+    }
+  } catch (shErr) {
+    // Non-blocking: stakeholder insert failure doesn't kill the plan save
+    console.error('[wizard/stakeholders]', shErr);
+  }
+
+  // ── Notify Alex ───────────────────────────────────────────────────────
   try {
     await fetch(NOTIFY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        type:         'plan_submitted',
-        clientName:   clientName,
-        pillar,       goalDesc,     goalStatement,
-        metricName:   metric1Name,
-        baseline:     metric1Baseline,
-        target:       metric1Target,
-        startDate,
-        startBehavior: behavior1,
-        reward30,     reward90
+        type:            'plan_submitted',
+        clientName:      wizClientName,
+        pillar:          p.pillar,
+        goalDesc:        p.goal90,
+        goal30Day:       p.goal30,
+        goalStatement:   p.goal90,
+        behavior1:       p.behavior1,
+        behavior2:       p.behavior2 || '',
+        metricName:      p.metric1.name,
+        baseline:        p.metric1.baseline,
+        target:          p.metric1.target,
+        metric2Question: p.metric2.question,
+        metric2Target:   p.metric2.targetAvg,
+        startDate:       p.startDate,
+        startBehavior:   p.behavior1,
+        reward30:        p.reward30,
+        reward90:        p.reward90,
       })
     });
-  } catch (_) { /* notification failed silently — not blocking */ }
+  } catch (_) { /* non-blocking */ }
 
-  trackActivity(clientId);
-  // Reload to show portal
+  trackActivity(wizClientId);
   window.location.reload();
 }
+
+// ── Error helpers ──────────────────────────────────────────────────────────
+function wizShowError(msg) {
+  const el = document.getElementById('wizErr');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('show');
+  el.scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+function wizClearError() {
+  const el = document.getElementById('wizErr');
+  if (el) el.classList.remove('show');
+}
+
+// ── Legacy stubs (kept for backward compat — coach.html may reference) ────
+function selectPillar(pillar) {
+  document.querySelectorAll('.pillar-option').forEach(el => el.classList.remove('selected'));
+  const el = document.getElementById('pillar-'+pillar);
+  if (el) el.classList.add('selected');
+  const inp = document.getElementById('tp3Pillar');
+  if (inp) inp.value = pillar;
+}
+function showMetric(n) {
+  const t = document.getElementById('metric'+n+'Toggle');
+  const b = document.getElementById('metric'+n+'Block');
+  if (t) t.style.display = 'none';
+  if (b) b.style.display = '';
+  if (n===2) { const t3 = document.getElementById('metric3Toggle'); if(t3) t3.style.display = ''; }
+}
+function showBehavior2() {
+  const t = document.getElementById('behavior2Toggle'); if(t) t.style.display='none';
+  const b = document.getElementById('behavior2Block');  if(b) b.style.display='';
+}
+
 
 // ─────────────────────────────────────────────
 // DATE HELPER — parse "YYYY-MM-DD" as local midnight (avoids UTC offset shifting date back 1 day)
@@ -4747,7 +4919,6 @@ function activateQATab() {
   if (tabDiag)    tabDiag.classList.remove('active');
   const qaQi = document.getElementById('qa-qi');
   if (qaQi) setTimeout(() => qaQi.focus(), 100);
-  loadAskAlexHistory();
 }
 
 function openTermsModal(readOnly) {
@@ -5033,70 +5204,6 @@ const QA_CRISIS_PHRASES = [
   'not worth living',"life isn't worth",'life is not worth',
   "can't go on",'cannot go on','giving up on life','no reason to live'
 ];
-// ── Ask Alex history — last 7 sessions, read-only view ───────────────────────
-async function loadAskAlexHistory() {
-  const historyEl = document.getElementById('qa-history');
-  const listEl    = document.getElementById('qa-history-list');
-  if (!historyEl || !listEl || !currentClient?.id) return;
-
-  try {
-    const { data, error } = await db
-      .from('ask_alex_log')
-      .select('id, asked_at, question_text, response_text')
-      .eq('client_id', currentClient.id)
-      .order('asked_at', { ascending: false })
-      .limit(7);
-
-    if (error || !data || data.length === 0) {
-      historyEl.style.display = 'none';
-      return;
-    }
-
-    listEl.innerHTML = data.map((entry, i) => {
-      const dateStr  = new Date(entry.asked_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-      const timeStr  = new Date(entry.asked_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-      const qShort   = (entry.question_text || '').slice(0, 90) + ((entry.question_text || '').length > 90 ? '…' : '');
-      const qFull    = escH(entry.question_text || '');
-      const rFull    = escH(entry.response_text || '');
-      const uid      = `qa-hist-${i}`;
-      return `
-        <div style="border:1px solid var(--gray-200);border-radius:8px;overflow:hidden;">
-          <button onclick="toggleHistoryEntry('${uid}')"
-            style="width:100%;text-align:left;background:var(--gray-100);border:none;padding:11px 14px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;">
-            <div style="flex:1;min-width:0;">
-              <div style="font-size:13px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escH(qShort)}</div>
-              <div style="font-size:11px;color:var(--gray-600);margin-top:2px;">${dateStr} · ${timeStr}</div>
-            </div>
-            <span id="${uid}-chevron" style="font-size:12px;color:var(--gray-600);flex-shrink:0;">▼</span>
-          </button>
-          <div id="${uid}" style="display:none;padding:14px;background:#fff;">
-            <div style="font-size:12px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;">Your Question</div>
-            <div style="font-size:13px;color:var(--navy);line-height:1.6;margin-bottom:14px;white-space:pre-wrap;">${qFull}</div>
-            <div style="font-size:12px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;">Alex's Response</div>
-            <div style="font-size:13px;color:#333;line-height:1.65;white-space:pre-wrap;">${rFull}</div>
-            <button onclick="navigator.clipboard.writeText(${JSON.stringify(entry.response_text || '')})"
-              style="margin-top:12px;background:none;border:1px solid var(--gray-300);border-radius:5px;padding:5px 12px;font-size:11px;color:var(--gray-600);cursor:pointer;font-family:'Open Sans',sans-serif;">
-              Copy Response
-            </button>
-          </div>
-        </div>`;
-    }).join('');
-
-    historyEl.style.display = 'block';
-  } catch(_) {
-    historyEl.style.display = 'none';
-  }
-}
-
-function toggleHistoryEntry(uid) {
-  const el      = document.getElementById(uid);
-  const chevron = document.getElementById(uid + '-chevron');
-  if (!el) return;
-  const open = el.style.display !== 'none';
-  el.style.display      = open ? 'none' : 'block';
-  if (chevron) chevron.textContent = open ? '▼' : '▲';
-}
-
 function qaCrisisDetect(text) {
   const lower = text.toLowerCase();
   return QA_CRISIS_PHRASES.some(p => lower.includes(p));
@@ -6168,425 +6275,6 @@ function showAccessEndedScreen(expiryStr) {
     </div>
   `;
 }
-
-
-// ─────────────────────────────────────────────
-// TESTIMONIAL & REFERRAL FLYWHEEL
-// ─────────────────────────────────────────────
-
-let T_SOURCE        = null;  // 'diagnostic_debrief' | 'coaching_midpoint' | 'engagement_end'
-let T_SAVED_ID      = null;  // saved testimonial id from API
-let T_NPS_SCORE     = null;  // selected NPS score (0-10)
-let T_REFERRALS     = [];    // generated referral objects from API
-let T_CLIENT_TOKEN  = null;  // client.token
-
-// All testimonial screens in order — used by _tShowScreen()
-const T_SCREENS = [
-  't-screen-questions',
-  't-screen-nps',
-  't-screen-referral-offer',
-  't-screen-referral-form',
-  't-screen-referral-emails',
-  't-screen-thankyou'
-];
-
-function _tShowScreen(id) {
-  T_SCREENS.forEach(s => {
-    const el = document.getElementById(s);
-    if (el) el.style.display = (s === id) ? '' : 'none';
-  });
-}
-
-// ── Entry point ────────────────────────────────
-async function checkForPendingTestimonial(client) {
-  try {
-    T_CLIENT_TOKEN = client.token;
-    const res = await fetch('/api/testimonial?action=get-pending-prompt', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        client_token: client.token,
-        diagnostic_id: (window.CLIENT_DIAG && window.CLIENT_DIAG.id) || null,
-        // ?t=end in URL forces the end-of-engagement prompt (for testing)
-        force_end_prompt: new URLSearchParams(window.location.search).get('t') === 'end' ? 'true' : undefined,
-      })
-    });
-    if (!res.ok) return;
-    const data = await res.json();
-    if (data && data.pending_source) {
-      setTimeout(() => showTestimonialOverlay(data.pending_source, client), 2000);
-    }
-  } catch (e) {
-    // Never block portal load
-    console.warn('[testimonial] checkForPendingTestimonial error:', e);
-  }
-}
-
-// ── Configure and open overlay ──────────────────
-function showTestimonialOverlay(source, client) {
-  T_SOURCE = source;
-  T_NPS_SCORE = null;
-  T_SAVED_ID = null;
-  T_REFERRALS = [];
-
-  const engType = (client && client.engagement_type) || '';
-  const isDiagOnly = engType === 'diagnostic_only';
-
-  // Reset all screens to hidden; default show questions
-  _tShowScreen('t-screen-questions');
-
-  const stepLabel   = document.getElementById('t-step-label');
-  const heading     = document.getElementById('t-heading');
-  const subheading  = document.getElementById('t-subheading');
-  const q1Label     = document.getElementById('t-q1-label');
-  const q2Label     = document.getElementById('t-q2-label');
-  const q3Label     = document.getElementById('t-q3-label');
-  const q1Group     = document.getElementById('t-q1-group');
-  const q2Group     = document.getElementById('t-q2-group');
-  const q3Group     = document.getElementById('t-q3-group');
-
-  // Clear previous values
-  ['t-q1','t-q2','t-q3'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-
-  if (source === 'diagnostic_debrief') {
-    if (stepLabel) stepLabel.textContent = 'STEP 1 OF 1';
-    if (heading) heading.textContent = 'A quick reflection on your experience';
-    if (subheading) subheading.textContent = 'Takes about 3 minutes. Your honest answers help future leaders like you.';
-
-    q1Group.style.display = '';
-    q2Group.style.display = '';
-    q3Group.style.display = '';
-
-    if (q1Label) q1Label.textContent = isDiagOnly
-      ? 'Before we started this 14-Day Executive Leadership Diagnostic, what was hardest or most frustrating for you as a leader?'
-      : 'Before we started this 14-Day Executive Leadership Diagnostic and coaching work, what was hardest or most frustrating for you as a leader?';
-    if (q2Label) q2Label.textContent = 'What, specifically, did this process reveal that you weren\'t fully seeing before?';
-    if (q3Label) q3Label.textContent = 'What impact do you expect these insights to have on you and your organization?';
-
-  } else if (source === 'coaching_midpoint') {
-    if (stepLabel) stepLabel.textContent = 'STEP 1 OF 1';
-    if (heading) heading.textContent = 'A quick check-in on your progress';
-    if (subheading) subheading.textContent = 'Takes about 3 minutes. Your honest reflection shapes our next session.';
-
-    q1Group.style.display = '';
-    q2Group.style.display = '';
-    q3Group.style.display = '';
-
-    if (q1Label) q1Label.textContent = 'What has changed for you or your team since we started working together on your diagnostic and coaching plan?';
-    if (q2Label) q2Label.textContent = 'What\'s been the single most valuable part of this work so far?';
-    if (q3Label) q3Label.textContent = 'If a trusted peer asked whether this was worth it, what would you tell them?';
-
-  } else if (source === 'engagement_end') {
-    // For engagement_end: show the outcome question on screen 1, then NPS on screen 2
-    if (stepLabel) stepLabel.textContent = 'STEP 1 OF 2';
-    if (heading) heading.textContent = 'One final reflection';
-    if (subheading) subheading.textContent = 'Takes about 2 minutes. Thank you for being part of this work.';
-
-    q1Group.style.display = '';
-    q2Group.style.display = 'none';
-    q3Group.style.display = 'none';
-
-    if (q1Label) q1Label.textContent = 'In your own words, what\'s been the most meaningful outcome of this work for you or your organization?';
-  }
-
-  // Build NPS grid
-  buildNPSGrid();
-
-  // Configure the NPS prompt label
-  const npsLabel = document.getElementById('t-nps-label');
-  if (npsLabel) {
-    npsLabel.textContent = isDiagOnly
-      ? 'On a scale from 0–10, how likely are you to recommend the 14-Day Executive Leadership Diagnostic to a peer?'
-      : 'On a scale from 0–10, how likely are you to recommend this diagnostic and coaching experience to a peer?';
-  }
-
-  document.getElementById('testimonialOverlay').classList.add('active');
-}
-
-// ── NPS Grid ───────────────────────────────────
-function buildNPSGrid() {
-  const grid = document.getElementById('nps-grid');
-  if (!grid) return;
-  grid.innerHTML = '';
-  for (let i = 0; i <= 10; i++) {
-    const btn = document.createElement('button');
-    btn.className = 'nps-btn';
-    btn.textContent = i;
-    btn.addEventListener('click', function() {
-      T_NPS_SCORE = i;
-      grid.querySelectorAll('.nps-btn').forEach(b => b.classList.remove('selected'));
-      btn.classList.add('selected');
-      // Show/hide follow-up blocks
-      document.getElementById('t-nps-followup-78').style.display = (i === 7 || i === 8) ? '' : 'none';
-      document.getElementById('t-nps-followup-06').style.display = (i <= 6) ? '' : 'none';
-      document.getElementById('t-outcome-group').style.display = '';
-    });
-    grid.appendChild(btn);
-  }
-}
-
-// ── Submit questions (debrief / midpoint / engagement_end screen 1) ──
-async function submitTestimonialQuestions() {
-  const q1 = (document.getElementById('t-q1').value || '').trim();
-  const q2 = (document.getElementById('t-q2').value || '').trim();
-  const q3 = (document.getElementById('t-q3').value || '').trim();
-
-  if (!q1) {
-    alert('Please share at least a brief answer to the first question.');
-    return;
-  }
-
-  const submitBtn = document.querySelector('#t-screen-questions .t-btn-primary');
-  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Saving…'; }
-
-  try {
-    const res = await fetch('/api/testimonial?action=save-testimonial', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        client_token: T_CLIENT_TOKEN,
-        source: T_SOURCE,
-        responses: { q1, q2, q3 }
-      })
-    });
-    const data = res.ok ? await res.json() : {};
-    if (data && data.id) T_SAVED_ID = data.id;
-  } catch (e) {
-    console.warn('[testimonial] save error:', e);
-    // Continue — don't block the user experience
-  }
-
-  if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Continue →'; }
-
-  if (T_SOURCE === 'engagement_end') {
-    _tShowScreen('t-screen-nps');
-  } else {
-    // Show a simple inline thank-you for debrief / midpoint
-    _tShowScreen('t-screen-thankyou');
-    // Update thank you copy for non-referral flow
-    const ty = document.getElementById('t-screen-thankyou');
-    if (ty) {
-      ty.innerHTML = `
-        <h2 style="text-align:center;">Thank you.</h2>
-        <p class="t-sub" style="text-align:center;">Your reflection has been saved. It means a lot.</p>
-        <div class="t-actions" style="justify-content:center;">
-          <button class="t-btn-primary" onclick="closeTestimonialOverlay()">Close</button>
-        </div>
-      `;
-    }
-  }
-}
-
-// ── Submit NPS (engagement_end flow) ───────────
-async function submitNPS() {
-  if (T_NPS_SCORE === null) {
-    alert('Please select a score before submitting.');
-    return;
-  }
-
-  const submitBtn = document.querySelector('#t-screen-nps .t-btn-primary');
-  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Saving…'; }
-
-  const responses = { nps_score: T_NPS_SCORE };
-  if (T_NPS_SCORE >= 7 && T_NPS_SCORE <= 8) {
-    responses.nps_improve = (document.getElementById('t-nps-improve').value || '').trim();
-  }
-  if (T_NPS_SCORE <= 6) {
-    responses.nps_recover = (document.getElementById('t-nps-recover').value || '').trim();
-  }
-  responses.outcome = (document.getElementById('t-outcome').value || '').trim();
-
-  try {
-    const res = await fetch('/api/testimonial?action=save-testimonial', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        client_token: T_CLIENT_TOKEN,
-        source: T_SOURCE,
-        rating_nps: T_NPS_SCORE,
-        testimonial_id: T_SAVED_ID || null,
-        responses
-      })
-    });
-    const data = res.ok ? await res.json() : {};
-    if (data && data.id) T_SAVED_ID = data.id;
-  } catch (e) {
-    console.warn('[testimonial] NPS save error:', e);
-  }
-
-  if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Submit →'; }
-
-  if (T_NPS_SCORE >= 9) {
-    // Fetch referral config copy or use defaults
-    let offerBody = 'Would you be willing to introduce one or two peers who might benefit from this kind of work? I\'ll generate a warm, personalized intro email you can send directly.';
-    try {
-      const r = await fetch('/api/testimonial?action=get-referral-config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_token: T_CLIENT_TOKEN })
-      });
-      if (r.ok) {
-        const cfg = await r.json();
-        if (cfg && cfg.offer_body) offerBody = cfg.offer_body;
-      }
-    } catch (e) { /* use default */ }
-
-    const offerEl = document.getElementById('t-referral-offer-body');
-    if (offerEl) offerEl.textContent = offerBody;
-    _tShowScreen('t-screen-referral-offer');
-  } else {
-    // Show thank you without referral offer
-    const ty = document.getElementById('t-screen-thankyou');
-    if (ty) {
-      ty.innerHTML = `
-        <h2 style="text-align:center;">Thank you.</h2>
-        <p class="t-sub" style="text-align:center;">Your feedback has been recorded and will help shape future engagements.</p>
-        <div class="t-actions" style="justify-content:center;">
-          <button class="t-btn-primary" onclick="closeTestimonialOverlay()">Close</button>
-        </div>
-      `;
-    }
-    _tShowScreen('t-screen-thankyou');
-  }
-}
-
-// ── Show referral form ─────────────────────────
-function showReferralForm() {
-  // Clear referral inputs
-  document.querySelectorAll('#referral-rows input').forEach(inp => { inp.value = ''; });
-  _tShowScreen('t-screen-referral-form');
-}
-
-// ── Generate referral emails via API ──────────
-async function generateReferralEmails() {
-  const rows = [];
-  for (let i = 0; i <= 2; i++) {
-    const name  = (document.querySelector(`input[data-field="name"][data-idx="${i}"]`) || {}).value || '';
-    const email = (document.querySelector(`input[data-field="email"][data-idx="${i}"]`) || {}).value || '';
-    const org   = (document.querySelector(`input[data-field="org"][data-idx="${i}"]`) || {}).value || '';
-    if (name.trim() && email.trim()) {
-      rows.push({ name: name.trim(), email: email.trim(), org: org.trim() });
-    }
-  }
-
-  if (rows.length === 0) {
-    alert('Please enter at least one referral (name and email required).');
-    return;
-  }
-
-  const btn = document.getElementById('t-generate-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
-
-  try {
-    const res = await fetch('/api/testimonial?action=save-referrals', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        client_token: T_CLIENT_TOKEN,
-        testimonial_id: T_SAVED_ID || null,
-        referrals: rows
-      })
-    });
-    if (!res.ok) throw new Error('API error');
-    const data = await res.json();
-    T_REFERRALS = (data && data.referrals) ? data.referrals : rows.map((r, idx) => ({
-      ...r,
-      subject: `I wanted to introduce you to someone`,
-      body: `Hi ${r.name},\n\nI wanted to reach out and introduce you to Alex Tremble at GPS Leadership Solutions. I recently went through his executive leadership work and found it genuinely useful — the kind of thing I wish I'd done earlier.\n\nI thought of you because I think you'd get a lot out of it too.\n\nI'll let Alex share more, but wanted to give you the warm intro first.\n\n[Your name]`
-    }));
-  } catch (e) {
-    console.warn('[testimonial] generate referrals error:', e);
-    // Fall back to client-side placeholder emails
-    T_REFERRALS = rows.map(r => ({
-      ...r,
-      subject: 'Connecting you with Alex Tremble — GPS Leadership',
-      body: `Hi ${r.name},\n\nI wanted to introduce you to Alex Tremble at GPS Leadership Solutions. I recently completed his 14-Day Executive Leadership Diagnostic and it surfaced things about my leadership I hadn't been seeing clearly.\n\nI think you'd find real value in it too — especially given the kind of work you're doing.\n\nHappy to share more if you want to talk before reaching out.\n\n[Your name]`
-    }));
-  }
-
-  if (btn) { btn.disabled = false; btn.textContent = 'Generate Intro Emails →'; }
-
-  renderReferralEmailCards();
-  _tShowScreen('t-screen-referral-emails');
-}
-
-// ── Render editable email cards ────────────────
-function renderReferralEmailCards() {
-  const container = document.getElementById('referral-email-list');
-  if (!container) return;
-  container.innerHTML = '';
-
-  T_REFERRALS.forEach((ref, idx) => {
-    const card = document.createElement('div');
-    card.className = 'referral-email-card';
-    card.innerHTML = `
-      <div class="referral-include-row">
-        <input type="checkbox" id="t-ref-include-${idx}" checked style="width:16px;height:16px;cursor:pointer;">
-        <label for="t-ref-include-${idx}" style="cursor:pointer;">Include ${ref.name}</label>
-      </div>
-      <div class="referral-email-meta">
-        <strong>To:</strong> ${_escHtml(ref.email)}<br>
-        <strong>CC:</strong> alex@gpsleadership.org<br>
-        <strong>Subject:</strong> ${_escHtml(ref.subject || 'Introduction')}
-      </div>
-      <textarea class="referral-email-body" id="t-ref-body-${idx}">${_escHtml(ref.body || '')}</textarea>
-    `;
-    container.appendChild(card);
-  });
-}
-
-function _escHtml(str) {
-  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-// ── Send emails via mailto ─────────────────────
-async function sendReferralEmails() {
-  const sent = [];
-
-  T_REFERRALS.forEach((ref, idx) => {
-    const checkbox = document.getElementById(`t-ref-include-${idx}`);
-    if (!checkbox || !checkbox.checked) return;
-
-    const bodyEl = document.getElementById(`t-ref-body-${idx}`);
-    const body   = bodyEl ? bodyEl.value : (ref.body || '');
-    const subject = ref.subject || 'Introduction';
-
-    const mailto = `mailto:${encodeURIComponent(ref.email)}?cc=${encodeURIComponent('alex@gpsleadership.org')}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    window.open(mailto, '_blank');
-    sent.push(ref);
-  });
-
-  if (sent.length === 0) {
-    alert('Please check at least one referral to send.');
-    return;
-  }
-
-  // Fire-and-forget: mark as sent
-  sent.forEach(ref => {
-    fetch('/api/testimonial?action=mark-referral-sent', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_token: T_CLIENT_TOKEN, testimonial_id: T_SAVED_ID, referral_email: ref.email })
-    }).catch(() => {});
-  });
-
-  _tShowScreen('t-screen-thankyou');
-}
-
-// ── Dismiss / Close ────────────────────────────
-function dismissTestimonial() {
-  document.getElementById('testimonialOverlay').classList.remove('active');
-}
-
-function closeTestimonialOverlay() {
-  document.getElementById('testimonialOverlay').classList.remove('active');
-  T_SOURCE       = null;
-  T_SAVED_ID     = null;
-  T_NPS_SCORE    = null;
-  T_REFERRALS    = [];
-}
-
-// ─────────────────────────────────────────────
 
 
 </script>

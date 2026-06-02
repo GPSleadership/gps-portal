@@ -1,7 +1,11 @@
 // GPS Leadership — Secure Client Fetch + Portal Link Recovery
-// GET  ?token=X          → returns client record (service role, server-side)
+// GET  ?token=X          → returns client record + diagnostic prefill (if available)
 // POST { email }         → looks up client by email, sends portal link via Resend
-// The service role key and Resend key never reach the browser.
+//
+// v20 update: GET now also queries diagnostics table for wizard_prefill_data.
+// If the client has a linked diagnostic with prefill data set, it is returned
+// as client.diagnostic_prefill for the onboarding wizard to consume.
+// Fails gracefully: if diagnostic query errors, client record still returns.
 
 const SUPABASE_URL    = process.env.SUPABASE_URL        || 'https://pbnkefuqpoztcxfagiod.supabase.co';
 const SUPABASE_SECRET = process.env.SUPABASE_SECRET_KEY;
@@ -56,7 +60,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Server misconfigured — missing secret key' });
   }
 
-  // ── POST: portal link recovery ─────────────────────────────────────────
+  // ── POST: portal link recovery ─────────────────────────────────────────────
   if (req.method === 'POST') {
     const { email } = req.body || {};
     if (!email || typeof email !== 'string') {
@@ -65,7 +69,6 @@ export default async function handler(req, res) {
     const normalizedEmail = email.trim().toLowerCase();
 
     try {
-      // Look up client by email (case-insensitive)
       const r = await sbSecret(
         `/rest/v1/clients?email=eq.${encodeURIComponent(normalizedEmail)}&is_archived=eq.false&limit=1`
       );
@@ -79,7 +82,6 @@ export default async function handler(req, res) {
       const client = clients[0];
       const portalUrl = `${PORTAL_BASE}/client?token=${encodeURIComponent(client.token)}`;
 
-      // Send via Resend if configured
       if (RESEND_API_KEY) {
         await fetch('https://api.resend.com/emails', {
           method: 'POST',
@@ -98,13 +100,12 @@ export default async function handler(req, res) {
 
       return res.status(200).json({ ok: true });
     } catch (err) {
-      // Never expose internal errors on the recovery endpoint
       console.error('[get-client/resend-link]', err);
       return res.status(200).json({ ok: true });
     }
   }
 
-  // ── GET: fetch client by token ─────────────────────────────────────────
+  // ── GET: fetch client by token ─────────────────────────────────────────────
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   const { token } = req.query;
@@ -129,6 +130,31 @@ export default async function handler(req, res) {
 
   if (client.in_coaching_program === false) {
     return res.status(403).json({ error: 'Access not available. Contact your coach.' });
+  }
+
+  // ── Diagnostic prefill lookup (v20) ────────────────────────────────────────
+  // Only runs for clients who haven't submitted a plan yet (wizard path).
+  // Wrapped in try/catch: if this fails, client record still returns normally.
+  // The wizard handles null diagnostic_prefill gracefully (shows blank fields).
+  if (!client.plan_submitted_at) {
+    try {
+      const diagRes = await sbSecret(
+        `/rest/v1/diagnostics?client_id=eq.${encodeURIComponent(client.id)}&wizard_prefill_data=not.is.null&order=created_at.desc&limit=1&select=id,wizard_prefill_data,status`
+      );
+
+      if (diagRes.ok) {
+        const diags = await diagRes.json();
+        if (Array.isArray(diags) && diags.length > 0 && diags[0].wizard_prefill_data) {
+          // Attach the prefill data to the client response
+          // wizard_prefill_data structure: { key_theme, scores, suggested: { goal90, goal30, behavior1, behavior2, metric1, metric2, stakeholders } }
+          client.diagnostic_prefill = diags[0].wizard_prefill_data;
+          client.diagnostic_id_ref  = diags[0].id;
+        }
+      }
+    } catch (diagErr) {
+      // Non-blocking: log and continue. Wizard will show blank fields.
+      console.error('[get-client/diagnostic-prefill]', diagErr.message || diagErr);
+    }
   }
 
   return res.status(200).json(client);
