@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPS Leadership Proposal — Wayside Truck Parts</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --sand: #E5DDC8; --sand-light: #F5F1E8; --sand-pale: #FAFAF7;
+    --teal: #01949A; --navy: #004369; --red: #DB1F48; --red-dark: #b81a3c;
+    --white: #FFFFFF; --gray-200: #E8E6E0; --gray-400: #9A9890; --gray-600: #5C5A54;
+    --sans: "Barlow", sans-serif; --cond: "Barlow Condensed", sans-serif;
+    --teal-dark: #006B6F; --teal-light: #7FD9DB;
+    --navy-muted: #C8D8E0; --navy-sub: #B0C4CE;
+  }
+  html { scroll-behavior: smooth; }
+  body { background: var(--white); color: #1A1A18; font-family: var(--sans); font-weight: 400; line-height: 1.65; -webkit-font-smoothing: antialiased; }
+
+  /* HEADER */
+  .proposal-nav-bar { position:sticky; top:0; z-index:100; background:#ffffff; padding:0 52px; display:flex; align-items:center; justify-content:space-between; height:76px; box-shadow:0 3px 16px rgba(0,0,0,0.10); border-bottom:1px solid var(--gray-200); }
+  .header-logos { display:flex; align-items:center; gap:20px; }
+  .logo-gps img { height:46px; width:auto; display:block; }
+  .logo-divider { width:1px; height:36px; background:rgba(0,0,0,0.15); }
+  .logo-client { background:transparent; display:flex; align-items:center; }
+  .logo-client img { height:52px; width:auto; display:block; }
+  .header-badge { background:var(--teal-dark); color:var(--white); font-size:11px; font-weight:600; letter-spacing:0.18em; text-transform:uppercase; padding:7px 14px; border-radius:2px; }
+
+  /* HERO */
+  .hero { background:var(--navy); color:var(--white); padding:80px 64px 72px; position:relative; overflow:hidden; }
+  .hero::after { content:""; position:absolute; right:-80px; top:-80px; width:480px; height:480px; border:48px solid rgba(1,148,154,0.13); border-radius:50%; pointer-events:none; }
+  .hero-eyebrow { display:inline-flex; align-items:center; background:var(--teal); color:var(--white); font-size:11px; font-weight:600; letter-spacing:0.22em; text-transform:uppercase; padding:6px 14px; margin-bottom:28px; border-radius:2px; }
+  .hero-title { font-family:var(--cond); font-size:clamp(48px,7vw,90px); font-weight:800; line-height:0.95; letter-spacing:0.01em; color:var(--white); }
+  .hero-title .accent { color:var(--teal); }
+  .hero-subtitle { font-size:clamp(15px,1.6vw,18px); color:var(--navy-muted); max-width:600px; margin-top:24px; font-weight:300; line-height:1.75; }
+  .hero-meta { margin-top:48px; display:flex; flex-wrap:wrap; border:1px solid rgba(255,255,255,0.15); border-radius:4px; overflow:hidden; max-width:720px; }
+  .hero-meta-item { flex:1; min-width:160px; padding:18px 24px; border-right:1px solid rgba(255,255,255,0.12); }
+  .hero-meta-item:last-child { border-right:none; }
+  .hero-meta-item label { display:block; font-size:10px; letter-spacing:0.22em; text-transform:uppercase; color:var(--teal-light); margin-bottom:5px; font-weight:600; }
+  .hero-meta-item strong { font-size:14px; font-weight:600; color:var(--white); }
+
+  /* SHARED */
+  section { padding:80px 64px; }
+  .section-label { display:inline-flex; align-items:center; gap:10px; font-size:10px; font-weight:700; letter-spacing:0.24em; text-transform:uppercase; color:var(--teal-dark); margin-bottom:14px; }
+  .section-label::before { content:""; display:block; width:20px; height:3px; background:var(--teal-dark); border-radius:2px; }
+  .section-title { font-family:var(--cond); font-size:clamp(30px,4vw,48px); font-weight:800; line-height:1.0; letter-spacing:0.02em; color:var(--navy); margin-bottom:20px; }
+  .section-title .accent { color:var(--red); }
+  .section-body { font-size:16px; color:var(--gray-600); max-width:680px; line-height:1.8; }
+  .divider { height:4px; background:linear-gradient(to right, var(--navy), var(--teal), var(--sand)); }
+
+  /* STRENGTH */
+  .strength { background:var(--sand-pale); }
+  .strength-grid { display:grid; grid-template-columns:1fr 1fr; gap:52px; margin-top:44px; align-items:start; }
+  .strength-body { font-size:15px; color:var(--gray-600); line-height:1.8; }
+  .strength-points { display:flex; flex-direction:column; gap:16px; }
+  .strength-point { display:flex; gap:16px; align-items:flex-start; background:var(--white); border:1px solid var(--gray-200); border-left:4px solid var(--teal); border-radius:0 4px 4px 0; padding:18px 20px; }
+  .sp-icon { flex-shrink:0; width:28px; height:28px; border-radius:50%; background:var(--teal-dark); color:var(--white); font-size:14px; font-weight:700; display:flex; align-items:center; justify-content:center; margin-top:1px; }
+  .sp-text strong { display:block; font-size:14px; font-weight:600; color:var(--navy); margin-bottom:3px; }
+  .sp-text p { font-size:13px; color:var(--gray-600); line-height:1.65; }
+
+  /* OPPORTUNITY */
+  .opportunity { background:var(--white); }
+  .opp-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:44px; }
+  .opp-card { border:2px solid var(--gray-200); border-radius:6px; padding:26px 24px; background:var(--white); transition:border-color 0.25s, box-shadow 0.25s; }
+  .opp-card:hover { border-color:var(--navy); box-shadow:0 4px 18px rgba(0,67,105,0.08); }
+  .opp-card.full-row { grid-column:span 2; }
+  .opp-num { font-family:var(--cond); font-size:11px; font-weight:700; letter-spacing:0.2em; color:var(--teal-dark); text-transform:uppercase; margin-bottom:8px; }
+  .opp-title { font-size:15px; font-weight:600; color:var(--navy); margin-bottom:8px; }
+  .opp-body { font-size:13px; color:var(--gray-600); line-height:1.65; }
+
+  /* LEADERS */
+  .leaders-section { background:var(--sand-pale); }
+  .leaders-cards { display:grid; grid-template-columns:repeat(1,1fr); gap:24px; margin-top:44px; }
+  .leader-profile { background:var(--white); border:2px solid var(--gray-200); border-radius:8px; overflow:hidden; transition:border-color 0.25s, box-shadow 0.25s; }
+  .leader-profile:hover { border-color:var(--navy); box-shadow:0 6px 24px rgba(0,67,105,0.10); }
+  .leader-photo { width:100%; aspect-ratio:4/3; object-fit:cover; object-position:center 20%; display:block; background:var(--gray-200); }
+  .leader-info { padding:14px 16px 18px; }
+  .leader-role-tag { font-size:10px; font-weight:700; letter-spacing:0.2em; text-transform:uppercase; color:var(--teal-dark); margin-bottom:4px; }
+  .leader-name { font-family:var(--cond); font-size:19px; font-weight:800; color:var(--navy); letter-spacing:0.02em; margin-bottom:6px; }
+  .leader-bio { font-size:12px; color:var(--gray-600); line-height:1.55; }
+
+  /* TP3 */
+  .framework { background:var(--white); }
+  .tp3-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-top:44px; }
+  .tp3-card { border:2px solid var(--gray-200); border-radius:6px; padding:32px 28px; position:relative; overflow:hidden; background:var(--white); transition:border-color 0.25s, box-shadow 0.25s, transform 0.25s; }
+  .tp3-card:hover { border-color:var(--teal); box-shadow:0 4px 24px rgba(1,148,154,0.12); transform:translateY(-3px); }
+  .tp3-letter { font-family:var(--cond); font-size:100px; font-weight:800; line-height:1; color:rgba(0,67,105,0.05); position:absolute; top:8px; right:12px; pointer-events:none; }
+  .tp3-tag { font-size:10px; font-weight:700; letter-spacing:0.22em; text-transform:uppercase; color:var(--teal-dark); margin-bottom:8px; }
+  .tp3-title { font-family:var(--cond); font-size:28px; font-weight:800; color:var(--navy); letter-spacing:0.03em; margin-bottom:12px; }
+  .tp3-desc { font-size:13px; color:var(--gray-600); line-height:1.65; }
+  .tp3-question { margin-top:18px; padding:12px 14px; background:var(--sand-light); border-radius:3px; font-size:12.5px; color:var(--navy); font-style:italic; line-height:1.55; font-weight:500; }
+
+  /* SCOPE */
+  .scope { background:var(--sand-pale); }
+  .scope-layout { display:grid; grid-template-columns:1.1fr 0.9fr; gap:56px; margin-top:44px; align-items:start; }
+  .rater-section-title { font-size:10px; font-weight:700; letter-spacing:0.2em; text-transform:uppercase; color:var(--gray-600); margin-bottom:14px; }
+  .rater-list { list-style:none; display:flex; flex-direction:column; gap:10px; }
+  .rater-list li { display:flex; align-items:flex-start; gap:12px; font-size:14px; color:var(--gray-600); padding:12px 16px; background:var(--white); border:1px solid var(--gray-200); border-radius:4px; line-height:1.5; }
+  .rater-list li::before { content:""; flex-shrink:0; width:8px; height:8px; border-radius:50%; background:var(--teal); margin-top:5px; }
+  .rater-list li strong { color:var(--navy); font-weight:600; }
+  .method-cards { display:flex; flex-direction:column; gap:12px; }
+  .method-card { background:var(--white); border:1px solid var(--gray-200); border-left:4px solid var(--teal); border-radius:0 4px 4px 0; padding:16px 20px; }
+  .method-card strong { display:block; font-size:13px; font-weight:600; color:var(--navy); margin-bottom:4px; }
+  .method-card p { font-size:12.5px; color:var(--gray-600); line-height:1.6; }
+
+  /* TIMELINE */
+  .timeline-section { background:var(--navy); color:var(--white); }
+  .timeline-section .section-label { color:var(--teal-light); }
+  .timeline-section .section-label::before { background:var(--teal-light); }
+  .timeline-section .section-title { color:var(--white); }
+  .timeline-section .section-title .accent { color:var(--teal-light); }
+  .timeline-section .section-body { color:var(--navy-muted); }
+  .timeline-layout { display:grid; grid-template-columns:1fr 1fr; gap:48px; margin-top:44px; align-items:start; }
+  .timeline { position:relative; padding-left:44px; }
+  .timeline::before { content:""; position:absolute; left:12px; top:14px; bottom:20px; width:2px; background:rgba(1,148,154,0.4); }
+  .timeline-item { position:relative; margin-bottom:36px; }
+  .timeline-item:last-child { margin-bottom:0; }
+  .timeline-dot { position:absolute; left:-40px; top:4px; width:18px; height:18px; border-radius:50%; border:2px solid var(--teal); background:var(--navy); z-index:1; }
+  .timeline-item:first-child .timeline-dot { background:var(--teal); }
+  .timeline-range { font-size:10px; font-weight:700; letter-spacing:0.2em; text-transform:uppercase; color:var(--teal-light); margin-bottom:5px; }
+  .timeline-label { font-size:16px; font-weight:600; color:var(--white); margin-bottom:5px; }
+  .timeline-desc { font-size:13px; color:var(--navy-muted); line-height:1.65; }
+  .key-event-box { background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.14); border-radius:6px; padding:32px; }
+  .key-event-tag { font-size:10px; font-weight:700; letter-spacing:0.2em; text-transform:uppercase; color:var(--teal-light); margin-bottom:14px; }
+  .key-event-box p { font-size:15px; color:#E8F0F4; line-height:1.75; font-style:italic; margin-bottom:20px; }
+  .key-event-box .detail { font-size:13px; color:var(--navy-muted); line-height:1.65; font-style:normal; }
+  .dur-label { font-size:10px; font-weight:700; letter-spacing:0.2em; text-transform:uppercase; color:var(--navy-sub); margin-bottom:6px; margin-top:24px; padding-top:24px; border-top:1px solid rgba(255,255,255,0.12); }
+  .dur-value { font-family:var(--cond); font-size:36px; font-weight:800; color:var(--white); }
+  .dur-sub { font-size:12px; color:var(--navy-sub); }
+
+  /* TIME REQUIRED */
+  .time-required { background:var(--sand-pale); }
+  .time-cards { display:grid; grid-template-columns:1fr 1fr; gap:32px; max-width:860px; margin-top:44px; }
+  .time-card { background:var(--white); border:1px solid var(--gray-200); border-radius:0 4px 4px 0; padding:24px 28px; }
+  .time-card.teal-accent { border-left:4px solid var(--teal); }
+  .time-card.navy-accent { border-left:4px solid var(--navy); }
+  .time-card-label { font-size:11px; font-weight:700; letter-spacing:0.2em; text-transform:uppercase; margin-bottom:14px; }
+  .time-card.teal-accent .time-card-label { color:var(--teal-dark); }
+  .time-card.navy-accent .time-card-label { color:var(--navy); }
+  .time-list { list-style:none; display:flex; flex-direction:column; gap:10px; }
+  .time-list li { font-size:14px; color:var(--gray-600); padding-left:20px; position:relative; line-height:1.55; }
+  .time-list.teal-bullets li::before { content:"→"; position:absolute; left:0; color:var(--teal); font-weight:700; }
+  .time-list.navy-bullets li::before { content:"→"; position:absolute; left:0; color:var(--navy); font-weight:700; }
+  .time-summary { margin-top:24px; font-size:15px; color:var(--gray-600); max-width:680px; line-height:1.8; font-style:italic; }
+
+  /* DELIVERABLES */
+  .deliverables { background:var(--white); }
+  .deliverables-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:44px; }
+  .del-card { border:2px solid var(--gray-200); border-radius:6px; padding:28px; background:var(--white); transition:border-color 0.25s, box-shadow 0.25s; }
+  .del-card:hover { border-color:var(--navy); box-shadow:0 4px 20px rgba(0,67,105,0.08); }
+  .del-tag { font-size:10px; font-weight:700; letter-spacing:0.2em; text-transform:uppercase; color:var(--teal-dark); margin-bottom:8px; }
+  .del-title { font-size:16px; font-weight:600; color:var(--navy); margin-bottom:14px; line-height:1.35; }
+  .del-items { list-style:none; display:flex; flex-direction:column; gap:8px; }
+  .del-items li { font-size:13px; color:var(--gray-600); padding-left:18px; position:relative; line-height:1.55; }
+  .del-items li::before { content:"\2192"; position:absolute; left:0; color:var(--teal); font-size:12px; font-weight:700; }
+
+  /* BOARD SUMMARY */
+  .board-summary { background:var(--sand-pale); }
+  .board-list { list-style:none; display:flex; flex-direction:column; gap:14px; margin-bottom:32px; max-width:860px; }
+  .board-list li { display:flex; gap:14px; align-items:flex-start; font-size:15px; color:var(--gray-600); line-height:1.7; }
+  .board-list li .dot { flex-shrink:0; margin-top:8px; width:8px; height:8px; border-radius:50%; background:var(--teal); display:inline-block; }
+  .board-callout { background:var(--navy); border-radius:6px; padding:28px 32px; max-width:860px; }
+  .board-callout p { font-size:16px; color:var(--navy-muted); line-height:1.8; font-style:italic; }
+
+  /* INVESTMENT */
+  .investment { background:var(--white); }
+  .invest-layout { display:grid; grid-template-columns:1fr 1.15fr; gap:56px; margin-top:44px; align-items:start; }
+  .price-card { background:var(--navy); border-radius:8px; padding:44px; text-align:center; box-shadow:0 6px 36px rgba(0,67,105,0.18); }
+  .price-eyebrow { font-size:10px; font-weight:700; letter-spacing:0.22em; text-transform:uppercase; color:var(--navy-sub); margin-bottom:16px; }
+  .price-amount { font-family:var(--cond); font-size:88px; font-weight:800; line-height:1; color:var(--white); letter-spacing:0.02em; margin-bottom:4px; }
+  .price-total-label { font-size:13px; color:var(--teal-light); font-weight:600; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:24px; }
+  .price-sub { font-size:13px; color:var(--navy-muted); margin-bottom:16px; line-height:1.65; }
+  .price-full { background:rgba(1,148,154,0.18); border:1px solid rgba(255,255,255,0.15); border-radius:4px; padding:18px; text-align:center; margin-bottom:12px; }
+  .price-full label { display:block; font-size:10px; font-weight:700; letter-spacing:0.2em; text-transform:uppercase; color:var(--navy-sub); margin-bottom:6px; }
+  .price-full strong { font-family:var(--cond); font-size:24px; font-weight:800; color:var(--white); }
+  .price-inaction { font-size:12px; color:var(--navy-muted); line-height:1.7; margin-top:16px; text-align:left; }
+  .value-points { display:flex; flex-direction:column; gap:18px; }
+  .vp { display:flex; gap:16px; align-items:flex-start; padding:18px 20px; background:var(--sand-pale); border:1px solid var(--gray-200); border-radius:4px; }
+  .vp-icon { flex-shrink:0; width:36px; height:36px; border-radius:50%; background:var(--navy); color:var(--white); display:flex; align-items:center; justify-content:center; font-size:16px; }
+  .vp strong { display:block; font-size:14px; font-weight:600; color:var(--navy); margin-bottom:2px; }
+  .vp p { font-size:13px; color:var(--gray-600); line-height:1.65; }
+  .value-quote { padding:20px 24px; background:var(--sand-light); border-left:4px solid var(--teal); border-radius:0 4px 4px 0; }
+  .value-quote p { font-size:15px; color:var(--navy); line-height:1.7; font-style:italic; }
+
+  /* CTA */
+  .cta-section { background:var(--navy); text-align:center; padding:88px 64px; position:relative; overflow:hidden; }
+  .cta-section::after { content:""; position:absolute; left:50%; top:-80px; transform:translateX(-50%); width:500px; height:500px; border:50px solid rgba(1,148,154,0.09); border-radius:50%; pointer-events:none; }
+  .cta-tag { font-size:10px; font-weight:700; letter-spacing:0.24em; text-transform:uppercase; color:var(--teal-light); margin-bottom:16px; }
+  .cta-title { font-family:var(--cond); font-size:clamp(32px,4.5vw,60px); font-weight:800; color:var(--white); letter-spacing:0.02em; line-height:1.0; margin-bottom:18px; }
+  .cta-title .accent { color:var(--teal-light); }
+  .cta-sub { font-size:16px; color:var(--navy-muted); max-width:520px; margin:0 auto 44px; line-height:1.75; }
+  .cta-btn { display:inline-block; background:var(--red); color:var(--white); text-decoration:none; font-size:13px; font-weight:700; letter-spacing:0.18em; text-transform:uppercase; padding:20px 52px; border-radius:3px; cursor:pointer; border:none; transition:background 0.25s, transform 0.2s, box-shadow 0.25s; box-shadow:0 4px 24px rgba(219,31,72,0.4); position:relative; z-index:1; }
+  .cta-btn:hover { background:var(--red-dark); transform:translateY(-2px); box-shadow:0 8px 32px rgba(219,31,72,0.45); }
+  .cta-btn:focus { outline:3px solid var(--sand); outline-offset:3px; }
+  .cta-note { margin-top:20px; font-size:13px; color:var(--navy-sub); position:relative; z-index:1; }
+  .cta-note a { color:var(--teal-light); font-weight:600; text-decoration:none; }
+
+  /* ANIMATIONS — visible by default; JS activates scroll effect after load */
+  .fade-up { opacity:1; transform:translateY(0); transition:opacity 0.65s ease, transform 0.65s ease; }
+  .fade-up.animate { opacity:0; transform:translateY(22px); }
+  .fade-up.animate.visible { opacity:1; transform:translateY(0); }
+  .fade-up.animate:nth-child(2) { transition-delay:0.08s; }
+  .fade-up.animate:nth-child(3) { transition-delay:0.16s; }
+  a:focus, button:focus { outline:3px solid var(--navy); outline-offset:2px; }
+
+  @media (max-width:860px) {
+    section, .hero { padding-left:24px; padding-right:24px; }
+    .proposal-nav-bar { padding:0 24px; }
+    .strength-grid,.scope-layout,.timeline-layout,.invest-layout,.deliverables-grid,.opp-grid,.tp3-grid,.time-cards { grid-template-columns:1fr; }
+    .leaders-cards { grid-template-columns:repeat(2,1fr) !important; gap:12px; }
+    .hero-meta-item { border-right:none; border-bottom:1px solid rgba(255,255,255,0.12); }
+    .hero-meta-item:last-child { border-bottom:none; }
+    .opp-card.full-row { grid-column:span 1 !important; }
+  }
+
+  /* HIDE WORDPRESS THEME ELEMENTS */
+  #masthead, .site-header, header.site-header,
+  .ast-above-header-wrap, .ast-below-header-wrap,
+  .ast-primary-header-bar, .main-header-bar,
+  #colophon, .site-footer, footer.site-footer,
+  .footer-widget-area, .footer-credits,
+  .elementor-location-header, .elementor-location-footer,
+  .ast-above-header, .ast-below-header,
+  nav.site-navigation, .primary-navigation,
+  .wp-site-blocks > header, .wp-site-blocks > footer {
+    display: none !important;
+  }
+  /* HIDE PAGE TITLE */
+  .entry-title, .page-title, h1.entry-title, .wp-block-post-title,
+  .ast-page-builder-template .entry-header, .entry-header,
+  .page-header, .ast-archive-description { display: none !important; }
+  body.page { padding-top:0 !important; margin-top:0 !important; }
+  #wpadminbar { display:none !important; }
+  html { margin-top:0 !important; }
+</style>
+</head>
+<body>
+
+<header role="banner">
+  <div class="proposal-nav-bar">
+    <div class="header-logos">
+      <div class="logo-gps">
+        <img src="https://gpsleadership.org/wp-content/uploads/2023/09/GPS-Leadership-Logo-No-Bg.webp" alt="GPS Leadership Solutions" />
+      </div>
+      <div class="logo-divider" aria-hidden="true"></div>
+      <!-- Wayside logo is white-on-transparent; navy background ensures visibility on white nav bar -->
+      <div class="logo-client" style="background:var(--navy); padding:6px 12px; border-radius:4px;">
+        <img src="https://waysidetruckparts.com/wp-content/uploads/2017/03/Wayside-Logo-REV-Shadow.png" alt="Wayside Truck Parts" />
+      </div>
+    </div>
+    <div class="header-badge">Confidential Proposal</div>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- HERO -->
+<section class="hero" aria-labelledby="hero-title">
+  <div class="hero-eyebrow">14-Day Executive Leadership Diagnostic</div>
+  <h1 class="hero-title" id="hero-title">FORTY YEARS<br>BUILT RIGHT.<br><span class="accent">NOW GROW IT.</span></h1>
+  <p class="hero-subtitle">Wayside has been the go-to for truck parts in Houston since 1983. Revenue has been flat for three years while costs have gone up. That math only moves one direction. Getting Sergio leading, delegating, and developing people at the right level is what makes the next hire — and every hire after that — actually work.</p>
+  <div class="hero-meta" role="list" aria-label="Proposal summary">
+    <div class="hero-meta-item" role="listitem"><label>Prepared For</label><strong>Peter Batarse, Owner, Wayside Truck Parts</strong></div>
+    <div class="hero-meta-item" role="listitem"><label>Engagement</label><strong>1 Leader · 14-Day Assessment</strong></div>
+  </div>
+</section>
+<div class="divider" role="separator" aria-hidden="true"></div>
+
+<!-- WHERE YOU STAND -->
+<section class="strength" aria-labelledby="strength-title">
+  <div class="section-label" aria-hidden="true">Where You Stand</div>
+  <h2 class="section-title" id="strength-title">FORTY YEARS OF DOING IT THE RIGHT WAY</h2>
+  <div class="strength-grid">
+    <div>
+      <p class="strength-body fade-up">Wayside has been solving Houston's truck problems since 1983. You built a profitable, respected business by staying committed to quality American parts, treating customers right, and keeping trucks on the road. That reputation did not happen by accident. And it has outlasted a lot of competitors who did not take operations and relationships as seriously as you did.<br><br>The business is at an inflection point. Adding staff is the right call. But whether those hires produce results depends almost entirely on whether Sergio is leading, delegating, and coaching at the level the next chapter requires. This diagnostic is not about fixing something broken. It is about getting an honest picture before you make the next set of expensive decisions.</p>
+    </div>
+    <div class="strength-points" role="list">
+      <article class="strength-point fade-up" role="listitem">
+        <div class="sp-icon" aria-hidden="true">&#10003;</div>
+        <div class="sp-text">
+          <strong>40-Plus Years of Consistent Operation</strong>
+          <p>Founded in 1983 and still running. That kind of staying power in a competitive, margin-sensitive industry comes from running things right, not from luck.</p>
+        </div>
+      </article>
+      <article class="strength-point fade-up" role="listitem">
+        <div class="sp-icon" aria-hidden="true">&#10003;</div>
+        <div class="sp-text">
+          <strong>Profitable and Respected in the Market</strong>
+          <p>The business is not broken. Revenue has held while the industry has gotten more competitive. The foundation is solid. The goal now is growth, not repair.</p>
+        </div>
+      </article>
+      <article class="strength-point fade-up" role="listitem">
+        <div class="sp-icon" aria-hidden="true">&#10003;</div>
+        <div class="sp-text">
+          <strong>Owner and GM Are Aligned</strong>
+          <p>Peter and Sergio already agree on the diagnosis: more staff is needed, and Sergio's leadership development matters. That alignment is rare. It makes this engagement significantly easier to execute well.</p>
+        </div>
+      </article>
+      <article class="strength-point fade-up" role="listitem">
+        <div class="sp-icon" aria-hidden="true">&#10003;</div>
+        <div class="sp-text">
+          <strong>HDA Truck Pride Membership</strong>
+          <p>Access to quality American parts at volume. The supply chain and vendor relationships are already built. The constraint is not what you sell. It is building the team to sell and serve more of it.</p>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+<div class="divider" role="separator" aria-hidden="true"></div>
+
+<!-- THE OPPORTUNITY -->
+<section class="opportunity" aria-labelledby="opp-title">
+  <div class="section-label" aria-hidden="true">The Opportunity</div>
+  <h2 class="section-title" id="opp-title">THREE GAPS WORTH GETTING AHEAD OF</h2>
+  <p class="section-body">Three years of flat revenue with rising costs is a slow leak. The cause is rarely one big thing. It is usually a few leadership habits that made sense when the company was smaller but do not scale.</p>
+  <div class="opp-grid" role="list">
+    <article class="opp-card fade-up" role="listitem">
+      <div class="opp-num">Opportunity 01</div>
+      <div class="opp-title">Delegation and Follow-Through</div>
+      <p class="opp-body">When the person running the operation is also the best at most things, delegation can feel more like risk than leverage. Sergio likely knows the business well. What this diagnostic will clarify is whether he is delegating in a way that frees him up and develops the people around him, or whether he is holding more than he needs to. That distinction matters a great deal before adding headcount.</p>
+    </article>
+    <article class="opp-card fade-up" role="listitem">
+      <div class="opp-num">Opportunity 02</div>
+      <div class="opp-title">Coaching and Developing People</div>
+      <p class="opp-body">Adding staff is one decision. Getting results from that staff is a different challenge entirely. It requires a leader who sets clear expectations, catches problems early, and builds capability instead of just redirecting work. Before adding headcount, it is worth understanding exactly how Sergio develops the people he already has. That is the best predictor of what happens with the next hires.</p>
+    </article>
+    <article class="opp-card fade-up full-row" role="listitem">
+      <div class="opp-num">Opportunity 03</div>
+      <div class="opp-title">Leadership Habits That Scale With Growth</div>
+      <p class="opp-body">The habits that got Wayside to this point are not automatically the habits that get it to the next level. A 5% annual revenue increase with new staff requires Sergio to lead differently than he has. That is not a criticism — it is simply how growth works. This diagnostic surfaces exactly where the gaps are before they become expensive people problems, so the 90-day plan he walks away with is specific, practical, and tied directly to your business goals.</p>
+    </article>
+  </div>
+</section>
+<div class="divider" role="separator" aria-hidden="true"></div>
+
+<!-- LEADERS -->
+<section class="leaders-section" aria-labelledby="leaders-title">
+  <div class="section-label" aria-hidden="true">Leader Being Assessed</div>
+  <h2 class="section-title" id="leaders-title">ONE LEADER. <span class="accent">ONE ASSESSMENT.</span></h2>
+  <p class="section-body">Sergio receives an individual report, a confidential debrief, and a written 90-day roadmap tailored to his specific role, the team he leads, and the growth goals Peter has set for the business.</p>
+  <div class="leaders-cards" style="max-width:420px;" role="list">
+    <article class="leader-profile fade-up" role="listitem">
+      <!-- Photo: add Sergio's photo URL here before sending -->
+      <div class="leader-photo" style="background:var(--navy); display:flex; align-items:center; justify-content:center; aspect-ratio:4/3;">
+        <span style="font-family:var(--cond); font-size:96px; font-weight:800; color:rgba(1,148,154,0.4); letter-spacing:0.02em;">S</span>
+      </div>
+      <div class="leader-info">
+        <div class="leader-role-tag">General Manager</div>
+        <div class="leader-name">Sergio</div>
+        <p class="leader-bio">Sergio runs day-to-day operations at Wayside. He and Peter are aligned that the next phase of growth requires stronger leadership habits, clearer delegation, and a more intentional approach to coaching and developing staff. This diagnostic gives him the data and the roadmap to make that shift.</p>
+      </div>
+    </article>
+  </div>
+</section>
+<div class="divider" role="separator" aria-hidden="true"></div>
+
+<!-- TP3 FRAMEWORK — FIXED, DO NOT EDIT -->
+<section class="framework" aria-labelledby="framework-title">
+  <div class="section-label" aria-hidden="true">The Diagnostic Framework</div>
+  <h2 class="section-title" id="framework-title">THE TP3&trade; FRAMEWORK: <span class="accent">THREE LENSES</span></h2>
+  <p class="section-body">Each leader is assessed across three dimensions that determine whether the organization moves with them or stalls without them in the room.</p>
+  <div class="tp3-grid" role="list">
+    <article class="tp3-card fade-up" role="listitem"><div class="tp3-letter" aria-hidden="true">T</div><div class="tp3-tag">Pillar One</div><h3 class="tp3-title">TRUST</h3><p class="tp3-desc">Do the people around this leader feel seen, heard, and valued? This goes beyond competence. It measures whether people feel their leader is present and invested in them as individuals, not just as role-fillers.</p><div class="tp3-question">"Does this leader make you feel like you are part of the operation, or just an employee of it?"</div></article>
+    <article class="tp3-card fade-up" role="listitem"><div class="tp3-letter" aria-hidden="true">P</div><div class="tp3-tag">Pillar Two</div><h3 class="tp3-title">PROACTIVITY</h3><p class="tp3-desc">Does this leader's presence and style pull initiative out of the people around them? High-performing teams take ownership because their leaders create the conditions for it, not because they are micromanaged into it.</p><div class="tp3-question">"When this leader is not around, do things move or stall?"</div></article>
+    <article class="tp3-card fade-up" role="listitem"><div class="tp3-letter" aria-hidden="true">P</div><div class="tp3-tag">Pillar Three</div><h3 class="tp3-title">PRODUCTIVITY</h3><p class="tp3-desc">Are the systems, expectations, and decisions this leader drives making it easier for the team to do great work, or harder? Operating efficiency at the leadership level is the multiplier behind everything else.</p><div class="tp3-question">"Does working with this leader make your job easier or harder?"</div></article>
+  </div>
+</section>
+<div class="divider" role="separator" aria-hidden="true"></div>
+
+<!-- SCOPE AND METHODOLOGY -->
+<section class="scope" aria-labelledby="scope-title">
+  <div class="section-label" aria-hidden="true">Scope and Methodology</div>
+  <h2 class="section-title" id="scope-title">EVERY VOICE <span class="accent">THAT MATTERS</span></h2>
+  <div class="scope-layout">
+    <div>
+      <p class="section-body" style="margin-bottom:28px;">One leader. Every perspective that matters, from ownership to the front line to the customers who depend on his follow-through. Quantitative ratings give you a scoreboard. The qualitative data gives you the story behind the scores.</p>
+      <div class="rater-section-title" id="raters-label">Rater Design: 10 to 18 Total</div>
+      <ul class="rater-list" aria-labelledby="raters-label">
+        <li><div><strong>Peter Batarse, Owner</strong> — your perspective defines the success criteria and anchors the entire assessment</div></li>
+        <li><div><strong>Team members who work directly with Sergio</strong> — the people whose day-to-day experience of his leadership matters most</div></li>
+        <li><div><strong>3 to 5 key customers</strong> — where Sergio's leadership, responsiveness, and follow-through have the most direct business impact</div></li>
+      </ul>
+    </div>
+    <div>
+      <div class="rater-section-title">What We Are Collecting</div>
+      <div class="method-cards">
+        <div class="method-card fade-up"><strong>Quantitative Ratings</strong><p>Specific behaviors rated on a 1 to 5 scale tied to a leadership profile defined at kickoff. Gives you a clear, trackable scoreboard over time.</p></div>
+        <div class="method-card fade-up"><strong>Targeted Qualitative Questions</strong><p>"Where does this leader show up best?" and "What one behavior would most increase your confidence in them?" Questions that surface the texture behind the numbers.</p></div>
+        <div class="method-card fade-up"><strong>Confidential 1:1 Interviews</strong><p>Conducted with Peter and 2 to 4 key stakeholders. These conversations capture nuance that surveys cannot reach on their own.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+<div class="divider" role="separator" aria-hidden="true"></div>
+
+<!-- TIMELINE -->
+<section class="timeline-section" aria-labelledby="timeline-title">
+  <div class="section-label" aria-hidden="true">Timeline</div>
+  <h2 class="section-title" id="timeline-title">14 DAYS. <span class="accent">THREE</span> PHASES.</h2>
+  <p class="section-body">From kickoff to individual reports, the process moves quickly because your leaders' time is the scarcest resource in the organization.</p>
+  <div class="timeline-layout">
+    <div class="timeline" role="list">
+      <article class="timeline-item fade-up" role="listitem"><div class="timeline-dot" aria-hidden="true"></div><div class="timeline-range">Days 1 to 3</div><div class="timeline-label">Setup and Calibration</div><p class="timeline-desc">Clarify the leadership success profile, finalize rater lists, and tailor all questions to the company's context. Nothing launches until you have approved the design.</p></article>
+      <article class="timeline-item fade-up" role="listitem"><div class="timeline-dot" aria-hidden="true"></div><div class="timeline-range">Days 4 to 10</div><div class="timeline-label">Survey Launch and Interviews</div><p class="timeline-desc">Self-assessments and stakeholder surveys go live. Reminders sent. Confidential interviews conducted with Peter and selected raters, including key customers.</p></article>
+      <article class="timeline-item fade-up" role="listitem"><div class="timeline-dot" aria-hidden="true"></div><div class="timeline-range">Days 11 to 14</div><div class="timeline-label">Analysis and 90-Day Roadmap</div><p class="timeline-desc">Data analyzed. Individual report drafted. Sergio receives a 90-day behavior roadmap built around concrete, observable habits, not abstract advice.</p></article>
+    </div>
+    <div class="key-event-box fade-up">
+      <div class="key-event-tag">The Hiring Window</div>
+      <p>Starting this diagnostic as soon as Sergio returns from leave means Peter walks into the next hiring decision with real data instead of assumptions about where Sergio's leadership stands.</p>
+      <p class="detail">If we wait until after new staff are already onboarded, the diagnostic findings land in the middle of onboarding. That is not the right moment to ask a leader to change how he operates. Getting ahead of it is the whole point.</p>
+      <div class="dur-label">Total Duration</div>
+      <div class="dur-value">3 to 4 WEEKS</div>
+      <div class="dur-sub">including debrief scheduling</div>
+    </div>
+  </div>
+</section>
+<div class="divider" role="separator" aria-hidden="true"></div>
+
+<!-- TIME REQUIRED — FIXED STRUCTURE -->
+<section class="time-required" aria-labelledby="time-title">
+  <div class="section-label" aria-hidden="true">What It Takes</div>
+  <h2 class="section-title" id="time-title">TIME <span class="accent">REQUIRED</span></h2>
+  <div class="time-cards">
+    <div class="time-card teal-accent">
+      <p class="time-card-label">Per Leader, Over 2 to 3 Weeks</p>
+      <ul class="time-list teal-bullets">
+        <li>30 minutes — intake</li>
+        <li>10 minutes — self-survey</li>
+        <li>60 to 90 minutes — debrief and 90-day plan</li>
+      </ul>
+    </div>
+    <div class="time-card navy-accent">
+      <p class="time-card-label">For Peter</p>
+      <ul class="time-list navy-bullets">
+        <li>45 to 60 minutes — kickoff and success profile</li>
+        <li>30 minutes — qualitative input (optional but recommended)</li>
+        <li>60 to 90 minutes — summary debrief</li>
+      </ul>
+    </div>
+  </div>
+  <p class="time-summary">Roughly 2 to 2.5 hours total for Sergio, plus Peter's own debrief time, spread across the full diagnostic window.</p>
+</section>
+<div class="divider" role="separator" aria-hidden="true"></div>
+
+<!-- DELIVERABLES — FIXED, DO NOT EDIT -->
+<section class="deliverables" aria-labelledby="deliverables-title">
+  <div class="section-label" aria-hidden="true">Deliverables</div>
+  <h2 class="section-title" id="deliverables-title">WHAT EACH LEADER <span class="accent">WALKS AWAY WITH</span></h2>
+  <p class="section-body">Not a report that gets filed. A behavior-specific plan each leader can act on immediately, plus a shared picture for ownership and the board showing where each leader stands and what needs to happen next.</p>
+  <div class="deliverables-grid" role="list">
+    <article class="del-card fade-up" role="listitem"><div class="del-tag">For Each Leader</div><h3 class="del-title">Individual Leadership Report</h3><ul class="del-items"><li>Quantitative scores and qualitative themes from every rater group</li><li>Strengths and gaps tied to the leadership profile defined at kickoff</li><li>Confidential stakeholder perspectives, including from ownership and direct reports</li></ul></article>
+    <article class="del-card fade-up" role="listitem"><div class="del-tag">For Each Leader</div><h3 class="del-title">60 to 90 Minute Confidential Debrief</h3><ul class="del-items"><li>One-on-one with Alex, private and action-focused</li><li>The context and story behind the data, not just the numbers</li><li>2 to 3 concrete behavior targets agreed before the session ends</li></ul></article>
+    <article class="del-card fade-up" role="listitem"><div class="del-tag">For Each Leader</div><h3 class="del-title">Written 90-Day Development Roadmap</h3><ul class="del-items"><li>Behavioral commitments tied to specific stakeholder groups</li><li>Concrete, observable habits, not a list of abstract recommendations</li><li>Simple indicators so progress is visible and trackable</li></ul></article>
+    <article class="del-card fade-up" role="listitem"><div class="del-tag">For Peter and Ownership</div><h3 class="del-title">Owner Summary and Leadership Overview</h3><ul class="del-items"><li>Sergio's key strengths and risk areas as a leader, based on input from Peter, his team, and key customers</li><li>His 90-day development goal, focus behaviors, and the metrics he will use to hold himself accountable</li></ul></article>
+  </div>
+
+  <!-- Leadership Impact Portal — FIXED, DO NOT EDIT -->
+  <div class="portal-block fade-up" style="margin-top:36px; background:var(--navy); border-radius:8px; padding:40px 44px; color:var(--white);">
+    <div style="font-size:10px; font-weight:700; letter-spacing:0.22em; text-transform:uppercase; color:var(--teal-light); margin-bottom:10px;">Ongoing Support</div>
+    <h3 style="font-family:var(--cond); font-size:28px; font-weight:800; color:var(--white); letter-spacing:0.02em; margin-bottom:14px;">Leadership Impact Portal Access</h3>
+    <p style="font-size:15px; color:var(--navy-muted); line-height:1.75; margin-bottom:24px;">Each leader also gets access to GPS's Leadership Impact Portal, built specifically to help CEOs and executive teams in multi-location, operations-heavy businesses turn insight into sustained behavior change. It is designed to make implementation easier, not add more to anyone's plate.</p>
+    <p style="font-size:14px; font-weight:600; color:var(--sand); margin-bottom:16px; text-transform:uppercase; letter-spacing:0.1em;">Inside the portal, leaders will:</p>
+    <ul style="list-style:none; display:flex; flex-direction:column; gap:12px; margin-bottom:24px;">
+      <li style="font-size:14px; color:var(--navy-muted); padding-left:20px; position:relative; line-height:1.65;"><span style="position:absolute;left:0;color:var(--teal);">&#8594;</span> <strong style="color:var(--white);">Set and track 90-day goals</strong> tied to Trust, Proactivity, and Productivity, including clear outcomes, 30-day checkpoints, metrics, baselines, and targets.</li>
+      <li style="font-size:14px; color:var(--navy-muted); padding-left:20px; position:relative; line-height:1.65;"><span style="position:absolute;left:0;color:var(--teal);">&#8594;</span> <strong style="color:var(--white);">Log key committed behaviors</strong> and update progress in a simple weekly rhythm. Most leaders spend 5 to 10 minutes per week on this, enough to keep progress visible without becoming another task.</li>
+      <li style="font-size:14px; color:var(--navy-muted); padding-left:20px; position:relative; line-height:1.65;"><span style="position:absolute;left:0;color:var(--teal);">&#8594;</span> <strong style="color:var(--white);">Access practical scripts, tools, and templates</strong> including conversation guides, working-agreement templates, and accountability tools.</li>
+      <li style="font-size:14px; color:var(--navy-muted); padding-left:20px; position:relative; line-height:1.65;"><span style="position:absolute;left:0;color:var(--teal);">&#8594;</span> <strong style="color:var(--white);">Use "Ask Alex"</strong> for in-the-moment support by submitting real situations and getting tailored guidance between sessions.</li>
+      <li style="font-size:14px; color:var(--navy-muted); padding-left:20px; position:relative; line-height:1.65;"><span style="position:absolute;left:0;color:var(--teal);">&#8594;</span> <strong style="color:var(--white);">Receive light reminders and nudges</strong> to review goals and update progress so commitments stay visible even when the calendar gets busy.</li>
+    </ul>
+    <p style="font-size:14px; color:var(--sand); line-height:1.75; border-top:1px solid rgba(255,255,255,0.12); padding-top:20px; font-style:italic;">In short, the Leadership Impact Portal keeps goals, metrics, tools, and support in one place. It gives leaders a simple structure to stay accountable to the behavior changes they commit to over the 90-day sprint.</p>
+    <p style="font-size:14px; color:var(--navy-muted); line-height:1.75; margin-top:16px;">The portal is there if you want it. It replaces scattered documents and ad-hoc tracking. It does not add another standing meeting or program to anyone's calendar.</p>
+  </div>
+</section>
+<div class="divider" role="separator" aria-hidden="true"></div>
+
+<!-- FOR PETER AND OWNERSHIP -->
+<section class="board-summary" aria-labelledby="board-title">
+  <div class="section-label" aria-hidden="true">For Peter and Ownership</div>
+  <h2 class="section-title" id="board-title">WHAT YOU WALK AWAY WITH <span class="accent">AS THE OWNER</span></h2>
+  <ul class="board-list">
+    <li><span class="dot"></span>A 30-minute onboarding call to define what success looks like for Sergio in his role and to capture your specific concerns around his leadership, delegation, and coaching</li>
+    <li><span class="dot"></span>A high-level owner summary of the diagnostic: Sergio's key strengths, risk areas, his 90-day development goal, and the specific behaviors he is focused on changing</li>
+    <li><span class="dot"></span>Full visibility into his 90-day leadership plan and portal-based tracking, so you know exactly what he has committed to and how he is progressing without needing to check in constantly</li>
+    <li><span class="dot"></span>A 30 to 45 minute follow-up conversation at the end of the 90 days to review his progress against what you are seeing day-to-day and discuss what the next step looks like</li>
+  </ul>
+  <div class="board-callout">
+    <p>In other words, Peter, you do not just get a report about Sergio. You get a structured, honest picture of what he is committed to changing, how you will know if it is working, and a clear decision point at the 90-day mark on what comes next.</p>
+  </div>
+</section>
+<div class="divider" role="separator" aria-hidden="true"></div>
+
+<!-- INVESTMENT -->
+<section class="investment" aria-labelledby="investment-title">
+  <div class="section-label" aria-hidden="true">Investment</div>
+  <h2 class="section-title" id="investment-title">SIMPLE PRICING. <span class="accent">CLEAR RISK REVERSAL.</span></h2>
+  <div class="invest-layout">
+    <div class="price-card fade-up">
+      <div class="price-eyebrow">Total Project Investment</div>
+      <div class="price-amount" aria-label="5,000 dollars">$5K</div>
+      <div class="price-total-label">Flat fee. One leader, all-inclusive.</div>
+      <p class="price-sub">Survey design and administration, stakeholder interviews, analysis, individual report and debrief, 90-day roadmap, and your owner summary. One flat fee for the outcome. No hourly surprises.</p>
+      <p class="price-sub"><strong style="color:var(--teal-light);">Payment terms:</strong> Full investment due at kickoff.</p>
+      <div class="price-full">
+        <label>Project Fee</label>
+        <strong>$5,000 flat</strong>
+      </div>
+      <p class="price-inaction">A mis-hire in a lean, operations-heavy business costs far more than this project in time, retraining, and lost momentum. One wrong addition to Wayside's team — or one that is not coached and developed correctly — can set the business back six to twelve months. This is a small, upfront investment to avoid a very expensive mistake later.</p>
+    </div>
+    <div class="value-points fade-up">
+      <div class="vp"><div class="vp-icon" aria-hidden="true">&#9881;</div><div><strong>One flat fee for the outcome</strong><p>Not itemized by hour or task. You are investing in a clear, unfiltered picture of where Sergio stands as a leader, with a 90-day plan to build on what is working.</p></div></div>
+      <div class="vp"><div class="vp-icon" aria-hidden="true">&#9733;</div><div><strong>Guarantee</strong><p>If, after the final debrief, you do not feel this process has materially increased your clarity and reduced your risk, you can request a full refund within 48 hours. We will honor it.</p></div></div>
+      <div class="vp"><div class="vp-icon" aria-hidden="true">&#128200;</div><div><strong>Built-in 90-day accountability</strong><p>Each leader's behavior data goes into a tracking portal so progress is visible every week, not just at the next review cycle.</p></div></div>
+      <div class="value-quote"><p>To do this right for Sergio, all-in, it is $5,000. That is less than the cost of one mis-hire. If this gives Peter confidence that Sergio is ready to lead the next phase of Wayside's growth, it pays for itself many times over.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section" aria-labelledby="cta-title">
+  <div class="cta-tag">Ready to Move Forward</div>
+  <h2 class="cta-title" id="cta-title">LET'S LOCK IN <span class="accent">THE WINDOW.</span></h2>
+  <p class="cta-sub">Once you confirm, we will align dates around Sergio's return from leave so the onboarding call, survey window, and debrief are all set before he is back and ready to move.</p>
+  <button class="cta-btn" id="invest-btn" aria-label="Confirm project and reserve dates">Confirm project and reserve dates</button>
+  <p class="cta-note">Questions first? Reach Alex directly at <a href="mailto:alex@gpsleadership.org">alex@gpsleadership.org</a></p>
+</section>
+
+</main>
+<script>
+  document.querySelectorAll(".fade-up").forEach(el => el.classList.add("animate"));
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add("visible"); });
+  }, { threshold: 0.1 });
+  document.querySelectorAll(".fade-up").forEach(el => obs.observe(el));
+  // TODO: Replace "#" with the actual FastPay or invoice link before sending to Peter
+  document.getElementById("invest-btn").addEventListener("click", function() {
+    window.open("#", "_blank");
+  });
+</script>
+</body>
+</html>

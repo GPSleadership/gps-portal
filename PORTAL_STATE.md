@@ -1,5 +1,5 @@
 # GPS Leadership Portal — Complete State Document
-**Last updated:** May 2026  
+**Last updated:** June 2, 2026 — git HEAD `15ec7ad`  
 **Purpose:** This document is the authoritative reference for everything built in the GPS Leadership portal. Before making ANY changes to the portal, read this document in full. Do not rebuild, replace, or modify anything described here unless explicitly instructed by Alex Tremble.
 
 ---
@@ -120,8 +120,42 @@ gps-portal/
 
 Seeded with: `coach_password`, `pending_code`, `pending_code_expires`
 
+### `diagnostics` table — key columns (added via migrations v13–v23)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid | Primary key |
+| client_id | uuid | FK to clients — nullable (diagnostic may precede coaching) |
+| client_name / client_email / client_title / client_org | text | Denormalized identity |
+| tier | text | standard / pro |
+| status | text | setup → intake_complete → self_assessment_pending → survey_open → survey_closed → report_draft → report_final → debrief_complete → plan_active |
+| intake_notes / intake_transcript_url | text | Coach notes + optional transcript link |
+| self_three_year_vision / self_future_self_capabilities / etc. | text | Self-report succession responses (Section E) |
+| custom_g1_question / custom_g1_generated_at | text/ts | Claude-generated custom rater question |
+| invites_sent_at / survey_closed_at | timestamp | Survey lifecycle |
+| report_generated_at / report_finalized_at | timestamp | Report lifecycle |
+| **report_pdf_url** | text | **Added v23** — Supabase Storage public URL for uploaded PDF report |
+| coaching_notes | text | Alex's ongoing session notes |
+| debrief_completed_at | timestamp | |
+| plan_status / plan_draft_content / plan_locked_at | text/ts | 90-day plan (managed in client portal, not coach Report tab) |
+| leader_token | text | Unique URL token for leader portal access |
+
+### `diagnostic_raters` table
+One row per invited rater. Columns: id, diagnostic_id (FK), name, email, relationship, is_self, token (unique survey link), invited_at, completed_at.
+
+### `diagnostic_responses` table
+Denormalized survey response data keyed to the diagnostic record.
+
+### Supabase Storage — `diagnostic-reports` bucket (added v23)
+
+- **Bucket name:** `diagnostic-reports` — public (files readable by URL)
+- **File path pattern:** `{diagnostic_id}/report.pdf`
+- **Public URL format:** `https://pbnkefuqpoztcxfagiod.supabase.co/storage/v1/object/public/diagnostic-reports/{diagnostic_id}/report.pdf`
+- **Policies:** anon INSERT + UPDATE (coach portal is password-gated), public SELECT
+- **When report is finalized:** `report_pdf_url` is set on the `diagnostics` row AND on `clients.diagnostic_report_url` (if linked) so the client portal can serve it without a separate diagnostics query.
+
 ### RLS Status
-All three tables have RLS enabled with permissive anon policies. Client portal reads go through `api/get-client.js` (service role key) for isolation.
+All tables have RLS enabled with permissive anon policies. Client portal reads go through `api/get-client.js` (service role key) for isolation.
 
 ---
 
@@ -450,7 +484,56 @@ Current crisis phrases detected (case-insensitive):
 
 ---
 
-## 12. Pending Items (in order)
+## 12. Known Code Hazards — READ BEFORE EDITING coach.html
+
+### CRITICAL: Never use `\`` (backslash-backtick) in function bodies inside `${}` template expressions
+
+**What it is:** Inside a template literal `\`outer ${...} \``, if you write a function inside `${}` that returns a template literal, use a plain backtick — NOT an escaped backtick.
+
+**Wrong (breaks portal login):**
+```javascript
+oc.innerHTML = `outer ${(function() {
+  return \`inner ${value}\`;   // ← THIS causes SyntaxError: Invalid or unexpected token
+})()}`;
+```
+
+**Correct:**
+```javascript
+oc.innerHTML = `outer ${(function() {
+  return `inner ${value}`;    // ← plain backtick inside ${}
+})()}`;
+```
+
+**Why it matters:** This exact bug locked Alex out of the coach portal on June 2, 2026. A `\`` inside an IIFE inside a template expression causes a JS parse error that silently breaks the entire page. The pre-commit hook now catches this before any commit can land.
+
+**Prevention in place:**
+- `check.sh` baseline for `coach.html` = 0 (zero escaped backticks allowed)
+- Pre-commit hook (installed June 2, 2026) blocks any commit containing `\`` in HTML files
+- Pre-push hook runs full `check.sh` validation
+
+---
+
+## 13. Coach Portal — Report Tab Behavior (as of June 2, 2026)
+
+The Report tab (`renderReportTab()` in coach.html) contains two cards:
+
+**Card 1 — Report Generation:**
+- Shows rater count vs. 7-rater minimum
+- Buttons: Generate Draft Report (Claude), Preview & Finalize Report, Mark Debrief Complete
+- If `report_finalized_at` is set: shows green confirmation banner
+
+**Card 2 — Upload Final Report PDF (added June 2, 2026):**
+- Coach chooses a PDF file → clicks "Upload & Finalize Report"
+- PDF uploads directly to Supabase Storage bucket `diagnostic-reports/{diagnostic_id}/report.pdf`
+- On success: sets `report_pdf_url` on the diagnostic, sets `report_finalized_at = now()`, sets `status = 'report_final'`
+- If diagnostic is linked to a coaching client: also updates `clients.diagnostic_report_url` so client portal can display it immediately
+- If report already on file: shows green banner with "View PDF" link + option to replace
+
+**Removed June 2, 2026:** The "90-Day Plan" textarea section (plan content, Save Plan button, lock controls) has been removed from the Report tab. The 90-day plan is now entirely managed inside the client portal during onboarding.
+
+---
+
+## 14. Pending Items (in order)
 
 1. Test multi-behavior and multi-metric Form B with a new client
 2. Test Excel import with a small roster file
@@ -465,10 +548,14 @@ Current crisis phrases detected (case-insensitive):
 11. ✅ Q&A tab integrated into `client.html`
 12. ✅ `in_coaching_program` access gate wired — tab hidden if false
 13. Test end-to-end with one real client before broader rollout
+14. ✅ PDF upload added to Report tab — `diagnostic-reports` Supabase Storage bucket live
+15. ✅ Migration v23 applied — `report_pdf_url` column on diagnostics, storage bucket + policies
+16. ✅ Pre-commit hook installed — blocks escaped backtick (`\``) commits
+17. Add `debrief_date` field to diagnostics + auto-release report to leader 1 day before (pending design decision)
 
 ---
 
-## 13. How to Use This Document in Cowork
+## 15. How to Use This Document in Cowork
 
 Paste the following at the start of any new Cowork conversation before making portal changes:
 

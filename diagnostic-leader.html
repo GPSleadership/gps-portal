@@ -390,10 +390,21 @@ function renderTopAlert() {
         <div>Your report is being finalized. It will be available by end of day on ${releaseStr} — the evening before your debrief.</div>
       </div>`;
     }
-  } else if (s === 'plan_active') {
+  } else if (s === 'debrief_complete') {
+    const portalBtn = DIAGNOSTIC.coaching_portal_url
+      ? `<div style="margin-top:14px;"><a href="${DIAGNOSTIC.coaching_portal_url}" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:700;">Go to Your Coaching Portal &rarr;</a></div>`
+      : `<div style="margin-top:10px;font-size:13px;color:#666;">Your coaching portal link will arrive by email shortly. Check your inbox.</div>`;
     el.innerHTML = `<div class="alert alert-green">
       <span class="alert-icon">✓</span>
-      <div><strong>Your 90-day plan is locked and active.</strong> Check in with Alex each week to track progress.</div>
+      <div><strong>Debrief complete.</strong> Your 90-day plan portal is ready. Use the link in your email or the button below to get started.${portalBtn}</div>
+    </div>`;
+  } else if (s === 'plan_active') {
+    const portalBtn = DIAGNOSTIC.coaching_portal_url
+      ? `<div style="margin-top:14px;"><a href="${DIAGNOSTIC.coaching_portal_url}" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:700;">Go to Your Coaching Portal &rarr;</a></div>`
+      : '';
+    el.innerHTML = `<div class="alert alert-green">
+      <span class="alert-icon">✓</span>
+      <div><strong>Your 90-day plan is locked and active.</strong> Check in with Alex each week to track progress.${portalBtn}</div>
     </div>`;
   }
 }

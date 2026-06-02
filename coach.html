@@ -5697,8 +5697,42 @@ async function finalizeReport() {
 }
 
 async function markDebriefComplete() {
-  if (!confirm('Mark debrief as complete? This starts the 24-hour plan auto-lock countdown.')) return;
+  const hasClient = !!(DIAG_SEL && DIAG_SEL.client_id);
+  const msg = hasClient
+    ? 'Mark debrief as complete? This starts the 24-hour plan auto-lock countdown and sends the client their coaching portal welcome email.'
+    : 'No coaching client is linked to this diagnostic.\n\nThe portal welcome email cannot be sent automatically. You can link one later via the client dashboard.\n\nMark debrief complete anyway?';
+  if (!confirm(msg)) return;
+
   await updateDiag({ status: 'debrief_complete', debrief_completed_at: new Date().toISOString() });
+
+  if (hasClient) {
+    const { data: clientData } = await db
+      .from('clients')
+      .select('name, email, token')
+      .eq('id', DIAG_SEL.client_id)
+      .single();
+    if (clientData && clientData.token) {
+      const portalURL = PORTAL_BASE_URL + '?token=' + clientData.token;
+      // Save portal URL on the diagnostic so the leader portal can show the button
+      await updateDiag({ coaching_portal_url: portalURL });
+      try {
+        await fetch('/api/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'portal_welcome',
+            clientName: clientData.name,
+            clientEmail: clientData.email,
+            portalURL,
+            debriefDate: DIAG_SEL.debrief_date || null
+          })
+        });
+      } catch(e) {
+        console.warn('Portal welcome email failed to send:', e.message);
+      }
+    }
+  }
+
   await refreshSelected();
 }
 

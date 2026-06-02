@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPS EA Console</title>
+<style>
+  :root {
+    --navy: #004369; --teal: #01949A; --red: #DB1F48;
+    --sand: #E5DDC8; --navy-dark: #002D47;
+    --light-teal: #E8F7F7; --bg: #F4F6F9;
+    --card: #FFFFFF; --text: #1A1A2E;
+    --muted: #64748B; --border: #E2E8F0;
+    --success: #10B981; --warn: #F59E0B; --danger: #EF4444;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.5; }
+
+  /* PASSWORD SCREEN */
+  .pw-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+  .pw-box { background: white; border-radius: 14px; padding: 36px 32px; width: 100%; max-width: 360px; box-shadow: 0 8px 32px rgba(0,0,0,0.12); border-top: 5px solid var(--teal); }
+  .pw-logo { font-size: 22px; font-weight: 800; color: var(--navy); margin-bottom: 6px; }
+  .pw-sub { font-size: 12px; color: var(--muted); margin-bottom: 24px; }
+  .pw-input { width: 100%; border: 1.5px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 14px; font-family: inherit; outline: none; margin-bottom: 12px; }
+  .pw-input:focus { border-color: var(--teal); }
+  .pw-btn { width: 100%; background: var(--navy); color: white; border: none; border-radius: 8px; padding: 11px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .pw-btn:hover { background: var(--navy-dark); }
+  .pw-err { color: var(--danger); font-size: 11px; margin-bottom: 10px; display: none; }
+  /* FORCE-CHANGE SCREEN */
+  .fc-screen { display: none; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+  .fc-box { background: white; border-radius: 14px; padding: 36px 32px; width: 100%; max-width: 380px; box-shadow: 0 8px 32px rgba(0,0,0,0.12); border-top: 5px solid var(--teal); }
+  .fc-title { font-size: 16px; font-weight: 800; color: var(--navy); margin-bottom: 6px; }
+  .fc-sub { font-size: 12px; color: var(--muted); margin-bottom: 20px; line-height: 1.5; }
+  .fc-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; display: block; }
+  .fc-field { margin-bottom: 14px; }
+  .fc-req { font-size: 10px; color: var(--muted); margin-top: 3px; }
+  .fc-err { color: var(--danger); font-size: 11px; margin-bottom: 10px; display: none; }
+  .fc-btn { width: 100%; background: var(--teal); color: white; border: none; border-radius: 8px; padding: 11px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .fc-btn:hover { opacity: 0.88; }
+  .fc-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* MAIN APP */
+  .app { display: none; flex-direction: column; min-height: 100vh; }
+  .top-bar { height: 5px; background: linear-gradient(90deg, var(--navy), var(--teal), var(--red)); }
+  .header { background: var(--navy); color: white; padding: 13px 20px; display: flex; align-items: center; justify-content: space-between; }
+  .header-left { display: flex; align-items: center; gap: 10px; }
+  .logo-mark { width: 30px; height: 30px; background: linear-gradient(135deg, var(--teal), var(--navy-dark)); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; color: white; }
+  .header-title { font-size: 14px; font-weight: 700; }
+  .header-sub { font-size: 10px; opacity: 0.7; }
+  .refresh-btn { background: var(--teal); color: white; border: none; border-radius: 6px; padding: 5px 12px; font-size: 11px; font-weight: 600; cursor: pointer; }
+  .refresh-btn:hover { opacity: 0.85; }
+  .main { padding: 16px; max-width: 680px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 14px; }
+
+  /* ADD FOR ALEX */
+  .add-card { background: white; border-radius: 10px; border: 1px solid var(--border); overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  .add-header { padding: 11px 16px; background: var(--navy); color: white; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; }
+  .add-body { padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .add-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .add-input { flex: 1; min-width: 180px; border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; font-size: 12px; font-family: inherit; outline: none; }
+  .add-input:focus { border-color: var(--teal); }
+  .add-select { font-size: 11px; border: 1px solid var(--border); border-radius: 5px; padding: 5px 8px; background: white; cursor: pointer; outline: none; }
+  .add-select:focus { border-color: var(--teal); }
+  .add-date { font-size: 11px; border: 1px solid var(--border); border-radius: 5px; padding: 5px 8px; background: white; color: var(--text); outline: none; }
+  .add-btn { background: var(--teal); color: white; border: none; border-radius: 6px; padding: 7px 14px; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .add-btn:hover { opacity: 0.85; }
+  .add-note-input { width: 100%; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 12px; font-family: inherit; outline: none; resize: none; }
+  .add-note-input:focus { border-color: var(--teal); }
+  .add-confirm { font-size: 11px; color: var(--success); display: none; padding: 4px 0; }
+
+  /* TASK CARD */
+  .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+  .section-title hr { flex: 1; border: none; border-top: 1px solid var(--border); }
+  .badge-count { background: var(--navy); color: white; border-radius: 10px; padding: 1px 7px; font-size: 10px; }
+  .task-list { display: flex; flex-direction: column; gap: 8px; }
+  .task-card { background: white; border-radius: 9px; border: 1px solid var(--border); padding: 12px 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+  .task-card.done-card { opacity: 0.45; }
+  .task-top { display: flex; align-items: flex-start; gap: 10px; }
+  .task-text { flex: 1; font-size: 13px; font-weight: 600; color: var(--navy-dark); line-height: 1.4; }
+  .task-card.done-card .task-text { text-decoration: line-through; }
+  .task-meta { font-size: 10px; color: var(--muted); margin-top: 3px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .imp-H { background: #FEE2E2; color: #991B1B; font-weight: 700; font-size: 9px; padding: 1px 5px; border-radius: 3px; }
+  .imp-M { background: #FEF3C7; color: #92400E; font-weight: 700; font-size: 9px; padding: 1px 5px; border-radius: 3px; }
+  .imp-L { background: #DBEAFE; color: #1E40AF; font-weight: 700; font-size: 9px; padding: 1px 5px; border-radius: 3px; }
+  .due-badge { font-size: 9px; color: var(--muted); }
+  .due-badge.overdue { color: var(--danger); font-weight: 600; }
+  .task-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
+  .status-btn { border: 1px solid var(--border); background: white; border-radius: 5px; padding: 4px 10px; font-size: 11px; font-weight: 600; cursor: pointer; color: var(--muted); transition: all 0.15s; font-family: inherit; }
+  .status-btn:hover { border-color: var(--teal); color: var(--teal); }
+  .status-btn.active-status { background: var(--teal); border-color: var(--teal); color: white; }
+  .status-btn.done-status { background: var(--success); border-color: var(--success); color: white; }
+  .note-toggle { font-size: 10px; color: var(--teal); background: none; border: none; cursor: pointer; text-decoration: underline; padding: 0; font-family: inherit; }
+  .note-area { margin-top: 8px; display: none; }
+  .note-area.open { display: block; }
+  .note-textarea { width: 100%; border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; font-size: 12px; font-family: inherit; resize: none; outline: none; min-height: 52px; }
+  .note-textarea:focus { border-color: var(--teal); }
+  .note-save-btn { margin-top: 5px; background: var(--navy); color: white; border: none; border-radius: 5px; padding: 5px 12px; font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .note-save-btn:hover { background: var(--navy-dark); }
+  .saved-note { font-size: 11px; color: var(--navy); background: #F0FDF4; border-radius: 5px; padding: 6px 10px; margin-top: 6px; border-left: 2px solid var(--success); display: none; }
+  .empty-state { text-align: center; padding: 28px 16px; color: var(--muted); font-size: 12px; font-style: italic; }
+  .loading { text-align: center; padding: 20px; color: var(--muted); font-size: 12px; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--teal); border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- PASSWORD SCREEN -->
+<div class="pw-screen" id="pwScreen">
+  <div class="pw-box">
+    <div class="pw-logo">GPS Leadership</div>
+    <div class="pw-sub">EA Console — Anna Gabales</div>
+    <p class="pw-err" id="pwErr">Incorrect password. Try again.</p>
+    <input class="pw-input" type="password" id="pwInput" placeholder="Enter password" />
+    <button class="pw-btn" onclick="checkPassword()">Sign In</button>
+  </div>
+</div>
+
+<!-- FORCE-CHANGE PASSWORD SCREEN -->
+<div class="fc-screen" id="fcScreen">
+  <div class="fc-box">
+    <div class="fc-title">Set Your Password</div>
+    <div class="fc-sub">This is your first time logging in. Choose a password you will remember. Alex has separate admin access, so this is yours alone.</div>
+    <p class="fc-err" id="fcErr"></p>
+    <div class="fc-field">
+      <label class="fc-label">New Password</label>
+      <input class="pw-input" type="password" id="fcNew" placeholder="Choose a password" style="margin-bottom:0;" />
+      <div class="fc-req">Minimum 8 characters</div>
+    </div>
+    <div class="fc-field">
+      <label class="fc-label">Confirm Password</label>
+      <input class="pw-input" type="password" id="fcConfirm" placeholder="Confirm password" style="margin-bottom:0;" />
+    </div>
+    <button class="fc-btn" id="fcBtn" onclick="saveNewPassword()">Set Password and Continue</button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div class="app" id="appEl">
+  <div class="top-bar"></div>
+  <div class="header">
+    <div class="header-left">
+      <div class="logo-mark">GPS</div>
+      <div>
+        <div class="header-title">EA Console</div>
+        <div class="header-sub">Anna Gabales — GPS Leadership Solutions</div>
+      </div>
+    </div>
+    <button class="refresh-btn" onclick="loadAll()">Refresh</button>
+  </div>
+
+  <div class="main">
+
+    <!-- ADD FOR ALEX -->
+    <div class="add-card">
+      <div class="add-header">+ Add Task for Alex</div>
+      <div class="add-body">
+        <div class="add-row">
+          <input class="add-input" id="addText" type="text" placeholder="What do you need Alex to do?" />
+          <select class="add-select" id="addImp" title="Priority">
+            <option value="M">Med</option>
+            <option value="H">High</option>
+            <option value="L">Low</option>
+          </select>
+          <input class="add-date" id="addDate" type="date" title="Due date" />
+          <button class="add-btn" onclick="addForAlex()">Add</button>
+        </div>
+        <textarea class="add-note-input" id="addNote" rows="2" placeholder="Optional context or note for Alex..."></textarea>
+        <div class="add-confirm" id="addConfirm">Added to Alex's queue.</div>
+      </div>
+    </div>
+
+    <!-- DELEGATED TASKS -->
+    <div class="section-title"><span>On Your Plate</span><span class="badge-count" id="taskCount">0</span><hr></div>
+    <div id="taskLoading" class="loading"><span class="spinner"></span>Loading your queue...</div>
+    <div class="task-list" id="taskList" style="display:none;"></div>
+    <div id="emptyState" class="empty-state" style="display:none;">Your queue is clear. Nothing delegated to you right now.</div>
+
+    <!-- COMPLETED -->
+    <div id="doneSection" style="display:none;">
+      <div class="section-title" style="margin-top:8px;"><span>Completed</span><hr></div>
+      <div class="task-list" id="doneList"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://pbnkefuqpoztcxfagiod.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBibmtlZnVxcG96dGN4ZmFnaW9kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5OTkwMzEsImV4cCI6MjA5MjU3NTAzMX0.DxEMR2Ckt9QJlRMkFenEZn-gzsVoi8-6CFcAItTePjo';
+
+// Alex's master password — always grants access, never triggers force-change
+// Change this to something only you know
+const MASTER_PASSWORD = 'GPS-MASTER-2026';
+// Anna's initial default password — she will be required to change this on first login
+const DEFAULT_EA_PASSWORD = 'GPS-EA-2026';
+
+let isMasterSession = false;
+
+async function checkPassword() {
+  const val = document.getElementById('pwInput').value.trim();
+  const btn = document.querySelector('.pw-btn');
+  if (!val) return;
+  btn.textContent = 'Signing in...';
+  btn.disabled = true;
+
+  // Master password — always works, skip force-change
+  if (val === MASTER_PASSWORD) {
+    isMasterSession = true;
+    showApp();
+    return;
+  }
+
+  // Load Anna's current password from Supabase
+  try {
+    const rows = await supaFetch('/rest/v1/gps_settings?key=eq.ea_console_settings&select=value');
+    let settings = { password: DEFAULT_EA_PASSWORD, passwordChanged: false };
+    if (rows && rows[0] && rows[0].value) {
+      settings = JSON.parse(rows[0].value);
+    }
+
+    if (val === settings.password) {
+      if (!settings.passwordChanged) {
+        // First login — force password change
+        document.getElementById('pwScreen').style.display = 'none';
+        document.getElementById('fcScreen').style.display = 'flex';
+      } else {
+        showApp();
+      }
+    } else {
+      document.getElementById('pwErr').style.display = 'block';
+      document.getElementById('pwInput').value = '';
+      document.getElementById('pwInput').focus();
+      btn.textContent = 'Sign In';
+      btn.disabled = false;
+    }
+  } catch(e) {
+    // Fallback: allow default password if Supabase unreachable
+    if (val === DEFAULT_EA_PASSWORD) {
+      document.getElementById('pwScreen').style.display = 'none';
+      document.getElementById('fcScreen').style.display = 'flex';
+    } else {
+      document.getElementById('pwErr').style.display = 'block';
+      document.getElementById('pwInput').value = '';
+      document.getElementById('pwInput').focus();
+      btn.textContent = 'Sign In';
+      btn.disabled = false;
+    }
+  }
+}
+
+function showApp() {
+  document.getElementById('pwScreen').style.display = 'none';
+  document.getElementById('fcScreen').style.display = 'none';
+  document.getElementById('appEl').style.display = 'flex';
+  loadAll();
+}
+
+async function saveNewPassword() {
+  const newPw = document.getElementById('fcNew').value.trim();
+  const confirm = document.getElementById('fcConfirm').value.trim();
+  const err = document.getElementById('fcErr');
+  const btn = document.getElementById('fcBtn');
+
+  err.style.display = 'none';
+  if (newPw.length < 8) { err.textContent = 'Password must be at least 8 characters.'; err.style.display = 'block'; return; }
+  if (newPw !== confirm) { err.textContent = 'Passwords do not match.'; err.style.display = 'block'; return; }
+  if (newPw === DEFAULT_EA_PASSWORD) { err.textContent = 'Please choose a different password.'; err.style.display = 'block'; return; }
+  if (newPw === MASTER_PASSWORD) { err.textContent = 'Please choose a different password.'; err.style.display = 'block'; return; }
+
+  btn.textContent = 'Saving...';
+  btn.disabled = true;
+  try {
+    await supaFetch('/rest/v1/gps_settings', {
+      method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal',
+      body: JSON.stringify({ key: 'ea_console_settings', value: JSON.stringify({ password: newPw, passwordChanged: true }), updated_at: new Date().toISOString() })
+    });
+    showApp();
+  } catch(e) {
+    err.textContent = 'Error saving password. Please try again.';
+    err.style.display = 'block';
+    btn.textContent = 'Set Password and Continue';
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('pwInput').addEventListener('keydown', e => { if (e.key === 'Enter') checkPassword(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('fcScreen').style.display === 'flex') saveNewPassword();
+});
+
+async function supaFetch(path, opts = {}) {
+  const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', ...(opts.prefer ? { Prefer: opts.prefer } : {}) };
+  const res = await fetch(SUPABASE_URL + path, { method: opts.method || 'GET', headers, body: opts.body });
+  if (!res.ok) throw new Error(res.status);
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
+function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function formatDate(iso) {
+  try { return new Date(iso+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}); } catch(e) { return iso; }
+}
+
+let allItems = [];
+let itemSources = {};
+
+async function loadAll() {
+  document.getElementById('taskLoading').style.display = 'block';
+  document.getElementById('taskList').style.display = 'none';
+  document.getElementById('emptyState').style.display = 'none';
+
+  const delegated = [];
+  for (const key of ['custom_action_items', 'sweep_action_items']) {
+    try {
+      const rows = await supaFetch(`/rest/v1/gps_settings?key=eq.${key}&select=value`);
+      if (!rows || !rows[0] || !rows[0].value) continue;
+      const items = JSON.parse(rows[0].value);
+      items.filter(i => i.delegated && !i.dismissed).forEach(item => {
+        delegated.push({...item, _key: key});
+      });
+    } catch(e) {}
+  }
+
+  allItems = delegated;
+  renderItems();
+}
+
+function renderItems() {
+  const active = allItems.filter(i => i.delegatedStatus !== 'done');
+  const done = allItems.filter(i => i.delegatedStatus === 'done');
+
+  document.getElementById('taskCount').textContent = active.length;
+  document.getElementById('taskLoading').style.display = 'none';
+
+  const list = document.getElementById('taskList');
+  list.innerHTML = '';
+
+  if (active.length === 0) {
+    document.getElementById('emptyState').style.display = 'block';
+    document.getElementById('taskList').style.display = 'none';
+  } else {
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('taskList').style.display = 'flex';
+    active.forEach(item => list.appendChild(buildTaskCard(item)));
+  }
+
+  const doneList = document.getElementById('doneList');
+  doneList.innerHTML = '';
+  if (done.length > 0) {
+    document.getElementById('doneSection').style.display = 'block';
+    done.forEach(item => doneList.appendChild(buildTaskCard(item)));
+  } else {
+    document.getElementById('doneSection').style.display = 'none';
+  }
+}
+
+function buildTaskCard(item) {
+  const today = new Date().toISOString().split('T')[0];
+  const isOverdue = item.dueDate && item.dueDate < today && item.delegatedStatus !== 'done';
+  const imp = item.importance || 'M';
+  const isDone = item.delegatedStatus === 'done';
+  const isInProgress = item.delegatedStatus === 'in_progress';
+
+  const card = document.createElement('div');
+  card.className = `task-card${isDone ? ' done-card' : ''}`;
+  card.dataset.id = item.id;
+  card.dataset.key = item._key;
+
+  const dueBadge = item.dueDate ? `<span class="due-badge${isOverdue?' overdue':''}">Due: ${formatDate(item.dueDate)}</span>` : '';
+  const fromBadge = `<span style="font-size:9px;color:var(--muted);">${escHtml(item.from || 'Alex')}</span>`;
+  const savedNote = item.delegatedNote ? `<div class="saved-note" style="display:block;">Your note: ${escHtml(item.delegatedNote)}</div>` : '';
+
+  card.innerHTML = `
+    <div class="task-top">
+      <div style="flex:1;">
+        <div class="task-text">${escHtml(item.text || '')}</div>
+        <div class="task-meta">
+          <span class="imp-${imp}">${{H:'High',M:'Med',L:'Low'}[imp]||'Med'}</span>
+          ${dueBadge}
+          ${fromBadge}
+        </div>
+      </div>
+    </div>
+    ${savedNote}
+    <div class="task-actions">
+      <button class="status-btn${isInProgress?' active-status':''}" onclick="setStatus('${item.id}','${item._key}','in_progress',this)">On It</button>
+      <button class="status-btn${isDone?' done-status':''}" onclick="setStatus('${item.id}','${item._key}','done',this)">Done</button>
+      <button class="note-toggle" onclick="toggleNote(this)">Add note</button>
+    </div>
+    <div class="note-area">
+      <textarea class="note-textarea" placeholder="Leave a note for Alex..." rows="2">${item.delegatedNote||''}</textarea>
+      <button class="note-save-btn" onclick="saveNote('${item.id}','${item._key}',this)">Save Note</button>
+    </div>`;
+
+  return card;
+}
+
+function toggleNote(btn) {
+  const area = btn.closest('.task-actions').nextElementSibling;
+  area.classList.toggle('open');
+  btn.textContent = area.classList.contains('open') ? 'Hide note' : 'Add note';
+}
+
+async function setStatus(id, key, status, btn) {
+  btn.textContent = '...';
+  try {
+    const rows = await supaFetch(`/rest/v1/gps_settings?key=eq.${key}&select=value`);
+    if (!rows || !rows[0] || !rows[0].value) return;
+    const items = JSON.parse(rows[0].value);
+    const idx = items.findIndex(i => i.id === id);
+    if (idx === -1) return;
+    items[idx] = {...items[idx], delegatedStatus: status};
+    await supaFetch('/rest/v1/gps_settings', {
+      method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal',
+      body: JSON.stringify({key, value: JSON.stringify(items), updated_at: new Date().toISOString()})
+    });
+    const itemIdx = allItems.findIndex(i => i.id === id);
+    if (itemIdx !== -1) allItems[itemIdx].delegatedStatus = status;
+    renderItems();
+  } catch(e) { btn.textContent = status === 'done' ? 'Done' : 'On It'; }
+}
+
+async function saveNote(id, key, btn) {
+  const area = btn.closest('.note-area');
+  const note = area.querySelector('.note-textarea').value.trim();
+  btn.textContent = 'Saving...';
+  try {
+    const rows = await supaFetch(`/rest/v1/gps_settings?key=eq.${key}&select=value`);
+    if (!rows || !rows[0] || !rows[0].value) return;
+    const items = JSON.parse(rows[0].value);
+    const idx = items.findIndex(i => i.id === id);
+    if (idx === -1) return;
+    items[idx] = {...items[idx], delegatedNote: note};
+    await supaFetch('/rest/v1/gps_settings', {
+      method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal',
+      body: JSON.stringify({key, value: JSON.stringify(items), updated_at: new Date().toISOString()})
+    });
+    const itemIdx = allItems.findIndex(i => i.id === id);
+    if (itemIdx !== -1) allItems[itemIdx].delegatedNote = note;
+    btn.textContent = 'Saved';
+    area.classList.remove('open');
+    renderItems();
+  } catch(e) { btn.textContent = 'Save Note'; }
+}
+
+async function addForAlex() {
+  const text = document.getElementById('addText').value.trim();
+  if (!text) return;
+  const importance = document.getElementById('addImp').value;
+  const dueDate = document.getElementById('addDate').value || null;
+  const note = document.getElementById('addNote').value.trim() || null;
+  const id = 'anna-' + Date.now();
+  const item = {
+    id, text,
+    from: 'From Anna' + (note ? ' · ' + note : ''),
+    importance, dueDate,
+    source: 'anna',
+    date: new Date().toISOString(),
+    dismissed: false
+  };
+  try {
+    const rows = await supaFetch('/rest/v1/gps_settings?key=eq.anna_action_items&select=value');
+    const existing = (rows && rows[0] && rows[0].value) ? JSON.parse(rows[0].value) : [];
+    existing.push(item);
+    await supaFetch('/rest/v1/gps_settings', {
+      method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal',
+      body: JSON.stringify({key: 'anna_action_items', value: JSON.stringify(existing), updated_at: new Date().toISOString()})
+    });
+    document.getElementById('addText').value = '';
+    document.getElementById('addNote').value = '';
+    document.getElementById('addDate').value = '';
+    const confirm = document.getElementById('addConfirm');
+    confirm.style.display = 'block';
+    setTimeout(() => confirm.style.display = 'none', 3000);
+  } catch(e) { alert('Error adding task. Please try again.'); }
+}
+</script>
+</body>
+</html>

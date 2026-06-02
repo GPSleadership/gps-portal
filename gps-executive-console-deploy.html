@@ -393,129 +393,6 @@
     </div>
   </div>
 
-  <!-- ALERT -->
-  <div class="alert-banner" style="background:#FEF3C7;border-color:#F59E0B;">
-    <span style="font-size:14px;flex-shrink:0;">⚠️</span>
-    <span><strong>Capital One ···3673:</strong> AutoPay $1,243 due Jun 10 — but $6,116 in new charges since last statement. Next statement balance ~$6K. Review charges and ensure full payment is covered. WF ···5758 min $397 due Jun 1.</span>
-  </div>
-
-  <!-- MAIN GRID -->
-  <div class="content-grid">
-    <div class="left-col">
-
-      <!-- PIPELINE -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title"><span class="dot dot-navy"></span> Pipeline Snapshot</div>
-          <span class="card-badge" id="pipelineUpdated">Live · GHL via Make</span>
-        </div>
-        <div id="pipelineContent"><div class="loading"><div class="spinner"></div>Pulling pipeline…</div></div>
-      </div>
-
-      <!-- CALENDAR -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title"><span class="dot dot-teal"></span> This Week's Calendar</div>
-          <span class="card-badge">Live · Google Calendar</span>
-        </div>
-        <div id="calendarContent"><div class="loading"><div class="spinner"></div>Loading calendar…</div></div>
-      </div>
-
-    </div>
-
-    <div class="right-col">
-
-      <!-- FINANCIAL SNAPSHOT (credit cards trend) -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title"><span class="dot dot-warn"></span> Credit Card Trend</div>
-          <span class="card-badge">As of May 2026</span>
-        </div>
-        <div class="card-body">
-          <div class="section-label"><span>WF Balance (6 months)</span><hr></div>
-          <div class="fin-chart-wrap"><canvas id="wfChart"></canvas></div>
-          <div class="fin-divider"></div>
-          <div class="fin-bar-container">
-            <div class="fin-bar-label"><span class="fin-bar-name">Wells Fargo ···5758</span><span class="fin-bar-amounts">$18,179 / $23,000</span></div>
-            <div class="fin-bar-track"><div class="fin-bar-fill fill-warn" style="width:79%"></div></div>
-            <div class="fin-note">14.5% APR · min $397 due Jun 1 · autopay enrolled · ⚠ $6K SP Acquisition charges in May</div>
-          </div>
-          <div class="fin-bar-container">
-            <div class="fin-bar-label"><span class="fin-bar-name">Capital One ···3673</span><span class="fin-bar-amounts">$7,359 current</span></div>
-            <div class="fin-bar-track"><div class="fin-bar-fill fill-warn" style="width:100%"></div></div>
-            <div class="fin-note urgent">⚠ $6,116 new charges since May 16 stmt · AutoPay $1,243 Jun 10 · next stmt ~$6K</div>
-          </div>
-          <div class="fin-bar-container">
-            <div class="fin-bar-label"><span class="fin-bar-name">Chase Ink ···4688</span><span class="fin-bar-amounts">$633 / $15,500</span></div>
-            <div class="fin-bar-track"><div class="fin-bar-fill" style="width:4%;background:var(--success);"></div></div>
-            <div class="fin-note">AutoPay $201 due Jun 7 ✓</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ACTION ITEMS -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title"><span class="dot dot-red"></span> Action Items</div>
-          <span class="card-badge" id="actionBadge">6 open</span>
-        </div>
-        <div class="action-add-row">
-          <input class="action-add-input" id="actionAddInput" type="text" placeholder="Add action item… (Enter to save)" />
-          <button class="action-add-btn" onclick="addActionItem()">+ Add</button>
-        </div>
-        <div class="card-body" style="padding-top:10px;">
-          <div class="action-list" id="actionList">
-            <div class="action-item urgent" data-id="ai-1" data-pri="urgent">
-              <div class="action-check" onclick="checkActionItem('ai-1',this)"></div>
-              <div class="action-text"><div class="action-title">Review Capital One $6,116 new charges — confirm next statement covered</div><div class="action-from">Financial · AutoPay Jun 10 covers $1,243 only</div></div>
-              <span class="action-pri pri-urgent">This week</span>
-            </div>
-            <div class="action-item urgent" data-id="ai-2" data-pri="urgent">
-              <div class="action-check" onclick="checkActionItem('ai-2',this)"></div>
-              <div class="action-text"><div class="action-title">Confirm NM client invoice payment date (30 days?)</div><div class="action-from">Cash Flow · Week 3 risk</div></div>
-              <span class="action-pri pri-urgent">Today</span>
-            </div>
-            <div class="action-item urgent" data-id="ai-3" data-pri="urgent">
-              <div class="action-check" onclick="checkActionItem('ai-3',this)"></div>
-              <div class="action-text"><div class="action-title">Send Dean Dally recap — assessment pricing & next steps</div><div class="action-from">Blaine Brothers · May 21</div></div>
-              <span class="action-pri pri-urgent">Today</span>
-            </div>
-            <div class="action-item" data-id="ai-4" data-pri="high">
-              <div class="action-check" onclick="checkActionItem('ai-4',this)"></div>
-              <div class="action-text"><div class="action-title">Reduce contractors to 10 hrs/week each — notify this week</div><div class="action-from">Budget · saves ~$260/wk</div></div>
-              <span class="action-pri pri-high">This week</span>
-            </div>
-            <div class="action-item" data-id="ai-5" data-pri="high">
-              <div class="action-check" onclick="checkActionItem('ai-5',this)"></div>
-              <div class="action-text"><div class="action-title">Draft Claude prompt with 3 assessment questions</div><div class="action-from">Michelle / SeniorExecs · May 22</div></div>
-              <span class="action-pri pri-high">This week</span>
-            </div>
-            <div class="action-item" data-id="ai-6" data-pri="high">
-              <div class="action-check" onclick="checkActionItem('ai-6',this)"></div>
-              <div class="action-text"><div class="action-title">Check Jan's timesheets — reduce hero hours for budget</div><div class="action-from">Hero Check-In · May 22</div></div>
-              <span class="action-pri pri-high">This week</span>
-            </div>
-            <div class="action-item" data-id="ai-7" data-pri="normal">
-              <div class="action-check" onclick="checkActionItem('ai-7',this)"></div>
-              <div class="action-text"><div class="action-title">Share podcast link with Steve Bashir (Dayton Parts)</div><div class="action-from">Steve Bashir · May 21</div></div>
-              <span class="action-pri pri-normal">This week</span>
-            </div>
-            <div class="action-item" data-id="ai-8" data-pri="normal">
-              <div class="action-check" onclick="checkActionItem('ai-8',this)"></div>
-              <div class="action-text"><div class="action-title">Update David Winjum to biweekly — 30 min earlier</div><div class="action-from">Coaching session · May 22</div></div>
-              <span class="action-pri pri-normal">This week</span>
-            </div>
-          </div>
-          <div id="actionDoneSection" style="display:none;margin-top:8px;">
-            <button class="action-done-toggle" id="actionDoneToggle" onclick="toggleDoneSection()">▸ Show completed (0)</button>
-            <div class="action-list" id="actionDoneList" style="display:none;margin-top:6px;"></div>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
   <!-- ─── CASH POSITION & RUNWAY ─────────────────────────────────── -->
   <div class="card">
     <div class="card-header">
@@ -589,6 +466,40 @@
         </div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ALERT -->
+  <div class="alert-banner" style="background:#FEF3C7;border-color:#F59E0B;">
+    <span style="font-size:14px;flex-shrink:0;">⚠️</span>
+    <span><strong>Capital One ···3673:</strong> AutoPay $1,243 due Jun 10 — but $6,116 in new charges since last statement. Next statement balance ~$6K. Review charges and ensure full payment is covered. WF ···5758 min $397 due Jun 1.</span>
+  </div>
+
+<!-- FINANCIAL SNAPSHOT (credit cards trend) -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><span class="dot dot-warn"></span> Credit Card Trend</div>
+      <span class="card-badge">As of May 2026</span>
+    </div>
+    <div class="card-body">
+      <div class="section-label"><span>WF Balance (6 months)</span><hr></div>
+      <div class="fin-chart-wrap"><canvas id="wfChart"></canvas></div>
+      <div class="fin-divider"></div>
+      <div class="fin-bar-container">
+        <div class="fin-bar-label"><span class="fin-bar-name">Wells Fargo ···5758</span><span class="fin-bar-amounts">$18,179 / $23,000</span></div>
+        <div class="fin-bar-track"><div class="fin-bar-fill fill-warn" style="width:79%"></div></div>
+        <div class="fin-note">14.5% APR · min $397 due Jun 1 · autopay enrolled · ⚠ $6K SP Acquisition charges in May</div>
+      </div>
+      <div class="fin-bar-container">
+        <div class="fin-bar-label"><span class="fin-bar-name">Capital One ···3673</span><span class="fin-bar-amounts">$7,359 current</span></div>
+        <div class="fin-bar-track"><div class="fin-bar-fill fill-warn" style="width:100%"></div></div>
+        <div class="fin-note urgent">⚠ $6,116 new charges since May 16 stmt · AutoPay $1,243 Jun 10 · next stmt ~$6K</div>
+      </div>
+      <div class="fin-bar-container">
+        <div class="fin-bar-label"><span class="fin-bar-name">Chase Ink ···4688</span><span class="fin-bar-amounts">$633 / $15,500</span></div>
+        <div class="fin-bar-track"><div class="fin-bar-fill" style="width:4%;background:var(--success);"></div></div>
+        <div class="fin-note">AutoPay $201 due Jun 7 ✓</div>
+      </div>
     </div>
   </div>
 
@@ -690,6 +601,90 @@
     <div id="coachTabHistory" style="display:none;">
       <div class="coach-upload-list" id="coachList">
         <div class="loading"><div class="spinner"></div>Loading sessions…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── ACTION ITEMS ────────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><span class="dot dot-red"></span> Action Items</div>
+      <span class="card-badge" id="actionBadge">loading…</span>
+    </div>
+    <div class="action-add-row" style="flex-wrap:wrap;gap:6px;">
+      <input class="action-add-input" id="actionAddInput" type="text" placeholder="Add action item… (Enter to save)" style="min-width:160px;flex:1;" />
+      <div class="action-add-meta">
+        <select class="action-imp-select" id="actionImpSelect" title="Importance">
+          <option value="M">Med</option>
+          <option value="H">High</option>
+          <option value="L">Low</option>
+        </select>
+        <input class="action-date-input" id="actionDueDate" type="date" title="Due date" />
+        <button class="action-add-btn" onclick="addActionItem()">+ Add</button>
+      </div>
+    </div>
+    <div class="card-body" style="padding-top:10px;">
+      <div class="action-list-scroll action-list" id="actionList">
+            <div class="action-item urgent" data-id="ai-1" data-pri="urgent">
+              <div class="action-check" onclick="checkActionItem('ai-1',this)"></div>
+              <div class="action-text"><div class="action-title">Review Capital One $6,116 new charges — confirm next statement covered</div><div class="action-from">Financial · AutoPay Jun 10 covers $1,243 only</div></div>
+              <span class="action-pri pri-urgent">This week</span>
+            </div>
+            <div class="action-item urgent" data-id="ai-2" data-pri="urgent">
+              <div class="action-check" onclick="checkActionItem('ai-2',this)"></div>
+              <div class="action-text"><div class="action-title">Confirm NM client invoice payment date (30 days?)</div><div class="action-from">Cash Flow · Week 3 risk</div></div>
+              <span class="action-pri pri-urgent">Today</span>
+            </div>
+            <div class="action-item urgent" data-id="ai-3" data-pri="urgent">
+              <div class="action-check" onclick="checkActionItem('ai-3',this)"></div>
+              <div class="action-text"><div class="action-title">Send Dean Dally recap — assessment pricing & next steps</div><div class="action-from">Blaine Brothers · May 21</div></div>
+              <span class="action-pri pri-urgent">Today</span>
+            </div>
+            <div class="action-item" data-id="ai-4" data-pri="high">
+              <div class="action-check" onclick="checkActionItem('ai-4',this)"></div>
+              <div class="action-text"><div class="action-title">Reduce contractors to 10 hrs/week each — notify this week</div><div class="action-from">Budget · saves ~$260/wk</div></div>
+              <span class="action-pri pri-high">This week</span>
+            </div>
+            <div class="action-item" data-id="ai-5" data-pri="high">
+              <div class="action-check" onclick="checkActionItem('ai-5',this)"></div>
+              <div class="action-text"><div class="action-title">Draft Claude prompt with 3 assessment questions</div><div class="action-from">Michelle / SeniorExecs · May 22</div></div>
+              <span class="action-pri pri-high">This week</span>
+            </div>
+            <div class="action-item" data-id="ai-6" data-pri="high">
+              <div class="action-check" onclick="checkActionItem('ai-6',this)"></div>
+              <div class="action-text"><div class="action-title">Check Jan's timesheets — reduce hero hours for budget</div><div class="action-from">Hero Check-In · May 22</div></div>
+              <span class="action-pri pri-high">This week</span>
+            </div>
+            <div class="action-item" data-id="ai-7" data-pri="normal">
+              <div class="action-check" onclick="checkActionItem('ai-7',this)"></div>
+              <div class="action-text"><div class="action-title">Share podcast link with Steve Bashir (Dayton Parts)</div><div class="action-from">Steve Bashir · May 21</div></div>
+              <span class="action-pri pri-normal">This week</span>
+            </div>
+            <div class="action-item" data-id="ai-8" data-pri="normal">
+              <div class="action-check" onclick="checkActionItem('ai-8',this)"></div>
+              <div class="action-text"><div class="action-title">Update David Winjum to biweekly — 30 min earlier</div><div class="action-from">Coaching session · May 22</div></div>
+              <span class="action-pri pri-normal">This week</span>
+            </div>
+      </div>
+      <div id="actionDoneSection" style="display:none;margin-top:8px;">
+        <button class="action-done-toggle" id="actionDoneToggle" onclick="toggleDoneSection()">▸ Show completed (0)</button>
+        <div class="action-list" id="actionDoneList" style="display:none;margin-top:6px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── ANNA'S QUEUE ─────────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-header anna-queue-header" onclick="toggleAnnaQueue()">
+      <div class="card-title"><span class="dot dot-green"></span> Anna's Queue</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="card-badge" id="annaBadge">0 delegated</span>
+        <span id="annaToggleIcon" style="font-size:11px;color:var(--muted);">▸ Show</span>
+      </div>
+    </div>
+    <div class="anna-queue-body" id="annaQueueBody">
+      <div class="card-body" style="padding-top:10px;">
+        <div id="annaQueueList"></div>
       </div>
     </div>
   </div>
@@ -1153,58 +1148,6 @@ function timeAgo(iso){const s=Math.floor((Date.now()-new Date(iso))/1000);if(s<6
 function sqlEsc(s){return(s||'').replace(/'/g,"''");}
 function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
-// ─── PIPELINE ─────────────────────────────────────────────────────────────────
-async function loadPipeline() {
-  const el=document.getElementById('pipelineContent');
-  el.innerHTML=`<div class="card-body" style="padding-top:14px;">
-    <div style="text-align:center;padding:14px 12px 18px;">
-      <div style="font-size:28px;margin-bottom:8px;">📊</div>
-      <div style="font-size:12px;font-weight:700;color:var(--navy-dark);margin-bottom:5px;">Live pipeline requires GoHighLevel</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.5;">Your pipeline syncs through Make. Open GHL directly to see current opportunities and deal values.</div>
-      <a href="https://app.gohighlevel.com" target="_blank" rel="noopener" style="background:var(--navy);color:white;padding:7px 18px;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;display:inline-block;">Open GoHighLevel →</a>
-    </div>
-  </div>`;
-  document.getElementById('pipelineUpdated').textContent='View in GHL';
-  document.getElementById('statOpenValue').innerHTML='<span style="font-size:13px;color:var(--muted)">—</span>';
-  document.getElementById('statOpenCount').textContent='open GHL to refresh';
-}
-
-// ─── CALENDAR ─────────────────────────────────────────────────────────────────
-async function loadCalendar() {
-  const el=document.getElementById('calendarContent');
-  try {
-    const rows = await supaFetch('/rest/v1/gps_settings?key=eq.cal_embed_url&select=value');
-    if (rows && rows[0] && rows[0].value) {
-      const src = rows[0].value.includes('?') ? rows[0].value + '&showTitle=0&showNav=1&showPrint=0&showTabs=0&showCalendars=0' : rows[0].value;
-      el.innerHTML=`<div style="height:400px;"><iframe src="${src}" style="border:none;width:100%;height:100%;" frameborder="0" scrolling="no" allowfullscreen></iframe></div>`;
-      return;
-    }
-  } catch(e) {}
-  el.innerHTML=`<div class="card-body" style="padding-top:14px;">
-    <div style="text-align:center;padding:10px 12px 16px;">
-      <div style="font-size:28px;margin-bottom:8px;">📅</div>
-      <div style="font-size:12px;font-weight:700;color:var(--navy-dark);margin-bottom:4px;">Connect your Google Calendar</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:12px;line-height:1.5;">In Google Calendar → Settings → your calendar → <em>Integrate calendar</em> → copy the Embed URL. Paste it below to show live events here.</div>
-      <div style="display:flex;gap:6px;max-width:360px;margin:0 auto 10px;">
-        <input id="calEmbedInput" placeholder="Paste embed URL from Google Calendar…" style="flex:1;border:1px solid var(--border);border-radius:6px;padding:6px 9px;font-size:11px;outline:none;font-family:inherit;">
-        <button onclick="saveCalEmbed()" style="background:var(--teal);color:white;border:none;border-radius:6px;padding:6px 13px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;">Save</button>
-      </div>
-      <a href="https://calendar.google.com" target="_blank" rel="noopener" style="color:var(--teal);font-size:11px;text-decoration:none;">Or open Google Calendar →</a>
-    </div>
-  </div>`;
-}
-
-async function saveCalEmbed() {
-  const url = (document.getElementById('calEmbedInput')||{}).value?.trim();
-  if (!url) return;
-  try {
-    await supaFetch('/rest/v1/gps_settings', {
-      method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal',
-      body: JSON.stringify({key:'cal_embed_url', value:url, updated_at:new Date().toISOString()})
-    });
-    loadCalendar();
-  } catch(e) { alert('Could not save. Try again.'); }
-}
 
 // ─── CHART ────────────────────────────────────────────────────────────────────
 function initChart() {
@@ -1401,19 +1344,71 @@ function updateActionBadge() {
   document.getElementById('actionBadge').textContent = activeCount + ' open';
 }
 
+// ─── ACTION ITEM SORT ─────────────────────────────────────────────────────────
+// Sort order: Today (urgent) → High → Med → Low; then by due date within each tier
+function sortActionList() {
+  const list = document.getElementById('actionList');
+  const items = Array.from(list.querySelectorAll('.action-item:not(.done-item)'));
+  const tierOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
+  const labelOrder = label => {
+    if (!label) return 99;
+    const l = label.toLowerCase();
+    if (l.includes('today') || l.includes('overdue')) return 0;
+    if (l.includes('needs reply')) return 1;
+    if (l.includes('this week')) return 2;
+    return 3;
+  };
+  items.sort((a, b) => {
+    const pa = tierOrder[a.dataset.pri] ?? 2;
+    const pb = tierOrder[b.dataset.pri] ?? 2;
+    if (pa !== pb) return pa - pb;
+    const la = labelOrder(a.querySelector('.action-pri')?.textContent);
+    const lb = labelOrder(b.querySelector('.action-pri')?.textContent);
+    if (la !== lb) return la - lb;
+    const da = a.dataset.due || '9999-12-31';
+    const db = b.dataset.due || '9999-12-31';
+    return da.localeCompare(db);
+  });
+  items.forEach(item => list.appendChild(item));
+}
+
 let actionCounter = 100;
 async function addActionItem() {
   const input = document.getElementById('actionAddInput');
   const text = input.value.trim();
   if (!text) return;
+  const impSel = document.getElementById('actionImpSelect');
+  const dueInput = document.getElementById('actionDueDate');
+  const impVal = impSel ? impSel.value : 'M';
+  const dueVal = dueInput ? dueInput.value : '';
+  const priMap = { H: { cls: 'pri-urgent', label: 'Today', tier: 'urgent' },
+                   M: { cls: 'pri-high',   label: 'This week', tier: 'high' },
+                   L: { cls: 'pri-normal', label: 'This week', tier: 'normal' } };
+  const pri = priMap[impVal] || priMap['M'];
+  // If a due date is set, use it as the label; if due today or past, mark urgent
+  let label = pri.label;
+  let tier = pri.tier;
+  if (dueVal) {
+    const today = new Date().toISOString().slice(0,10);
+    if (dueVal <= today) { label = 'Today'; tier = 'urgent'; }
+    else {
+      const d = new Date(dueVal);
+      label = d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    }
+  }
+  const priCls = tier === 'urgent' ? 'pri-urgent' : tier === 'high' ? 'pri-high' : 'pri-normal';
   const id = 'ai-custom-' + (++actionCounter);
   const div = document.createElement('div');
   div.className = 'action-item';
   div.dataset.id = id;
-  div.dataset.pri = 'normal';
-  div.innerHTML = `<div class="action-check" onclick="checkActionItem('${id}',this)"></div><div class="action-text"><div class="action-title">${escHtml(text)}</div><div class="action-from">Added manually · ${new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div></div><span class="action-pri pri-normal">This week</span>`;
+  div.dataset.pri = tier;
+  if (dueVal) div.dataset.due = dueVal;
+  div.innerHTML = `<div class="action-check" onclick="checkActionItem('${id}',this)"></div><div class="action-text"><div class="action-title">${escHtml(text)}</div><div class="action-from">Added manually · ${new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div></div><span class="action-pri ${priCls}">${label}</span>`;
   document.getElementById('actionList').appendChild(div);
   input.value = '';
+  if (impSel) impSel.value = 'M';
+  if (dueInput) dueInput.value = '';
+  sortActionList();
   updateActionBadge();
   // Save to Supabase for cross-device sync
   let customs = [];
@@ -1722,13 +1717,15 @@ function renderForecast() {
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
+
+// ─── ANNA'S QUEUE
+function toggleAnnaQueue(){const b=document.getElementById('annaQueueBody'),ic=document.getElementById('annaToggleIcon'),o=b.classList.contains('open');b.classList.toggle('open');ic.textContent=o?'▸ Show':'▾ Hide';if(!o)loadAnnaQueue();}
+async function loadAnnaQueue(){const l=document.getElementById('annaQueueList');l.innerHTML='<div class="loading"><div class="spinner"></div>Loading…</div>';const d=[];for(const k of['custom_action_items','sweep_action_items']){try{const r=await supaFetch('/rest/v1/gps_settings?key=eq.'+k+'&select=value');if(r&&r[0]&&r[0].value)JSON.parse(r[0].value).filter(i=>i.delegated&&!i.dismissed).forEach(i=>d.push(i));}catch(e){}}try{const r=await supaFetch('/rest/v1/gps_settings?key=eq.anna_action_items&select=value');if(r&&r[0]&&r[0].value)JSON.parse(r[0].value).filter(i=>!i.dismissed).forEach(i=>d.push({...i,_fromAnna:true}));}catch(e){}document.getElementById('annaBadge').textContent=d.length+' delegated';if(!d.length){l.innerHTML='<div style="text-align:center;padding:16px;color:var(--muted);font-size:12px;font-style:italic;">Nothing delegated to Anna right now.</div>';return;}l.innerHTML='';d.forEach(item=>{const st=item._fromAnna?'from-anna':(item.delegatedStatus||'pending'),lb={pending:'Pending',in_progress:'In Progress',done:'Done','from-anna':'From Anna'}[st]||st,cl=item._fromAnna?'anna-status-in_progress':'anna-status-'+st,nt=item.delegatedNote?'<div class="anna-note">Anna: '+escHtml(item.delegatedNote)+'</div>':'',el=document.createElement('div');el.className='anna-item';el.innerHTML='<div style="flex:1;"><div class="anna-item-text">'+escHtml(item.text||'')+'</div><div class="anna-item-meta">'+escHtml(item.from||'')+'</div>'+nt+'</div><span class="'+cl+'">'+lb+'</span>';l.appendChild(el);});}
 function setDate(){document.getElementById('dateBadge').textContent=new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});}
 
 async function loadAll() {
   const btn=document.getElementById('refreshBtn');
   btn.disabled=true;btn.textContent='Refreshing…';
-  document.getElementById('pipelineContent').innerHTML='<div class="loading"><div class="spinner"></div>Pulling pipeline…</div>';
-  document.getElementById('calendarContent').innerHTML='<div class="loading"><div class="spinner"></div>Loading calendar…</div>';
   document.getElementById('notesList').innerHTML='<div class="loading"><div class="spinner"></div>Loading notes…</div>';
   setDate();initChart();renderAccounts();loadRunwayInputs();
   const cashDate=localStorage.getItem('gps_accounts_date');
@@ -1737,9 +1734,11 @@ async function loadAll() {
   await loadActionStateFromSupabase();
   await loadCustomActionItems();
   initActionItems();
+  sortActionList();
   // Forecast
   renderForecast();
-  await Promise.allSettled([loadPipeline(),loadCalendar(),loadNotes(),loadCoachBadge(),loadAccountsFromSupabase(),loadSweepActionItems()]);
+  await Promise.allSettled([loadNotes(),loadCoachBadge(),loadAccountsFromSupabase(),loadSweepActionItems()]);
+  sortActionList(); // re-sort after sweep items append
   btn.disabled=false;btn.textContent='↻ Refresh';
 }
 

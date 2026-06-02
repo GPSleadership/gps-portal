@@ -1,0 +1,1510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GPS Leadership Portal — Onboarding Sandbox</title>
+<style>
+  /* ─── DESIGN TOKENS ─────────────────────────────────────── */
+  :root {
+    --navy:       #1A3D6E;
+    --navy-light: #234d8a;
+    --teal:       #2EA887;
+    --teal-light: #d4f0e8;
+    --red:        #d94f4f;
+    --red-light:  #fff0f0;
+    --gold:       #e8a020;
+    --gold-light: #fff8ec;
+    --gray-100:   #f5f7fa;
+    --gray-200:   #e8ecf2;
+    --gray-300:   #d1d9e6;
+    --gray-500:   #8492a6;
+    --gray-600:   #5a6478;
+    --gray-800:   #2d3748;
+    --text:       #1e2535;
+    --white:      #ffffff;
+    --trust-color:      #2563eb;
+    --trust-bg:         #eff6ff;
+    --proactivity-color:#7c3aed;
+    --proactivity-bg:   #f5f3ff;
+    --productivity-color:#059669;
+    --productivity-bg:  #ecfdf5;
+    --radius:     10px;
+    --shadow:     0 2px 12px rgba(26,61,110,.08);
+    --shadow-md:  0 4px 20px rgba(26,61,110,.13);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Open Sans', 'Segoe UI', system-ui, sans-serif;
+    background: var(--gray-100);
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ─── SANDBOX BANNER ────────────────────────────────────── */
+  .sandbox-banner {
+    background: var(--gold);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: center;
+    padding: 6px 16px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  /* ─── HEADER ────────────────────────────────────────────── */
+  .portal-header {
+    background: var(--navy);
+    padding: 0 24px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,.2);
+  }
+  .header-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .header-logo-mark {
+    width: 32px;
+    height: 32px;
+    background: var(--teal);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.5px;
+  }
+  .header-logo-text {
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+  }
+  .header-logo-sub {
+    color: rgba(255,255,255,.55);
+    font-size: 11px;
+  }
+  .header-user {
+    color: rgba(255,255,255,.8);
+    font-size: 13px;
+  }
+
+  /* ─── LAYOUT ────────────────────────────────────────────── */
+  .page-wrap {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 28px 16px 80px;
+  }
+
+  /* ─── PROGRESS TRACKER ──────────────────────────────────── */
+  .progress-wrap {
+    background: #fff;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 16px 20px;
+    margin-bottom: 24px;
+  }
+  .progress-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--gray-500);
+    margin-bottom: 10px;
+  }
+  .progress-steps {
+    display: flex;
+    gap: 0;
+    position: relative;
+  }
+  .progress-step {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    position: relative;
+    cursor: default;
+  }
+  .progress-step::before {
+    content: '';
+    position: absolute;
+    top: 13px;
+    left: calc(-50% + 13px);
+    right: calc(50% + 13px);
+    height: 2px;
+    background: var(--gray-200);
+    z-index: 0;
+  }
+  .progress-step:first-child::before { display: none; }
+  .progress-step.done::before,
+  .progress-step.current::before {
+    background: var(--teal);
+  }
+  .ps-dot {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--gray-200);
+    color: var(--gray-500);
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 1;
+    flex-shrink: 0;
+    transition: all .2s;
+  }
+  .progress-step.done .ps-dot { background: var(--teal); color: #fff; }
+  .progress-step.current .ps-dot { background: var(--navy); color: #fff; box-shadow: 0 0 0 3px rgba(26,61,110,.15); }
+  .ps-label {
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--gray-500);
+    text-align: center;
+    line-height: 1.2;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .progress-step.done .ps-label { color: var(--teal); }
+  .progress-step.current .ps-label { color: var(--navy); font-weight: 700; }
+  @media (max-width: 500px) { .ps-label { display: none; } }
+
+  /* ─── CARD ──────────────────────────────────────────────── */
+  .card {
+    background: #fff;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 28px 28px 24px;
+    margin-bottom: 20px;
+  }
+  .card.navy-top { border-top: 4px solid var(--navy); }
+  .card.teal-top  { border-top: 4px solid var(--teal); }
+  .card-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--navy);
+    margin-bottom: 6px;
+  }
+  .card-subtitle {
+    font-size: 13.5px;
+    color: var(--gray-600);
+    line-height: 1.6;
+    margin-bottom: 20px;
+  }
+  .step-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    color: var(--teal);
+    background: var(--teal-light);
+    border-radius: 4px;
+    padding: 3px 8px;
+    margin-bottom: 10px;
+  }
+
+  /* ─── FORM ELEMENTS ─────────────────────────────────────── */
+  .form-group { margin-bottom: 18px; }
+  .form-group:last-child { margin-bottom: 0; }
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--gray-800);
+    margin-bottom: 5px;
+  }
+  .hint {
+    font-size: 12px;
+    color: var(--gray-500);
+    margin-bottom: 7px;
+    line-height: 1.5;
+  }
+  input[type="text"],
+  input[type="email"],
+  input[type="number"],
+  select,
+  textarea {
+    width: 100%;
+    padding: 11px 14px;
+    border: 1.5px solid var(--gray-300);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--text);
+    background: #fff;
+    transition: border-color .15s;
+    outline: none;
+  }
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--navy);
+    box-shadow: 0 0 0 3px rgba(26,61,110,.07);
+  }
+  textarea { min-height: 84px; resize: vertical; }
+  .prefilled-note {
+    font-size: 11px;
+    color: var(--teal);
+    font-weight: 600;
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  .required-star { color: var(--red); }
+
+  /* ─── DIAGNOSTIC SUMMARY CARD ───────────────────────────── */
+  .diag-summary {
+    background: linear-gradient(135deg, #f0f4fb 0%, #f7f9fc 100%);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .diag-summary-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    color: var(--navy);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .diag-scores {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .diag-score-pill {
+    flex: 1;
+    border-radius: 8px;
+    padding: 10px 12px;
+    text-align: center;
+    position: relative;
+    border: 2px solid transparent;
+  }
+  .diag-score-pill.trust { background: var(--trust-bg); border-color: #bfdbfe; }
+  .diag-score-pill.proactivity { background: var(--proactivity-bg); border-color: #ddd6fe; border-width: 2px; }
+  .diag-score-pill.productivity { background: var(--productivity-bg); border-color: #a7f3d0; }
+  .diag-score-pill.weakest { border-width: 2px; }
+  .diag-score-pill.trust.weakest { border-color: var(--trust-color); }
+  .diag-score-pill.proactivity.weakest { border-color: var(--proactivity-color); }
+  .diag-score-pill.productivity.weakest { border-color: var(--productivity-color); }
+  .dsp-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-bottom: 2px;
+  }
+  .trust .dsp-label { color: var(--trust-color); }
+  .proactivity .dsp-label { color: var(--proactivity-color); }
+  .productivity .dsp-label { color: var(--productivity-color); }
+  .dsp-score {
+    font-size: 22px;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 1px;
+  }
+  .trust .dsp-score { color: var(--trust-color); }
+  .proactivity .dsp-score { color: var(--proactivity-color); }
+  .productivity .dsp-score { color: var(--productivity-color); }
+  .dsp-max { font-size: 10px; color: var(--gray-500); }
+  .weakest-tag {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    background: var(--navy);
+    color: #fff;
+    border-radius: 3px;
+    padding: 1px 5px;
+    margin-top: 3px;
+    display: inline-block;
+  }
+  .diag-theme {
+    font-size: 13px;
+    color: var(--gray-600);
+    border-left: 3px solid var(--teal);
+    padding-left: 10px;
+    font-style: italic;
+    line-height: 1.5;
+  }
+
+  /* ─── PILLAR SELECTOR ───────────────────────────────────── */
+  .pillar-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: 4px;
+  }
+  @media (max-width: 480px) { .pillar-grid { grid-template-columns: 1fr; } }
+  .pillar-card {
+    border: 2px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 16px 14px;
+    cursor: pointer;
+    transition: all .2s;
+    text-align: center;
+    position: relative;
+    background: #fff;
+  }
+  .pillar-card:hover { border-color: var(--gray-300); box-shadow: var(--shadow); }
+  .pillar-card.selected.trust { border-color: var(--trust-color); background: var(--trust-bg); }
+  .pillar-card.selected.proactivity { border-color: var(--proactivity-color); background: var(--proactivity-bg); }
+  .pillar-card.selected.productivity { border-color: var(--productivity-color); background: var(--productivity-bg); }
+  .pillar-card.auto-selected::after {
+    content: 'Auto-selected';
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    background: var(--navy);
+    color: #fff;
+    border-radius: 4px;
+    padding: 2px 6px;
+    white-space: nowrap;
+  }
+  .pillar-icon { font-size: 24px; margin-bottom: 6px; }
+  .pillar-name { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+  .trust .pillar-name { color: var(--trust-color); }
+  .proactivity .pillar-name { color: var(--proactivity-color); }
+  .productivity .pillar-name { color: var(--productivity-color); }
+  .pillar-desc { font-size: 11px; color: var(--gray-500); line-height: 1.4; }
+  .pillar-score-tag {
+    font-size: 10px;
+    font-weight: 700;
+    margin-top: 6px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    display: inline-block;
+  }
+  .trust .pillar-score-tag { background: #dbeafe; color: var(--trust-color); }
+  .proactivity .pillar-score-tag { background: #ede9fe; color: var(--proactivity-color); }
+  .productivity .pillar-score-tag { background: #d1fae5; color: var(--productivity-color); }
+
+  /* ─── METRIC CARDS ──────────────────────────────────────── */
+  .metric-card {
+    background: var(--gray-100);
+    border: 1.5px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 18px;
+    margin-bottom: 16px;
+  }
+  .metric-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .metric-type-badge {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-radius: 4px;
+    padding: 3px 8px;
+  }
+  .metric-type-badge.self { background: #dbeafe; color: var(--trust-color); }
+  .metric-type-badge.stakeholder { background: #ede9fe; color: var(--proactivity-color); }
+  .metric-card-title { font-size: 13px; font-weight: 700; color: var(--navy); margin-bottom: 2px; }
+  .metric-card-desc { font-size: 12px; color: var(--gray-500); }
+  .metric-required-note {
+    font-size: 11px;
+    color: var(--teal);
+    font-weight: 600;
+    background: var(--teal-light);
+    padding: 6px 10px;
+    border-radius: 5px;
+    margin-bottom: 12px;
+  }
+  .scale-preview {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .scale-dot {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1.5px solid var(--gray-300);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--gray-500);
+  }
+  .scale-dot.target { border-color: var(--teal); color: var(--teal); background: var(--teal-light); }
+  .scale-label { font-size: 11px; color: var(--gray-500); }
+
+  /* ─── STAKEHOLDER ROWS ──────────────────────────────────── */
+  .stakeholder-list { display: flex; flex-direction: column; gap: 10px; }
+  .stakeholder-row {
+    background: var(--gray-100);
+    border: 1.5px solid var(--gray-200);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .stakeholder-row-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .stakeholder-num {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--gray-500);
+    letter-spacing: 0.4px;
+  }
+  .remove-btn {
+    background: none;
+    border: none;
+    color: var(--red);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 2px 6px;
+  }
+  .remove-btn:hover { opacity: 0.7; }
+  .auto-tag {
+    font-size: 10px;
+    font-weight: 700;
+    background: var(--teal-light);
+    color: var(--teal);
+    border-radius: 3px;
+    padding: 2px 6px;
+  }
+  .add-stakeholder-btn {
+    background: none;
+    border: 1.5px dashed var(--teal);
+    color: var(--teal);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+    margin-top: 8px;
+    transition: all .15s;
+  }
+  .add-stakeholder-btn:hover { background: var(--teal-light); }
+  .add-stakeholder-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ─── REWARD CARDS ──────────────────────────────────────── */
+  .reward-card {
+    background: var(--gold-light);
+    border: 1.5px solid #fcd88a;
+    border-radius: var(--radius);
+    padding: 18px;
+    margin-bottom: 14px;
+  }
+  .reward-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .reward-icon { font-size: 20px; }
+  .reward-title { font-size: 14px; font-weight: 700; color: var(--navy); }
+  .reward-hint { font-size: 12px; color: var(--gray-600); margin-bottom: 10px; }
+
+  /* ─── SUMMARY ───────────────────────────────────────────── */
+  .summary-section { margin-bottom: 20px; }
+  .summary-section-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    color: var(--gray-500);
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--gray-200);
+  }
+  .summary-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 10px;
+    align-items: flex-start;
+  }
+  .summary-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--gray-600);
+    min-width: 120px;
+    flex-shrink: 0;
+  }
+  .summary-value { font-size: 14px; color: var(--text); line-height: 1.5; }
+  .pillar-badge {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 20px;
+  }
+  .pb-trust { background: var(--trust-bg); color: var(--trust-color); }
+  .pb-proactivity { background: var(--proactivity-bg); color: var(--proactivity-color); }
+  .pb-productivity { background: var(--productivity-bg); color: var(--productivity-color); }
+  .summary-stakeholders { display: flex; flex-direction: column; gap: 6px; }
+  .sh-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+  }
+  .sh-rel {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    background: var(--gray-200);
+    color: var(--gray-600);
+    border-radius: 3px;
+    padding: 2px 6px;
+  }
+
+  /* ─── NAVIGATION ────────────────────────────────────────── */
+  .nav-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 28px;
+  }
+  .btn-back {
+    background: none;
+    border: 1.5px solid var(--gray-300);
+    color: var(--gray-600);
+    padding: 11px 22px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .btn-back:hover { border-color: var(--gray-500); color: var(--text); }
+  .btn-next {
+    background: var(--navy);
+    color: #fff;
+    border: none;
+    padding: 12px 28px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all .15s;
+    box-shadow: 0 2px 8px rgba(26,61,110,.25);
+  }
+  .btn-next:hover { background: var(--navy-light); transform: translateY(-1px); }
+  .btn-next:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .btn-lock {
+    background: var(--teal);
+    box-shadow: 0 2px 8px rgba(46,168,135,.3);
+  }
+  .btn-lock:hover { background: #28977a; }
+
+  /* ─── ERROR BANNER ──────────────────────────────────────── */
+  .error-msg {
+    display: none;
+    background: var(--red-light);
+    border: 1px solid #fca5a5;
+    border-radius: 7px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--red);
+    margin-top: 16px;
+  }
+  .error-msg.show { display: block; }
+
+  /* ─── SUCCESS ────────────────────────────────────────────── */
+  .success-screen {
+    text-align: center;
+    padding: 40px 20px;
+  }
+  .success-icon { font-size: 56px; margin-bottom: 16px; }
+  .success-title { font-size: 24px; font-weight: 800; color: var(--navy); margin-bottom: 8px; }
+  .success-sub { font-size: 15px; color: var(--gray-600); max-width: 400px; margin: 0 auto; }
+
+  /* ─── DIVIDER ────────────────────────────────────────────── */
+  .divider { height: 1px; background: var(--gray-200); margin: 18px 0; }
+
+  /* ─── BEHAVIOR BLOCK ─────────────────────────────────────── */
+  .behavior-block {
+    background: var(--gray-100);
+    border: 1.5px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+  .behavior-block-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--navy);
+    margin-bottom: 10px;
+  }
+  .rule-format-hint {
+    font-size: 12px;
+    color: var(--gray-600);
+    background: var(--teal-light);
+    border-left: 3px solid var(--teal);
+    padding: 8px 10px;
+    border-radius: 0 5px 5px 0;
+    margin-bottom: 10px;
+    line-height: 1.5;
+  }
+
+  /* ─── HIDDEN ─────────────────────────────────────────────── */
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="sandbox-banner">🧪 Sandbox Prototype — Not Connected to Live Data</div>
+
+<header class="portal-header">
+  <div class="header-logo">
+    <div class="header-logo-mark">G</div>
+    <div>
+      <div class="header-logo-text">GPS Leadership</div>
+      <div class="header-logo-sub">Executive Impact Portal</div>
+    </div>
+  </div>
+  <div class="header-user">Jordan Carter · Apex Service Group</div>
+</header>
+
+<div class="page-wrap">
+
+  <!-- PROGRESS TRACKER -->
+  <div class="progress-wrap">
+    <div class="progress-label">Onboarding Progress</div>
+    <div class="progress-steps" id="progressSteps">
+      <!-- Injected by JS -->
+    </div>
+  </div>
+
+  <!-- STEP SCREENS -->
+  <div id="stepContainer"></div>
+
+  <!-- NAV BAR -->
+  <div class="nav-bar">
+    <button class="btn-back" id="btnBack" onclick="goBack()">← Back</button>
+    <button class="btn-next" id="btnNext" onclick="goNext()">Continue →</button>
+  </div>
+
+  <div class="error-msg" id="globalError"></div>
+
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────
+// DIAGNOSTIC DATA — POPULATED FROM JORDAN CARTER'S REAL DIAGNOSTIC
+// Source: 14-Day Executive Leadership Diagnostic, March 26, 2026
+// GPS Leadership Solutions / Alex D. Tremble
+// ─────────────────────────────────────────────────────────────────────
+const DIAGNOSTIC = {
+  // Client info (from cover page)
+  name: "Jordan Carter",
+  firstName: "Jordan",
+  company: "Apex Service Group",
+  title: "CEO",
+
+  // TP3 Pillar scores — Others Only (page 4 of report)
+  // Trust: 3.8 | Proactivity: 4.4 | Productivity: 4.5
+  scores: {
+    Trust:        3.8,
+    Proactivity:  4.4,
+    Productivity: 4.5
+  },
+
+  // Weakest pillar — Trust at 3.8 is the lowest rater score
+  // Direct reports rated Trust sub-dimensions in the 3.4–3.9 range
+  weakestPillar: "Trust",
+
+  // Key diagnostic theme — pulled directly from report language (pages 2, 8, 13-14)
+  // "People trust your intent and work ethic, but some hesitate to bring half-baked
+  //  problems or bad news early because they're not sure how you'll react."
+  // Verbatim: "If you changed one thing, it would be reacting 10% slower in heated moments."
+  keyTheme: "People trust your intent and work ethic. But several raters — especially direct reports — hesitate to bring bad news early or push back in meetings because they're not sure how you'll react. The feedback is clear: your intensity creates hesitation at the leadership table.",
+
+  // Suggested auto-generated content — derived from report's 90-day section,
+  // suggested behavior, sample metric, and Start/Stop/Continue themes
+  suggested: {
+    // 90-day goal — drawn from report's "Proposed Priority Behavior" (page 11)
+    // and verbatim theme: "shift from being the doer to the builder of doers"
+    goal90: "By the end of 90 days, my executive and regional leaders bring me problems with recommendations — not just questions — and I have built enough safety at the leadership table that they tell me the truth early, before it's already urgent. My first response is a question, not an answer.",
+
+    // 30-day goal — working backwards from 90-day; anchored in report's
+    // weekly practices: "In any escalation, first ask: what are your 2-3 options?"
+    // and "choose one meeting per week where a direct report leads and you participate"
+    goal30: "By day 30, I have run 4 leadership meetings where I held back my first response, asked for options first, and let my leaders bring recommendations before I weighed in — and I have had zero 'blast radius' moments in those sessions.",
+
+    // Behavior 1 — "rule in context" format, pulled from report's suggested
+    // 90-day behavior and verbatim: "Stop jumping in with the answer so quickly"
+    behavior1: "When a leader brings me a problem or escalation — in a meeting, a hallway, or a call — I ask 'What are your two or three options and what do you recommend?' before I give my view. Every time.",
+
+    // Behavior 2 — from report's weekly practices: "After any blow-up meeting,
+    // do a 10-minute self-review"
+    behavior2: "After any meeting where I felt frustrated or where the conversation got heated, I do a 10-minute self-review within 24 hours: what triggered me, what I did well, and one thing I'll do differently next time.",
+
+    // Metric 1 — self behavior count, directly tracking Behavior 1
+    // Adapted from report's Sample Metric: "Leaders solving without CEO intervention"
+    // "Count per week of issues escalated with a recommendation vs. 'What do you want to do?'"
+    metric1: {
+      name: "# of escalations where I asked for options/a recommendation before giving my own view",
+      baseline: 2,   // estimated — report says "estimate now; tighten after 2 weeks"
+      target: 8,     // 90-day weekly target (most escalations handled this way)
+    },
+
+    // Metric 2 — stakeholder perception, 1–5 agreement scale
+    // Addresses the core Trust gap: psychological safety to bring bad news early
+    // Drawn from verbatim: "I don't want people walking on eggshells around me"
+    metric2: {
+      question: "When I bring a difficult problem, bad news, or pushback to Jordan, I feel safe doing it early — before it becomes urgent — without worrying about his reaction.",
+      targetAvg: 4.0
+    },
+
+    // Stakeholders — representative from the diagnostic rater groups
+    // Report: 7 direct reports, 5 peers/partners, 3 board members, 2 key customers
+    // Portal stores these from the diagnostic rater database; shown here as examples
+    stakeholders: [
+      { name: "Renee Calloway",  email: "r.calloway@apexservicegroup.com",  relationship: "Direct Report" },
+      { name: "Derek Osgood",    email: "d.osgood@apexservicegroup.com",    relationship: "Direct Report" },
+      { name: "Taryn Wills",     email: "t.wills@apexservicegroup.com",     relationship: "Direct Report" },
+      { name: "Victor Salinas",  email: "v.salinas@apexservicegroup.com",   relationship: "Peer"          }
+    ]
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────
+// PLAN STATE — this is what gets built across the wizard steps
+// ─────────────────────────────────────────────────────────────────────
+const plan = {
+  pillar:       DIAGNOSTIC.weakestPillar,
+  goal90:       DIAGNOSTIC.suggested.goal90,
+  goal30:       DIAGNOSTIC.suggested.goal30,
+  metric1:      { ...DIAGNOSTIC.suggested.metric1 },
+  metric2:      { ...DIAGNOSTIC.suggested.metric2 },
+  behavior1:    DIAGNOSTIC.suggested.behavior1,
+  behavior2:    DIAGNOSTIC.suggested.behavior2,
+  stakeholders: DIAGNOSTIC.suggested.stakeholders.map(s => ({ ...s })),
+  reward30:     "",
+  reward90:     ""
+};
+
+// ─────────────────────────────────────────────────────────────────────
+// WIZARD STEPS CONFIG
+// ─────────────────────────────────────────────────────────────────────
+const STEPS = [
+  { id: 0, label: "Welcome"     },
+  { id: 1, label: "Pillar"      },
+  { id: 2, label: "Goals"       },
+  { id: 3, label: "Metrics"     },
+  { id: 4, label: "Behaviors"   },
+  { id: 5, label: "People"      },
+  { id: 6, label: "Rewards"     },
+  { id: 7, label: "Review"      },
+];
+
+let currentStep = 0;
+const LAST_STEP = 7;
+
+// ─────────────────────────────────────────────────────────────────────
+// RENDER ENGINE
+// ─────────────────────────────────────────────────────────────────────
+function render() {
+  renderProgress();
+  renderStep(currentStep);
+  renderNav();
+}
+
+function renderProgress() {
+  const container = document.getElementById('progressSteps');
+  container.innerHTML = STEPS.map(s => {
+    let cls = 'progress-step';
+    if (s.id < currentStep) cls += ' done';
+    else if (s.id === currentStep) cls += ' current';
+    const icon = s.id < currentStep ? '✓' : (s.id + 1);
+    return `<div class="${cls}">
+      <div class="ps-dot">${icon}</div>
+      <div class="ps-label">${s.label}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderNav() {
+  const back = document.getElementById('btnBack');
+  const next = document.getElementById('btnNext');
+  back.style.visibility = currentStep === 0 ? 'hidden' : 'visible';
+  if (currentStep === LAST_STEP) {
+    next.textContent = '🔒 Lock In My Plan';
+    next.className = 'btn-next btn-lock';
+  } else {
+    next.innerHTML = 'Continue →';
+    next.className = 'btn-next';
+  }
+}
+
+function showError(msg) {
+  const el = document.getElementById('globalError');
+  el.textContent = msg;
+  el.classList.add('show');
+  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function clearError() {
+  const el = document.getElementById('globalError');
+  el.classList.remove('show');
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// STEP RENDERERS
+// ─────────────────────────────────────────────────────────────────────
+function renderStep(step) {
+  const container = document.getElementById('stepContainer');
+  switch(step) {
+    case 0: container.innerHTML = renderStep0(); break;
+    case 1: container.innerHTML = renderStep1(); break;
+    case 2: container.innerHTML = renderStep2(); break;
+    case 3: container.innerHTML = renderStep3(); break;
+    case 4: container.innerHTML = renderStep4(); break;
+    case 5: container.innerHTML = renderStep5(); break;
+    case 6: container.innerHTML = renderStep6(); break;
+    case 7: container.innerHTML = renderStep7(); break;
+  }
+}
+
+// ── STEP 0: Welcome & Diagnostic Review ─────────────────────────────
+function renderStep0() {
+  const lowestScore = Math.min(...Object.values(DIAGNOSTIC.scores));
+  return `
+    <div class="card navy-top">
+      <div class="step-badge">Welcome</div>
+      <div class="card-title">Your Plan Is Already in Draft, ${DIAGNOSTIC.firstName}.</div>
+      <div class="card-subtitle">
+        Based on your TP3 diagnostic, we've pre-built a starting point for your 90-day plan.
+        In the next few steps you'll review, edit, and confirm each piece. Nothing is final until you lock it in.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="font-size:15px;margin-bottom:14px;">Your Diagnostic Results</div>
+
+      <div class="diag-summary">
+        <div class="diag-summary-title">
+          <span>📊</span> TP3 Pillar Scores
+        </div>
+        <div class="diag-scores">
+          ${Object.entries(DIAGNOSTIC.scores).map(([pillar, score]) => {
+            const key = pillar.toLowerCase();
+            const isWeakest = pillar === DIAGNOSTIC.weakestPillar;
+            return `<div class="diag-score-pill ${key}${isWeakest ? ' weakest' : ''}">
+              <div class="dsp-label">${pillar}</div>
+              <div class="dsp-score">${score.toFixed(1)}</div>
+              <div class="dsp-max">out of 5.0</div>
+              ${isWeakest ? '<div class="weakest-tag">Focus Area</div>' : ''}
+            </div>`;
+          }).join('')}
+        </div>
+        <div class="diag-theme">"${DIAGNOSTIC.keyTheme}"</div>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <div class="diag-summary-title" style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--navy);margin-bottom:12px;">What We've Drafted For You</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="display:flex;gap:10px;align-items:flex-start;font-size:13px;">
+            <span style="color:var(--teal);font-weight:700;min-width:20px;">✓</span>
+            <span><strong>Focus Pillar:</strong> ${plan.pillar} (your lowest score)</span>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start;font-size:13px;">
+            <span style="color:var(--teal);font-weight:700;min-width:20px;">✓</span>
+            <span><strong>90-Day Goal:</strong> Pre-written using language from your diagnostic</span>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start;font-size:13px;">
+            <span style="color:var(--teal);font-weight:700;min-width:20px;">✓</span>
+            <span><strong>30-Day Goal:</strong> Drafted as a concrete checkpoint toward your 90-day outcome</span>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start;font-size:13px;">
+            <span style="color:var(--teal);font-weight:700;min-width:20px;">✓</span>
+            <span><strong>Behavior + 2 Metrics:</strong> One self-tracking metric and one stakeholder perception question</span>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start;font-size:13px;">
+            <span style="color:var(--teal);font-weight:700;min-width:20px;">✓</span>
+            <span><strong>${DIAGNOSTIC.suggested.stakeholders.length} Stakeholders</strong> pre-loaded from your diagnostic contacts</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="background:var(--gold-light);border:1px solid #fcd88a;border-radius:8px;padding:12px 14px;font-size:13px;color:var(--gray-800);line-height:1.5;">
+        <strong>This is your starting point — not the final version.</strong> Every field is editable. Your coach has reviewed the draft and it's ready for your input. This takes about 10 minutes.
+      </div>
+    </div>`;
+}
+
+// ── STEP 1: Pillar ───────────────────────────────────────────────────
+function renderStep1() {
+  return `
+    <div class="card navy-top">
+      <div class="step-badge">Step 1 of 7 — Focus Pillar</div>
+      <div class="card-title">Confirm Your Focus Pillar</div>
+      <div class="card-subtitle">
+        Based on your diagnostic, <strong>${DIAGNOSTIC.weakestPillar}</strong> came back as your lowest-scoring area.
+        We've auto-selected it. You can change it if you and your coach decided on a different focus.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="pillar-grid" id="pillarGrid">
+        ${['Trust','Proactivity','Productivity'].map(p => {
+          const key = p.toLowerCase();
+          const score = DIAGNOSTIC.scores[p];
+          const isSelected = plan.pillar === p;
+          const isAuto = p === DIAGNOSTIC.weakestPillar;
+          return `<div class="pillar-card ${key}${isSelected ? ' selected' : ''}${isAuto ? ' auto-selected' : ''}" onclick="selectPillar('${p}')">
+            <div class="pillar-icon">${p==='Trust'?'🤝':p==='Proactivity'?'⚡':'🎯'}</div>
+            <div class="pillar-name">${p}</div>
+            <div class="pillar-desc">${
+              p==='Trust' ? 'How your team experiences your reliability and follow-through' :
+              p==='Proactivity' ? 'How you anticipate, initiate, and move without being told' :
+              'How effectively you focus your team on what moves the needle'
+            }</div>
+            <div class="pillar-score-tag">Diagnostic: ${score.toFixed(1)} / 5.0</div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div id="pillarInput" style="display:none;"></div>
+      <div class="hint" style="margin-top:14px;text-align:center;">Not sure? Trust your diagnostic. You can always revisit this with your coach.</div>
+    </div>`;
+}
+
+function selectPillar(p) {
+  plan.pillar = p;
+  document.querySelectorAll('.pillar-card').forEach(el => el.classList.remove('selected'));
+  const key = p.toLowerCase();
+  document.querySelectorAll(`.pillar-card.${key}`).forEach(el => el.classList.add('selected'));
+}
+
+// ── STEP 2: Goals ────────────────────────────────────────────────────
+function renderStep2() {
+  return `
+    <div class="card navy-top">
+      <div class="step-badge">Step 2 of 7 — Your Goals</div>
+      <div class="card-title">Your 90-Day and 30-Day Goals</div>
+      <div class="card-subtitle">
+        Write your 90-day goal first — it's the outcome you want to be able to say is true at day 90.
+        Then your 30-day goal: a specific, real checkpoint that proves you're on track.
+        Both are pre-filled from your diagnostic. Edit freely.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="form-group">
+        <label>90-Day Goal <span class="required-star">*</span></label>
+        <div class="hint">First person. Specific behavior change. Written as if day 90 has arrived and you're describing what is now true.</div>
+        <textarea id="goal90" rows="3">${escHTML(plan.goal90)}</textarea>
+        <div class="prefilled-note">✦ Pre-filled from your diagnostic</div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="form-group">
+        <label>30-Day Goal <span class="required-star">*</span></label>
+        <div class="hint">What specific, observable progress will you be able to point to at day 30? This is your first real checkpoint — not a feeling, a fact.</div>
+        <textarea id="goal30" rows="3">${escHTML(plan.goal30)}</textarea>
+        <div class="prefilled-note">✦ Pre-filled working backwards from your 90-day goal</div>
+      </div>
+    </div>`;
+}
+
+// ── STEP 3: Metrics ──────────────────────────────────────────────────
+function renderStep3() {
+  return `
+    <div class="card navy-top">
+      <div class="step-badge">Step 3 of 7 — Your Metrics</div>
+      <div class="card-title">Two Metrics — Both Required</div>
+      <div class="card-subtitle">
+        Every plan tracks exactly two things: how often you're doing the behavior (self-tracked) and how others experience the change (stakeholder perception).
+        These are pre-built from your diagnostic. Edit the text — not the structure.
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-required-note">✦ Required — Metric 1 is always self-tracked and count-based.</div>
+      <div class="metric-card-header">
+        <div>
+          <div class="metric-card-title">Metric 1 — Self Behavior Metric</div>
+          <div class="metric-card-desc">Counts how often you execute the behavior each week.</div>
+        </div>
+        <span class="metric-type-badge self">Self</span>
+      </div>
+      <div class="form-group">
+        <label>What you're counting <span class="required-star">*</span></label>
+        <div class="hint">Phrase it as "# of times I did [behavior] this week."</div>
+        <input type="text" id="m1Name" value="${escHTML(plan.metric1.name)}" />
+        <div class="prefilled-note">✦ Pre-filled from Behavior 1</div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Baseline <span class="required-star">*</span></label>
+          <div class="hint">How many times last week?</div>
+          <input type="number" id="m1Baseline" value="${plan.metric1.baseline}" min="0" />
+        </div>
+        <div class="form-group">
+          <label>90-Day Weekly Target <span class="required-star">*</span></label>
+          <div class="hint">Where you want to be by week 13.</div>
+          <input type="number" id="m1Target" value="${plan.metric1.target}" min="1" />
+        </div>
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-required-note">✦ Required — Metric 2 is always a 1–5 stakeholder perception question.</div>
+      <div class="metric-card-header">
+        <div>
+          <div class="metric-card-title">Metric 2 — Stakeholder Perception Metric</div>
+          <div class="metric-card-desc">Sent to your stakeholders at day 30 and day 90. They respond on a 1–5 scale.</div>
+        </div>
+        <span class="metric-type-badge stakeholder">Stakeholder</span>
+      </div>
+      <div class="form-group">
+        <label>Survey Question <span class="required-star">*</span></label>
+        <div class="hint">Write from your stakeholder's point of view. Should be answerable on a 1–5 agreement scale. "4 or 5 = meets the bar."</div>
+        <textarea id="m2Question" rows="2">${escHTML(plan.metric2.question)}</textarea>
+        <div class="prefilled-note">✦ Pre-filled based on your pillar and behavior</div>
+      </div>
+      <div class="form-group">
+        <label>Target Average Score</label>
+        <div class="hint">Default is 4.0. A score of 4 or 5 from any stakeholder is considered "meets the bar."</div>
+        <input type="number" id="m2Target" value="${plan.metric2.targetAvg}" min="1" max="5" step="0.1" style="max-width:120px;" />
+      </div>
+      <div>
+        <div class="hint" style="margin-bottom:6px;">How the scale reads to stakeholders:</div>
+        <div class="scale-preview">
+          <div class="scale-dot">1</div>
+          <div class="scale-dot">2</div>
+          <div class="scale-dot">3</div>
+          <div class="scale-dot target">4</div>
+          <div class="scale-dot target">5</div>
+          <span class="scale-label">← 1–3 needs work &nbsp;|&nbsp; 4–5 meets the bar →</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── STEP 4: Behaviors ────────────────────────────────────────────────
+function renderStep4() {
+  return `
+    <div class="card navy-top">
+      <div class="step-badge">Step 4 of 7 — Your Behaviors</div>
+      <div class="card-title">The Specific Things You're Committing to Do</div>
+      <div class="card-subtitle">
+        A behavior is a "rule in context" — if <em>this</em> situation, then <em>this</em> action.
+        Behavior 1 is required and is what Metric 1 tracks. Behavior 2 is optional.
+      </div>
+    </div>
+
+    <div class="behavior-block">
+      <div class="behavior-block-title">Behavior 1 — Required</div>
+      <div class="rule-format-hint">
+        <strong>Format:</strong> "When [situation], I [specific action] within [timeframe]."<br />
+        Example: "When I receive an escalation for a decision within an ops lead's authority, I respond with a question — not an answer — within 24 hours."
+      </div>
+      <div class="form-group" style="margin-bottom:0;">
+        <textarea id="behavior1" rows="3">${escHTML(plan.behavior1)}</textarea>
+        <div class="prefilled-note">✦ Pre-filled from your diagnostic — edit to make it yours</div>
+      </div>
+    </div>
+
+    <div class="behavior-block" id="behavior2Block">
+      <div class="behavior-block-title">Behavior 2 — Optional</div>
+      <div class="hint" style="margin-bottom:10px;">A second behavior that supports the same objective. Leave blank if you want to keep the focus tight.</div>
+      <div class="form-group" style="margin-bottom:0;">
+        <textarea id="behavior2" rows="2">${escHTML(plan.behavior2)}</textarea>
+        <div class="prefilled-note">✦ Pre-filled — delete if not relevant</div>
+      </div>
+    </div>`;
+}
+
+// ── STEP 5: Stakeholders ─────────────────────────────────────────────
+let stakeholderCount = 0; // will be set on render
+
+function renderStep5() {
+  stakeholderCount = plan.stakeholders.length;
+  return `
+    <div class="card navy-top">
+      <div class="step-badge">Step 5 of 7 — Your Stakeholders</div>
+      <div class="card-title">Who Will Rate Your Progress?</div>
+      <div class="card-subtitle">
+        At day 30 and day 90, these people will receive Metric 2 as a short survey.
+        We've pre-loaded them from your diagnostic contacts. You need at least 1 and no more than 5.
+        Names and emails can be edited.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="stakeholder-list" id="stakeholderList">
+        ${plan.stakeholders.map((s, i) => renderStakeholderRow(s, i, true)).join('')}
+      </div>
+      <button class="add-stakeholder-btn" id="addShBtn" onclick="addStakeholder()" ${plan.stakeholders.length >= 5 ? 'disabled' : ''}>
+        + Add another stakeholder ${plan.stakeholders.length >= 5 ? '(max 5 reached)' : `(${5 - plan.stakeholders.length} remaining)`}
+      </button>
+      <div class="hint" style="margin-top:12px;">
+        Relationships: <strong>Manager</strong> = your direct supervisor; <strong>Direct Report</strong> = someone you manage; <strong>Peer</strong> = same level, different team.
+      </div>
+    </div>`;
+}
+
+function renderStakeholderRow(s, i, isAuto) {
+  return `<div class="stakeholder-row" id="sh-row-${i}">
+    <div class="stakeholder-row-header">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="stakeholder-num">Stakeholder ${i+1}</span>
+        ${isAuto ? '<span class="auto-tag">From Diagnostic</span>' : ''}
+      </div>
+      ${i > 0 ? `<button class="remove-btn" onclick="removeStakeholder(${i})">✕ Remove</button>` : ''}
+    </div>
+    <div class="form-row" style="margin-bottom:10px;">
+      <div class="form-group" style="margin-bottom:0;">
+        <label style="font-size:12px;">Full Name <span class="required-star">*</span></label>
+        <input type="text" id="sh-name-${i}" value="${escHTML(s.name)}" placeholder="Full name" />
+      </div>
+      <div class="form-group" style="margin-bottom:0;">
+        <label style="font-size:12px;">Email <span class="required-star">*</span></label>
+        <input type="email" id="sh-email-${i}" value="${escHTML(s.email)}" placeholder="email@company.com" />
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:0;">
+      <label style="font-size:12px;">Relationship <span class="required-star">*</span></label>
+      <select id="sh-rel-${i}">
+        <option value="Manager" ${s.relationship==='Manager'?'selected':''}>Manager</option>
+        <option value="Direct Report" ${s.relationship==='Direct Report'?'selected':''}>Direct Report</option>
+        <option value="Peer" ${s.relationship==='Peer'?'selected':''}>Peer</option>
+      </select>
+    </div>
+  </div>`;
+}
+
+function addStakeholder() {
+  if (plan.stakeholders.length >= 5) return;
+  plan.stakeholders.push({ name: '', email: '', relationship: 'Peer' });
+  stakeholderCount = plan.stakeholders.length;
+  const list = document.getElementById('stakeholderList');
+  const newRow = document.createElement('div');
+  newRow.innerHTML = renderStakeholderRow(plan.stakeholders[plan.stakeholders.length-1], plan.stakeholders.length-1, false);
+  list.appendChild(newRow.firstElementChild);
+  const btn = document.getElementById('addShBtn');
+  if (plan.stakeholders.length >= 5) { btn.disabled = true; btn.textContent = '+ Add another stakeholder (max 5 reached)'; }
+  else { btn.textContent = `+ Add another stakeholder (${5 - plan.stakeholders.length} remaining)`; }
+}
+
+function removeStakeholder(i) {
+  if (plan.stakeholders.length <= 1) return;
+  plan.stakeholders.splice(i, 1);
+  // Re-render the step
+  document.getElementById('stepContainer').innerHTML = renderStep5();
+}
+
+// ── STEP 6: Rewards ──────────────────────────────────────────────────
+function renderStep6() {
+  return `
+    <div class="card navy-top">
+      <div class="step-badge">Step 6 of 7 — Your Rewards</div>
+      <div class="card-title">What's at Stake for You Personally?</div>
+      <div class="card-subtitle">
+        Both rewards are required. Make them real. The 30-day reward should feel meaningful. The 90-day reward should feel earned. Vague rewards don't work.
+      </div>
+    </div>
+
+    <div class="reward-card">
+      <div class="reward-card-header">
+        <span class="reward-icon">🎯</span>
+        <span class="reward-title">30-Day Reward <span class="required-star">*</span></span>
+      </div>
+      <div class="reward-hint">Something meaningful you'll give yourself if you show up at day 30 — on track against your 30-day goal.</div>
+      <input type="text" id="reward30" value="${escHTML(plan.reward30)}" placeholder="e.g. A full weekend completely offline — Friday night through Sunday" />
+    </div>
+
+    <div class="reward-card">
+      <div class="reward-card-header">
+        <span class="reward-icon">🏆</span>
+        <span class="reward-title">90-Day Reward <span class="required-star">*</span></span>
+      </div>
+      <div class="reward-hint">Something bigger that represents what it means to close this out. The trip. The experience. The thing you've been putting off.</div>
+      <input type="text" id="reward90" value="${escHTML(plan.reward90)}" placeholder="e.g. Book the trip we've been delaying for two years" />
+    </div>
+
+    <div class="card" style="background:var(--gray-100);box-shadow:none;border:1px solid var(--gray-200);">
+      <div style="font-size:13px;color:var(--gray-600);line-height:1.6;">
+        <strong>Why this matters:</strong> The rewards get anchored in the plan. Your coach will reference them. When week 8 is hard, you'll remember what you said you were working toward.
+      </div>
+    </div>`;
+}
+
+// ── STEP 7: Final Summary ────────────────────────────────────────────
+function renderStep7() {
+  const pillarClass = 'pb-' + plan.pillar.toLowerCase();
+  return `
+    <div class="card teal-top">
+      <div class="step-badge">Final Review</div>
+      <div class="card-title">Your 90-Day Plan — Review Before Locking</div>
+      <div class="card-subtitle">
+        This is exactly what gets locked. Once you hit "Lock In My Plan," your coach is notified and your weekly check-ins begin on your start date.
+        Read through everything once before confirming.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="summary-section">
+        <div class="summary-section-title">Focus</div>
+        <div class="summary-row">
+          <div class="summary-label">Pillar</div>
+          <div class="summary-value"><span class="pillar-badge ${pillarClass}">${plan.pillar}</span></div>
+        </div>
+      </div>
+
+      <div class="summary-section">
+        <div class="summary-section-title">Goals</div>
+        <div class="summary-row">
+          <div class="summary-label">90-Day Goal</div>
+          <div class="summary-value">${escHTML(plan.goal90)}</div>
+        </div>
+        <div class="summary-row">
+          <div class="summary-label">30-Day Goal</div>
+          <div class="summary-value">${escHTML(plan.goal30)}</div>
+        </div>
+      </div>
+
+      <div class="summary-section">
+        <div class="summary-section-title">Behaviors</div>
+        <div class="summary-row">
+          <div class="summary-label">Behavior 1</div>
+          <div class="summary-value">${escHTML(plan.behavior1)}</div>
+        </div>
+        ${plan.behavior2 ? `<div class="summary-row">
+          <div class="summary-label">Behavior 2</div>
+          <div class="summary-value">${escHTML(plan.behavior2)}</div>
+        </div>` : ''}
+      </div>
+
+      <div class="summary-section">
+        <div class="summary-section-title">Metrics</div>
+        <div class="summary-row">
+          <div class="summary-label">Self (Metric 1)</div>
+          <div class="summary-value">${escHTML(plan.metric1.name)}<br/><span style="font-size:12px;color:var(--gray-500);">Baseline: ${plan.metric1.baseline} → Target: ${plan.metric1.target}/week by day 90</span></div>
+        </div>
+        <div class="summary-row">
+          <div class="summary-label">Stakeholder (Metric 2)</div>
+          <div class="summary-value">"${escHTML(plan.metric2.question)}"<br/><span style="font-size:12px;color:var(--gray-500);">Target average: ${plan.metric2.targetAvg} / 5.0 · Scale: 1–5 agreement</span></div>
+        </div>
+      </div>
+
+      <div class="summary-section">
+        <div class="summary-section-title">Stakeholders (Metric 2 Survey)</div>
+        <div class="summary-stakeholders">
+          ${plan.stakeholders.filter(s => s.name).map(s => `
+            <div class="sh-chip">
+              <span>${escHTML(s.name)}</span>
+              <span class="sh-rel">${escHTML(s.relationship)}</span>
+              <span style="font-size:12px;color:var(--gray-500);">${escHTML(s.email)}</span>
+            </div>`).join('')}
+        </div>
+      </div>
+
+      <div class="summary-section" style="margin-bottom:0;">
+        <div class="summary-section-title">Rewards</div>
+        <div class="summary-row">
+          <div class="summary-label">30-Day</div>
+          <div class="summary-value">${escHTML(plan.reward30)}</div>
+        </div>
+        <div class="summary-row" style="margin-bottom:0;">
+          <div class="summary-label">90-Day</div>
+          <div class="summary-value">${escHTML(plan.reward90)}</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:var(--teal-light);border:1px solid #a7f3d0;border-radius:var(--radius);padding:14px 16px;font-size:13px;color:var(--gray-800);margin-bottom:16px;line-height:1.6;">
+      <strong>After you lock in:</strong> Your plan is saved. Alex gets notified. Your first weekly check-in will appear on your start date. At day 30 and day 90, your stakeholders will receive a 2-question survey automatically.
+    </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// VALIDATION & SAVE PER STEP
+// ─────────────────────────────────────────────────────────────────────
+function validateAndSave(step) {
+  clearError();
+  switch(step) {
+    case 0: return true; // just informational
+
+    case 1:
+      if (!plan.pillar) { showError("Please select a focus pillar."); return false; }
+      return true;
+
+    case 2: {
+      const g90 = document.getElementById('goal90').value.trim();
+      const g30 = document.getElementById('goal30').value.trim();
+      if (!g90) { showError("Please enter your 90-day goal."); return false; }
+      if (!g30) { showError("Please enter your 30-day goal."); return false; }
+      plan.goal90 = g90;
+      plan.goal30 = g30;
+      return true;
+    }
+
+    case 3: {
+      const m1Name = document.getElementById('m1Name').value.trim();
+      const m1Base = parseFloat(document.getElementById('m1Baseline').value);
+      const m1Tgt  = parseFloat(document.getElementById('m1Target').value);
+      const m2Q    = document.getElementById('m2Question').value.trim();
+      const m2Tgt  = parseFloat(document.getElementById('m2Target').value);
+      if (!m1Name)        { showError("Please enter the name for Metric 1."); return false; }
+      if (isNaN(m1Base))  { showError("Please enter a baseline for Metric 1."); return false; }
+      if (isNaN(m1Tgt))   { showError("Please enter a 90-day target for Metric 1."); return false; }
+      if (!m2Q)           { showError("Please enter the stakeholder survey question for Metric 2."); return false; }
+      if (isNaN(m2Tgt) || m2Tgt < 1 || m2Tgt > 5) { showError("Metric 2 target average must be between 1 and 5."); return false; }
+      plan.metric1 = { name: m1Name, baseline: m1Base, target: m1Tgt };
+      plan.metric2 = { question: m2Q, targetAvg: m2Tgt };
+      return true;
+    }
+
+    case 4: {
+      const b1 = document.getElementById('behavior1').value.trim();
+      const b2 = document.getElementById('behavior2').value.trim();
+      if (!b1) { showError("Behavior 1 is required."); return false; }
+      plan.behavior1 = b1;
+      plan.behavior2 = b2;
+      return true;
+    }
+
+    case 5: {
+      // Sync stakeholder fields from DOM
+      const rows = document.querySelectorAll('[id^="sh-row-"]');
+      const updated = [];
+      let err = null;
+      rows.forEach((row, i) => {
+        const name  = document.getElementById(`sh-name-${i}`)?.value.trim() || '';
+        const email = document.getElementById(`sh-email-${i}`)?.value.trim() || '';
+        const rel   = document.getElementById(`sh-rel-${i}`)?.value || 'Peer';
+        if (!name || !email) err = `Stakeholder ${i+1} is missing a name or email.`;
+        updated.push({ name, email, relationship: rel });
+      });
+      if (err) { showError(err); return false; }
+      if (updated.length < 1) { showError("You need at least one stakeholder."); return false; }
+      plan.stakeholders = updated;
+      return true;
+    }
+
+    case 6: {
+      const r30 = document.getElementById('reward30').value.trim();
+      const r90 = document.getElementById('reward90').value.trim();
+      if (!r30) { showError("Please enter your 30-day reward."); return false; }
+      if (!r90) { showError("Please enter your 90-day reward."); return false; }
+      plan.reward30 = r30;
+      plan.reward90 = r90;
+      return true;
+    }
+
+    case 7: return true; // lock it in
+  }
+  return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// NAVIGATION
+// ─────────────────────────────────────────────────────────────────────
+function goNext() {
+  if (!validateAndSave(currentStep)) return;
+
+  if (currentStep === LAST_STEP) {
+    lockInPlan();
+    return;
+  }
+
+  currentStep++;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  render();
+}
+
+function goBack() {
+  if (currentStep === 0) return;
+  currentStep--;
+  clearError();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  render();
+}
+
+function lockInPlan() {
+  // In production this would POST to the API. In sandbox we show success.
+  document.getElementById('stepContainer').innerHTML = `
+    <div class="card success-screen">
+      <div class="success-icon">🔒</div>
+      <div class="success-title">Plan Locked.</div>
+      <div class="success-sub" style="margin-bottom:20px;">
+        Your 90-day plan is saved. Alex has been notified. Your first weekly check-in will be ready on your start date.
+      </div>
+      <div style="background:var(--teal-light);border-radius:8px;padding:14px;font-size:13px;color:var(--gray-800);text-align:left;line-height:1.7;max-width:420px;margin:0 auto;">
+        <strong>What happens next:</strong><br />
+        • Your dashboard is now active<br />
+        • At Day 30, your stakeholders receive Metric 2<br />
+        • At Day 90, they receive it again<br />
+        • Alex reviews your check-ins weekly
+      </div>
+      <div style="margin-top:20px;">
+        <button onclick="resetSandbox()" style="background:var(--navy);color:#fff;border:none;padding:11px 24px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">↩ Run Through Again (Sandbox)</button>
+      </div>
+    </div>`;
+  document.getElementById('btnBack').style.display = 'none';
+  document.getElementById('btnNext').style.display = 'none';
+  document.getElementById('progressSteps').parentElement.style.display = 'none';
+}
+
+function resetSandbox() {
+  location.reload();
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// UTILS
+// ─────────────────────────────────────────────────────────────────────
+function escHTML(str) {
+  if (!str) return '';
+  return str.toString()
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────────────────────────
+render();
+</script>
+</body>
+</html>
