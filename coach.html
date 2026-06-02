@@ -127,6 +127,7 @@
       border-left: 5px solid var(--teal);
       overflow: hidden;
       box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+      position: relative;
     }
     .client-card.pillar-trust       { border-left-color: #1565c0; }
     .client-card.pillar-proactivity { border-left-color: #2e7d32; }
@@ -275,7 +276,7 @@
       display: none;
       position: fixed; inset: 0;
       background: rgba(0,0,0,0.5);
-      z-index: 100;
+      z-index: 300;
       align-items: center;
       justify-content: center;
     }
@@ -600,6 +601,24 @@
     .rp-body ul { padding-left: 20px; margin: 0 0 12px; }
     .rp-body ul li { margin-bottom: 5px; }
     .rp-body .rp-highlight { background: #f5f7fa; border-left: 4px solid var(--d-gold); padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 12px 0; }
+    /* Option B — full HTML report classes */
+    .rp-body table.report-table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13px; }
+    .rp-body table.report-table th { background: var(--d-blue); color: #fff; padding: 7px 10px; text-align: left; font-weight: 700; }
+    .rp-body table.report-table td { padding: 6px 10px; border-bottom: 1px solid var(--d-border); vertical-align: top; }
+    .rp-body table.report-table tr:last-child td { border-bottom: none; }
+    .rp-body table.report-table tr:nth-child(even) td { background: #f7f9fc; }
+    .rp-body blockquote.rater-quote { border-left: 3px solid var(--d-teal); background: #f0f9f9; margin: 12px 0; padding: 10px 16px; font-style: italic; font-size: 13.5px; color: #1a1a1a; border-radius: 0 6px 6px 0; }
+    .rp-body .insight-callout { background: #fff8ec; border: 1px solid #f5c84a; border-left: 4px solid #d4a017; padding: 12px 16px; border-radius: 6px; margin: 14px 0; }
+    .rp-body ul.report-list { padding-left: 20px; margin: 8px 0 14px; }
+    .rp-body ul.report-list li { margin-bottom: 6px; font-size: 14px; }
+    /* Report branded cover */
+    .rp-body .report-cover { text-align:center; padding:24px 0 18px; margin-bottom:4px; }
+    .rp-body .report-cover-logo { font-size:19px; font-weight:900; color:var(--d-blue); letter-spacing:3px; text-transform:uppercase; margin-bottom:3px; }
+    .rp-body .report-cover-subtitle { font-size:10px; color:var(--d-mid); text-transform:uppercase; letter-spacing:1.5px; margin-bottom:12px; }
+    .rp-body .report-cover-client { font-size:16px; font-weight:700; color:#1a1a1a; margin-bottom:10px; }
+    .rp-body .report-cover-meta { display:flex; justify-content:center; gap:18px; flex-wrap:wrap; font-size:11px; color:var(--d-mid); align-items:center; }
+    .rp-body .report-confidential-badge { background:#dc2626; color:#fff; padding:2px 9px; border-radius:4px; font-weight:700; font-size:10px; text-transform:uppercase; letter-spacing:0.5px; }
+    hr.report-cover-divider { border:none; border-top:2px solid var(--d-blue); margin:0 0 22px; }
     .rp-footer {
       padding: 16px 24px;
       border-top: 1px solid var(--d-border);
@@ -624,6 +643,11 @@
     .rp-send-btn:disabled { opacity: .45; cursor: not-allowed; }
     .rp-send-btn:not(:disabled):hover { background: #A88520; }
     .rp-loading { text-align: center; padding: 48px 24px; color: var(--d-mid); font-size: 14px; }
+    .rp-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 24px; background: #f0f2f5; border-bottom: 1px solid var(--d-border); flex-shrink: 0; }
+    .rp-tool-btn { padding: 5px 14px; font-size: 12px; font-weight: 600; color: var(--d-blue); background: #fff; border: 1px solid var(--d-border); border-radius: 6px; cursor: pointer; transition: background .15s, color .15s; }
+    .rp-tool-btn:hover { background: var(--d-blue); color: #fff; border-color: var(--d-blue); }
+    .rp-tool-btn.editing-active { background: var(--d-gold); color: var(--d-dark); border-color: var(--d-gold); }
+    .rp-body[contenteditable="true"] { background: #fffef8; outline: 2px dashed #f5c84a; outline-offset: -6px; }
 
     /* Diagnostic modals — override coach.html's .modal padding/border */
     #new-diag-modal .modal,#send-invites-modal .modal,#team-report-modal .modal{padding:0;max-width:580px;border-top:none;border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,.2);}
@@ -740,6 +764,7 @@
       <div class="profile-nav-item"        id="profNav-surveys"      onclick="switchProfileNav('surveys')">👥 Surveys &amp; Stakeholders</div>
       <div class="profile-nav-item"        id="profNav-diagnostics"  onclick="switchProfileNav('diagnostics')">🔬 Diagnostics</div>
       <div class="profile-nav-item"        id="profNav-settings"     onclick="switchProfileNav('settings')">⚙️ Settings</div>
+      <div class="profile-nav-item"        id="profNav-testimonials" onclick="switchProfileNav('testimonials')">⭐ Testimonials</div>
     </div>
     <div class="profile-content" id="profileContent">
     </div>
@@ -853,6 +878,19 @@
         <option value="Other">Other</option>
       </select>
       <button onclick="clearClientFilters()" style="padding:7px 12px;background:none;border:1px solid var(--gray-300);border-radius:6px;font-size:12px;cursor:pointer;color:var(--gray-600);font-family:'Open Sans',sans-serif;white-space:nowrap;">✕ Clear</button>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray-600);cursor:pointer;white-space:nowrap;margin-left:4px;">
+        <input type="checkbox" id="selectAllClients" onchange="toggleSelectAll(this)" style="width:14px;height:14px;cursor:pointer;accent-color:var(--navy);">
+        Select all
+      </label>
+    </div>
+
+    <!-- Bulk action bar — visible only when ≥1 client selected -->
+    <div id="bulkActionBar" style="display:none;background:var(--navy);color:#fff;border-radius:8px;padding:10px 16px;margin-bottom:12px;align-items:center;gap:10px;flex-wrap:wrap;">
+      <span id="bulkCount" style="font-weight:700;font-size:13px;flex:1;"></span>
+      <button onclick="bulkSendInvite()" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">📧 Send Invite</button>
+      <button onclick="bulkArchive()" style="background:#e65100;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">📦 Archive</button>
+      <button onclick="bulkDelete()" style="background:#c62828;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">🗑 Delete</button>
+      <button onclick="clearSelection()" style="background:none;border:1px solid rgba(255,255,255,0.4);color:#fff;border-radius:6px;padding:7px 12px;font-size:12px;cursor:pointer;font-family:'Montserrat',sans-serif;">✕ Clear</button>
     </div>
 
     <div id="clientList">
@@ -1323,6 +1361,13 @@
       </div>
       <button class="dclose-btn" onclick="closeDiagModal('report-preview-modal')">✕</button>
     </div>
+    <div class="rp-toolbar" id="rp-toolbar">
+      <button class="rp-tool-btn" id="rp-edit-btn" onclick="toggleReportEdit()">✏ Edit</button>
+      <button class="rp-tool-btn" id="rp-save-btn" onclick="saveReportEdits()" style="display:none;">Save Edits</button>
+      <div style="flex:1;"></div>
+      <button class="rp-tool-btn" onclick="downloadReportWord()">⬇ Word</button>
+      <button class="rp-tool-btn" onclick="downloadReportPdf()">⬇ PDF</button>
+    </div>
     <div class="rp-body" id="rp-body">
       <div class="rp-loading">Loading report draft…</div>
     </div>
@@ -1397,35 +1442,20 @@ if (hasValidSession()) {
   unlockDashboard();
 }
 
-async function checkPassword() {
+function checkPassword() {
   const val = document.getElementById('passwordInput').value.trim();
-  if (!val) return;
-
-  // Load coach password from settings
-  const { data } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
-  const stored = (data && data.value) ? data.value : 'GPS2026'; // fallback
-
-  if (val === stored) {
+  if (!val) {
+    document.getElementById('loginError').textContent = 'Please enter your password.';
+    return;
+  }
+  if (val === 'GPS2026') {
     saveSession();
     unlockDashboard();
     return;
   }
-
-  // Check admin accounts as fallback
-  const { data: adminData } = await db
-    .from('admin_accounts')
-    .select('password')
-    .eq('is_active', true);
-
-  const adminPasswords = (adminData || []).map(a => a.password);
-  if (adminPasswords.includes(val)) {
-    saveSession();
-    unlockDashboard();
-    return;
-  }
-
-  document.getElementById('loginError').textContent = 'Incorrect password.';
+  document.getElementById('loginError').textContent = 'Incorrect password. Try again.';
   document.getElementById('passwordInput').value = '';
+  document.getElementById('passwordInput').focus();
 }
 
 // ─────────────────────────────────────────────
@@ -1590,7 +1620,104 @@ function clearClientFilters() {
   renderClients();
 }
 
+// ── Multi-select + bulk actions ───────────────────────────────────────────────
+let _selectedClients = new Set();
+
+function toggleClientSelect(id, checked) {
+  if (checked) _selectedClients.add(id);
+  else _selectedClients.delete(id);
+  updateBulkBar();
+}
+
+function toggleSelectAll(cb) {
+  document.querySelectorAll('.client-select-cb').forEach(el => {
+    el.checked = cb.checked;
+    if (cb.checked) _selectedClients.add(el.dataset.id);
+    else _selectedClients.delete(el.dataset.id);
+  });
+  updateBulkBar();
+}
+
+function updateBulkBar() {
+  const bar   = document.getElementById('bulkActionBar');
+  const count = document.getElementById('bulkCount');
+  const n     = _selectedClients.size;
+  if (!bar) return;
+  if (n === 0) {
+    bar.style.display = 'none';
+    const sa = document.getElementById('selectAllClients');
+    if (sa) sa.checked = false;
+  } else {
+    bar.style.display = 'flex';
+    if (count) count.textContent = `${n} client${n !== 1 ? 's' : ''} selected`;
+  }
+}
+
+function clearSelection() {
+  _selectedClients.clear();
+  document.querySelectorAll('.client-select-cb').forEach(el => el.checked = false);
+  const sa = document.getElementById('selectAllClients');
+  if (sa) sa.checked = false;
+  updateBulkBar();
+}
+
+async function bulkArchive() {
+  const ids = [..._selectedClients];
+  const names = allClients.filter(c => ids.includes(c.id)).map(c => c.name).join(', ');
+  if (!confirm(`Archive ${ids.length} client${ids.length !== 1 ? 's' : ''}?\n\n${names}\n\nThey'll be hidden from your dashboard but all data is preserved.`)) return;
+  await Promise.all(ids.map(id => db.from('clients').update({ is_archived: true }).eq('id', id)));
+  allClients = allClients.map(c => ids.includes(c.id) ? { ...c, is_archived: true } : c);
+  clearSelection();
+  renderClients();
+}
+
+async function bulkDelete() {
+  const ids   = [..._selectedClients];
+  const names = allClients.filter(c => ids.includes(c.id)).map(c => c.name).join(', ');
+  const typed = prompt(
+    `Permanently delete ${ids.length} client${ids.length !== 1 ? 's' : ''} and ALL their data?\n\n${names}\n\nThis cannot be undone. Type DELETE to confirm:`
+  );
+  if ((typed || '').trim().toUpperCase() !== 'DELETE') { alert('Cancelled — nothing was deleted.'); return; }
+  await Promise.all(ids.map(id => db.from('clients').delete().eq('id', id)));
+  allClients = allClients.filter(c => !ids.includes(c.id));
+  clearSelection();
+  renderClients();
+}
+
+async function bulkSendInvite() {
+  const ids     = [..._selectedClients];
+  const targets = allClients.filter(c => ids.includes(c.id) && c.email && c.token);
+  if (targets.length === 0) { alert('No selected clients have an email and portal link on file.'); return; }
+  if (!confirm(`Send portal invite email to ${targets.length} client${targets.length !== 1 ? 's' : ''}?\n\n${targets.map(c=>c.name).join(', ')}`)) return;
+
+  let sent = 0, failed = 0;
+  for (const c of targets) {
+    try {
+      const r = await fetch('/api/notify', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type:        'welcome_email',
+          clientEmail: c.email,
+          clientName:  c.name,
+          portalURL:   `${PORTAL_BASE_URL}?token=${c.token}`
+        })
+      });
+      r.ok ? sent++ : failed++;
+    } catch(_) { failed++; }
+  }
+  clearSelection();
+  alert(sent > 0
+    ? `✓ Invite sent to ${sent} client${sent !== 1 ? 's' : ''}${failed > 0 ? ` · ${failed} failed (check Emails tab)` : ''}.`
+    : `All ${failed} invites failed — check the Emails tab for details.`
+  );
+}
+
 function renderClients() {
+  // Reset selection state when list re-renders (filter/sort change)
+  _selectedClients.clear();
+  updateBulkBar();
+
   const search    = (document.getElementById('clientSearch')?.value           || '').toLowerCase();
   const sort      =  document.getElementById('clientSort')?.value             || 'newest';
   const compF     =  document.getElementById('clientCompFilter')?.value       || 'all';
@@ -1699,6 +1826,28 @@ function renderClientCard(client, checkins) {
     ? new Date(lastCheckin.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     : '—';
 
+  // ── Archive countdown ──────────────────────────────────────────────────────
+  // Auto-archive fires at 45 days from last_active_at (or created_at if never visited)
+  const archiveRef      = client.last_active_at || client.created_at;
+  const daysSinceActive = archiveRef
+    ? Math.floor((today - new Date(archiveRef)) / (1000 * 60 * 60 * 24))
+    : null;
+  const daysUntilArchive = daysSinceActive !== null ? 45 - daysSinceActive : null;
+  const neverVisited     = !client.last_active_at;
+
+  let archiveBadge = '';
+  if (!client.is_active || client.is_archived) {
+    archiveBadge = '';
+  } else if (daysUntilArchive !== null && daysUntilArchive <= 0) {
+    archiveBadge = `<div style="font-size:10px;font-weight:700;color:#fff;background:#c62828;border-radius:4px;padding:2px 6px;white-space:nowrap;margin-top:3px;">Archives next run</div>`;
+  } else if (neverVisited) {
+    archiveBadge = `<div style="font-size:10px;color:#856404;background:#fff3cd;border-radius:4px;padding:2px 6px;white-space:nowrap;margin-top:3px;">Never visited · ${daysUntilArchive}d left</div>`;
+  } else if (daysUntilArchive !== null && daysUntilArchive <= 14) {
+    const color = daysUntilArchive <= 7 ? '#c62828' : '#856404';
+    const bg    = daysUntilArchive <= 7 ? '#fdecea' : '#fff3cd';
+    archiveBadge = `<div style="font-size:10px;font-weight:700;color:${color};background:${bg};border-radius:4px;padding:2px 6px;white-space:nowrap;margin-top:3px;">Archives in ${daysUntilArchive}d</div>`;
+  }
+
   const dotClass = !lastCheckin ? 'dot-none'
     : lastCheckin.completion_status === 'Yes' ? 'dot-yes'
     : lastCheckin.completion_status === 'Partially' ? 'dot-part'
@@ -1761,11 +1910,7 @@ function renderClientCard(client, checkins) {
       <div class="plan-field" style="grid-column:1/-1;"><label>Behavior 1</label><div class="val">${client.behavior_1 || client.start_behavior || '—'}</div></div>
       ${client.behavior_2 ? `<div class="plan-field" style="grid-column:1/-1;"><label>Behavior 2</label><div class="val">${client.behavior_2}</div></div>` : ''}
       <div class="plan-field"><label>Metric 1</label><div class="val">${client.metric_1_name || client.metric_name || '—'}</div></div>
-      ${client.metric_2_question
-        ? `<div class="plan-field" style="grid-column:1/-1;"><label>Metric 2 — Stakeholder Perception Survey</label><div class="val">"${client.metric_2_question}"<br/><span style="font-size:11px;color:#888;">Target avg: ${client.metric_2_target_avg || 4.0} / 5.0 &nbsp;·&nbsp; Sent at day 30 &amp; 90</span></div></div>`
-        : client.metric_2_name
-          ? `<div class="plan-field"><label>Metric 2</label><div class="val">${client.metric_2_name}</div></div>`
-          : ''}
+      ${client.metric_2_name ? `<div class="plan-field"><label>Metric 2</label><div class="val">${client.metric_2_name}</div></div>` : ''}
       ${client.metric_3_name ? `<div class="plan-field"><label>Metric 3</label><div class="val">${client.metric_3_name}</div></div>` : ''}
       <div class="plan-field"><label>Start Date</label><div class="val">${client.plan_start_date || '—'}</div></div>
       <div class="plan-field"><label>30-Day Reward</label><div class="val">${client.reward_30_day || '—'}</div></div>
@@ -1793,11 +1938,17 @@ function renderClientCard(client, checkins) {
 
   return `
     <div class="client-card ${pillarClass} ${!client.is_active ? 'inactive' : ''}" id="card-${client.id}">
-      <div class="client-header" onclick="openClientProfile('${client.id}')">
+      <label style="position:absolute;top:10px;left:10px;z-index:2;cursor:pointer;" onclick="event.stopPropagation()">
+        <input type="checkbox" class="client-select-cb" data-id="${client.id}"
+          onchange="toggleClientSelect('${client.id}', this.checked)"
+          style="width:15px;height:15px;cursor:pointer;accent-color:var(--navy);">
+      </label>
+      <div class="client-header" style="padding-left:32px;" onclick="openClientProfile('${client.id}')">
         <div class="client-avatar" style="${avatarRingStyle}" title="${completionPct !== null ? completionPct + '% follow-through rate' : 'No check-ins yet'}">${initials}</div>
         <div class="client-name-block">
           <div class="client-name">${client.name || 'Unnamed'}</div>
           <div class="client-org">${client.organization || ''} ${client.tp3_pillar ? '&nbsp;·&nbsp;<span class="pillar-badge pillar-'+pillarKey+'">'+client.tp3_pillar+'</span>' : ''}</div>
+          ${archiveBadge}
         </div>
         <div class="client-meta">
           ${currentWeek ? `<div class="meta-item"><div class="week-badge">Wk ${currentWeek}</div>${(client.current_sprint_number || 1) > 1 ? `<div style="font-size:10px;text-align:center;color:var(--teal);font-weight:700;margin-top:2px;">Sprint ${client.current_sprint_number}</div>` : ''}</div>` : '<div class="meta-item"><div style="font-size:11px;color:var(--gray-600);">No plan yet</div></div>'}
@@ -1897,11 +2048,7 @@ function renderProfileSection(section, client, checkins) {
       <div class="plan-field" style="grid-column:1/-1;"><label>Behavior 1</label><div class="val">${client.behavior_1 || client.start_behavior || '—'}</div></div>
       ${client.behavior_2 ? `<div class="plan-field" style="grid-column:1/-1;"><label>Behavior 2</label><div class="val">${client.behavior_2}</div></div>` : ''}
       <div class="plan-field"><label>Metric 1</label><div class="val">${client.metric_1_name || client.metric_name || '—'}</div></div>
-      ${client.metric_2_question
-        ? `<div class="plan-field" style="grid-column:1/-1;"><label>Metric 2 — Stakeholder Perception Survey</label><div class="val">"${client.metric_2_question}"<br/><span style="font-size:11px;color:#888;">Target avg: ${client.metric_2_target_avg || 4.0} / 5.0 &nbsp;·&nbsp; Sent at day 30 &amp; 90</span></div></div>`
-        : client.metric_2_name
-          ? `<div class="plan-field"><label>Metric 2</label><div class="val">${client.metric_2_name}</div></div>`
-          : ''}
+      ${client.metric_2_name ? `<div class="plan-field"><label>Metric 2</label><div class="val">${client.metric_2_name}</div></div>` : ''}
       ${client.metric_3_name ? `<div class="plan-field"><label>Metric 3</label><div class="val">${client.metric_3_name}</div></div>` : ''}
       <div class="plan-field"><label>Start Date</label><div class="val">${client.plan_start_date || '—'}</div></div>
       <div class="plan-field"><label>30-Day Reward</label><div class="val">${client.reward_30_day || '—'}</div></div>
@@ -2263,7 +2410,436 @@ function renderProfileSection(section, client, checkins) {
       loadAskAlexStats(client.id);
       loadAskAlexLog(client.id);
     }
+  } else if (section === 'testimonials') {
+    el.innerHTML = renderTestimonialsSection(client);
+    loadReferralConfig(client.id);
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TESTIMONIALS & REFERRAL FLYWHEEL — Coach-side
+// ─────────────────────────────────────────────────────────────────────────────
+
+function renderTestimonialsSection(client) {
+  const engTypeOpts = [
+    ['diagnostic_only',           'Diagnostic Only'],
+    ['diagnostic_plus_coaching',  'Diagnostic + Coaching'],
+  ].map(([v, label]) => `<option value="${v}"${client.engagement_type === v ? ' selected' : ''}>${label}</option>`).join('');
+
+  const winMarked = !!client.first_big_win_flag;
+
+  return `
+    <div class="profile-section-title">Testimonials &amp; Referral Flywheel</div>
+
+    <!-- ── Section 1: Engagement Type & Controls ── -->
+    <div class="detail-section">
+      <h4>Engagement Controls</h4>
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--gray-600);display:block;margin-bottom:5px;">Engagement Type</label>
+          <select id="engType-${client.id}"
+            onchange="setEngagementType('${client.id}', this.value)"
+            style="padding:7px 12px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;color:var(--text);"
+            onfocus="this.style.borderColor='var(--teal)'"
+            onblur="this.style.borderColor='var(--gray-300)'">
+            <option value="">— Not set —</option>
+            ${engTypeOpts}
+          </select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--gray-600);">First Big Win</label>
+          ${winMarked
+            ? `<button disabled style="padding:7px 18px;background:#2e7d32;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:not-allowed;opacity:0.85;">Win Marked ✓</button>`
+            : `<button onclick="markFirstBigWin('${client.id}')" id="firstWinBtn-${client.id}"
+                style="padding:7px 18px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;">
+                Mark First Big Win ✓
+               </button>`
+          }
+        </div>
+      </div>
+      <div id="engControlMsg-${client.id}" style="font-size:12px;margin-top:8px;min-height:16px;"></div>
+    </div>
+
+    <!-- ── Section 2: Testimonials ── -->
+    <div class="detail-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h4 style="margin:0;">Testimonials</h4>
+        <button onclick="loadTestimonialsForClient('${client.id}')"
+          style="padding:5px 14px;background:var(--navy);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">
+          Load Testimonials
+        </button>
+      </div>
+      <div id="testimonials-list-${client.id}">
+        <p style="font-size:13px;color:var(--gray-600);font-style:italic;">Click "Load Testimonials" to fetch responses.</p>
+      </div>
+    </div>
+
+    <!-- ── Section 3: Referrals ── -->
+    <div class="detail-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h4 style="margin:0;">Referrals</h4>
+        <button onclick="loadReferralsForClient('${client.id}')"
+          style="padding:5px 14px;background:var(--navy);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">
+          Load Referrals
+        </button>
+      </div>
+      <div id="referrals-list-${client.id}">
+        <p style="font-size:13px;color:var(--gray-600);font-style:italic;">Click "Load Referrals" to fetch entries.</p>
+      </div>
+    </div>
+
+    <!-- ── Section 4: Referral Config ── -->
+    <div class="detail-section">
+      <h4>Referral Config</h4>
+      <p style="font-size:12px;color:var(--gray-600);margin-bottom:12px;">These values appear in the referral email sent to this client's contacts.</p>
+      <div id="referral-config-fields-${client.id}">
+        ${['referral_bonus_label','referral_bonus_value_display','referral_bonus_conditions_text','coaching_access_description'].map(key => `
+          <div style="margin-bottom:14px;" id="cfg-row-${client.id}-${key}">
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--gray-600);display:block;margin-bottom:4px;">${key.replace(/_/g,' ')}</label>
+            <div style="display:flex;align-items:flex-start;gap:8px;">
+              <div id="cfg-view-${client.id}-${key}"
+                style="flex:1;font-size:13px;color:var(--text);background:var(--gray-100);border-radius:6px;padding:8px 12px;min-height:36px;word-break:break-word;">
+                —
+              </div>
+              <button onclick="openCfgEdit('${client.id}','${key}')"
+                style="padding:6px 12px;background:none;border:1px solid var(--teal);color:var(--teal);border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">
+                Edit
+              </button>
+            </div>
+            <div id="cfg-edit-${client.id}-${key}" style="display:none;margin-top:6px;">
+              <textarea id="cfg-ta-${client.id}-${key}" rows="2"
+                style="width:100%;padding:8px 10px;border:2px solid var(--teal);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;resize:vertical;"></textarea>
+              <div style="display:flex;gap:8px;margin-top:6px;align-items:center;">
+                <button onclick="saveCfgEdit('${client.id}','${key}')"
+                  style="padding:6px 16px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Save</button>
+                <button onclick="cancelCfgEdit('${client.id}','${key}')"
+                  style="padding:6px 12px;background:none;border:1px solid var(--gray-300);border-radius:6px;font-size:12px;cursor:pointer;color:var(--gray-600);">Cancel</button>
+                <span id="cfg-msg-${client.id}-${key}" style="font-size:11px;color:var(--gray-600);"></span>
+              </div>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// ── Load Testimonials ─────────────────────────────────────────────────────────
+async function loadTestimonialsForClient(clientId) {
+  const el = document.getElementById('testimonials-list-' + clientId);
+  if (!el) return;
+  el.innerHTML = '<p style="font-size:13px;color:var(--gray-600);">Loading…</p>';
+
+  const { data: pwData } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
+  const password = pwData?.value || 'GPS2026';
+
+  let res, json;
+  try {
+    res  = await fetch('/api/testimonial?action=coach-get-testimonials', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ client_id: clientId, coach_password: password }),
+    });
+    json = await res.json();
+  } catch (err) {
+    el.innerHTML = `<p style="color:var(--red);font-size:13px;">Network error: ${err.message}</p>`;
+    return;
+  }
+
+  if (!res.ok || json.error) {
+    el.innerHTML = `<p style="color:var(--red);font-size:13px;">Error: ${json.error || res.status}</p>`;
+    return;
+  }
+
+  const rows = json.testimonials || [];
+  if (rows.length === 0) {
+    el.innerHTML = '<p style="font-size:13px;color:var(--gray-600);font-style:italic;">No testimonials found for this client.</p>';
+    return;
+  }
+
+  el.innerHTML = rows.map((t, i) => {
+    const uid    = `test-${clientId}-${i}`;
+    const date   = t.submitted_at ? new Date(t.submitted_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—';
+
+    // Source badge
+    const srcColors = { Debrief: '#1565c0', Midpoint: '#e65100', End: '#2e7d32' };
+    const srcColor  = srcColors[t.source] || '#666';
+    const srcBadge  = `<span style="background:${srcColor}18;color:${srcColor};border:1px solid ${srcColor}40;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;">${t.source || 'Unknown'}</span>`;
+
+    // NPS badge
+    let npsBadge = '';
+    if (t.rating_nps != null) {
+      const npsScore = parseInt(t.rating_nps, 10);
+      const npsColor = npsScore >= 9 ? '#2e7d32' : npsScore >= 7 ? '#e65100' : '#DB1F48';
+      const npsBg    = npsScore >= 9 ? '#e8f5e9' : npsScore >= 7 ? '#fff3e0' : '#ffebee';
+      npsBadge = `<span style="background:${npsBg};color:${npsColor};border:1px solid ${npsColor}40;font-size:11px;font-weight:800;padding:2px 9px;border-radius:10px;font-family:'Montserrat',sans-serif;">NPS ${npsScore}</span>`;
+    }
+
+    // Public badge
+    const pubBadge = t.permission_public_use
+      ? `<span style="background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a770;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;">Public ✓</span>`
+      : '';
+
+    // responses is a JSONB object { q1: "text", q2: "text", ... }
+    const respEntries = Object.entries(t.responses || {}).filter(([, v]) => v?.trim());
+    const preview = respEntries.length > 0
+      ? `<p style="font-size:13px;color:var(--gray-600);margin:8px 0 0;font-style:italic;">"${respEntries[0][1].substring(0, 120)}${respEntries[0][1].length > 120 ? '…' : ''}"</p>`
+      : '';
+
+    // All Q&A rows (collapsible)
+    const qaRows = respEntries.length > 0
+      ? respEntries.map(([k, v]) => `
+          <div style="padding:8px 0;border-bottom:1px solid var(--gray-200);">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.3px;color:var(--gray-600);margin-bottom:3px;">${k}</div>
+            <div style="font-size:13px;color:var(--text);">${v}</div>
+          </div>`).join('')
+      : '<p style="font-size:12px;color:var(--gray-600);font-style:italic;">No response data.</p>';
+
+    return `
+      <div style="border:1px solid var(--gray-200);border-radius:8px;padding:14px 16px;margin-bottom:10px;background:#fff;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+          ${srcBadge} ${npsBadge} ${pubBadge}
+          <span style="font-size:11px;color:var(--gray-600);margin-left:auto;">${date}</span>
+        </div>
+        ${preview}
+        <div style="display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;font-weight:600;color:var(--navy);">
+            <input type="checkbox" ${t.permission_public_use ? 'checked' : ''}
+              onchange="toggleTestimonialPermission('${t.id}', ${!!t.permission_public_use})"
+              style="width:14px;height:14px;accent-color:var(--teal);cursor:pointer;" />
+            Allow public use
+          </label>
+          <button onclick="document.getElementById('${uid}-qa').style.display=document.getElementById('${uid}-qa').style.display==='none'?'block':'none'"
+            style="background:none;border:1px solid var(--gray-300);border-radius:5px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;color:var(--gray-600);">
+            Show / Hide Responses
+          </button>
+        </div>
+        <div id="${uid}-qa" style="display:none;margin-top:12px;border-top:1px solid var(--gray-200);padding-top:10px;">
+          ${qaRows}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── Load Referrals ────────────────────────────────────────────────────────────
+async function loadReferralsForClient(clientId) {
+  const el = document.getElementById('referrals-list-' + clientId);
+  if (!el) return;
+  el.innerHTML = '<p style="font-size:13px;color:var(--gray-600);">Loading…</p>';
+
+  const { data: pwData } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
+  const password = pwData?.value || 'GPS2026';
+
+  let res, json;
+  try {
+    res  = await fetch('/api/testimonial?action=coach-get-referrals', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ client_id: clientId, coach_password: password }),
+    });
+    json = await res.json();
+  } catch (err) {
+    el.innerHTML = `<p style="color:var(--red);font-size:13px;">Network error: ${err.message}</p>`;
+    return;
+  }
+
+  if (!res.ok || json.error) {
+    el.innerHTML = `<p style="color:var(--red);font-size:13px;">Error: ${json.error || res.status}</p>`;
+    return;
+  }
+
+  const rows = json.referrals || [];
+  if (rows.length === 0) {
+    el.innerHTML = '<p style="font-size:13px;color:var(--gray-600);font-style:italic;">No referrals found for this client.</p>';
+    return;
+  }
+
+  const statusStyle = {
+    draft:     { bg: '#f3f4f6', color: '#666' },
+    sent:      { bg: '#e3edf9', color: '#1565c0' },
+    responded: { bg: '#e8f5e9', color: '#2e7d32' },
+    converted: { bg: '#fffbe6', color: '#b7860c' },
+  };
+
+  const tableRows = rows.map(r => {
+    const st    = (r.status || 'draft').toLowerCase();
+    const sty   = statusStyle[st] || { bg: '#f3f4f6', color: '#666' };
+    const badge = `<span style="background:${sty.bg};color:${sty.color};font-size:10px;font-weight:700;padding:2px 9px;border-radius:10px;">${st.charAt(0).toUpperCase() + st.slice(1)}</span>`;
+    const created = r.created_at ? new Date(r.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—';
+    const sent    = (st === 'sent' || st === 'responded' || st === 'converted') && r.sent_at
+      ? new Date(r.sent_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
+      : '—';
+    return `<tr>
+      <td style="font-weight:600;color:var(--navy);">${r.referral_name || '—'}</td>
+      <td style="font-size:12px;color:var(--gray-600);">${r.referral_email || '—'}</td>
+      <td style="font-size:12px;">${r.referral_org || '—'}</td>
+      <td>${badge}</td>
+      <td style="font-size:12px;color:var(--gray-600);">${created}</td>
+      <td style="font-size:12px;color:var(--gray-600);">${sent}</td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div style="overflow-x:auto;">
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>Name</th><th>Email</th><th>Organization</th>
+            <th>Status</th><th>Created</th><th>Sent</th>
+          </tr>
+        </thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+    </div>`;
+}
+
+// ── Toggle Testimonial Permission ─────────────────────────────────────────────
+async function toggleTestimonialPermission(testimonialId, currentVal) {
+  const { data: pwData } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
+  const password = pwData?.value || 'GPS2026';
+
+  try {
+    const res  = await fetch('/api/testimonial?action=coach-toggle-permission', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ testimonial_id: testimonialId, permission_public_use: !currentVal, coach_password: password }),
+    });
+    const json = await res.json();
+    if (!res.ok || json.error) {
+      alert('Error updating permission: ' + (json.error || res.status));
+    }
+  } catch (err) {
+    alert('Network error: ' + err.message);
+  }
+}
+
+// ── Set Engagement Type ───────────────────────────────────────────────────────
+async function setEngagementType(clientId, val) {
+  const msgEl = document.getElementById('engControlMsg-' + clientId);
+  if (msgEl) msgEl.textContent = 'Saving…';
+
+  const { data: pwData } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
+  const password = pwData?.value || 'GPS2026';
+
+  try {
+    const res  = await fetch('/api/testimonial?action=coach-set-engagement-type', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ client_id: clientId, engagement_type: val, coach_password: password }),
+    });
+    const json = await res.json();
+    if (res.ok && !json.error) {
+      if (msgEl) { msgEl.textContent = 'Saved ✓'; msgEl.style.color = '#2e7d32'; setTimeout(() => { if (msgEl) { msgEl.textContent = ''; msgEl.style.color = ''; } }, 2500); }
+      allClients = allClients.map(c => c.id === clientId ? { ...c, engagement_type: val } : c);
+    } else {
+      if (msgEl) { msgEl.textContent = 'Error: ' + (json.error || res.status); msgEl.style.color = 'var(--red)'; }
+    }
+  } catch (err) {
+    if (msgEl) { msgEl.textContent = 'Network error.'; msgEl.style.color = 'var(--red)'; }
+  }
+}
+
+// ── Mark First Big Win ────────────────────────────────────────────────────────
+async function markFirstBigWin(clientId) {
+  const btn   = document.getElementById('firstWinBtn-' + clientId);
+  const msgEl = document.getElementById('engControlMsg-' + clientId);
+  if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
+
+  const { data: pwData } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
+  const password = pwData?.value || 'GPS2026';
+
+  try {
+    const res  = await fetch('/api/testimonial?action=coach-set-win-flag', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ client_id: clientId, first_big_win_flag: true, coach_password: password }),
+    });
+    const json = await res.json();
+    if (res.ok && !json.error) {
+      allClients = allClients.map(c => c.id === clientId ? { ...c, first_big_win_flag: true } : c);
+      if (btn) { btn.textContent = 'Win Marked ✓'; btn.style.background = '#2e7d32'; btn.disabled = true; btn.style.cursor = 'not-allowed'; }
+      if (msgEl) { msgEl.textContent = 'First big win recorded.'; msgEl.style.color = '#2e7d32'; setTimeout(() => { if (msgEl) { msgEl.textContent = ''; msgEl.style.color = ''; } }, 3000); }
+    } else {
+      if (btn) { btn.textContent = 'Mark First Big Win ✓'; btn.disabled = false; }
+      if (msgEl) { msgEl.textContent = 'Error: ' + (json.error || res.status); msgEl.style.color = 'var(--red)'; }
+    }
+  } catch (err) {
+    if (btn) { btn.textContent = 'Mark First Big Win ✓'; btn.disabled = false; }
+    if (msgEl) { msgEl.textContent = 'Network error.'; msgEl.style.color = 'var(--red)'; }
+  }
+}
+
+// ── Referral Config: Load ─────────────────────────────────────────────────────
+async function loadReferralConfig(clientId) {
+  const { data: pwData } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
+  const password = pwData?.value || 'GPS2026';
+
+  let res, json;
+  try {
+    res  = await fetch('/api/testimonial?action=get-referral-config', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ client_id: clientId, password }),
+    });
+    json = await res.json();
+  } catch (err) { return; }
+
+  if (!res.ok || json.error) return;
+
+  const cfg = json || {}; // API returns flat object, not { config: {...} }
+  ['referral_bonus_label','referral_bonus_value_display','referral_bonus_conditions_text','coaching_access_description'].forEach(key => {
+    const viewEl = document.getElementById(`cfg-view-${clientId}-${key}`);
+    if (viewEl) viewEl.textContent = cfg[key] || '—';
+    const taEl = document.getElementById(`cfg-ta-${clientId}-${key}`);
+    if (taEl) taEl.value = cfg[key] || '';
+  });
+}
+
+// ── Referral Config: Save ─────────────────────────────────────────────────────
+async function saveReferralConfig(clientId, key, value) {
+  const msgEl = document.getElementById(`cfg-msg-${clientId}-${key}`);
+  if (msgEl) { msgEl.textContent = 'Saving…'; msgEl.style.color = 'var(--gray-600)'; }
+
+  const { data: pwData } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
+  const password = pwData?.value || 'GPS2026';
+
+  try {
+    const res  = await fetch('/api/testimonial?action=coach-update-config', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ client_id: clientId, key, value, coach_password: password }),
+    });
+    const json = await res.json();
+    if (res.ok && !json.error) {
+      if (msgEl) { msgEl.textContent = 'Saved ✓'; msgEl.style.color = '#2e7d32'; setTimeout(() => { if (msgEl) { msgEl.textContent = ''; } }, 2500); }
+      const viewEl = document.getElementById(`cfg-view-${clientId}-${key}`);
+      if (viewEl) viewEl.textContent = value || '—';
+      cancelCfgEdit(clientId, key);
+    } else {
+      if (msgEl) { msgEl.textContent = 'Error: ' + (json.error || res.status); msgEl.style.color = 'var(--red)'; }
+    }
+  } catch (err) {
+    if (msgEl) { msgEl.textContent = 'Network error.'; msgEl.style.color = 'var(--red)'; }
+  }
+}
+
+// ── Referral Config: Inline edit helpers ─────────────────────────────────────
+function openCfgEdit(clientId, key) {
+  const viewRow = document.getElementById(`cfg-view-${clientId}-${key}`).parentElement;
+  const editEl  = document.getElementById(`cfg-edit-${clientId}-${key}`);
+  const taEl    = document.getElementById(`cfg-ta-${clientId}-${key}`);
+  if (editEl) editEl.style.display = 'block';
+  if (taEl) taEl.focus();
+}
+
+function cancelCfgEdit(clientId, key) {
+  const editEl = document.getElementById(`cfg-edit-${clientId}-${key}`);
+  if (editEl) editEl.style.display = 'none';
+}
+
+function saveCfgEdit(clientId, key) {
+  const taEl = document.getElementById(`cfg-ta-${clientId}-${key}`);
+  if (!taEl) return;
+  saveReferralConfig(clientId, key, taEl.value.trim());
 }
 
 // ─────────────────────────────────────────────
@@ -3625,6 +4201,13 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
         ? `<span style="background:#f0e6ff;color:#6b21a8;font-size:9px;font-weight:700;padding:1px 5px;border-radius:6px;margin-left:4px;">${s.is_board_member ? 'Board' : 'Supervisor'}</span>`
         : '';
 
+      const resendBtn = (sent && !responded)
+        ? `<button id="resend-btn-${s.id}" onclick="resendSurveyToStakeholder('${clientId}','${s.id}','${tkStatus?.checkpoint || 'baseline'}',this)"
+            style="font-size:11px;color:var(--teal);background:none;border:1px solid var(--teal);border-radius:4px;padding:3px 8px;cursor:pointer;white-space:nowrap;">
+            ↺ Resend
+          </button>`
+        : '';
+
       return `
         <div class="stakeholder-row">
           <div>
@@ -3633,6 +4216,7 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
           </div>
           <span class="stakeholder-role">${roleLabel(s)}</span>
           ${statusBadge}
+          ${resendBtn}
           <button onclick="removeStakeholder('${s.id}','${clientId}','${s.name.replace(/'/g,"\\'").replace(/"/g,'\\"')}',this)"
             style="margin-left:auto;font-size:11px;color:var(--red);background:none;border:1px solid var(--red);border-radius:4px;padding:3px 8px;cursor:pointer;white-space:nowrap;">
             Remove
@@ -3891,6 +4475,41 @@ async function removeStakeholder(stakeholderId, clientId, name, btn) {
   btn.disabled = true;
   await db.from('stakeholders').update({ is_active: false }).eq('id', stakeholderId);
   loadStakeholderData(clientId);
+}
+
+async function resendSurveyToStakeholder(clientId, stakeholderId, checkpoint, btn) {
+  const name = btn.closest('.stakeholder-row')?.querySelector('.stakeholder-name')?.textContent?.trim() || 'this stakeholder';
+  if (!confirm(`Resend the ${checkpoint} survey to ${name}?\n\nThis replaces their existing survey link with a new one.`)) return;
+
+  btn.textContent = 'Sending…';
+  btn.disabled = true;
+
+  const { data: pwData } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
+  const password = pwData?.value || 'GPS2026';
+
+  try {
+    const res = await fetch('/api/survey?action=resend', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ client_id: clientId, stakeholder_id: stakeholderId, checkpoint, password })
+    });
+    const json = await res.json().catch(() => ({}));
+    if (res.ok && json.sent) {
+      btn.textContent = '✓ Resent';
+      btn.style.color = '#2e7d32';
+      btn.style.borderColor = '#2e7d32';
+      setTimeout(() => loadStakeholderData(clientId), 1500);
+    } else {
+      alert('Resend failed: ' + (json.error || `HTTP ${res.status}`));
+      btn.textContent = '↺ Resend';
+      btn.disabled = false;
+    }
+    if (_currentSection === 'emails') setTimeout(loadEmailLog, 500);
+  } catch(err) {
+    alert('Error: ' + err.message);
+    btn.textContent = '↺ Resend';
+    btn.disabled = false;
+  }
 }
 
 async function triggerBaselineSurvey(clientId, btn) {
@@ -4741,10 +5360,19 @@ function renderDetailHeader() {
 
   const leaderLink = `${DIAG_BASE_URL}/diagnostic-leader.html?token=${d.leader_token}`;
   const dl = document.getElementById('detail-links');
-  if (dl) dl.innerHTML =
-    `<strong>Leader portal:</strong>
-     <a href="${leaderLink}" target="_blank" style="color:var(--d-blue);word-break:break-all;">${leaderLink}</a>
-     <button class="dbtn dbtn-outline dbtn-sm" style="margin-left:8px;" onclick="diagCopyText('${leaderLink}')">Copy</button>`;
+  if (dl) {
+    const selfDone  = !!d.self_assessment_completed_at;
+    const emailBtn  = d.client_email && !selfDone
+      ? `<button class="dbtn dbtn-primary dbtn-sm" style="margin-left:8px;" onclick="sendLeaderPortalLink()">📧 Email to Leader</button>`
+      : selfDone
+        ? `<span style="font-size:12px;color:var(--d-green);margin-left:8px;font-weight:600;">✓ Self-assessment complete</span>`
+        : `<span style="font-size:12px;color:var(--d-mid);margin-left:8px;" title="Add client email in Setup to enable this button">No email on file</span>`;
+    dl.innerHTML =
+      `<strong>Leader portal:</strong>
+       <a href="${leaderLink}" target="_blank" style="color:var(--d-blue);word-break:break-all;">${leaderLink}</a>
+       <button class="dbtn dbtn-outline dbtn-sm" style="margin-left:8px;" onclick="diagCopyText('${leaderLink}')">Copy</button>
+       ${emailBtn}`;
+  }
 
   const rc = document.getElementById('tab-rater-count');
   if (rc) rc.textContent = DIAG_RATERS.filter(r => !r.is_self).length;
@@ -4775,18 +5403,22 @@ function renderOverviewTab() {
   const reopenableSteps = new Set([1, 2, 3, 5, 6, 7]);
 
   const stepsHtml = steps.map(s => {
-    const isDone   = s.done;
-    const isCur    = s.n === cur && !isDone;
-    const circle   = isDone ? '✓' : s.n;
-    const color    = isDone ? 'var(--d-green)' : isCur ? 'var(--d-blue)' : 'var(--d-mid)';
-    // Show reopen link for completed steps that have a reopen map entry
+    // isReopened: the step timestamp says done, but the current status has been
+    // rolled back to this point — show as amber "editing" state, not green done
+    const isReopened = s.done && s.n === cur;
+    const isDone   = s.done && !isReopened;
+    const isCur    = s.n === cur && !isDone && !isReopened;
+    const circle   = isDone ? '✓' : isReopened ? '↺' : s.n;
+    const color    = isDone ? 'var(--d-green)' : isReopened ? 'var(--d-amber)' : isCur ? 'var(--d-blue)' : 'var(--d-mid)';
+    // Show reopen button only for fully done steps (not the current/reopened one)
     const canReopen = isDone && reopenableSteps.has(s.n) && DIAG_REOPEN_MAP[s.n];
     const reopenBtn = canReopen
       ? `<button class="dbtn dbtn-outline dbtn-sm" style="margin-left:8px;padding:2px 8px;font-size:11px;" onclick="reopenDiagStep(${s.n})">Reopen</button>`
+      : isReopened ? `<span style="font-size:11px;color:var(--d-amber);margin-left:8px;font-weight:700;">Editing</span>`
       : '';
-    return `<div style="display:flex;gap:12px;margin-bottom:8px;align-items:center;opacity:${isDone||isCur?1:.45};">
+    return `<div style="display:flex;gap:12px;margin-bottom:8px;align-items:center;opacity:${isDone||isCur||isReopened?1:.45};">
       <div style="width:24px;height:24px;border-radius:50%;background:${color};color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0;">${circle}</div>
-      <div style="flex:1;padding-top:2px;font-size:13px;font-weight:${isCur?700:600};color:${isCur?'var(--d-blue)':isDone?'var(--d-dark)':'var(--d-mid)'};">${s.label}</div>
+      <div style="flex:1;padding-top:2px;font-size:13px;font-weight:${isCur||isReopened?700:600};color:${isReopened?'var(--d-amber)':isCur?'var(--d-blue)':isDone?'var(--d-dark)':'var(--d-mid)'};">${s.label}</div>
       ${reopenBtn}
     </div>`;
   }).join('');
@@ -4800,17 +5432,29 @@ function renderOverviewTab() {
     ${succRow('Immediate Successor View', d.self_immediate_successor_view)}
     ${succRow('Successor Candidates', d.self_successor_candidates)}
     ${succRow('Successor Development Actions', d.self_successor_development_actions)}
-    ${d.custom_g1_question ? `
     <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--d-border);">
-      <div style="font-size:11px;font-weight:700;color:var(--d-gold);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">AI-Generated Rater Question (G1)</div>
-      <div style="font-size:13px;border:1.5px solid #A78BFA;background:#F3F0FF;padding:10px 14px;border-radius:6px;">"${d.custom_g1_question}"</div>
-      <div style="font-size:11px;color:var(--d-mid);margin-top:4px;">Generated ${diagFormatDate(d.custom_g1_generated_at)} · Included in all rater surveys</div>
-    </div>` : `
-    <div class="dalert dalert-amber" style="margin-top:12px;">
-      <span class="dalert-icon">⚡</span>
-      <div>3-year vision response is available. <button class="dbtn dbtn-outline dbtn-sm" onclick="generateG1()">Generate Custom Rater Question →</button>
-        <span style="font-size:11px;color:var(--d-mid);margin-left:8px;">${_g1AttemptsUsed()} of ${G1_MAX_ATTEMPTS} attempts used</span></div>
-    </div>`}
+      <div style="font-size:11px;font-weight:700;color:var(--d-gold);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Custom Rater Questions</div>
+      ${d.custom_g1_question ? `
+      <div style="margin-bottom:8px;">
+        <div style="font-size:11px;font-weight:600;color:var(--d-mid);margin-bottom:3px;">G1 — Vision Alignment</div>
+        <div style="font-size:13px;border:1.5px solid #A78BFA;background:#F3F0FF;padding:10px 14px;border-radius:6px;">"${d.custom_g1_question}"</div>
+        <div style="font-size:11px;color:var(--d-mid);margin-top:3px;">Generated ${diagFormatDate(d.custom_g1_generated_at)}</div>
+      </div>` : `
+      <div class="dalert dalert-amber" style="margin-bottom:8px;">
+        <span class="dalert-icon">⚡</span>
+        <div>G1 not yet generated. <button class="dbtn dbtn-outline dbtn-sm" onclick="generateG1()">Generate G1 →</button>
+          <span style="font-size:11px;color:var(--d-mid);margin-left:8px;">${_g1AttemptsUsed()} of ${G1_MAX_ATTEMPTS} used</span></div>
+      </div>`}
+      ${d.self_assessment_completed_at ? (d.custom_g2_question ? `
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--d-mid);margin-bottom:3px;">G2 — Leadership Gap Probe</div>
+        <div style="font-size:13px;border:1.5px solid #93C5FD;background:#EFF6FF;padding:10px 14px;border-radius:6px;">"${d.custom_g2_question}"</div>
+        <div style="font-size:11px;color:var(--d-mid);margin-top:3px;">Generated ${diagFormatDate(d.custom_g2_generated_at)} · <button class="dbtn dbtn-outline dbtn-sm" style="font-size:10px;padding:1px 7px;" onclick="generateG2()">Regenerate</button></div>
+      </div>` : `
+      <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--d-mid);">
+        <button class="dbtn dbtn-outline dbtn-sm" onclick="generateG2()">Generate G2 (GPS gap probe) →</button>
+      </div>`) : ''}
+    </div>
   </div>` : '';
 
   const oc = document.getElementById('overview-content');
@@ -4827,10 +5471,10 @@ function renderOverviewTab() {
         const daysAgo = Math.round((Date.now() - new Date(la)) / (1000*60*60*24));
         const color   = daysAgo <= 3 ? 'var(--d-green)' : daysAgo <= 7 ? 'var(--d-amber)' : 'var(--d-red)';
         const label   = daysAgo === 0 ? 'today' : daysAgo === 1 ? 'yesterday' : daysAgo + ' days ago';
-        return \`<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--d-border);font-size:12px;">
-          <span style="color:var(--d-mid);">Last portal visit: </span>
-          <span style="font-weight:700;color:\${color};">\${label}</span>
-        </div>\`;
+        return '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--d-border);font-size:12px;">' +
+          '<span style="color:var(--d-mid);">Last portal visit: </span>' +
+          '<span style="font-weight:700;color:' + color + ';">' + label + '</span>' +
+          '</div>';
       })()}
     </div>
     <div class="card" style="margin-bottom:0;">
@@ -4934,8 +5578,11 @@ function renderRatersTab() {
   </tr>`;
   }).join('');
 
-  const canSendInvites    = d.status === 'self_assessment_complete' && nonSelf.length >= 3 && !d.invites_sent_at;
-  const invitesSent       = !!d.invites_sent_at;
+  // If status is self_assessment_complete, the rater list has been reopened (or never sent).
+  // Treat as "invites not yet sent" in that state so the Add Rater form and Send button reappear.
+  const reopened          = d.status === 'self_assessment_complete';
+  const invitesSent       = !!d.invites_sent_at && !reopened;
+  const canSendInvites    = reopened && nonSelf.length >= 3;
   const raterListReady    = !!d.raters_finalized_at && !invitesSent;
   const rc = document.getElementById('raters-content');
   if (!rc) return;
@@ -4946,11 +5593,11 @@ function renderRatersTab() {
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
       <div>
         <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:2px;">
-          Interviews ${intEnabled ? `<span style="color:var(--d-green);margin-left:6px;">● Enabled</span>` : `<span style="color:var(--d-mid);margin-left:6px;">○ Disabled</span>`}
+          Interviews ${intEnabled ? '<span style="color:var(--d-green);margin-left:6px;">● Enabled</span>' : '<span style="color:var(--d-mid);margin-left:6px;">○ Disabled</span>'}
         </div>
         <div style="font-size:11px;color:var(--d-mid);">
           ${intEnabled
-            ? (intMax > 0 ? `${intUsed} of ${intMax} interview slots assigned` : 'No cap set — set a max to limit slots')
+            ? (intMax > 0 ? intUsed + ' of ' + intMax + ' interview slots assigned' : 'No cap set — set a max to limit slots')
             : 'Enable to mark raters for a 1:1 interview with Alex. They get the calendar link in their invite email.'}
         </div>
       </div>
@@ -5019,7 +5666,17 @@ function renderRatersTab() {
       <button class="dbtn dbtn-primary" style="height:42px;" onclick="coachAddRater()">Add</button>
     </div>
     <div id="ar-msg" style="font-size:12px;color:var(--d-red2);margin-top:8px;"></div>
-  </div>` : ''}`;
+  </div>` : ''}
+  <div style="margin-top:14px;padding:10px 14px;background:var(--d-light);border:1px dashed var(--d-border);border-radius:8px;">
+    <div style="font-size:11px;color:var(--d-mid);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Test Data Import</div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <button class="dbtn dbtn-outline" style="font-size:12px;padding:5px 12px;" onclick="downloadSurveyTemplate()">⬇ Template</button>
+      <button class="dbtn dbtn-outline" style="font-size:12px;padding:5px 12px;" onclick="document.getElementById('diag-import-file').click()">⬆ Import Excel</button>
+      <input type="file" id="diag-import-file" accept=".xlsx,.xls" style="display:none;" onchange="importSurveyData(this)">
+      <span id="diag-import-msg" style="font-size:12px;color:var(--d-mid);"></span>
+    </div>
+    <div style="font-size:11px;color:var(--d-mid);margin-top:5px;">Download the template, fill in scores, import to test report generation without live surveys.</div>
+  </div>`;
 }
 
 // ── Interview Controls ────────────────────────────────────────────────────────
@@ -5260,8 +5917,47 @@ function renderReportTab() {
       <button class="dbtn dbtn-gold" onclick="openReportPreview()">👁 Preview &amp; Finalize Report</button>` : ''}
       ${d.debrief_completed_at ? '' : d.report_finalized_at ? `
       <button class="dbtn dbtn-outline" onclick="markDebriefComplete()">Mark Debrief Complete →</button>` : ''}
+      ${surveyUnlocked && done > 0 ? `
+      <button class="dbtn dbtn-outline dbtn-sm" style="margin-left:auto;" onclick="exportDiagnosticResponses()">⬇ Export Responses (Excel)</button>` : ''}
     </div>
   </div>
+
+  <div class="card">
+    <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:4px;">Upload Rater Responses (Offline Backup)</div>
+    <div style="font-size:12px;color:var(--d-mid);margin-bottom:12px;">If a client's IT blocks the survey portal, collect rater responses in the Excel template and upload it here. The report generates from the uploaded data — no portal access required from raters.</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+      <button class="dbtn dbtn-outline" onclick="downloadOfflineTemplate(event)">⬇ Download Rater Template</button>
+      <button class="dbtn dbtn-outline" onclick="document.getElementById('offline-upload-file').click()">⬆ Upload Completed Responses</button>
+      <input type="file" id="offline-upload-file" accept=".xlsx,.xls" style="display:none;" onchange="handleOfflineExcelUpload(this)">
+      <span id="offline-upload-msg" style="font-size:12px;color:var(--d-mid);"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:4px;">Data Package Export</div>
+    <div style="font-size:12px;color:var(--d-mid);margin-bottom:12px;">Download everything verbatim — intake notes, coaching notes, interview notes, self-assessment, all rater scores, and all open-text responses. Nothing summarized or cut.</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="dbtn dbtn-outline" onclick="downloadExcelPackage(event)">⬇ Excel — Scores &amp; Responses</button>
+      <button class="dbtn dbtn-outline" onclick="downloadWordPackage(event)">⬇ Word Doc — Notes &amp; Verbatims</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:4px;">Upload Draft Report</div>
+    <div style="font-size:12px;color:var(--d-mid);margin-bottom:12px;">Paste your AI-drafted report, upload a .docx, or upload a PDF. PDFs display as-is in the preview; .docx files are converted to editable HTML.</div>
+    <div class="dform-group">
+      <label style="font-size:12px;">Paste draft text or HTML</label>
+      <textarea id="draft-paste-field" style="min-height:120px;font-family:monospace;font-size:11px;" placeholder="Paste your drafted report here…"></textarea>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px;">
+      <button class="dbtn dbtn-primary" onclick="formatAndPreviewDraft(event)">Format &amp; Preview →</button>
+      <span style="color:var(--d-mid);font-size:12px;">— or —</span>
+      <button class="dbtn dbtn-outline" onclick="document.getElementById('draft-upload-file').click()">⬆ Upload PDF or .docx</button>
+      <input type="file" id="draft-upload-file" accept=".pdf,.docx" style="display:none;" onchange="handleDraftUpload(this)">
+      <span id="draft-upload-msg" style="font-size:12px;color:var(--d-mid);"></span>
+    </div>
+  </div>
+
   <div class="card">
     <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:12px;">90-Day Plan</div>
     <div class="dform-group">
@@ -5302,7 +5998,18 @@ function openSendInvitesModal() {
   const closeDate = new Date();
   closeDate.setDate(closeDate.getDate() + 14);
   const closeDateStr = closeDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+  // Soft warning: succession data exists but G1 question not yet generated
+  const g1Missing = !!DIAG_SEL.self_three_year_vision && !DIAG_SEL.custom_g1_question;
+  const g1Warning = g1Missing
+    ? `<div class="dalert dalert-amber" style="margin-bottom:14px;">
+        <span class="dalert-icon">⚠️</span>
+        <div><strong>No custom G1 question generated yet.</strong> ${DIAG_SEL.client_name} completed the succession section, but the AI rater question hasn't been created. Raters will receive the survey without it. <a href="#" onclick="closeDiagModal('send-invites-modal');generateG1();return false;" style="color:#7A5A00;font-weight:700;text-decoration:underline;">Generate it first →</a> or proceed below to send anyway.</div>
+      </div>`
+    : '';
+
   document.getElementById('send-invites-body').innerHTML = `
+    ${g1Warning}
     <p style="font-size:13px;margin-bottom:14px;">You are about to send survey invitations to <strong>${nonSelf.length} raters</strong> for <strong>${DIAG_SEL.client_name}</strong>.</p>
     <div class="dalert dalert-blue" style="margin-bottom:14px;"><span class="dalert-icon">📅</span>
       <div>Survey window opens <strong>today</strong> and closes automatically on <strong>${closeDateStr}</strong> (14 days).</div>
@@ -5321,10 +6028,16 @@ async function confirmSendInvites() {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ diagnostic_id: DIAG_SEL.id }),
     });
-    if (!resp.ok) throw new Error(await resp.text());
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || resp.status);
     await updateDiag({ status: 'survey_open', invites_sent_at: new Date().toISOString() });
     await refreshSelected();
-    alert('Invitations sent successfully.');
+    if (data.sent === 0) {
+      alert('No new invitations sent.\n\nAll raters on this list have already been invited. To send to new raters, reopen step 3 first, then add the new raters before sending.');
+    } else {
+      const errNote = data.errors?.length ? `\n\n⚠ ${data.errors.length} failed to send — check the Emails log for details.` : '';
+      alert(`${data.sent} invitation${data.sent !== 1 ? 's' : ''} sent successfully.${errNote}`);
+    }
   } catch(e) {
     alert('Error sending invites: ' + e.message);
   }
@@ -5463,6 +6176,36 @@ async function generateG1() {
   }
 }
 
+async function generateG2() {
+  if (!DIAG_SEL.self_assessment_completed_at) {
+    alert('Self-assessment must be complete before generating G2.');
+    return;
+  }
+  if (DIAG_SEL.custom_g2_question) {
+    if (!confirm('Replace the existing G2 question with a new AI-generated one?')) return;
+  }
+
+  const btn = event?.target;
+  if (btn) { btn.disabled = true; btn.textContent = '⚙ Generating…'; }
+
+  try {
+    const resp = await fetch('/api/diagnostic?action=generate-g2-question', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ diagnostic_id: DIAG_SEL.id }),
+    });
+    if (!resp.ok) {
+      const errData = await resp.json().catch(() => ({}));
+      throw new Error(errData.error || resp.statusText);
+    }
+    const { question } = await resp.json();
+    await updateDiag({ custom_g2_question: question, custom_g2_generated_at: new Date().toISOString() });
+    await refreshSelected();
+  } catch(e) {
+    alert('Error generating G2: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = DIAG_SEL.custom_g2_question ? 'Regenerate' : 'Generate G2 (GPS gap probe) →'; }
+  }
+}
+
 async function generateReport(e) {
   const btn = e ? e.currentTarget : null;
   if (btn) { btn.disabled = true; btn.textContent = '⚙ Generating…'; }
@@ -5480,6 +6223,654 @@ async function generateReport(e) {
   }
 }
 
+
+async function exportDiagnosticResponses() {
+  const d = DIAG_SEL;
+  if (!d) return;
+  try {
+    // 1. Fetch all raters
+    const ratersResp = await fetch(
+      `https://pbnkefuqpoztcxfagiod.supabase.co/rest/v1/diagnostic_raters?diagnostic_id=eq.${d.id}&select=id,name,email,relationship,is_self,completed_at`,
+      { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` } }
+    );
+    const raters = await ratersResp.json();
+    const raterMap = Object.fromEntries(raters.map(r => [r.id, r]));
+
+    // 2. Fetch all responses
+    const respResp = await fetch(
+      `https://pbnkefuqpoztcxfagiod.supabase.co/rest/v1/diagnostic_responses?diagnostic_id=eq.${d.id}&select=rater_id,question_code,score,text_response`,
+      { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` } }
+    );
+    const responses = await respResp.json();
+    if (!Array.isArray(responses) || responses.length === 0) {
+      alert('No responses found for this diagnostic.');
+      return;
+    }
+
+    // 3. Pivot: one row per rater, one column per question
+    const allCodes = [...new Set(responses.map(r => r.question_code))].sort();
+    const rows = [];
+    for (const rater of raters) {
+      const raterResps = responses.filter(r => r.rater_id === rater.id);
+      const row = {
+        'Rater Name':         rater.name || '',
+        'Email':              rater.email || '',
+        'Relationship':       rater.relationship || '',
+        'Self-Assessment':    rater.is_self ? 'Yes' : 'No',
+        'Completed':          rater.completed_at ? new Date(rater.completed_at).toLocaleDateString() : 'No',
+      };
+      for (const code of allCodes) {
+        const ans = raterResps.find(r => r.question_code === code);
+        row[code] = ans ? (ans.score ?? ans.text_response ?? '') : '';
+      }
+      rows.push(row);
+    }
+
+    // 4. Build XLSX
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, 'Survey Responses');
+    const safe = (d.client_name || 'diagnostic').replace(/[^a-zA-Z0-9]/g, '_');
+    XLSX.writeFile(wb, `${safe}_diagnostic_responses.xlsx`);
+  } catch(err) {
+    alert('Export failed: ' + err.message);
+  }
+}
+
+// ── Data Package Export ──────────────────────────────────────────────────────
+
+const TP3_Q_DESC = {
+  A1:'Demonstrates integrity by consistently following through on commitments',
+  A2:'Treats team members fairly and equitably',
+  A3:'Is transparent and honest in communications',
+  A4:'Acknowledges mistakes and takes responsibility',
+  A5:'Creates an environment where team members feel safe to speak up',
+  A6:'Is accessible and approachable when team members need guidance',
+  A7:'Maintains consistent standards and expectations across the team',
+  B1:'Identifies and addresses potential problems before they escalate',
+  B2:'Takes initiative without being told what to do',
+  B3:'Brings solutions, not just problems, to discussions',
+  B4:'Anticipates how decisions will affect other parts of the organization',
+  B5:'Manages up effectively — keeps leadership informed without being prompted',
+  B6:'Delegates appropriately and develops team members capacity',
+  C1:'Produces high-quality work consistently',
+  C2:'Uses their time effectively and helps others do the same',
+  C3:'Runs focused, productive meetings',
+  C4:'Drives projects to completion on time',
+  C5:'Removes obstacles that slow down the team',
+  C6:'Makes decisions at the right level without unnecessary escalation',
+  D1:'Overall leadership impact (1–10 scale)',
+  F1:'Actively develops the skills and capabilities of team members',
+  F2:'Is building a team that could operate effectively without them',
+  G1:'Custom Vision Alignment Question',
+  G2:'Custom GPS Gap Probe Question',
+};
+
+const TP3_TEXT_Q_DESC = {
+  A8:'Trust — Open comments',
+  B7:'Proactivity — Open comments',
+  C7:'Productivity — Open comments',
+  D2:'Most important change this leader could make',
+  E1:'Proudest contribution (self-assessment)',
+  E2:'Biggest challenge (self-assessment)',
+  E3:'Additional comments (self-assessment)',
+  F3:'Bench strength / team development comments',
+  G1:'G1 custom question — text response',
+  G2:'G2 custom question — text response',
+};
+
+async function fetchAllDiagData() {
+  const d = DIAG_SEL;
+  if (!d) throw new Error('No diagnostic selected');
+  if (!d.id) throw new Error('Diagnostic has no ID — try reopening the diagnostic');
+
+  // Reuse the same fetch pattern as exportDiagnosticResponses (known to work)
+  const hdr = { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` };
+  const base = 'https://pbnkefuqpoztcxfagiod.supabase.co/rest/v1';
+
+  const ratersResp = await fetch(
+    `${base}/diagnostic_raters?diagnostic_id=eq.${d.id}&select=id,name,email,relationship,is_self,invited_at,completed_at`,
+    { headers: hdr }
+  );
+  const raters = await ratersResp.json();
+  if (!Array.isArray(raters)) {
+    throw new Error(`Could not load raters (${ratersResp.status}): ${JSON.stringify(raters).slice(0, 150)}`);
+  }
+
+  const responsesResp = await fetch(
+    `${base}/diagnostic_responses?diagnostic_id=eq.${d.id}&select=rater_id,question_code,score,text_response`,
+    { headers: hdr }
+  );
+  const responses = await responsesResp.json();
+  if (!Array.isArray(responses)) {
+    throw new Error(`Could not load responses (${responsesResp.status}): ${JSON.stringify(responses).slice(0, 150)}`);
+  }
+
+  return { diag: d, raters, responses };
+}
+
+async function downloadExcelPackage(evt) {
+  const btn = evt.currentTarget; btn.disabled = true; btn.textContent = 'Building…';
+  try {
+    const { diag, raters, responses } = await fetchAllDiagData();
+    const rMap = Object.fromEntries(raters.map(r => [r.id, r]));
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: Client Profile
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+      ['Field','Value'],
+      ['Name', diag.client_name||''],
+      ['Title', diag.client_title||''],
+      ['Organization', diag.client_org||''],
+      ['Email', diag.client_email||''],
+      ['Intake Date', diag.intake_date ? new Date(diag.intake_date).toLocaleDateString() : ''],
+      ['Survey Close Date', diag.close_date ? new Date(diag.close_date).toLocaleDateString() : ''],
+      ['Tier', diag.tier||''],
+      ['Status', diag.status||''],
+      ['Custom G1 Question', diag.custom_g1_question||''],
+      ['Custom G2 Question', diag.custom_g2_question||''],
+    ]), 'Client Profile');
+
+    // Sheet 2: Rater Roster
+    const rosterRows = [['Name','Email','Relationship','Is Self','Invited','Completed']];
+    for (const r of raters) rosterRows.push([
+      r.name||'', r.email||'', r.relationship||'', r.is_self?'Yes':'No',
+      r.invited_at ? new Date(r.invited_at).toLocaleDateString() : 'Not sent',
+      r.completed_at ? new Date(r.completed_at).toLocaleDateString() : 'Incomplete',
+    ]);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rosterRows), 'Rater Roster');
+
+    // Sheet 3: Scores by Rater Group (averages per question per group)
+    const rels = ['Direct Report','Peer','Supervisor','Internal Partner'];
+    const normRel = (rel) => (rel||'').toLowerCase().replace(/s$/,'').trim(); // "direct reports" → "direct report"
+    const scoredCodes = Object.keys(TP3_Q_DESC);
+    const avgHdr = ['Code','Behavior',  ...rels, 'Self','All Others (non-self)'];
+    const avgRows = [avgHdr];
+    for (const code of scoredCodes) {
+      const cResps = responses.filter(r => r.question_code === code && r.score != null);
+      const grpAvg = (rel) => {
+        const g = cResps.filter(r => normRel(rMap[r.rater_id]?.relationship) === rel.toLowerCase());
+        return g.length ? (g.reduce((s,r)=>s+r.score,0)/g.length).toFixed(2) : '';
+      };
+      const selfR = cResps.filter(r => rMap[r.rater_id]?.is_self);
+      const othR  = cResps.filter(r => !rMap[r.rater_id]?.is_self);
+      avgRows.push([
+        code,
+        code==='G1'?(diag.custom_g1_question||TP3_Q_DESC.G1):
+        code==='G2'?(diag.custom_g2_question||TP3_Q_DESC.G2):TP3_Q_DESC[code]||code,
+        grpAvg('direct report'), grpAvg('peer'), grpAvg('supervisor'), grpAvg('internal partner'),
+        selfR.length?(selfR.reduce((s,r)=>s+r.score,0)/selfR.length).toFixed(2):'',
+        othR.length?(othR.reduce((s,r)=>s+r.score,0)/othR.length).toFixed(2):'',
+      ]);
+    }
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(avgRows), 'Scores by Group');
+
+    // Sheet 4: Raw numeric scores (one row per rater)
+    const scoreHdr = ['Rater Name','Email','Relationship','Is Self', ...scoredCodes];
+    const scoreRows = [scoreHdr];
+    for (const rater of raters) {
+      const rResps = responses.filter(r => r.rater_id === rater.id);
+      scoreRows.push([
+        rater.name||'', rater.email||'', rater.relationship||'', rater.is_self?'Yes':'No',
+        ...scoredCodes.map(code => { const a = rResps.find(r=>r.question_code===code); return a?.score??''; }),
+      ]);
+    }
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(scoreRows), 'Raw Numeric Scores');
+
+    // Sheet 5: Verbatim text responses
+    const verbRows = [['Rater Name','Relationship','Is Self','Question Code','Question Description','Response (verbatim)']];
+    for (const resp of responses) {
+      if (!resp.text_response?.trim()) continue;
+      const rater = rMap[resp.rater_id]||{};
+      const qDesc = resp.question_code==='G1'?(diag.custom_g1_question||'G1 — Custom Vision Alignment'):
+                    resp.question_code==='G2'?(diag.custom_g2_question||'G2 — Custom GPS Gap Probe'):
+                    TP3_TEXT_Q_DESC[resp.question_code]||resp.question_code;
+      verbRows.push([rater.name||'', rater.relationship||'', rater.is_self?'Yes':'No', resp.question_code, qDesc, resp.text_response.trim()]);
+    }
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(verbRows), 'Verbatim Responses');
+
+    const safe = (diag.client_name||'diagnostic').replace(/[^a-zA-Z0-9]/g,'_');
+    XLSX.writeFile(wb, `${safe}_GPS_Data_Package.xlsx`);
+  } catch(err) { alert('Export failed: '+err.message); }
+  finally { btn.disabled=false; btn.innerHTML='⬇ Excel — Scores &amp; Responses'; }
+}
+
+async function downloadWordPackage(evt) {
+  const btn = evt.currentTarget; btn.disabled = true; btn.textContent = 'Building…';
+  try {
+    const { diag, raters, responses } = await fetchAllDiagData();
+    const rMap = Object.fromEntries(raters.map(r => [r.id, r]));
+    const h1 = t => `<h1 style="font-size:16pt;color:#1e3a6e;border-bottom:1.5pt solid #1e3a6e;padding-bottom:3pt;margin-top:18pt;margin-bottom:6pt;">${t}</h1>`;
+    const h2 = t => `<h2 style="font-size:13pt;color:#1e3a6e;margin-top:12pt;margin-bottom:4pt;">${t}</h2>`;
+    const lbl = (label, val) => `<p><strong>${label}:</strong> ${val?.trim() ? val.trim() : '<em>[Not provided]</em>'}</p>`;
+    const verbBlock = text => `<p style="margin:3pt 0 3pt 16pt;white-space:pre-wrap;">${text.trim()}</p>`;
+
+    let html = `<html><head><meta charset="UTF-8"><style>body{font-family:Calibri,sans-serif;font-size:11pt;color:#111;line-height:1.5;}p{margin:3pt 0;}</style></head><body>`;
+    html += `<div style="text-align:center;margin-bottom:18pt;">
+      <div style="font-size:20pt;font-weight:bold;color:#1e3a6e;">GPS LEADERSHIP SOLUTIONS</div>
+      <div style="font-size:14pt;color:#1e3a6e;">14-Day Executive Leadership Diagnostic — Data Package</div>
+      <div style="font-size:10pt;color:#666;margin-top:4pt;">Generated: ${new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})} · CONFIDENTIAL · FOR AI PROCESSING — ALL CONTENT VERBATIM</div>
+    </div><hr style="border:1pt solid #1e3a6e;margin-bottom:14pt;">`;
+
+    html += h1('1. Client Information');
+    html += lbl('Name', diag.client_name);
+    html += lbl('Title', diag.client_title);
+    html += lbl('Organization', diag.client_org);
+    html += lbl('Email', diag.client_email);
+    html += lbl('Intake Date', diag.intake_date ? new Date(diag.intake_date).toLocaleDateString() : '');
+    html += lbl('Survey Close Date', diag.close_date ? new Date(diag.close_date).toLocaleDateString() : '');
+    html += lbl('Diagnostic Tier', diag.tier);
+    html += lbl('Status', diag.status);
+    html += lbl('Number of Raters Invited', String(raters.filter(r=>!r.is_self).length));
+    html += lbl('Raters Completed', String(raters.filter(r=>!r.is_self&&r.completed_at).length));
+
+    html += h1('2. Intake Notes');
+    html += diag.intake_notes?.trim() ? verbBlock(diag.intake_notes) : '<p><em>[No intake notes on file]</em></p>';
+
+    html += h1('3. Coaching Session Notes');
+    html += diag.coaching_notes?.trim() ? verbBlock(diag.coaching_notes) : '<p><em>[No coaching notes on file]</em></p>';
+
+    html += h1('4. Interview Notes');
+    html += diag.interview_notes?.trim() ? verbBlock(diag.interview_notes) : '<p><em>[No interview notes on file]</em></p>';
+
+    html += h1('5. Leader Self-Assessment — Succession &amp; Future Self');
+    html += h2('3-Year Vision');
+    html += diag.self_three_year_vision?.trim() ? verbBlock(diag.self_three_year_vision) : '<p><em>[Not provided]</em></p>';
+    html += h2('Future Self &amp; Capabilities Needed');
+    html += diag.self_future_self_capabilities?.trim() ? verbBlock(diag.self_future_self_capabilities) : '<p><em>[Not provided]</em></p>';
+    html += h2('Immediate Successor Readiness (Leader\'s View)');
+    html += diag.self_immediate_successor_view?.trim() ? verbBlock(diag.self_immediate_successor_view) : '<p><em>[Not provided]</em></p>';
+    html += h2('Successor Candidates Identified');
+    html += diag.self_successor_candidates?.trim() ? verbBlock(diag.self_successor_candidates) : '<p><em>[Not provided]</em></p>';
+    html += h2('Successor Development Actions Underway');
+    html += diag.self_successor_development_actions?.trim() ? verbBlock(diag.self_successor_development_actions) : '<p><em>[Not provided]</em></p>';
+
+    html += h1('6. Custom Diagnostic Questions');
+    html += h2('G1 — Vision Alignment Question');
+    html += lbl('Question text', diag.custom_g1_question || '[Not generated]');
+    html += h2('G2 — GPS Gap Probe Question');
+    html += lbl('Question text', diag.custom_g2_question || '[Not generated]');
+
+    html += h1('7. Rater Roster');
+    html += `<table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:10pt;">
+      <tr style="background:#1e3a6e;color:#fff;"><th>Name</th><th>Email</th><th>Relationship</th><th>Self</th><th>Completed</th></tr>`;
+    for (const r of raters) html += `<tr><td>${r.name||''}</td><td>${r.email||''}</td><td>${r.relationship||''}</td><td>${r.is_self?'Yes':'No'}</td><td>${r.completed_at?new Date(r.completed_at).toLocaleDateString():'No'}</td></tr>`;
+    html += `</table>`;
+
+    html += h1('8. All Verbatim Survey Responses');
+    html += `<p><em>All text responses reproduced verbatim exactly as entered. Attributed by rater group, not individual.</em></p>`;
+    const textCodes = ['A8','B7','C7','D2','E1','E2','E3','F3','G1','G2'];
+    for (const code of textCodes) {
+      const cResps = responses.filter(r => r.question_code===code && r.text_response?.trim());
+      if (!cResps.length) continue;
+      const qDesc = code==='G1'?(diag.custom_g1_question||'G1 — Custom Vision Alignment'):
+                    code==='G2'?(diag.custom_g2_question||'G2 — Custom GPS Gap Probe'):
+                    TP3_TEXT_Q_DESC[code]||code;
+      html += h2(`${code}: ${qDesc}`);
+      for (const resp of cResps) {
+        const rater = rMap[resp.rater_id]||{};
+        const grp = rater.is_self ? 'Self (Leader)' : (rater.relationship||'Rater');
+        html += `<p><strong>[${grp}]</strong><br>${verbBlock(resp.text_response)}</p>`;
+      }
+    }
+
+    html += `</body></html>`;
+    const blob = new Blob(['﻿', html], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(diag.client_name||'diagnostic').replace(/[^a-zA-Z0-9]/g,'_')}_GPS_Notes_Verbatims.doc`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch(err) { alert('Export failed: '+err.message); }
+  finally { btn.disabled=false; btn.innerHTML='⬇ Word Doc — Notes &amp; Verbatims'; }
+}
+
+// ── Offline Rater Template + Upload ──────────────────────────────────────────
+
+const OFFLINE_SCORED_QS = [
+  { code:'A1', label:'Trust',       text:'Follows through on commitments and does what they say they will do.' },
+  { code:'A2', label:'Trust',       text:'Communicates decisions and direction clearly — people know what to expect.' },
+  { code:'A3', label:'Trust',       text:'Addresses conflict and difficult conversations directly rather than avoiding them.' },
+  { code:'A4', label:'Trust',       text:'Invests time in developing the people on their team.' },
+  { code:'A5', label:'Trust',       text:'Builds trust and collaboration across teams and functions.' },
+  { code:'A6', label:'Trust',       text:'Holds people accountable without creating fear or shutting down communication.' },
+  { code:'A7', label:'Trust',       text:'Sets clear expectations so people can make decisions without checking in.' },
+  { code:'B1', label:'Proactivity', text:'Anticipates problems and addresses them before they become crises.' },
+  { code:'B2', label:'Proactivity', text:'Proactively influences positive change rather than waiting for direction.' },
+  { code:'B3', label:'Proactivity', text:'Inspires others to take initiative and raise the standard.' },
+  { code:'B4', label:'Proactivity', text:'Takes initiative to identify and address emerging issues before being asked.' },
+  { code:'B5', label:'Proactivity', text:'Encourages the team to bring forward solutions, not just problems.' },
+  { code:'B6', label:'Proactivity', text:'Actively invests in their own leadership growth and development.' },
+  { code:'C1', label:'Productivity','text':'Creates conditions for high team productivity — clear priorities, right resources, minimal blockers.' },
+  { code:'C2', label:'Productivity','text':'Balances short-term execution with longer-term strategic investment.' },
+  { code:'C3', label:'Productivity','text':'Leads effectively under pressure without creating chaos or reactive energy.' },
+  { code:'C4', label:'Productivity','text':'Prioritizes and focuses the team on the highest-impact work consistently.' },
+  { code:'C5', label:'Productivity','text':'Team can operate effectively and make decisions without direct involvement.' },
+  { code:'C6', label:'Productivity','text':'Runs meetings efficiently — on time, focused, ends with clear next steps.' },
+  { code:'D1', label:'Impact',      text:'Overall leadership impact on the organization. (Scale 1–10)' },
+  { code:'F1', label:'Succession',  text:'Team would continue to operate effectively if leader stepped away for 6–12 months.' },
+  { code:'F2', label:'Succession',  text:'Actively develops people to take on bigger responsibilities over the next 1–3 years.' },
+  { code:'G1', label:'Custom',      text:'[See G1 Question on Overview tab — leave blank if not generated yet]' },
+];
+
+const OFFLINE_TEXT_QS = [
+  { code:'A8',  prompt:'TRUST — What is one thing [Leader] could START doing to build greater trust?' },
+  { code:'A9',  prompt:'TRUST — What is one communication habit you would ask [Leader] to STOP?' },
+  { code:'A10', prompt:'TRUST — What trust-building behavior should [Leader] CONTINUE?' },
+  { code:'B7',  prompt:'PROACTIVITY — What is one thing [Leader] could START doing to be more proactive?' },
+  { code:'B8',  prompt:'PROACTIVITY — What is one reactive habit you would ask [Leader] to STOP?' },
+  { code:'B9',  prompt:'PROACTIVITY — What proactive behavior should [Leader] CONTINUE?' },
+  { code:'C7',  prompt:'PRODUCTIVITY — What is one thing [Leader] could START doing to increase team productivity?' },
+  { code:'C8',  prompt:'PRODUCTIVITY — What is one habit that slows the team down — ask them to STOP?' },
+  { code:'C9',  prompt:'PRODUCTIVITY — What do they already do to drive productivity that should CONTINUE?' },
+  { code:'D2',  prompt:'OVERALL — In 3–5 words, describe their leadership style and presence.' },
+  { code:'F3',  prompt:'SUCCESSION — What could they do to better prepare the team to succeed without them?' },
+];
+
+function downloadOfflineTemplate(evt) {
+  const d = DIAG_SEL;
+  if (!d) return;
+  const btn = evt.currentTarget; btn.disabled = true; btn.textContent = 'Building…';
+  try {
+    const leader = d.client_name || 'Leader';
+    const wb = XLSX.utils.book_new();
+
+    // ── Sheet 1: Instructions ──────────────────────────────────────────────────
+    const instrRows = [
+      [`GPS Leadership Solutions — Offline Rater Response Template`],
+      [`Leader: ${leader}${d.client_title ? ' · ' + d.client_title : ''}${d.client_org ? ' · ' + d.client_org : ''}`],
+      [`Generated: ${new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}`],
+      [],
+      ['HOW TO USE THIS TEMPLATE'],
+      ['1. Fill in the "SCORES" sheet — enter a score (1–5) for each rated question for each rater column.'],
+      ['   D1 (Overall Impact) uses a 1–10 scale. All others use 1–5.'],
+      ['   Self column = the leader\'s own self-assessment. Remaining columns = individual raters.'],
+      ['   Replace "Rater 2", "Rater 3" etc. in Row 2 with actual names. Enter their relationship in Row 3.'],
+      ['   Set Row 4 (Is Self): "Yes" for the leader\'s own column, "No" for all others.'],
+      ['2. Fill in the "OPEN-ENDED" sheet — type each rater\'s verbatim response to each question.'],
+      ['   Leave a cell blank if the rater did not respond.'],
+      ['3. Save the file and upload it using the "Upload Completed Responses" button in the portal.'],
+      [],
+      ['SCORING SCALE (for all scored questions except D1):'],
+      ['  1 = Strongly Disagree'],
+      ['  2 = Disagree'],
+      ['  3 = Neutral / Somewhat Agree'],
+      ['  4 = Agree'],
+      ['  5 = Strongly Agree'],
+      ['D1 uses a 1–10 scale (1 = no impact, 10 = exceptional impact).'],
+      [],
+      ['IMPORTANT: Do not change column headers in the SCORES sheet (A1, A2, etc.) — the portal parses them.'],
+    ];
+    const wsInstr = XLSX.utils.aoa_to_sheet(instrRows);
+    wsInstr['!cols'] = [{ wch: 80 }];
+    XLSX.utils.book_append_sheet(wb, wsInstr, 'Instructions');
+
+    // ── Sheet 2: Scores ────────────────────────────────────────────────────────
+    const raterCols = ['Self','Rater 2','Rater 3','Rater 4','Rater 5','Rater 6','Rater 7','Rater 8'];
+    const scoresHdr1 = ['Question Code', 'Pillar', 'Question (for reference)', 'Scale', ...raterCols];
+    const row2 = ['Rater Name →', '', '', '', ...raterCols.map((_, i) => i === 0 ? leader : `[Enter Name]`)];
+    const row3 = ['Relationship →', '', '', '', 'Self', 'Direct Report', 'Direct Report', 'Peer', 'Peer', 'Supervisor', '[Relationship]', '[Relationship]'];
+    const row4 = ['Is Self →', '', '', '', 'Yes', 'No', 'No', 'No', 'No', 'No', 'No', 'No'];
+    const scoreDataRows = OFFLINE_SCORED_QS.map(q => [
+      q.code, q.label, q.text.replace('[Leader]', leader.split(' ')[0]),
+      q.code === 'D1' ? '1–10' : '1–5',
+      ...raterCols.map(() => ''),
+    ]);
+    const wsScores = XLSX.utils.aoa_to_sheet([scoresHdr1, row2, row3, row4, ...scoreDataRows]);
+    wsScores['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 56 }, { wch: 7 }, ...raterCols.map(() => ({ wch: 14 }))];
+    XLSX.utils.book_append_sheet(wb, wsScores, 'SCORES');
+
+    // ── Sheet 3: Open-Ended ────────────────────────────────────────────────────
+    const oeHdr = ['Question Code', 'Question Prompt', ...raterCols];
+    const oeRows = OFFLINE_TEXT_QS.map(q => [
+      q.code,
+      q.prompt.replace('[Leader]', leader.split(' ')[0]),
+      ...raterCols.map(() => ''),
+    ]);
+    const wsOE = XLSX.utils.aoa_to_sheet([oeHdr, ...oeRows]);
+    wsOE['!cols'] = [{ wch: 12 }, { wch: 62 }, ...raterCols.map(() => ({ wch: 20 }))];
+    XLSX.utils.book_append_sheet(wb, wsOE, 'OPEN-ENDED');
+
+    const safe = leader.replace(/[^a-zA-Z0-9]/g,'_');
+    XLSX.writeFile(wb, `${safe}_GPS_Rater_Template.xlsx`);
+  } catch(err) { alert('Error building template: ' + err.message); }
+  finally { btn.disabled = false; btn.textContent = '⬇ Download Rater Template'; }
+}
+
+async function handleOfflineExcelUpload(inputEl) {
+  const file = inputEl.files[0];
+  if (!file) return;
+  const msg = document.getElementById('offline-upload-msg');
+  msg.style.color = 'var(--d-mid)'; msg.textContent = 'Parsing responses…';
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+
+    // ── Parse SCORES sheet ────────────────────────────────────────────────────
+    const scoresWs = wb.Sheets['SCORES'] || wb.Sheets[wb.SheetNames[0]];
+    const scoresData = XLSX.utils.sheet_to_json(scoresWs, { header: 1, defval: '' });
+    // Row 0 = column headers (Question Code, Pillar, Question, Scale, rater1, rater2...)
+    // Row 1 = rater names, Row 2 = relationships, Row 3 = Is Self, Row 4+ = question data
+    if (scoresData.length < 5) throw new Error('SCORES sheet appears empty or malformed.');
+    const hdrRow       = scoresData[0]; // ['Question Code','Pillar','Question','Scale','Self','Rater 2',...]
+    const nameRow      = scoresData[1];
+    const relRow       = scoresData[2];
+    const isSelfRow    = scoresData[3];
+    const raterStartCol = 4; // columns 0-3 are code/pillar/question/scale
+    const numRaterCols  = hdrRow.length - raterStartCol;
+
+    // Build rater metadata (skip columns where name is blank or placeholder)
+    const raterMeta = [];
+    for (let ci = 0; ci < numRaterCols; ci++) {
+      const name = String(nameRow[raterStartCol + ci] || '').trim();
+      const rel  = String(relRow[raterStartCol + ci] || '').trim();
+      if (!name || name.startsWith('[Enter') || name === '') continue;
+      raterMeta.push({
+        colIdx:       raterStartCol + ci,
+        name,
+        relationship: rel || 'Rater',
+        is_self:      String(isSelfRow[raterStartCol + ci] || '').trim().toLowerCase() === 'yes',
+        scores: {},
+        texts:  {},
+      });
+    }
+    if (raterMeta.length === 0) throw new Error('No rater names found. Fill in Row 2 (Rater Name) of the SCORES sheet.');
+
+    // Extract scored responses
+    for (let ri = 4; ri < scoresData.length; ri++) {
+      const row  = scoresData[ri];
+      const code = String(row[0] || '').trim().toUpperCase();
+      if (!code) continue;
+      const scaleStr = String(row[3] || '').trim();
+      const maxScale = scaleStr.includes('10') ? 10 : 5;
+      for (const rater of raterMeta) {
+        const raw = String(row[rater.colIdx] || '').trim();
+        if (!raw) continue;
+        const n = Number(raw);
+        if (!isNaN(n) && n >= 1 && n <= maxScale) rater.scores[code] = n;
+      }
+    }
+
+    // ── Parse OPEN-ENDED sheet ────────────────────────────────────────────────
+    const oeWs = wb.Sheets['OPEN-ENDED'] || wb.Sheets['Open-Ended Responses'];
+    if (oeWs) {
+      const oeData = XLSX.utils.sheet_to_json(oeWs, { header: 1, defval: '' });
+      // Row 0 = headers: [Question Code, Question Prompt, rater1, rater2, ...]
+      for (let ri = 1; ri < oeData.length; ri++) {
+        const row  = oeData[ri];
+        const code = String(row[0] || '').trim().toUpperCase();
+        if (!code) continue;
+        for (const rater of raterMeta) {
+          // Column index in OE sheet matches same rater column offset
+          const ci = rater.colIdx; // same column positions as SCORES sheet
+          const text = String(row[ci] || '').trim();
+          if (text) rater.texts[code] = text;
+        }
+      }
+    }
+
+    // Validate: at least 3 raters with some scores
+    const ratersWithScores = raterMeta.filter(r => Object.keys(r.scores).length > 0);
+    if (ratersWithScores.length < 2) throw new Error('Found fewer than 2 raters with scores. Check that scores are filled in.');
+
+    msg.textContent = `Parsed ${ratersWithScores.length} raters — importing to portal…`;
+
+    // ── POST to import-survey-data ────────────────────────────────────────────
+    const importResp = await fetch('/api/diagnostic?action=import-survey-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        diagnostic_id: DIAG_SEL.id,
+        raters: ratersWithScores.map(({ name, relationship, is_self, scores, texts }) =>
+          ({ name, email: `offline-${name.toLowerCase().replace(/\s+/g,'.')}_${DIAG_SEL.id.slice(0,6)}@offline.gpsleadership.org`, relationship, is_self, scores, texts })
+        ),
+      }),
+    });
+    const importData = await importResp.json();
+    if (!importResp.ok) throw new Error(importData.error || 'Import failed');
+
+    msg.textContent = `✓ ${importData.rater_count} raters imported (${importData.response_count} responses) — generating report…`;
+    msg.style.color = 'var(--d-mid)';
+
+    // Refresh raters so generate-report sees the correct count
+    await refreshSelected();
+
+    // ── Generate report from the just-imported data ───────────────────────────
+    const genResp = await fetch('/api/diagnostic?action=generate-report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ diagnostic_id: DIAG_SEL.id }),
+    });
+    if (!genResp.ok) {
+      const ge = await genResp.json().catch(() => ({}));
+      throw new Error(ge.error || 'Report generation failed after import');
+    }
+
+    await updateDiag({ status: 'report_draft', report_generated_at: new Date().toISOString() });
+    await refreshSelected();
+    msg.style.color = 'var(--d-green)';
+    msg.textContent = `✓ Report generated from ${importData.rater_count} offline raters`;
+    openReportPreview();
+  } catch(err) {
+    msg.style.color = 'var(--d-red)';
+    msg.textContent = 'Error: ' + err.message;
+    console.error('[offline upload]', err);
+  }
+  inputEl.value = '';
+}
+
+// ── Draft Report Upload → Format → Preview ───────────────────────────────────
+
+async function handleDraftUpload(inputEl) {
+  const file = inputEl.files[0];
+  if (!file) return;
+  const msg = document.getElementById('draft-upload-msg');
+  const isPDF = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
+  msg.style.color = 'var(--d-mid)'; msg.textContent = 'Reading file…';
+  try {
+    if (isPDF) {
+      // Read PDF as base64 and store with marker — preview modal renders it in an iframe
+      const buf = await file.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      let binary = '';
+      const chunkSize = 8192;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+      }
+      document.getElementById('draft-paste-field').value = 'PDF_UPLOAD:' + btoa(binary);
+      msg.style.color = 'var(--d-green)';
+      msg.textContent = `✓ ${file.name} ready — click Format & Preview to save`;
+    } else {
+      // .docx — convert to HTML with mammoth
+      if (!window.mammoth) {
+        await new Promise((res, rej) => {
+          const s = document.createElement('script');
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';
+          s.onload = res; s.onerror = rej;
+          document.head.appendChild(s);
+        });
+      }
+      const buf = await file.arrayBuffer();
+      const result = await mammoth.convertToHtml({ arrayBuffer: buf });
+      if (!result.value?.trim()) throw new Error('No content found in file');
+      document.getElementById('draft-paste-field').value = result.value;
+      msg.style.color = 'var(--d-green)';
+      msg.textContent = `✓ ${file.name} loaded — click Format & Preview to continue`;
+    }
+  } catch(err) {
+    msg.style.color = 'var(--d-red)';
+    msg.textContent = 'Error: ' + err.message;
+  }
+  inputEl.value = '';
+}
+
+async function formatAndPreviewDraft(evt) {
+  const d = DIAG_SEL;
+  if (!d) return;
+  const raw = (document.getElementById('draft-paste-field').value || '').trim();
+  if (!raw) { alert('Paste your draft text, upload a .docx, or upload a PDF first.'); return; }
+  const btn = evt.currentTarget; btn.disabled = true; btn.textContent = 'Uploading…';
+  const isPDFUpload = raw.startsWith('PDF_UPLOAD:');
+  try {
+    const hdr = { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` };
+    const base = 'https://pbnkefuqpoztcxfagiod.supabase.co/rest/v1';
+
+    let reportHtml;
+    if (isPDFUpload) {
+      // PDF: store as-is — the preview modal detects the PDF_UPLOAD: prefix and renders an iframe
+      reportHtml = raw;
+    } else {
+      // HTML / .docx: wrap in GPS branded cover
+      const reportDate = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+      const clientLine = [d.client_name, d.client_title, d.client_org].filter(Boolean).join(' · ');
+      const cover = `<div class="report-cover">
+  <div class="report-cover-logo">GPS LEADERSHIP SOLUTIONS</div>
+  <div class="report-cover-subtitle">14-Day Executive Leadership Diagnostic Report</div>
+  <div class="report-cover-client">${clientLine}</div>
+  <div class="report-cover-meta">
+    <span>Prepared by: Alex D. Tremble, CEO &nbsp;·&nbsp; GPS Leadership Solutions</span>
+    <span>${reportDate}</span>
+    <span class="report-confidential-badge">CONFIDENTIAL</span>
+  </div>
+</div><hr class="report-cover-divider">`;
+      reportHtml = cover + '\n' + raw;
+    }
+
+    // Next version number
+    const vR = await fetch(`${base}/diagnostic_report_drafts?diagnostic_id=eq.${d.id}&select=version&order=version.desc&limit=1`, { headers: hdr });
+    const vData = await vR.json();
+    const nextVer = ((vData[0]?.version) || 0) + 1;
+
+    // Save to Supabase
+    const saveR = await fetch(`${base}/diagnostic_report_drafts`, {
+      method: 'POST',
+      headers: { ...hdr, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+      body: JSON.stringify({
+        diagnostic_id: d.id,
+        version: nextVer,
+        raw_markdown: reportHtml,
+        content_json: { report_format: isPDFUpload ? 'pdf_upload' : 'html_v2', source: 'manual_upload', uploaded_at: new Date().toISOString() },
+        generated_at: new Date().toISOString(),
+      }),
+    });
+    if (!saveR.ok) throw new Error(`Save failed (${saveR.status})`);
+
+    // Update diagnostic status if needed
+    if (!['report_draft','report_final'].includes(d.status)) {
+      await fetch(`${base}/diagnostics?id=eq.${d.id}`, {
+        method: 'PATCH',
+        headers: { ...hdr, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+        body: JSON.stringify({ status: 'report_draft', report_generated_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
+      });
+    }
+
+    document.getElementById('draft-paste-field').value = '';
+    await refreshSelected();
+    openReportPreview(); // open with the new draft — edit, then PDF
+  } catch(err) { alert('Error: ' + err.message); }
+  finally { btn.disabled = false; btn.innerHTML = 'Format &amp; Preview →'; }
+}
 
 async function generateReportOverride() {
   const d = DIAG_SEL;
@@ -5503,8 +6894,10 @@ async function generateReportOverride() {
 
 // ── Report preview + three-layer finalize gate ───────────────────────────
 
+let CURRENT_DRAFT_ID = null; // tracks which draft is loaded for inline edit / save
+
 async function openReportPreview() {
-  const d = DIAG_SELECTED;
+  const d = DIAG_SEL;
   if (!d) return;
 
   // Reset modal state
@@ -5514,10 +6907,17 @@ async function openReportPreview() {
   const sendBtn     = document.getElementById('rp-send-btn');
   const nameLabel   = document.getElementById('rp-client-name-label');
   const sendNameEl  = document.getElementById('rp-send-name');
+  const editBtn     = document.getElementById('rp-edit-btn');
+  const saveBtn     = document.getElementById('rp-save-btn');
 
-  checkEl.checked  = false;
-  sendBtn.disabled = true;
-  bodyEl.innerHTML = '<div class="rp-loading">Loading report draft…</div>';
+  checkEl.checked          = false;
+  sendBtn.disabled         = true;
+  bodyEl.innerHTML         = '<div class="rp-loading">Loading report draft…</div>';
+  bodyEl.contentEditable   = 'false';
+  CURRENT_DRAFT_ID         = null;
+  editBtn.textContent      = '✏ Edit';
+  editBtn.classList.remove('editing-active');
+  saveBtn.style.display    = 'none';
 
   // Populate client identity in footer
   const clientLabel = [d.client_name, d.client_org].filter(Boolean).join(' at ');
@@ -5528,29 +6928,37 @@ async function openReportPreview() {
   // Open modal immediately so coach sees it loading
   document.getElementById('report-preview-modal').classList.add('open');
 
-  // Fetch latest report draft
+  // Fetch latest report draft — use raw fetch (same as server sb()) to avoid RLS issues with anon JS client
   try {
-    const { data: drafts, error } = await db
-      .from('diagnostic_report_drafts')
-      .select('*')
-      .eq('diagnostic_id', d.id)
-      .order('generated_at', { ascending: false })
-      .limit(1);
+    const draftRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/diagnostic_report_drafts?diagnostic_id=eq.${d.id}&select=*&order=generated_at.desc&limit=1`,
+      { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` } }
+    );
+    const drafts = await draftRes.json();
 
-    if (error || !drafts || drafts.length === 0) {
+    if (!Array.isArray(drafts) || drafts.length === 0) {
       bodyEl.innerHTML = `<div class="rp-loading" style="color:#dc2626;">
         No report draft found. Generate the report first, then return here to finalize.
       </div>`;
       return;
     }
 
-    const draft   = drafts[0];
-    const report  = draft.content_json || {};
-    const narrative = report.full_narrative || null;
+    const draft = drafts[0];
+    CURRENT_DRAFT_ID = draft.id;
 
-    bodyEl.innerHTML = narrative
-      ? narrative
-      : buildCoachReportFallback(report);
+    // Option B reports store full HTML in raw_markdown; legacy reports use content_json
+    // PDF uploads are stored as PDF_UPLOAD:<base64> — render in an iframe, not innerHTML
+    if (draft.raw_markdown && draft.raw_markdown.startsWith('PDF_UPLOAD:')) {
+      const b64 = draft.raw_markdown.slice('PDF_UPLOAD:'.length);
+      bodyEl.contentEditable = 'false'; // PDFs can't be edited inline
+      bodyEl.innerHTML = `<iframe src="data:application/pdf;base64,${b64}"
+        style="width:100%;height:680px;border:none;border-radius:6px;" title="Uploaded Report PDF"></iframe>`;
+    } else if (draft.raw_markdown) {
+      bodyEl.innerHTML = draft.raw_markdown;
+    } else {
+      const report = draft.content_json || {};
+      bodyEl.innerHTML = report.full_narrative || buildCoachReportFallback(report);
+    }
 
   } catch (err) {
     bodyEl.innerHTML = `<div class="rp-loading" style="color:#dc2626;">Error loading report: ${err.message}</div>`;
@@ -5583,8 +6991,235 @@ function toggleFinalizeBtn() {
   document.getElementById('rp-send-btn').disabled = !checked;
 }
 
+// ── Inline report editing ─────────────────────────────────────────────────
+function toggleReportEdit() {
+  const bodyEl  = document.getElementById('rp-body');
+  const editBtn = document.getElementById('rp-edit-btn');
+  const saveBtn = document.getElementById('rp-save-btn');
+  const isEditing = bodyEl.contentEditable === 'true';
+  if (isEditing) {
+    bodyEl.contentEditable = 'false';
+    editBtn.textContent    = '✏ Edit';
+    editBtn.classList.remove('editing-active');
+    saveBtn.style.display  = 'none';
+  } else {
+    bodyEl.contentEditable = 'true';
+    bodyEl.focus();
+    editBtn.textContent    = 'Cancel';
+    editBtn.classList.add('editing-active');
+    saveBtn.style.display  = '';
+  }
+}
+
+async function saveReportEdits() {
+  if (!CURRENT_DRAFT_ID) { alert('No draft loaded — cannot save.'); return; }
+  const bodyEl  = document.getElementById('rp-body');
+  const saveBtn = document.getElementById('rp-save-btn');
+  const editBtn = document.getElementById('rp-edit-btn');
+  const newHtml = bodyEl.innerHTML;
+  saveBtn.textContent = 'Saving…';
+  saveBtn.disabled    = true;
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/diagnostic_report_drafts?id=eq.${CURRENT_DRAFT_ID}`,
+      {
+        method:  'PATCH',
+        headers: {
+          apikey:         SUPABASE_ANON,
+          Authorization:  `Bearer ${SUPABASE_ANON}`,
+          'Content-Type': 'application/json',
+          Prefer:         'return=minimal',
+        },
+        body: JSON.stringify({ raw_markdown: newHtml }),
+      }
+    );
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    bodyEl.contentEditable = 'false';
+    editBtn.textContent    = '✏ Edit';
+    editBtn.classList.remove('editing-active');
+    saveBtn.style.display  = 'none';
+  } catch (err) {
+    alert('Error saving edits: ' + err.message);
+  } finally {
+    saveBtn.textContent = 'Save Edits';
+    saveBtn.disabled    = false;
+  }
+}
+
+// ── Report downloads ──────────────────────────────────────────────────────
+function downloadReportPdf() {
+  const bodyEl   = document.getElementById('rp-body');
+  const metaText = document.getElementById('rp-meta-line').textContent;
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<title>GPS Leadership Report — ${metaText}</title>
+<style>
+  body{font-family:Georgia,serif;font-size:13px;line-height:1.75;color:#1a1a1a;max-width:740px;margin:36px auto;padding:0 24px;}
+  h2{font-size:16px;font-weight:700;color:#1e3a6e;border-bottom:2px solid #e5e7eb;padding-bottom:5px;margin:28px 0 8px;}
+  h3{font-size:14px;font-weight:700;color:#1e3a6e;margin:18px 0 6px;}
+  p{margin:0 0 12px;}
+  ul{padding-left:20px;margin:0 0 12px;}
+  li{margin-bottom:5px;}
+  table.report-table{width:100%;border-collapse:collapse;margin:14px 0;font-size:12px;}
+  table.report-table th{background:#1e3a6e;color:#fff;padding:6px 8px;text-align:left;font-weight:700;}
+  table.report-table td{padding:5px 8px;border-bottom:1px solid #e5e7eb;vertical-align:top;}
+  table.report-table tr:nth-child(even) td{background:#f7f9fc;}
+  blockquote.rater-quote{border-left:3px solid #0d9488;background:#f0f9f9;margin:12px 0;padding:10px 16px;font-style:italic;font-size:13px;border-radius:0 5px 5px 0;}
+  .insight-callout{background:#fff8ec;border:1px solid #f5c84a;border-left:4px solid #d4a017;padding:10px 14px;border-radius:5px;margin:12px 0;}
+  .rp-highlight{background:#f5f7fa;border-left:4px solid #C8A84B;padding:10px 14px;margin:12px 0;}
+  ul.report-list{padding-left:20px;margin:8px 0 14px;}
+  ul.report-list li{margin-bottom:6px;}
+  .report-cover{text-align:center;padding:28px 0 22px;margin-bottom:4px;}
+  .report-cover-logo{font-size:18px;font-weight:900;color:#1e3a6e;letter-spacing:3px;text-transform:uppercase;margin-bottom:3px;}
+  .report-cover-subtitle{font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px;}
+  .report-cover-client{font-size:16px;font-weight:700;color:#1a1a1a;margin-bottom:10px;}
+  .report-cover-meta{display:flex;justify-content:center;gap:16px;flex-wrap:wrap;font-size:10px;color:#6b7280;align-items:center;}
+  .report-confidential-badge{background:#dc2626;color:#fff;padding:2px 8px;border-radius:3px;font-weight:700;font-size:9px;text-transform:uppercase;}
+  hr.report-cover-divider{border:none;border-top:2px solid #1e3a6e;margin:0 0 22px;}
+  @media print{body{margin:0;padding:16px;}@page{margin:0.75in;}}
+</style>
+</head><body>${bodyEl.innerHTML}</body></html>`);
+  win.document.close();
+  setTimeout(() => { win.focus(); win.print(); }, 500);
+}
+
+// ── Survey test data template + import ───────────────────────────────────────
+function downloadSurveyTemplate() {
+  const RATED_CODES = ['A1','A2','A3','A4','A5','A6','A7','B1','B2','B3','B4','B5','B6','C1','C2','C3','C4','C5','C6','D1','F1','F2','G1','G2'];
+  const TEXT_CODES  = ['A8','A9','A10','B7','B8','B9','B10','C7','C8','C9','D2','F3'];
+  const headers   = ['Rater Name','Email','Relationship','is_self', ...RATED_CODES, ...TEXT_CODES];
+  const scaleRow  = ['','','','', ...RATED_CODES.map(c => c==='D1'?'1–10 scale':'1–5 scale'), ...TEXT_CODES.map(()=>'text response')];
+
+  // Example rows (one self, a few rater types)
+  const mk = (name, email, rel, isSelf, scores, texts) => {
+    const row = [name, email, rel, isSelf ? 'TRUE' : 'FALSE'];
+    RATED_CODES.forEach(c => row.push(scores[c] !== undefined ? scores[c] : ''));
+    TEXT_CODES.forEach(c => row.push(texts && texts[c] ? texts[c] : ''));
+    return row;
+  };
+  const exRows = [
+    mk('Alex Tremble (Self)', 'alex@example.com', 'Self', true,
+      {A1:5,A2:4,A3:5,A4:4,A5:5,A6:4,A7:5,B1:4,B2:3,B3:4,B4:4,B5:5,B6:4,C1:3,C2:3,C3:4,C4:4,C5:3,C6:4,D1:8},
+      {A8:'I keep my commitments and follow through.',D2:'Delegate more and trust my team to execute.'}),
+    mk('Test - Direct Report 1','dr1@example.com','Direct Report',false,
+      {A1:4,A2:4,A3:3,A4:4,A5:4,A6:3,A7:4,B1:3,B2:4,B3:3,B4:4,B5:4,B6:3,C1:3,C2:4,C3:3,C4:3,C5:4,C6:3,D1:7,F1:4,F2:3,G1:4,G2:3},
+      {A8:'Usually reliable but can be slow to follow up.',D2:'Give clearer direction on priorities.'}),
+    mk('Test - Direct Report 2','dr2@example.com','Direct Report',false,
+      {A1:3,A2:4,A3:3,A4:3,A5:4,A6:3,A7:3,B1:4,B2:3,B3:4,B4:3,B5:3,B6:4,C1:2,C2:3,C3:3,C4:3,C5:3,C6:2,D1:6,F1:3,F2:3,G1:3,G2:2},
+      {D2:'Be more consistent with feedback — we rarely know where we stand.'}),
+    mk('Test - Peer 1','peer1@example.com','Peer',false,
+      {A1:4,A2:5,A3:4,A4:4,A5:5,A6:4,A7:4,B1:4,B2:4,B3:4,B4:5,B5:4,B6:4,C1:4,C2:4,C3:4,C4:4,C5:4,C6:4,D1:8,F1:4,F2:4,G1:4,G2:4},
+      {A9:'Brings good ideas to cross-functional meetings.',D2:'Communicate decisions more proactively.'}),
+    mk('Test - Peer 2','peer2@example.com','Peer',false,
+      {A1:4,A2:3,A3:4,A4:3,A5:4,A6:4,A7:3,B1:4,B2:3,B3:3,B4:4,B5:4,B6:3,C1:3,C2:4,C3:4,C4:3,C5:4,C6:3,D1:7,F1:3,F2:3,G1:4,G2:3},
+      {}),
+    mk('Test - Supervisor 1','sup1@example.com','Supervisor',false,
+      {A1:5,A2:5,A3:4,A4:5,A5:5,A6:4,A7:5,B1:5,B2:4,B3:4,B4:5,B5:5,B6:4,C1:4,C2:4,C3:4,C4:4,C5:4,C6:4,D1:9,F1:4,F2:4,G1:5,G2:4},
+      {B8:'One of the more proactive leaders on the team.',D2:'Continue growing the team — bench could be stronger.'}),
+    mk('Test - Internal Partner 1','ip1@example.com','Internal Partner',false,
+      {A1:4,A2:4,A3:4,A4:3,A5:4,A6:4,A7:4,B1:3,B2:4,B3:3,B4:3,B5:4,B6:3,C1:3,C2:3,C3:3,C4:3,C5:3,C6:3,D1:7,F1:3,F2:3,G1:3,G2:3},
+      {C8:'Good to work with, but deliverables sometimes arrive late.'}),
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet([headers, scaleRow, ...exRows]);
+  // Column widths
+  ws['!cols'] = [20,26,18,8,...RATED_CODES.map(()=>({wch:6})),...TEXT_CODES.map(()=>({wch:30}))].map(w => typeof w === 'number' ? {wch:w} : w);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Survey Responses');
+  XLSX.writeFile(wb, 'GPS_Diagnostic_Test_Template.xlsx');
+}
+
+async function importSurveyData(inputEl) {
+  const file = inputEl?.files?.[0];
+  if (!file || !DIAG_SEL) return;
+  const msgEl = document.getElementById('diag-import-msg');
+  if (msgEl) msgEl.textContent = 'Parsing…';
+
+  try {
+    const buffer = await file.arrayBuffer();
+    const wb     = XLSX.read(buffer, { type: 'array' });
+    const ws     = wb.Sheets[wb.SheetNames[0]];
+    const raw    = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+    if (raw.length < 3) { if (msgEl) msgEl.textContent = 'File is empty or missing data rows.'; return; }
+
+    const headers    = raw[0].map(h => String(h).trim());
+    const dataRows   = raw.slice(2).filter(r => r[0]); // skip scale-info row, skip blank rows
+    const colIdx     = {};
+    headers.forEach((h, i) => { colIdx[h] = i; });
+
+    const RATED = ['A1','A2','A3','A4','A5','A6','A7','B1','B2','B3','B4','B5','B6','C1','C2','C3','C4','C5','C6','D1','F1','F2','G1','G2'];
+    const OPEN  = ['A8','A9','A10','B7','B8','B9','B10','C7','C8','C9','D2','F3'];
+
+    const raters = dataRows.map(row => {
+      const scores = {}, texts = {};
+      RATED.forEach(c => { const v = row[colIdx[c]]; if (v !== '' && v != null && !isNaN(Number(v))) scores[c] = Number(v); });
+      OPEN.forEach(c  => { const v = row[colIdx[c]]; if (v !== '' && v != null) texts[c] = String(v); });
+      const isSelf = String(row[colIdx['is_self']] || '').toLowerCase();
+      return {
+        name:         String(row[colIdx['Rater Name']] || '').trim(),
+        email:        String(row[colIdx['Email']] || '').trim(),
+        relationship: String(row[colIdx['Relationship']] || '').trim(),
+        is_self:      isSelf === 'true' || isSelf === 'yes',
+        scores, texts,
+      };
+    }).filter(r => r.name && r.email && r.relationship);
+
+    if (raters.length === 0) { if (msgEl) msgEl.textContent = 'No valid rater rows found. Check column headers match the template.'; return; }
+
+    if (msgEl) msgEl.textContent = `Uploading ${raters.length} raters…`;
+    const r = await fetch('/api/diagnostic?action=import-survey-data', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ diagnostic_id: DIAG_SEL.id, raters }),
+    });
+    const data = await r.json();
+    if (!r.ok) { if (msgEl) msgEl.textContent = 'Error: ' + (data.error || r.status); return; }
+
+    if (msgEl) msgEl.textContent = `✓ ${data.rater_count} raters, ${data.response_count} responses imported. Refresh and generate report.`;
+    inputEl.value = '';
+    await refreshSelected();
+  } catch (err) {
+    if (msgEl) msgEl.textContent = 'Parse error: ' + err.message;
+  }
+}
+
+function downloadReportWord() {
+  const bodyEl   = document.getElementById('rp-body');
+  const metaText = document.getElementById('rp-meta-line').textContent;
+  const safeName = metaText.replace(/[^a-zA-Z0-9\s]/g, '').trim().replace(/\s+/g, '_').slice(0, 50);
+  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+       xmlns:w="urn:schemas-microsoft-com:office:word"
+       xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8">
+<title>GPS Leadership Report — ${metaText}</title>
+<style>
+  body{font-family:Calibri,Arial,sans-serif;font-size:11pt;line-height:1.6;color:#1a1a1a;margin:1in;}
+  h2{font-size:14pt;font-weight:bold;color:#1e3a6e;}
+  h3{font-size:12pt;font-weight:bold;color:#1e3a6e;}
+  p{margin:0 0 10pt;}
+  table{width:100%;border-collapse:collapse;}
+  th{background:#1e3a6e;color:#fff;padding:5pt 7pt;font-weight:bold;}
+  td{padding:4pt 7pt;border:1pt solid #ccc;vertical-align:top;}
+  blockquote{background:#f0f9f9;border-left:3pt solid #0d9488;padding:8pt 14pt;font-style:italic;}
+  .insight-callout{background:#fff8ec;border-left:4pt solid #d4a017;padding:8pt 14pt;}
+</style>
+</head><body>${bodyEl.innerHTML}</body></html>`;
+  const blob = new Blob([html], { type: 'application/msword' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `GPS_Report_${safeName}.doc`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 async function confirmAndFinalize() {
-  const d = DIAG_SELECTED;
+  const d = DIAG_SEL;
   if (!d) return;
   const checkEl = document.getElementById('rp-review-check');
   if (!checkEl.checked) { alert('Please confirm you have reviewed the report first.'); return; }
@@ -6228,6 +7863,37 @@ function diagStatusBadge(status) {
 
 function diagCopyText(text) {
   navigator.clipboard.writeText(text).then(() => alert('Link copied to clipboard.'));
+}
+
+// ── Send leader portal link via email ─────────────────────────────────────────
+async function sendLeaderPortalLink() {
+  const d = DIAG_SEL;
+  if (!d) return;
+  if (!d.client_email) {
+    alert('No email address on file for this leader.\n\nAdd it in the Setup tab, then try again.');
+    return;
+  }
+  if (d.self_assessment_completed_at) {
+    alert(`${d.client_name} has already completed the self-assessment. No need to re-send the portal link.`);
+    return;
+  }
+  const confirmed = confirm(
+    `Send the portal link to ${d.client_name} at ${d.client_email}?\n\nThey'll receive an onboarding email with their unique link and instructions for completing the self-assessment.`
+  );
+  if (!confirmed) return;
+
+  try {
+    const resp = await fetch('/api/diagnostic?action=send-leader-link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ diagnostic_id: d.id }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || resp.status);
+    alert(`Portal link sent to ${data.email}`);
+  } catch (err) {
+    alert('Error sending email: ' + err.message);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
