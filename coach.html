@@ -4883,10 +4883,10 @@ function renderOverviewTab() {
         const daysAgo = Math.round((Date.now() - new Date(la)) / (1000*60*60*24));
         const color   = daysAgo <= 3 ? 'var(--d-green)' : daysAgo <= 7 ? 'var(--d-amber)' : 'var(--d-red)';
         const label   = daysAgo === 0 ? 'today' : daysAgo === 1 ? 'yesterday' : daysAgo + ' days ago';
-        return \`<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--d-border);font-size:12px;">
+        return `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--d-border);font-size:12px;">
           <span style="color:var(--d-mid);">Last portal visit: </span>
-          <span style="font-weight:700;color:\${color};">\${label}</span>
-        </div>\`;
+          <span style="font-weight:700;color:${color};">${label}</span>
+        </div>`;
       })()}
     </div>
     <div class="card" style="margin-bottom:0;">
