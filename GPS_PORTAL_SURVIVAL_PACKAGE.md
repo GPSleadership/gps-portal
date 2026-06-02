@@ -1,7 +1,7 @@
 # GPS Leadership Portal — Survival Package
 ### Everything needed to recreate this system from scratch
 
-**Last updated:** May 29, 2026
+**Last updated:** June 2, 2026
 **GitHub repo:** https://github.com/GPSleadership/gps-portal
 **Live URL:** https://portal.gpsleadership.org
 **Coach dashboard:** https://portal.gpsleadership.org/coach
@@ -44,11 +44,11 @@ A full 360-style leadership assessment using the TP3™ framework (Trust, Proact
 
 | File | URL | What it does |
 |------|-----|-------------|
-| `client.html` | /client | Client portal. Token-gated via `?token=X`. Tabs: My Plan, My Results, My Diagnostic, Ask Alex. Full sprint tracking, check-ins, stakeholder scoreboards, AI assistant. ~6,000 lines. |
-| `coach.html` | /coach | Alex's dashboard. Password-protected. Tabs: Dashboard, Clients, Diagnostics, Team Reports, Email Log. Manages all clients and diagnostics. ~6,200 lines. |
+| `client.html` | /client | Client portal. Token-gated via `?token=X`. Tabs: My Plan, My Results, My Diagnostic, Ask Alex. Full sprint tracking, check-ins, stakeholder scoreboards, AI assistant. Onboarding wizard v20 with inline goal prefill, edit-mode choice screen, Ask Alex history panel. ~7,000 lines. |
+| `coach.html` | /coach | Alex's dashboard. Password-protected. Tabs: Dashboard, Clients, Diagnostics, Team Reports, Email Log. Add-client modal includes inline diagnostic setup. Report tab includes PDF upload card. ~6,400 lines. |
 | `diagnostic-survey.html` | /diagnostic-survey | Rater survey. Token-gated. TP3 V2 question bank (35 questions), section progress bar, self vs rater branching, mobile-optimized. Hard-blocks on closed surveys. |
 | `survey.html` | /survey | Stakeholder feedback survey for the 90-day coaching program. Separate from the diagnostic system. |
-| `diagnostic-leader.html` | /diagnostic-leader | Leader intake portal for the diagnostic. Self-assessment form, rater list submission, unlock sequence. |
+| `diagnostic-leader.html` | /diagnostic-leader | Leader intake portal for the diagnostic. Self-assessment form, rater list submission, unlock sequence. Expanded rater relationship types (8 options + Other write-in). |
 | `diagnostic-sandbox.html` | /diagnostic-sandbox | Clickable prototype / design reference. Not production. |
 | `diagnostic-coach.html` | /diagnostic-coach | Legacy coach diagnostic view. Superseded by coach.html Diagnostics tab. |
 | `client-DEMO.html` | — | Demo version of client portal. No live data. For sales/preview use. |
@@ -59,8 +59,8 @@ A full 360-style leadership assessment using the TP3™ framework (Trust, Proact
 | File | Trigger | What it does |
 |------|---------|-------------|
 | `diagnostic.js` | POST `?action=` | Master diagnostic handler. 6 routes via action param: `send-invites`, `generate-question` (G1), `generate-report`, `generate-team-report`, `finalize-report`, `reminders`. 60s maxDuration. ~1,650 lines. |
-| `ask.js` | POST | Ask Alex endpoint. Calls Anthropic API. Logs full Q+R to `ask_alex_log`. Keeps legacy counter in `ask_alex_usage`. 60s maxDuration. |
-| `get-client.js` | GET / POST | Client auth: GET `?token=X` returns client record. POST `{email}` sends portal link recovery email. |
+| `ask.js` | POST | Ask Alex endpoint. Calls Anthropic API. Logs full Q+R to `ask_alex_log`. Also handles `action=prefill` — takes a 90-day goal and returns AI-suggested behaviors, metrics, and 30-day goal (uses claude-haiku-4-5 for speed). 60s maxDuration. |
+| `get-client.js` | GET / POST | Client auth: GET `?token=X` returns client record + diagnostic_prefill data. POST `{email}` sends portal link recovery email. |
 | `notify.js` | POST | Email notification hub for coaching program: check-in alerts, plan submissions, stakeholder responses, welcome emails. |
 | `send-reminders.js` | Cron (Mon 2pm UTC) | Weekly coaching reminders: check-in nudges, auto-archive after 45 days inactive. |
 | `survey-reminders.js` | Cron (daily 2pm UTC) | Daily stakeholder survey nudges, auto-confirm logic, welcome email sequence. |
@@ -96,6 +96,7 @@ A full 360-style leadership assessment using the TP3™ framework (Trust, Proact
 | `supabase-migration-v17.sql` | is_archived (BOOLEAN), all_raters_complete_at (TIMESTAMPTZ) on diagnostics |
 | `supabase-migration-v18.sql` | ask_alex_log table: full Q+R text capture (question_text, response_text, sprint_number, token counts) |
 | `supabase-migration-v19.sql` | interviews_enabled, interview_calendar_link, interview_max_count on diagnostics; will_interview on diagnostic_raters |
+| `supabase-migration-v20.sql` | **clients:** metric_2_question (TEXT), metric_2_target_avg (FLOAT DEFAULT 4.0) for new Metric 2 model. **diagnostics:** wizard_prefill_data (JSONB) for onboarding prefill content. Required before deploying wizard v20. |
 
 ### Config
 
@@ -110,7 +111,7 @@ A full 360-style leadership assessment using the TP3™ framework (Trust, Proact
 
 | File | What it does |
 |------|-------------|
-| `check.sh` | Pre-push validation: JS syntax check on all HTML files, backslash-backtick hazard scan, vercel.json/vercelignore consistency check, serverless function count. Run automatically via git hook — do not bypass. |
+| `check.sh` | Pre-push validation: JS syntax check on all HTML files, backslash-backtick hazard scan (per-file baseline: coach.html=2, client.html=0 — only flags NEW occurrences above baseline), vercel.json/vercelignore consistency check, serverless function count. Run automatically via git hook — do not bypass. |
 | `deploy.sh` | Safe deploy wrapper: runs check.sh, then stages all changes, commits with your message, and pushes. Usage: `./deploy.sh "commit message"` |
 | `smoke-test.sh` | Post-deploy health check: hits /coach, /client, and key API endpoints on the live portal. Run 90 seconds after a push. |
 | `install-hooks.sh` | One-time setup: installs the git pre-push hook so check.sh runs automatically on every `git push`. Must be re-run after cloning on a new machine. |
@@ -278,6 +279,8 @@ diagnostic_raters
 diagnostic_report_drafts
   id, diagnostic_id, version (1,2,3...)
   content_json                — full report: scored dimensions + full_narrative (pre-rendered HTML)
+                                OR { report_type: 'pdf_upload', pdf_base64: 'data:application/pdf;base64,...' }
+                                for manually uploaded final reports (base64-encoded, max ~8MB)
   generated_at, model_used, input_tokens, output_tokens
 
 ask_alex_log  (v18 — full text capture)
@@ -386,6 +389,34 @@ clients → stakeholders → survey_tokens → survey_responses  — stakeholder
 - Calendar link field + max interview slot cap
 - Checkbox per rater row to mark for interview (enforces cap)
 - Interview-tagged raters receive calendar booking section in their invite email
+
+**June 2, 2026 — Coach Dashboard & Onboarding Session**
+
+*Coach dashboard improvements (coach.html):*
+- Add Client modal: removed "Regions Owned" field (never used). Renamed "Client has weekly coaching sessions" → "Coaching Client" throughout (modal, profile view, toggle buttons). Added "Setting Up for Diagnostic" checkbox — when checked, Tier and Email Delivery selectors appear inline; after the client is saved, a diagnostic is created automatically and linked. No need to go to the Diagnostics tab separately.
+- Report tab: added "Upload Final Report" card as static HTML (not inside a JS template literal — avoids the V8 parse error pattern). Accepts PDF up to 8MB. Converts to base64, upserts into `diagnostic_report_drafts` with `content_json: { report_type: 'pdf_upload', pdf_base64: '...' }`, marks diagnostic as `report_final`. Client portal detects this flag and renders the PDF in an iframe with a download button instead of the HTML narrative renderer.
+
+*Diagnostic rater relationship types (diagnostic-leader.html + coach.html):*
+- Expanded from 7 options to 8: Direct Report, Peer, Supervisor / Manager, Board Member, Internal Customer, External Customer, External Stakeholder, Other
+- "Other" triggers a write-in text field; saves as "Other: [text]"
+- Definition strip added below each dropdown so every type is explained
+
+*Onboarding wizard improvements (client.html):*
+- Stakeholder step: updated hint text to include definitions for all relationship types
+- Goal step (wizS2): inline AI prefill fires 1.2 seconds after user pauses typing their 90-day goal (≥ 8 words). Calls `/api/ask` with `action: 'prefill'`. Suggestions arrive as: 30-day goal (filled directly in the DOM while still on Step 2), behavior 1, behavior 2, metric 1 name, metric 2 question — all stored in `wizPlan` for later steps. Responses use first-person "I" framing enforced in the prompt. A teal notice banner explains the feature at the top of the Goals card; it fades out when suggestions land. Does NOT fire if diagnostic prefill is already present.
+- Edit mode: replaced "All fields start blank / Update anything that needs to change" with a "Keep my answers / Start fresh" choice screen. "Keep my answers" (default) pre-fills wizard from existing client data. "Start fresh" clears all fields. Choice cards update live with teal/red border on selection.
+- Ask Alex tab: "Recent Questions" panel loads last 7 Q&A pairs from `ask_alex_log` on every tab open. Each entry shows the question collapsed; click to expand the full answer. "Copy answer" button on each expanded entry. Panel auto-refreshes 800ms after every new Ask Alex response.
+
+*api/ask.js:*
+- Added `action: 'prefill'` route. Input: `{ goal90, goal30, pillar }`. Returns JSON: `{ prefill: { behavior1, behavior2, metric1Name, metric2Question, goal30 } }`. Uses `claude-haiku-4-5-20251001` (fast, cheap) instead of Sonnet. Does not log to `ask_alex_log`.
+
+*check.sh:*
+- Backtick scan upgraded from "fail on any `\``" to per-file baseline. coach.html baseline = 2 (pre-existing valid escaped backticks in an IIFE inside a template literal). Only fails if new occurrences are added above that count.
+
+*Incident: SVG in template literal broke coach.html login (June 2, 2026):*
+- First attempt at PDF upload embedded an SVG icon inline inside `rpt.innerHTML = \`...\``. The SVG path data caused V8 to fail parsing the template literal. Login stopped responding.
+- Fix: moved all upload UI to static HTML in the page body (outside all JS template literals). JS functions use only plain strings. Zero special characters in JS code. This is the correct pattern for this codebase — never embed SVG or binary-like content inside JS template literals.
+- **Rule:** All SVG, complex HTML, or content with special characters goes in the static HTML section of the file, shown/hidden via `style.display`. Never generate it inside a JS template literal.
 
 **Deployment Safety System (May 29, 2026)**
 
@@ -497,4 +528,4 @@ All API keys and secrets are stored exclusively as Vercel environment variables.
 
 ---
 
-*Last updated: May 28, 2026. This document is auto-updated nightly at 9 PM when code changes are detected (Cowork scheduled task: gps-portal-survival-package-update). Update manually after any major architectural change that isn't captured by file diffs alone.*
+*Last updated: June 2, 2026. Update manually after any session that adds features, changes architecture, or introduces new failure modes not captured in the feature log.*
