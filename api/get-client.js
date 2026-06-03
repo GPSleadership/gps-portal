@@ -7,11 +7,15 @@
 // as client.diagnostic_prefill for the onboarding wizard to consume.
 // Fails gracefully: if diagnostic query errors, client record still returns.
 
+import crypto from 'node:crypto';
+
 const SUPABASE_URL    = process.env.SUPABASE_URL        || 'https://pbnkefuqpoztcxfagiod.supabase.co';
 const SUPABASE_SECRET = process.env.SUPABASE_SECRET_KEY;
 const RESEND_API_KEY  = process.env.RESEND_API_KEY;
 const RESEND_FROM     = process.env.RESEND_FROM_EMAIL   || 'noreply@portal.gpsleadership.org';
 const PORTAL_BASE     = process.env.PORTAL_BASE_URL     || 'https://portal.gpsleadership.org';
+const COACH_SESSION_SECRET = process.env.COACH_SESSION_SECRET || '';
+const COACH_SESSION_TTL_MS = 1000 * 60 * 60 * 12; // 12 hours
 
 function sbSecret(path, method = 'GET', body = null) {
   return fetch(SUPABASE_URL + path, {
@@ -50,6 +54,79 @@ function buildResendLinkEmail(clientName, portalUrl) {
   `;
 }
 
+// ── Coach auth helpers (Phase 1 hardening) ──────────────────────────────────
+// Replaces the client-side plaintext password check in coach.html. Verifies a
+// scrypt hash server-side (service key) and issues a signed, expiring session.
+function b64url(buf) {
+  return Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function signSession(payload) {
+  const body = b64url(JSON.stringify(payload));
+  const sig  = b64url(crypto.createHmac('sha256', COACH_SESSION_SECRET).update(body).digest());
+  return body + '.' + sig;
+}
+function verifySession(token) {
+  if (!token || !COACH_SESSION_SECRET) return null;
+  const parts = String(token).split('.');
+  if (parts.length !== 2) return null;
+  const expected = b64url(crypto.createHmac('sha256', COACH_SESSION_SECRET).update(parts[0]).digest());
+  const a = Buffer.from(parts[1]), b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  let payload;
+  try { payload = JSON.parse(Buffer.from(parts[0].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString()); }
+  catch { return null; }
+  if (!payload || typeof payload.exp !== 'number' || payload.exp < Date.now()) return null;
+  return payload;
+}
+function verifyPassword(password, stored) {
+  // stored = "salt:hash" (scrypt 64-byte hex). Falls back to legacy plaintext
+  // during the cutover transition; remove the plaintext path once hashes are set.
+  if (!stored) return false;
+  if (stored.includes(':')) {
+    const [salt, hash] = stored.split(':');
+    try {
+      const calc = crypto.scryptSync(String(password), salt, 64).toString('hex');
+      const a = Buffer.from(calc), b = Buffer.from(hash);
+      return a.length === b.length && crypto.timingSafeEqual(a, b);
+    } catch { return false; }
+  }
+  return password === stored;
+}
+async function coachLogin(body, res) {
+  if (!COACH_SESSION_SECRET) {
+    return res.status(500).json({ error: 'Server misconfigured — COACH_SESSION_SECRET missing' });
+  }
+  const password = body.password;
+  if (!password) return res.status(400).json({ error: 'Password required' });
+
+  // Prefer the hashed value; fall back to the legacy plaintext key in transition.
+  let stored = null;
+  const r = await sbSecret('/rest/v1/coach_settings?key=eq.coach_password_hash&select=value&limit=1');
+  const rows = r.ok ? await r.json() : [];
+  if (Array.isArray(rows) && rows[0]) stored = rows[0].value;
+  if (!stored) {
+    const r2 = await sbSecret('/rest/v1/coach_settings?key=eq.coach_password&select=value&limit=1');
+    const rows2 = r2.ok ? await r2.json() : [];
+    if (Array.isArray(rows2) && rows2[0]) stored = rows2[0].value;
+  }
+
+  let ok = verifyPassword(password, stored);
+  if (!ok) {
+    const ar = await sbSecret('/rest/v1/admin_accounts?is_active=eq.true&select=password');
+    const admins = ar.ok ? await ar.json() : [];
+    ok = Array.isArray(admins) && admins.some(a => verifyPassword(password, a.password));
+  }
+  if (!ok) return res.status(401).json({ error: 'Incorrect password' });
+
+  const session = signSession({ role: 'coach', exp: Date.now() + COACH_SESSION_TTL_MS });
+  return res.status(200).json({ ok: true, session, expires_in_ms: COACH_SESSION_TTL_MS });
+}
+async function coachSession(body, res) {
+  const payload = verifySession(body.session);
+  if (!payload) return res.status(401).json({ ok: false });
+  return res.status(200).json({ ok: true, role: payload.role, exp: payload.exp });
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -60,9 +137,16 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Server misconfigured — missing secret key' });
   }
 
-  // ── POST: portal link recovery ─────────────────────────────────────────────
+  // ── POST ───────────────────────────────────────────────────────────────────
   if (req.method === 'POST') {
-    const { email } = req.body || {};
+    const body = req.body || {};
+
+    // Coach auth (Phase 1) — server-side hashed password + signed session.
+    if (body.action === 'coach-login')   return coachLogin(body, res);
+    if (body.action === 'coach-session') return coachSession(body, res);
+
+    // Default POST: portal link recovery
+    const { email } = body;
     if (!email || typeof email !== 'string') {
       return res.status(400).json({ error: 'Email required' });
     }
