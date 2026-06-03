@@ -1416,6 +1416,27 @@ function clearSession() {
 function getCoachSessionToken() {
   return localStorage.getItem(SESSION_TOKEN_KEY) || '';
 }
+
+// ── Phase 1: coach dashboard data goes through the session-gated server
+// endpoint (/api/coach-data) instead of the public anon key. `db` (anon) is
+// being phased out. These thin wrappers mirror the old supabase-js call shapes.
+async function coachData(payload) {
+  const session = getCoachSessionToken();
+  const res = await fetch('/api/coach-data', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(Object.assign({ session }, payload))
+  });
+  let json = {};
+  try { json = await res.json(); } catch (_) {}
+  if (!res.ok) throw new Error(json.error || ('Request failed (' + res.status + ')'));
+  return json;
+}
+async function cdSelect(table, opts)            { const r = await coachData(Object.assign({ op: 'select', table }, opts || {})); return r.rows || []; }
+async function cdInsert(table, values, opts)     { const r = await coachData(Object.assign({ op: 'insert', table, values }, opts || {})); return r.rows || []; }
+async function cdUpsert(table, values, onConflict){ const r = await coachData({ op: 'upsert', table, values, onConflict }); return r.rows || []; }
+async function cdUpdate(table, values, filters)  { return coachData(Object.assign({ op: 'update', table, values }, filters || {})); }
+async function cdDelete(table, filters)          { return coachData(Object.assign({ op: 'delete', table }, filters || {})); }
 function hasValidSession() {
   const exp = parseInt(localStorage.getItem(SESSION_EXP_KEY) || '0', 10);
   if (exp && Date.now() < exp && getCoachSessionToken()) return true;
@@ -1572,13 +1593,13 @@ async function verifyAndChangePassword() {
 // LOAD DATA
 // ─────────────────────────────────────────────
 async function loadDashboard() {
-  const [clientsRes, checkinsRes] = await Promise.all([
-    db.from('clients').select('*').order('created_at', { ascending: false }),
-    db.from('checkins').select('*').order('submitted_at', { ascending: false })
+  const [clientsRows, checkinsRows] = await Promise.all([
+    cdSelect('clients',  { order: { col: 'created_at',   asc: false } }),
+    cdSelect('checkins', { order: { col: 'submitted_at', asc: false } })
   ]);
 
-  allClients  = clientsRes.data  || [];
-  allCheckins = checkinsRes.data || [];
+  allClients  = clientsRows  || [];
+  allCheckins = checkinsRows || [];
 
   renderStats();
   renderClients();
@@ -2319,14 +2340,12 @@ async function loadAskAlexStats(clientId) {
   const s30   = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
 
   const [r7, r30] = await Promise.all([
-    db.from('ask_alex_usage').select('*', { count: 'exact', head: true })
-       .eq('client_id', clientId).gte('asked_at', s7),
-    db.from('ask_alex_usage').select('*', { count: 'exact', head: true })
-       .eq('client_id', clientId).gte('asked_at', s30),
+    cdSelect('ask_alex_usage', { eq: { client_id: clientId }, gte: { asked_at: s7 },  select: 'id' }),
+    cdSelect('ask_alex_usage', { eq: { client_id: clientId }, gte: { asked_at: s30 }, select: 'id' }),
   ]);
 
-  el7.querySelector('div:first-child').textContent  = r7.count  ?? '—';
-  el30.querySelector('div:first-child').textContent = r30.count ?? '—';
+  el7.querySelector('div:first-child').textContent  = r7.length;
+  el30.querySelector('div:first-child').textContent = r30.length;
 }
 
 // ── Ask Alex Questions Log ────────────────────────────────────────────────────
@@ -2339,14 +2358,17 @@ async function loadAskAlexLog(clientId, forceReload) {
 
   el.innerHTML = '<p style="font-size:12px;color:var(--gray-600);">Loading…</p>';
 
-  const { data, error } = await db
-    .from('ask_alex_log')
-    .select('id, asked_at, question_text, response_text, sprint_number, input_tokens, output_tokens')
-    .eq('client_id', clientId)
-    .order('asked_at', { ascending: false })
-    .limit(50);
+  let data = null;
+  try {
+    data = await cdSelect('ask_alex_log', {
+      eq: { client_id: clientId },
+      order: { col: 'asked_at', asc: false },
+      limit: 50,
+      select: 'id,asked_at,question_text,response_text,sprint_number,input_tokens,output_tokens'
+    });
+  } catch (e) { data = null; }
 
-  if (error || !data) {
+  if (!data) {
     el.innerHTML = '<p style="font-size:12px;color:var(--red);">Error loading questions. Check Supabase RLS on ask_alex_log.</p>';
     return;
   }
@@ -2661,7 +2683,8 @@ async function togglePlanEdit(clientId, currentState) {
   btn.textContent = 'Saving…';
   btn.disabled = true;
 
-  const { error } = await db.from('clients').update({ allow_plan_edit: newState }).eq('id', clientId);
+  let error = null;
+  try { await cdUpdate('clients', { allow_plan_edit: newState }, { eq: { id: clientId } }); } catch (e) { error = e; }
 
   if (error) {
     btn.textContent = 'Error — try again';
@@ -2695,7 +2718,8 @@ async function toggleCoachingSessions(clientId, currentState) {
   btn.textContent = 'Saving…';
   btn.disabled    = true;
 
-  const { error } = await db.from('clients').update({ coaching_sessions_enabled: newState }).eq('id', clientId);
+  let error = null;
+  try { await cdUpdate('clients', { coaching_sessions_enabled: newState }, { eq: { id: clientId } }); } catch (e) { error = e; }
 
   if (error) {
     btn.textContent = 'Error — try again';
@@ -2726,7 +2750,8 @@ async function togglePortalLock(clientId, currentState) {
   btn.textContent = 'Saving…';
   btn.disabled = true;
 
-  const { error } = await db.from('clients').update({ portal_locked: newState }).eq('id', clientId);
+  let error = null;
+  try { await cdUpdate('clients', { portal_locked: newState }, { eq: { id: clientId } }); } catch (e) { error = e; }
 
   if (error) {
     btn.textContent = 'Error — try again';
@@ -2757,7 +2782,8 @@ async function toggleAskAlex(clientId, currentState) {
   btn.textContent = 'Saving…';
   btn.disabled = true;
 
-  const { error } = await db.from('clients').update({ ask_alex_enabled: newState }).eq('id', clientId);
+  let error = null;
+  try { await cdUpdate('clients', { ask_alex_enabled: newState }, { eq: { id: clientId } }); } catch (e) { error = e; }
 
   if (error) {
     btn.textContent = 'Error — try again';
