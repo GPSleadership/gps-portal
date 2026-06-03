@@ -9,7 +9,7 @@
 //
 // ENV VARS REQUIRED:
 //   SUPABASE_URL          — Supabase project URL
-//   SUPABASE_ANON         — Supabase anon key
+//   SUPABASE_SECRET_KEY   — Supabase service role key (server-side; bypasses RLS)
 //   RESEND_API_KEY        — Resend API key
 //   RESEND_FROM_EMAIL     — Sending address (default: noreply@portal.gpsleadership.org)
 //   PORTAL_BASE_URL       — Portal base URL (default: https://portal.gpsleadership.org)
@@ -18,7 +18,9 @@
 //   CRON_SECRET           — Optional: protect manual reminders trigger
 
 const SUPABASE_URL      = process.env.SUPABASE_URL      || 'https://pbnkefuqpoztcxfagiod.supabase.co';
-const SUPABASE_ANON     = process.env.SUPABASE_ANON     || 'sb_publishable_nu9GXGeoqDXcxVocodQ4UA_ke7Yrzyw';
+// Phase 1: server-side functions use the SERVICE ROLE key (bypasses RLS) so they
+// keep working after the v26 anon-policy lockdown. Never expose this to the browser.
+const SUPABASE_KEY      = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_ANON || 'sb_publishable_nu9GXGeoqDXcxVocodQ4UA_ke7Yrzyw';
 const RESEND_API_KEY    = process.env.RESEND_API_KEY;
 const RESEND_FROM       = process.env.RESEND_FROM_EMAIL   || 'noreply@portal.gpsleadership.org';
 const PORTAL_BASE       = process.env.PORTAL_BASE_URL     || 'https://portal.gpsleadership.org';
@@ -33,8 +35,8 @@ function sb(path, method = 'GET', body = null, extra = {}) {
   return fetch(SUPABASE_URL + path, {
     method,
     headers: {
-      apikey:         SUPABASE_ANON,
-      Authorization:  `Bearer ${SUPABASE_ANON}`,
+      apikey:         SUPABASE_KEY,
+      Authorization:  `Bearer ${SUPABASE_KEY}`,
       'Content-Type': 'application/json',
       ...extra,
     },

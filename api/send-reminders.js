@@ -9,7 +9,9 @@
 //      (used to protect the endpoint if triggered manually)
 
 const SUPABASE_URL  = process.env.SUPABASE_URL  || 'https://pbnkefuqpoztcxfagiod.supabase.co';
-const SUPABASE_ANON = process.env.SUPABASE_ANON || 'sb_publishable_nu9GXGeoqDXcxVocodQ4UA_ke7Yrzyw';
+// Phase 1: cron uses the SERVICE ROLE key (bypasses RLS) so it keeps working
+// after the v26 anon-policy lockdown. Server-side only — never sent to a browser.
+const SUPABASE_KEY  = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_ANON || 'sb_publishable_nu9GXGeoqDXcxVocodQ4UA_ke7Yrzyw';
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const RESEND_FROM    = process.env.RESEND_FROM_EMAIL || 'noreply@portal.gpsleadership.org';
 const PORTAL_BASE    = 'https://portal.gpsleadership.org/client.html';
@@ -30,8 +32,8 @@ async function logEmail({ clientId, recipientEmail, recipientName, emailType, su
     await fetch(`${SUPABASE_URL}/rest/v1/email_log`, {
       method: 'POST',
       headers: {
-        apikey: SUPABASE_ANON,
-        Authorization: `Bearer ${SUPABASE_ANON}`,
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
         'Content-Type': 'application/json',
         Prefer: 'return=minimal',
       },
@@ -72,7 +74,7 @@ export default async function handler(req, res) {
   // ─── FETCH ALL ACTIVE CLIENTS WITH A PLAN ──────────────────────────────────
   const clientsRes = await fetch(
     `${SUPABASE_URL}/rest/v1/clients?is_active=eq.true&is_archived=eq.false&plan_start_date=not.is.null&email=not.is.null&select=id,name,email,token,plan_start_date`,
-    { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` } }
+    { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
   );
   const clients = await clientsRes.json();
 
@@ -83,7 +85,7 @@ export default async function handler(req, res) {
   // ─── FETCH ALL CHECK-INS ────────────────────────────────────────────────────
   const checkinsRes = await fetch(
     `${SUPABASE_URL}/rest/v1/checkins?select=client_id,week_number`,
-    { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` } }
+    { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
   );
   const checkins = await checkinsRes.json();
 
