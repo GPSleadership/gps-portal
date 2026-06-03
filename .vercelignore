@@ -3,6 +3,8 @@ api/run-reminders-now.js
 api/import-clients.js
 gps-executive-console.html
 gps-executive-console-deploy.html
+diagnostic-coach.html
+client-PRE-WIZARD-BACKUP-2026-06-01.html
 check.sh
 deploy.sh
 smoke-test.sh

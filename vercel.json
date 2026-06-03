@@ -21,10 +21,6 @@
       "destination": "/diagnostic-leader.html"
     },
     {
-      "source": "/diagnostic-coach",
-      "destination": "/diagnostic-coach.html"
-    },
-    {
       "source": "/diagnostic-survey",
       "destination": "/diagnostic-survey.html"
     },
