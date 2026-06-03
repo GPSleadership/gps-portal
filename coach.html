@@ -1510,19 +1510,14 @@ async function sendVerificationCode() {
   btn.textContent = 'Sending…';
   btn.disabled = true;
 
-  // Generate a 6-digit code
-  const code = String(Math.floor(100000 + Math.random() * 900000));
-  _pendingCode = code;
-  _codeExpires = Date.now() + 15 * 60 * 1000; // 15 minutes
-
   try {
-    const res = await fetch('/api/notify', {
+    // Server generates the code, stores its hash, and emails it (break-glass reset flow)
+    const res = await fetch('/api/get-client', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'password_change_request', code }),
+      body: JSON.stringify({ action: 'coach-reset-request' }),
     });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || 'Send failed');
+    if (!res.ok) throw new Error('Send failed');
 
     document.getElementById('changePwStep1').style.display = 'none';
     document.getElementById('changePwStep2').style.display = 'block';
@@ -1552,19 +1547,9 @@ async function verifyAndChangePassword() {
     msg.textContent = 'Passwords do not match.';
     return;
   }
-  if (newPw.length < 6) {
+  if (newPw.length < 8) {
     msg.style.color = '#DB1F48';
-    msg.textContent = 'Password must be at least 6 characters.';
-    return;
-  }
-  if (!_pendingCode || Date.now() > _codeExpires) {
-    msg.style.color = '#DB1F48';
-    msg.textContent = 'Verification code expired. Please start over.';
-    return;
-  }
-  if (enteredCode !== _pendingCode) {
-    msg.style.color = '#DB1F48';
-    msg.textContent = 'Incorrect verification code.';
+    msg.textContent = 'Password must be at least 8 characters.';
     return;
   }
 
@@ -1572,8 +1557,17 @@ async function verifyAndChangePassword() {
   btn.textContent = 'Saving…';
   btn.disabled = true;
 
-  const { error } = await db.from('coach_settings')
-    .upsert({ key: 'coach_password', value: newPw, updated_at: new Date().toISOString() });
+  // Server verifies the emailed code and writes the new scrypt hash.
+  let error = null;
+  try {
+    const res = await fetch('/api/get-client', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'coach-reset-complete', code: enteredCode, new_password: newPw }),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || !j.ok) error = new Error(j.error || 'Could not change password');
+  } catch (e) { error = e; }
 
   if (error) {
     msg.style.color = '#DB1F48';
@@ -5794,7 +5788,7 @@ async function uploadFinalReport() {
   await updateDiag({ report_pdf_url: pdfUrl, report_finalized_at: now, status: 'report_final' });
 
   if (DIAG_SEL.client_id) {
-    await db.from('clients').update({ diagnostic_report_url: pdfUrl }).eq('id', DIAG_SEL.client_id);
+    await cdUpdate('clients', { diagnostic_report_url: pdfUrl }, { eq: { id: DIAG_SEL.client_id } });
   }
 
   _finalReportFile = null;
