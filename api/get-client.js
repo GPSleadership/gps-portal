@@ -16,6 +16,8 @@ const RESEND_FROM     = process.env.RESEND_FROM_EMAIL   || 'noreply@portal.gpsle
 const PORTAL_BASE     = process.env.PORTAL_BASE_URL     || 'https://portal.gpsleadership.org';
 const COACH_SESSION_SECRET = process.env.COACH_SESSION_SECRET || '';
 const COACH_SESSION_TTL_MS = 1000 * 60 * 60 * 12; // 12 hours
+const COACH_ALERT_EMAIL    = process.env.COACH_ALERT_EMAIL || 'alex@gpsleadership.org';
+const RESET_TTL_MS         = 15 * 60 * 1000; // password-reset code valid 15 min
 
 function sbSecret(path, method = 'GET', body = null) {
   return fetch(SUPABASE_URL + path, {
@@ -127,6 +129,68 @@ async function coachSession(body, res) {
   return res.status(200).json({ ok: true, role: payload.role, exp: payload.exp });
 }
 
+// ── Break-glass: email-gated coach password reset (works when locked out) ────
+// A code is only ever emailed to the fixed COACH_ALERT_EMAIL, so this can't be
+// abused to take over the account. Always returns ok (never reveals state).
+async function upsertSetting(key, value) {
+  return fetch(`${SUPABASE_URL}/rest/v1/coach_settings?on_conflict=key`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}`, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({ key, value: String(value), updated_at: new Date().toISOString() }),
+  });
+}
+async function readSetting(key) {
+  const r = await sbSecret(`/rest/v1/coach_settings?key=eq.${encodeURIComponent(key)}&select=value&limit=1`);
+  if (!r.ok) return null;
+  const rows = await r.json();
+  return Array.isArray(rows) && rows[0] ? rows[0].value : null;
+}
+function scryptHash(secret) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  return `${salt}:${crypto.scryptSync(String(secret), salt, 64).toString('hex')}`;
+}
+function scryptVerify(secret, stored) {
+  if (!stored || !stored.includes(':')) return false;
+  const [salt, hash] = stored.split(':');
+  try {
+    const calc = crypto.scryptSync(String(secret), salt, 64).toString('hex');
+    const a = Buffer.from(calc), b = Buffer.from(hash);
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  } catch { return false; }
+}
+async function coachResetRequest(res) {
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  await upsertSetting('reset_code_hash', scryptHash(code));
+  await upsertSetting('reset_code_expires', String(Date.now() + RESET_TTL_MS));
+  if (RESEND_API_KEY) {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: `Alex Tremble – GPS Leadership <${RESEND_FROM}>`,
+        to: [COACH_ALERT_EMAIL],
+        subject: 'GPS Portal — coach dashboard reset code',
+        html: `<p>Your coach dashboard reset code is <b style="font-size:20px">${code}</b>. It expires in 15 minutes.</p><p>If you didn't request this, ignore this email — your password is unchanged.</p>`,
+      }),
+    }).catch(() => {});
+  }
+  return res.status(200).json({ ok: true });
+}
+async function coachResetComplete(body, res) {
+  const { code, new_password } = body;
+  if (!code || !new_password) return res.status(400).json({ error: 'Code and new password required' });
+  if (String(new_password).length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters' });
+  const storedHash = await readSetting('reset_code_hash');
+  const expires    = parseInt((await readSetting('reset_code_expires')) || '0', 10);
+  if (!storedHash || Date.now() > expires) return res.status(400).json({ error: 'Code expired — request a new one' });
+  if (!scryptVerify(code, storedHash)) return res.status(401).json({ error: 'Incorrect code' });
+  await upsertSetting('coach_password_hash', scryptHash(new_password));
+  await upsertSetting('reset_code_hash', '');     // invalidate the used code
+  await upsertSetting('reset_code_expires', '0');
+  await upsertSetting('coach_password', '');       // clear any legacy plaintext
+  return res.status(200).json({ ok: true });
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -142,8 +206,10 @@ export default async function handler(req, res) {
     const body = req.body || {};
 
     // Coach auth (Phase 1) — server-side hashed password + signed session.
-    if (body.action === 'coach-login')   return coachLogin(body, res);
-    if (body.action === 'coach-session') return coachSession(body, res);
+    if (body.action === 'coach-login')          return coachLogin(body, res);
+    if (body.action === 'coach-session')        return coachSession(body, res);
+    if (body.action === 'coach-reset-request')  return coachResetRequest(res);
+    if (body.action === 'coach-reset-complete') return coachResetComplete(body, res);
 
     // Default POST: portal link recovery
     const { email } = body;

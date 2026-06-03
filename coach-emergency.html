@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>GPS Portal — Emergency Access</title>
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; background:#0f2540; color:#1a1a1a; margin:0; padding:24px; }
+  .wrap { max-width:760px; margin:0 auto; }
+  .card { background:#fff; border-radius:10px; padding:22px 24px; margin-bottom:16px; box-shadow:0 2px 10px rgba(0,0,0,.2); }
+  h1 { color:#fff; font-size:20px; font-weight:800; letter-spacing:.3px; margin:6px 0 18px; }
+  h2 { font-size:15px; color:#0f2540; margin:0 0 12px; }
+  label { display:block; font-size:12px; font-weight:700; color:#555; text-transform:uppercase; letter-spacing:.4px; margin:10px 0 4px; }
+  input { width:100%; box-sizing:border-box; padding:11px 13px; border:1.5px solid #ccc; border-radius:8px; font-size:14px; }
+  button { background:#0f2540; color:#fff; border:none; padding:11px 20px; border-radius:8px; font-size:14px; font-weight:700; cursor:pointer; margin-top:14px; }
+  button.secondary { background:#e8e8e8; color:#0f2540; }
+  .muted { color:#777; font-size:13px; }
+  .err { color:#c0392b; font-size:13px; margin-top:10px; min-height:18px; }
+  .ok  { color:#1e7e4f; font-size:13px; margin-top:10px; }
+  a.linkbtn { color:#0f2540; font-weight:700; text-decoration:none; font-size:12px; }
+  table { width:100%; border-collapse:collapse; margin-top:8px; font-size:13px; }
+  td, th { text-align:left; padding:8px 6px; border-bottom:1px solid #eee; vertical-align:top; }
+  .hide { display:none; }
+  .toggle { color:#9ab; font-size:12px; cursor:pointer; text-decoration:underline; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>GPS Portal — Emergency Access</h1>
+
+  <!-- LOGIN -->
+  <div class="card" id="loginCard">
+    <h2>Coach sign in</h2>
+    <p class="muted">A minimal fallback for when the main dashboard is unavailable. Same password as the main dashboard.</p>
+    <label for="pw">Password</label>
+    <input type="password" id="pw" autofocus />
+    <div class="err" id="loginErr"></div>
+    <button id="loginBtn">Sign in</button>
+    <span class="toggle" id="showReset" style="margin-left:14px;">Locked out? Reset password</span>
+  </div>
+
+  <!-- RESET -->
+  <div class="card hide" id="resetCard">
+    <h2>Reset coach password</h2>
+    <p class="muted">We'll email a 6-digit code to the coach address on file. Enter it with a new password.</p>
+    <button class="secondary" id="sendCodeBtn">Email me a reset code</button>
+    <div class="ok" id="codeSent"></div>
+    <label for="code">Reset code</label>
+    <input id="code" inputmode="numeric" />
+    <label for="newpw">New password (min 8 characters)</label>
+    <input type="password" id="newpw" />
+    <div class="err" id="resetErr"></div>
+    <button id="resetBtn">Set new password</button>
+  </div>
+
+  <!-- CLIENTS -->
+  <div class="card hide" id="clientsCard">
+    <h2>Clients &amp; portal links</h2>
+    <p class="muted">Signed in. Use these to send a client their portal link if the main dashboard is down.</p>
+    <div id="clientsArea">Loading…</div>
+    <button class="secondary" id="logoutBtn">Sign out</button>
+  </div>
+</div>
+
+<script>
+  var SESSION_KEY = 'gps_coach_session';
+  var SESSION_EXP_KEY = 'gps_coach_session_exp';
+
+  function $(id){ return document.getElementById(id); }
+  function show(id){ $(id).classList.remove('hide'); }
+  function hide(id){ $(id).classList.add('hide'); }
+
+  async function api(action, payload){
+    var body = {}; for (var k in payload) body[k] = payload[k]; body.action = action;
+    var res = await fetch('/api/get-client', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    var json = {}; try { json = await res.json(); } catch(e){}
+    return { ok: res.ok, json: json };
+  }
+
+  function getSession(){ return localStorage.getItem(SESSION_KEY) || ''; }
+
+  $('loginBtn').onclick = async function(){
+    $('loginErr').textContent = '';
+    var pw = $('pw').value.trim();
+    if (!pw) return;
+    var r = await api('coach-login', { password: pw });
+    if (r.ok && r.json && r.json.session){
+      localStorage.setItem(SESSION_KEY, r.json.session);
+      localStorage.setItem(SESSION_EXP_KEY, String(Date.now() + (r.json.expires_in_ms || 43200000)));
+      enterDashboard();
+    } else {
+      $('loginErr').textContent = (r.json && r.json.error) ? r.json.error : 'Incorrect password.';
+    }
+  };
+
+  $('showReset').onclick = function(){ show('resetCard'); };
+
+  $('sendCodeBtn').onclick = async function(){
+    $('codeSent').textContent = '';
+    await api('coach-reset-request', {});
+    $('codeSent').textContent = 'If the coach address is configured, a code is on its way. Check your email.';
+  };
+
+  $('resetBtn').onclick = async function(){
+    $('resetErr').textContent = '';
+    var code = $('code').value.trim();
+    var newpw = $('newpw').value;
+    var r = await api('coach-reset-complete', { code: code, new_password: newpw });
+    if (r.ok && r.json && r.json.ok){
+      $('resetErr').style.color = '#1e7e4f';
+      $('resetErr').textContent = 'Password updated. Sign in above with your new password.';
+      hide('resetCard');
+    } else {
+      $('resetErr').style.color = '#c0392b';
+      $('resetErr').textContent = (r.json && r.json.error) ? r.json.error : 'Could not reset.';
+    }
+  };
+
+  $('logoutBtn').onclick = function(){
+    localStorage.removeItem(SESSION_KEY); localStorage.removeItem(SESSION_EXP_KEY);
+    location.reload();
+  };
+
+  async function enterDashboard(){
+    hide('loginCard'); hide('resetCard'); show('clientsCard');
+    var res = await fetch('/api/coach-data', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ session: getSession(), op:'select', table:'clients',
+        select:'name,email,token,is_archived', order:{ col:'name', asc:true } }) });
+    var json = {}; try { json = await res.json(); } catch(e){}
+    if (!res.ok || !json.rows){ $('clientsArea').textContent = 'Could not load clients (session may have expired — sign out and back in).'; return; }
+    var rows = json.rows.filter(function(c){ return !c.is_archived; });
+    var origin = window.location.origin;
+    var html = '<table><tr><th>Name</th><th>Email</th><th>Portal link</th></tr>';
+    for (var i=0; i<rows.length; i++){
+      var c = rows[i];
+      var link = c.token ? (origin + '/client?token=' + encodeURIComponent(c.token)) : '';
+      html += '<tr><td>' + esc(c.name) + '</td><td>' + esc(c.email) + '</td><td>';
+      html += link ? ('<a class="linkbtn" href="' + link + '" target="_blank">open</a> &nbsp; <span class="toggle" onclick="copyLink(this)" data-l="' + esc(link) + '">copy</span>') : '<span class="muted">no token</span>';
+      html += '</td></tr>';
+    }
+    html += '</table>';
+    $('clientsArea').innerHTML = html;
+  }
+
+  function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  window.copyLink = function(el){ var l = el.getAttribute('data-l'); navigator.clipboard.writeText(l); el.textContent = 'copied'; };
+
+  // Auto-enter if a valid session already exists
+  (function(){
+    var exp = parseInt(localStorage.getItem(SESSION_EXP_KEY) || '0', 10);
+    if (getSession() && exp && Date.now() < exp) enterDashboard();
+  })();
+</script>
+</body>
+</html>

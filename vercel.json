@@ -9,6 +9,10 @@
       "destination": "/coach.html"
     },
     {
+      "source": "/coach-emergency",
+      "destination": "/coach-emergency.html"
+    },
+    {
       "source": "/survey",
       "destination": "/survey.html"
     },
