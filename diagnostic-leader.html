@@ -254,6 +254,20 @@ const SUPABASE_ANON = 'sb_publishable_nu9GXGeoqDXcxVocodQ4UA_ke7Yrzyw';
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON);
 
+// Phase 1: all reads/writes go through the token-validated server endpoint
+// (/api/diag-portal) instead of the public anon key. `db` is being phased out.
+let LEADER_TOKEN = null;
+async function diagPortal(action, payload) {
+  const res = await fetch('/api/diag-portal', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(Object.assign({ action, token: LEADER_TOKEN }, payload || {}))
+  });
+  let j = {}; try { j = await res.json(); } catch (_) {}
+  if (!res.ok) throw new Error(j.error || ('Request failed (' + res.status + ')'));
+  return j;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  STATE
 // ─────────────────────────────────────────────────────────────────────────────
@@ -268,33 +282,18 @@ async function init() {
   const token = new URLSearchParams(window.location.search).get('token');
   if (!token) { showError(); return; }
 
-  // Load diagnostic by leader_token
-  const { data, error } = await db
-    .from('diagnostics')
-    .select('*')
-    .eq('leader_token', token)
-    .limit(1);
+  // Load diagnostic + raters by leader_token (server validates the token + touches last-used)
+  LEADER_TOKEN = token;
+  let portal;
+  try { portal = await diagPortal('leader-get'); }
+  catch (e) { showError(); return; }
+  if (!portal || !portal.diagnostic) { showError(); return; }
+  DIAGNOSTIC = portal.diagnostic;
 
-  if (error || !data || data.length === 0) { showError(); return; }
-  DIAGNOSTIC = data[0];
-
-  // Update last-used timestamp (fire and forget)
-  db.from('diagnostics')
-    .update({ leader_token_last_used_at: new Date().toISOString() })
-    .eq('id', DIAGNOSTIC.id);
-
-  // Load raters
-  const { data: raterData } = await db
-    .from('diagnostic_raters')
-    .select('id, name, email, relationship, invited_at, completed_at, is_self, token')
-    .eq('diagnostic_id', DIAGNOSTIC.id)
-    .order('created_at', { ascending: true });
-
-  if (raterData) {
-    RATERS = raterData.filter(r => !r.is_self);
-    const selfRow = raterData.find(r => r.is_self);
-    if (selfRow) SELF_TOKEN = selfRow.token;
-  }
+  const raterData = portal.raters || [];
+  RATERS = raterData.filter(r => !r.is_self);
+  const selfRow = raterData.find(r => r.is_self);
+  if (selfRow) SELF_TOKEN = selfRow.token;
 
   renderPortal();
   document.getElementById('screen-loading').style.display = 'none';
@@ -756,9 +755,8 @@ async function submitRaterList() {
   btn.disabled = true; btn.textContent = 'Submitting…';
 
   const now = new Date().toISOString();
-  const { error } = await db.from('diagnostics')
-    .update({ raters_finalized_at: now, updated_at: now })
-    .eq('id', DIAGNOSTIC.id);
+  let error = null;
+  try { await diagPortal('leader-finalize'); } catch (e) { error = e; }
 
   if (error) {
     btn.disabled = false; btn.textContent = '✓ My List Is Ready — Notify Alex';
@@ -804,17 +802,13 @@ async function addRater() {
   const btn = event.currentTarget;
   btn.disabled = true; btn.textContent = 'Adding…';
 
-  const { data, error } = await db.from('diagnostic_raters').insert({
-    diagnostic_id: DIAGNOSTIC.id,
-    name,
-    email,
-    relationship: rel,
-    is_self: false,
-  }).select().single();
+  let data = null, error = null;
+  try { const r = await diagPortal('leader-add-rater', { rater: { name, email, relationship: rel } }); data = r.rater; }
+  catch (e) { error = e; }
 
   btn.disabled = false; btn.textContent = 'Add';
 
-  if (error) { msgEl.textContent = 'Something went wrong. Please try again.'; return; }
+  if (error || !data) { msgEl.textContent = 'Something went wrong. Please try again.'; return; }
 
   RATERS.push(data);
   document.getElementById('add-name').value  = '';
