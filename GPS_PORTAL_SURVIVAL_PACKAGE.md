@@ -1,7 +1,7 @@
 # GPS Leadership Portal — Survival Package
 ### Everything needed to recreate this system from scratch
 
-**Last updated:** June 2, 2026
+**Last updated:** June 2, 2026 (evening — v23–v25 migrations, debrief date/auto-release, portal welcome email, coaching portal button)
 **GitHub repo:** https://github.com/GPSleadership/gps-portal
 **Live URL:** https://portal.gpsleadership.org
 **Coach dashboard:** https://portal.gpsleadership.org/coach
@@ -61,7 +61,7 @@ A full 360-style leadership assessment using the TP3™ framework (Trust, Proact
 | `diagnostic.js` | POST `?action=` | Master diagnostic handler. 6 routes via action param: `send-invites`, `generate-question` (G1), `generate-report`, `generate-team-report`, `finalize-report`, `reminders`. 60s maxDuration. ~1,650 lines. |
 | `ask.js` | POST | Ask Alex endpoint. Calls Anthropic API. Logs full Q+R to `ask_alex_log`. Also handles `action=prefill` — takes a 90-day goal and returns AI-suggested behaviors, metrics, and 30-day goal (uses claude-haiku-4-5 for speed). 60s maxDuration. |
 | `get-client.js` | GET / POST | Client auth: GET `?token=X` returns client record + diagnostic_prefill data. POST `{email}` sends portal link recovery email. |
-| `notify.js` | POST | Email notification hub for coaching program: check-in alerts, plan submissions, stakeholder responses, welcome emails. |
+| `notify.js` | POST | Email notification hub for coaching program: check-in alerts, plan submissions, stakeholder responses, welcome emails, portal_welcome (post-diagnostic debrief email with portal link — sent by markDebriefComplete when a coaching client is linked). |
 | `send-reminders.js` | Cron (Mon 2pm UTC) | Weekly coaching reminders: check-in nudges, auto-archive after 45 days inactive. |
 | `survey-reminders.js` | Cron (daily 2pm UTC) | Daily stakeholder survey nudges, auto-confirm logic, welcome email sequence. |
 | `survey.js` | GET / POST | Stakeholder survey load + submission handler. |
@@ -73,7 +73,7 @@ A full 360-style leadership assessment using the TP3™ framework (Trust, Proact
 
 > **Critical:** Vercel Hobby plan caps at 12 serverless functions. This project is at exactly 12. All diagnostic operations share one file via `?action=` routing. Adding any new API file requires upgrading to Vercel Pro or merging into an existing file.
 
-### Database Migrations (run in order v2 → v19)
+### Database Migrations (run in order v2 → v25; no v21 file exists)
 
 | File | What it adds |
 |------|-------------|
@@ -97,6 +97,10 @@ A full 360-style leadership assessment using the TP3™ framework (Trust, Proact
 | `supabase-migration-v18.sql` | ask_alex_log table: full Q+R text capture (question_text, response_text, sprint_number, token counts) |
 | `supabase-migration-v19.sql` | interviews_enabled, interview_calendar_link, interview_max_count on diagnostics; will_interview on diagnostic_raters |
 | `supabase-migration-v20.sql` | **clients:** metric_2_question (TEXT), metric_2_target_avg (FLOAT DEFAULT 4.0) for new Metric 2 model. **diagnostics:** wizard_prefill_data (JSONB) for onboarding prefill content. Required before deploying wizard v20. |
+| `supabase-migration-v22.sql` | **Testimonial & Referral Flywheel.** **clients:** engagement_type (TEXT, 'diagnostic_only' \| 'diagnostic_plus_coaching'), first_big_win_flag (BOOLEAN), debrief/midpoint/endof testimonial_prompted_at (TIMESTAMPTZ). New tables: **testimonials** (id, client_id, engagement_type, source, responses JSONB, rating_nps, permission_public_use) and **referrals** (id, referrer_client_id, referral_name/email/org, engagement_type_suggested, email_subject/body, status, sent_at). Seeded referral config into gps_settings. |
+| `supabase-migration-v23.sql` | **diagnostics:** report_pdf_url (TEXT) — public URL of uploaded PDF in Supabase Storage. Creates `diagnostic-reports` storage bucket (public: true) with anon INSERT/UPDATE + public SELECT policies. |
+| `supabase-migration-v24.sql` | **diagnostics:** debrief_date (DATE), report_release_at (TIMESTAMPTZ). report_release_at is computed as 22:00 UTC the day before debrief_date (= COB Eastern). Set by coach portal when debrief_date is saved. Leader sees report automatically once this timestamp passes. |
+| `supabase-migration-v25.sql` | **diagnostics:** coaching_portal_url (TEXT). Set by coach portal when markDebriefComplete() runs (if a coaching client is linked). Read by diagnostic-leader.html to show "Go to Your Coaching Portal" button in Step 8. |
 
 ### Config
 
@@ -111,7 +115,7 @@ A full 360-style leadership assessment using the TP3™ framework (Trust, Proact
 
 | File | What it does |
 |------|-------------|
-| `check.sh` | Pre-push validation: JS syntax check on all HTML files, backslash-backtick hazard scan (per-file baseline: coach.html=2, client.html=0 — only flags NEW occurrences above baseline), vercel.json/vercelignore consistency check, serverless function count. Run automatically via git hook — do not bypass. |
+| `check.sh` | Pre-push validation: JS syntax check on all HTML files, backslash-backtick hazard scan (per-file baseline: coach.html=0, client.html=0 — any `\`` in either file fails), vercel.json/vercelignore consistency check, serverless function count. Run automatically via git hook — do not bypass. |
 | `deploy.sh` | Safe deploy wrapper: runs check.sh, then stages all changes, commits with your message, and pushes. Usage: `./deploy.sh "commit message"` |
 | `smoke-test.sh` | Post-deploy health check: hits /coach, /client, and key API endpoints on the live portal. Run 90 seconds after a push. |
 | `install-hooks.sh` | One-time setup: installs the git pre-push hook so check.sh runs automatically on every `git push`. Must be re-run after cloning on a new machine. |
@@ -241,6 +245,9 @@ clients
   ask_alex_total_questions    — counter (incremented via RPC)
   ask_alex_last_used_at
   industry, revenue_band, num_locations  — for AI context
+  engagement_type             — 'diagnostic_only' | 'diagnostic_plus_coaching' (v22)
+  first_big_win_flag          — coach toggles TRUE at first significant win; triggers midpoint testimonial prompt (v22)
+  debrief_testimonial_prompted_at, midpoint_testimonial_prompted_at, endof_testimonial_prompted_at  — dedup guards (v22)
   coaching_program_start_date, coaching_program_end_date
   diagnostic_report_url       — Google Drive link to their report
   portal_locked               — locks portal access
@@ -265,6 +272,10 @@ diagnostics
   intake_notes, coaching_notes, interview_notes
   invites_sent_at, survey_closed_at, report_finalized_at, debrief_completed_at
   close_date, start_date
+  debrief_date                — date of scheduled debrief session (v24)
+  report_release_at           — 22:00 UTC day before debrief_date; leader portal shows report after this (v24)
+  report_pdf_url              — public Supabase Storage URL of uploaded PDF report (v23)
+  coaching_portal_url         — coaching client's portal URL; set on debrief complete; shows button in leader Step 8 (v25)
 
 diagnostic_raters
   id, diagnostic_id (→diagnostics), name, email
@@ -282,6 +293,22 @@ diagnostic_report_drafts
                                 OR { report_type: 'pdf_upload', pdf_base64: 'data:application/pdf;base64,...' }
                                 for manually uploaded final reports (base64-encoded, max ~8MB)
   generated_at, model_used, input_tokens, output_tokens
+
+testimonials  (v22 — post-engagement social proof capture)
+  id, client_id, engagement_type, source (diagnostic_debrief | coaching_midpoint | engagement_end)
+  responses (JSONB — question text → answer text map), rating_nps (0–10)
+  permission_public_use (BOOLEAN — coach toggles when client approves public use)
+
+referrals  (v22 — referral tracking)
+  id, referrer_client_id, referral_name, referral_email, referral_org
+  engagement_type_suggested, email_subject, email_body (pre-generated mailto body)
+  status: draft_email_created → sent → responded → converted
+  sent_at, created_at
+
+diagnostic-reports  (Supabase Storage bucket, v23)
+  Public bucket. Files uploaded by coach as PDF reports.
+  Anon INSERT/UPDATE allowed (secured at app level by coach password). Public SELECT for client iframe view.
+  URL stored in diagnostics.report_pdf_url.
 
 ask_alex_log  (v18 — full text capture)
   id, client_id, asked_at
@@ -311,7 +338,7 @@ clients → stakeholders → survey_tokens → survey_responses  — stakeholder
 
 ### If Supabase goes away
 1. Spin up PostgreSQL on Neon, Railway, AWS RDS, or any Postgres host
-2. Run all migrations v2–v19 in order against the new database
+2. Run all migrations v2–v25 in order against the new database (skip v21 — no file exists)
 3. Supabase exposes PostgREST — replace `fetch` calls in API files with a `pg` or `postgres` Node client
 4. Update `SUPABASE_URL` and both keys in environment variables
 5. The browser-side Supabase JS client (`createClient`) would need to be replaced with direct API calls or a different client library
@@ -390,11 +417,19 @@ clients → stakeholders → survey_tokens → survey_responses  — stakeholder
 - Checkbox per rater row to mark for interview (enforces cap)
 - Interview-tagged raters receive calendar booking section in their invite email
 
+**May 31, 2026 — Testimonial & Referral Flywheel (v22)**
+
+- New `testimonials` table: captures structured post-engagement feedback (responses JSONB, NPS rating, public permission flag). Three trigger points: diagnostic_debrief, coaching_midpoint, engagement_end.
+- New `referrals` table: tracks client referrals with pre-generated mailto email body. Status pipeline: draft_email_created → sent → responded → converted.
+- `clients` gets: engagement_type ('diagnostic_only' | 'diagnostic_plus_coaching'), first_big_win_flag (coach toggles at meaningful milestone to trigger midpoint prompt), and three testimonial_prompted_at timestamps (dedup guards).
+- Coach dashboard: testimonial view with per-client form — question list, response capture, NPS score, public permission toggle. Referral generation panel.
+
 **June 2, 2026 — Coach Dashboard & Onboarding Session**
 
 *Coach dashboard improvements (coach.html):*
 - Add Client modal: removed "Regions Owned" field (never used). Renamed "Client has weekly coaching sessions" → "Coaching Client" throughout (modal, profile view, toggle buttons). Added "Setting Up for Diagnostic" checkbox — when checked, Tier and Email Delivery selectors appear inline; after the client is saved, a diagnostic is created automatically and linked. No need to go to the Diagnostics tab separately.
-- Report tab: added "Upload Final Report" card as static HTML (not inside a JS template literal — avoids the V8 parse error pattern). Accepts PDF up to 8MB. Converts to base64, upserts into `diagnostic_report_drafts` with `content_json: { report_type: 'pdf_upload', pdf_base64: '...' }`, marks diagnostic as `report_final`. Client portal detects this flag and renders the PDF in an iframe with a download button instead of the HTML narrative renderer.
+- Report tab: "Upload Final Report" card (static HTML outside JS template literals — avoids V8 parse error pattern). Accepts PDF up to 8MB. Uploads to Supabase Storage bucket `diagnostic-reports`, stores public URL in `diagnostics.report_pdf_url`, marks diagnostic as `report_final`. Client portal (diagnostic-leader.html) detects `report_pdf_url` and renders the PDF in an iframe with a download button. **Note:** An earlier attempt stored base64 in `diagnostic_report_drafts.content_json` — this was reverted because it caused a JS parse error in a template literal. Current approach (Storage + URL) is the correct one.
+- 90-day plan section removed from Report tab (was unused).
 
 *Diagnostic rater relationship types (diagnostic-leader.html + coach.html):*
 - Expanded from 7 options to 8: Direct Report, Peer, Supervisor / Manager, Board Member, Internal Customer, External Customer, External Stakeholder, Other
@@ -417,6 +452,24 @@ clients → stakeholders → survey_tokens → survey_responses  — stakeholder
 - First attempt at PDF upload embedded an SVG icon inline inside `rpt.innerHTML = \`...\``. The SVG path data caused V8 to fail parsing the template literal. Login stopped responding.
 - Fix: moved all upload UI to static HTML in the page body (outside all JS template literals). JS functions use only plain strings. Zero special characters in JS code. This is the correct pattern for this codebase — never embed SVG or binary-like content inside JS template literals.
 - **Rule:** All SVG, complex HTML, or content with special characters goes in the static HTML section of the file, shown/hidden via `style.display`. Never generate it inside a JS template literal.
+
+**June 2, 2026 (evening) — Debrief Date, Auto-Release & Portal Welcome**
+
+*Debrief date + auto-release (v24, coach.html, diagnostic-leader.html):*
+- Coach can set a debrief_date on each diagnostic. When saved, report_release_at is computed as 22:00 UTC the day before (= COB Eastern time — ~6pm EDT / 5pm EST). Stored in diagnostics.
+- diagnostic-leader.html checks report_release_at on load. Once the timestamp passes, the leader's portal automatically shows their report without the coach needing to manually release it.
+- Coach dashboard shows the release date/time below the debrief date input.
+
+*Portal welcome email (v25, api/notify.js):*
+- New email type `portal_welcome`. Sent automatically inside `markDebriefComplete()` in coach.html when a coaching client is linked to the diagnostic.
+- Content: post-debrief context, portal access button, 3-step "what to do first" instructions, weekly rhythm explanation. FROM: Alex's direct email. Plain instructions, no hype.
+- `diagnostics.coaching_portal_url` (v25) stores the linked client's portal URL — set at debrief-complete time so diagnostic-leader.html can access it without a separate clients table lookup.
+
+*Coaching portal button on leader page (diagnostic-leader.html):*
+- In Step 8 (post-survey completion), if `DIAGNOSTIC.coaching_portal_url` is set, a "Go to Your Coaching Portal →" button appears. Otherwise the field is blank.
+
+*check.sh baseline update:*
+- coach.html backtick baseline lowered from 2 → 0. The two pre-existing escaped backticks in an IIFE were cleaned up, so the baseline is now zero. Any `\`` in coach.html now fails the check immediately.
 
 **Deployment Safety System (May 29, 2026)**
 
@@ -446,7 +499,7 @@ Runs five checks in sequence:
 
 1. **JavaScript syntax** — Extracts all inline `<script>` blocks from every HTML file and runs `node --check` against them. Catches parse errors that browsers report silently or not at all.
 
-2. **Backslash-backtick scan** — Searches for literal `\`` characters in coach.html and client.html. Inside a `${}` expression in a template literal, `\`` is a syntax error (valid only inside a string literal, not as a template literal delimiter in expression context). This is the specific bug that broke login on May 29, 2026.
+2. **Backslash-backtick scan** — Searches for literal `\`` characters in coach.html and client.html. Inside a `${}` expression in a template literal, `\`` is a syntax error (valid only inside a string literal, not as a template literal delimiter in expression context). This is the specific bug that broke login on May 29, 2026. **Current baselines: coach.html=0, client.html=0.** Any `\`` in either file fails the check immediately.
 
 3. **vercel.json / .vercelignore consistency** — Verifies that every file listed in the `functions` section of `vercel.json` (a) actually exists on disk and (b) is not excluded by `.vercelignore`. A mismatch causes Vercel to fail the entire build in ~1 second before deploying anything.
 
@@ -528,4 +581,54 @@ All API keys and secrets are stored exclusively as Vercel environment variables.
 
 ---
 
-*Last updated: June 2, 2026. Update manually after any session that adds features, changes architecture, or introduces new failure modes not captured in the feature log.*
+---
+
+## 13. Security Hardening — Phase 1 (June 3, 2026)
+
+A June 3, 2026 premortem (`GPS_Portal_Premortem_2026-06-03.md`) found, and verified against live production, that **every database table had permissive `anon USING(true)` RLS policies** — meaning the public anon key (embedded in the browser HTML) could read and write all client, diagnostic, and rater data, and the coach password was stored/verified in the browser in plaintext. RLS was *enabled* but the policies made it meaningless. This section documents the remediation.
+
+**All Phase 1 work lives on git branch `security-hardening-phase1`** (not yet merged/deployed at time of writing). It is a coupled database + application change that must ship together at cutover — see `PHASE1_PLAN.md` for the full sequence.
+
+### The model
+The browser no longer talks to Supabase with the anon key for sensitive data. Instead:
+- **Client portal** (`client.html`) → all reads/writes go through `/api/portal-data` (token-validated; the server derives the client from the portal token and scopes every operation to that client, with a column allowlist).
+- **Coach dashboard** (`coach.html`) → authenticated by a signed **coach session** (see below), data through `/api/coach-data` (hybrid: generic allowlisted proxy for ordinary tables + dedicated hardened actions for `admin_accounts` and settings).
+- **Server functions** (`diagnostic.js`, `send-reminders.js`) switched from the anon key to the **service role key**.
+- At cutover, **`supabase-migration-v26-lockdown-rls.sql`** drops every permissive anon policy. After it runs, only the service-role key (used by `api/*.js`) can touch the tables.
+
+### New / changed API endpoints
+| File | What changed |
+|------|-------------|
+| `api/get-client.js` | Added coach auth actions: `coach-login` (verifies a **scrypt** password hash server-side, issues a signed HMAC session), `coach-session` (verify), `coach-reset-request` + `coach-reset-complete` (email-gated password reset — code is only ever emailed to `COACH_ALERT_EMAIL`, works even when locked out). |
+| `api/portal-data.js` | **NEW.** Token-validated client-portal data endpoint. All client.html reads/writes route here. |
+| `api/coach-data.js` | **NEW.** Coach-session-gated dashboard data endpoint (hybrid generic proxy + dedicated admin/settings actions; passwords always hashed). |
+| `api/ask.js` | Now **requires a valid portal token**, enforces a server-side daily cap (counts `ask_alex_log`), and restricts CORS to the portal origin. Closes the open free-Claude-proxy hole. |
+| `api/send-reminders.js`, `api/survey-reminders.js`, `api/diagnostic.js` | Manual cron trigger no longer accepts the open `{manual_trigger:true}` flag — it now requires `Bearer CRON_SECRET` **or a valid coach session** `{session}`. |
+
+### New files
+- `coach-emergency.html` — **break-glass page** at `/coach-emergency`. Minimal, near-unbreakable fallback that uses the same hardened login + the email password reset, and lists clients with portal links. For use when the main dashboard is broken. Bookmark it.
+- `api/portal-data.js`, `api/coach-data.js`, `supabase-migration-v26-lockdown-rls.sql`.
+
+### NEW required environment variable
+| Variable | Required | What it does |
+|----------|----------|-------------|
+| `COACH_SESSION_SECRET` | ✅ (at cutover) | HMAC key that signs/verifies coach login sessions and the password-reset codes. Generate: `openssl rand -hex 32`. **Coach login, the emergency page, and the manual cron trigger will not work until this is set in Vercel.** |
+
+The coach password is now stored as a **scrypt hash** in `coach_settings.coach_password_hash` (legacy plaintext `coach_password` is read as a fallback during transition and cleared on first reset). There is no longer a `GPS2026` fallback in working code paths.
+
+### Already shipped (live, before cutover)
+- The `diagnostic-reports` storage bucket's broad **listing** policy was removed (migration `harden_diagnostic_reports_remove_listing`) so the confidential PDFs can no longer be enumerated. Full private-bucket + signed-URL hardening is Phase 1 Step 5 (pending).
+
+### Cutover checklist (do together, low-traffic window)
+1. Merge `security-hardening-phase1` to `main` (deploys the rewired app).
+2. Set `COACH_SESSION_SECRET` in Vercel.
+3. Apply `supabase-migration-v26-lockdown-rls.sql`.
+4. Set the new coach password via the reset flow (`/coach-emergency` → reset).
+5. Smoke-test, then re-run the Supabase security advisor — confirm the `rls_policy_always_true` warnings are gone.
+
+### Monitoring
+A weekly automated **security sweep** runs Fridays 2pm (Claude scheduled task `gps-portal-weekly-security-sweep`): Supabase advisor + RLS drift + repo health + backup freshness; reports only regressions.
+
+---
+
+*Last updated: June 3, 2026. Phase 1 security hardening in progress on branch `security-hardening-phase1` (not yet deployed). Remaining: coach.html data-call migration (46 sites), diagnostic-leader/diagnostic-survey pages, Step 5 (private report bucket), Step 7 (SECURITY DEFINER cleanup), then cutover. Update after any session that adds features, changes architecture, or introduces new failure modes.*
