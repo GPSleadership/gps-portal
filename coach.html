@@ -2522,8 +2522,7 @@ function openStartSprintModal(clientId) {
 }
 
 async function startNextSprint(clientId, behaviorFocus, startDate) {
-  const { data: pwData } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
-  const password = pwData?.value || 'GPS2026';
+  const session = getCoachSessionToken();
 
   try {
     const res = await fetch('/api/start-sprint', {
@@ -2533,7 +2532,7 @@ async function startNextSprint(clientId, behaviorFocus, startDate) {
         client_id:      clientId,
         behavior_focus: behaviorFocus || null,
         start_date:     startDate     || null,
-        password
+        session
       })
     });
     const json = await res.json();
@@ -3277,14 +3276,13 @@ async function saveEmailTemplate(templateId, templateKey) {
 
   statusEl.textContent = 'Saving…'; statusEl.style.color = 'var(--gray-600)';
 
-  const { data: pwData } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
-  const password = pwData?.value || 'GPS2026';
+  const session = getCoachSessionToken();
 
   try {
     const res = await fetch('/api/email-templates', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ template_key: templateKey, subject, body_text: body, password })
+      body:    JSON.stringify({ template_key: templateKey, subject, body_text: body, session })
     });
     const json = await res.json();
     if (!res.ok || json.error) {
@@ -3306,14 +3304,13 @@ async function toggleTemplateApproval(templateId, templateKey, approved) {
   const statusEl = document.getElementById('tpl-status-' + templateId);
   if (statusEl) { statusEl.textContent = 'Saving…'; statusEl.style.color = 'var(--gray-600)'; }
 
-  const { data: pwData } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
-  const password = pwData?.value || 'GPS2026';
+  const session = getCoachSessionToken();
 
   try {
     const res = await fetch('/api/email-templates', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ template_key: templateKey, is_approved: approved, password })
+      body:    JSON.stringify({ template_key: templateKey, is_approved: approved, session })
     });
     const json = await res.json();
     if (!res.ok || json.error) {
@@ -3979,14 +3976,13 @@ async function triggerBaselineSurvey(clientId, btn) {
   btn.textContent = 'Sending…';
   btn.disabled = true;
 
-  const { data: pwData } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
-  const password = pwData?.value || 'GPS2026';
+  const session = getCoachSessionToken();
 
   try {
     const res  = await fetch('/api/survey?action=send', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ client_id: clientId, checkpoint: 'baseline', password })
+      body:    JSON.stringify({ client_id: clientId, checkpoint: 'baseline', session })
     });
     const text = await res.text();
     let json;

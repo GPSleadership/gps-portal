@@ -22,9 +22,9 @@ export default async function handler(req, res) {
 
     if (!client_id) return res.status(400).json({ error: 'client_id is required' });
 
-    // Auth
-    const authOk = await verifyPassword(password);
-    if (!authOk) return res.status(401).json({ error: 'Invalid password' });
+    // Auth: coach session (preferred) or legacy password (transition fallback)
+    const authOk = !!verifyCoachSession(req.body.session) || await verifyPassword(password);
+    if (!authOk) return res.status(401).json({ error: 'Not authorized' });
 
     // ── Load current client ───────────────────────────────────────────────────
     const clientRes = await sbFetch(
@@ -92,6 +92,22 @@ export default async function handler(req, res) {
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
+}
+
+import crypto from 'node:crypto';
+const COACH_SESSION_SECRET = process.env.COACH_SESSION_SECRET || '';
+// Preferred auth: HMAC coach session (replaces the password read in the browser).
+function verifyCoachSession(tok) {
+  if (!tok || !COACH_SESSION_SECRET) return null;
+  const parts = String(tok).split('.');
+  if (parts.length !== 2) return null;
+  const expected = Buffer.from(crypto.createHmac('sha256', COACH_SESSION_SECRET).update(parts[0]).digest())
+    .toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const a = Buffer.from(parts[1]), b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  let p; try { p = JSON.parse(Buffer.from(parts[0].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString()); } catch { return null; }
+  if (!p || p.role !== 'coach' || typeof p.exp !== 'number' || p.exp < Date.now()) return null;
+  return p;
 }
 
 async function verifyPassword(password) {

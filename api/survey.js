@@ -168,6 +168,22 @@ function buildSendEmailHtml(stakeholderName, clientName, checkpoint, priorityBeh
 </html>`;
 }
 
+import crypto from 'node:crypto';
+const COACH_SESSION_SECRET = process.env.COACH_SESSION_SECRET || '';
+// Preferred auth: HMAC coach session (replaces the password read in the browser).
+function verifyCoachSession(tok) {
+  if (!tok || !COACH_SESSION_SECRET) return null;
+  const parts = String(tok).split('.');
+  if (parts.length !== 2) return null;
+  const expected = Buffer.from(crypto.createHmac('sha256', COACH_SESSION_SECRET).update(parts[0]).digest())
+    .toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const a = Buffer.from(parts[1]), b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  let p; try { p = JSON.parse(Buffer.from(parts[0].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString()); } catch { return null; }
+  if (!p || p.role !== 'coach' || typeof p.exp !== 'number' || p.exp < Date.now()) return null;
+  return p;
+}
+
 async function verifyPassword(password) {
   if (!password) return false;
   const settingsRes = await sbFetch('/rest/v1/coach_settings?key=eq.coach_password&select=value&limit=1');
@@ -205,8 +221,8 @@ async function handleSend(req, res) {
       return res.status(400).json({ error: 'checkpoint must be baseline, day45, or day90' });
     }
 
-    const authOk = await verifyPassword(password);
-    if (!authOk) return res.status(401).json({ error: 'Invalid password' });
+    const authOk = !!verifyCoachSession(req.body.session) || await verifyPassword(password);
+    if (!authOk) return res.status(401).json({ error: 'Not authorized' });
 
     const clientRes = await sbFetch(`/rest/v1/clients?id=eq.${client_id}&select=id,name,email,behavior_1,start_behavior,current_sprint_number`);
     if (!clientRes.ok) return res.status(500).json({ error: 'Failed to load client' });
@@ -304,8 +320,8 @@ async function handleResend(req, res) {
     const { client_id, stakeholder_id, checkpoint = 'baseline', password } = req.body || {};
     if (!client_id || !stakeholder_id) return res.status(400).json({ error: 'client_id and stakeholder_id are required' });
 
-    const authOk = await verifyPassword(password);
-    if (!authOk) return res.status(401).json({ error: 'Invalid password' });
+    const authOk = !!verifyCoachSession(req.body.session) || await verifyPassword(password);
+    if (!authOk) return res.status(401).json({ error: 'Not authorized' });
 
     // Load client
     const clientRes = await sbFetch(`/rest/v1/clients?id=eq.${client_id}&select=id,name,email,behavior_1,start_behavior,current_sprint_number`);

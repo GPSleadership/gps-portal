@@ -54,7 +54,7 @@ const READ_TABLES = new Set([
   'diagnostics', 'diagnostic_raters', 'diagnostic_responses',
   'diagnostic_report_drafts', 'diagnostic_question_overrides', 'diagnostic_team_reports',
   'stakeholders', 'survey_responses', 'survey_tokens',
-  'ask_alex_usage', 'ask_alex_log', 'email_log',
+  'ask_alex_usage', 'ask_alex_log', 'email_log', 'email_templates',
   'testimonials', 'referrals',
 ]);
 // Tables the dashboard may write through the generic proxy.
@@ -134,9 +134,9 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, admins: rows });  // never returns password
     }
     if (action === 'admin-add') {
-      if (!body.name || !body.email || !body.password) return res.status(400).json({ error: 'name, email, password required' });
+      if (!body.name || !body.password) return res.status(400).json({ error: 'name and password required' });
       const r = await sb('/rest/v1/admin_accounts', 'POST',
-        { name: body.name, email: String(body.email).toLowerCase(), password: hashPassword(body.password), is_active: true },
+        { name: body.name, email: body.email ? String(body.email).toLowerCase() : null, password: hashPassword(body.password), notes: body.notes || null, role: 'admin', is_active: true },
         { Prefer: 'return=minimal' });
       if (!r.ok) { const d = await r.json().catch(() => ({})); return res.status(500).json({ error: 'Could not add admin', detail: d }); }
       return res.status(200).json({ ok: true });
