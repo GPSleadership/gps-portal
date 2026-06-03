@@ -53,7 +53,8 @@ const READ_TABLES = new Set([
   'clients', 'checkins', 'sprints', 'sprint_closeouts', 'self_checks',
   'diagnostics', 'diagnostic_raters', 'diagnostic_responses',
   'diagnostic_report_drafts', 'diagnostic_question_overrides', 'diagnostic_team_reports',
-  'stakeholders', 'ask_alex_usage', 'ask_alex_log', 'email_log',
+  'stakeholders', 'survey_responses', 'survey_tokens',
+  'ask_alex_usage', 'ask_alex_log', 'email_log',
   'testimonials', 'referrals',
 ]);
 // Tables the dashboard may write through the generic proxy.
@@ -61,7 +62,7 @@ const WRITE_TABLES = new Set([
   'clients', 'checkins', 'sprints', 'sprint_closeouts',
   'diagnostics', 'diagnostic_raters', 'diagnostic_responses',
   'diagnostic_report_drafts', 'diagnostic_question_overrides', 'diagnostic_team_reports',
-  'stakeholders', 'testimonials', 'referrals',
+  'stakeholders', 'survey_responses', 'testimonials', 'referrals',
 ]);
 // NOTE: admin_accounts and coach_settings are intentionally NOT in either set —
 // they are served only by the dedicated, hardened actions below.

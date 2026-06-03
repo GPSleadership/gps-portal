@@ -2554,7 +2554,7 @@ async function startNextSprint(clientId, behaviorFocus, startDate) {
 }
 
 async function toggleActive(clientId, currentlyActive) {
-  await db.from('clients').update({ is_active: !currentlyActive }).eq('id', clientId);
+  await cdUpdate('clients', { is_active: !currentlyActive }, { eq: { id: clientId } });
   await loadDashboard();
 }
 
@@ -2612,11 +2612,11 @@ async function addClient() {
   saveBtn.textContent = 'Creating…';
   saveBtn.disabled = true;
 
-  const { data, error } = await db
-    .from('clients')
-    .insert({ name, email: email || null, title: title || null, organization: org || null, diagnostic_report_url: diagnosticUrl || null, is_active: true, ask_alex_enabled: true, industry, revenue_band: revenueBand, num_locations: numLocations, direct_reports_count: directReports, coaching_sessions_enabled: coachingSessionsEnabled })
-    .select()
-    .single();
+  let data = null, error = null;
+  try {
+    const _rows = await cdInsert('clients', { name, email: email || null, title: title || null, organization: org || null, diagnostic_report_url: diagnosticUrl || null, is_active: true, ask_alex_enabled: true, industry, revenue_band: revenueBand, num_locations: numLocations, direct_reports_count: directReports, coaching_sessions_enabled: coachingSessionsEnabled });
+    data = Array.isArray(_rows) ? _rows[0] : _rows;
+  } catch (e) { error = e; }
 
   if (error || !data) {
     errEl.textContent = 'Error creating client. Try again.';
@@ -2631,16 +2631,20 @@ async function addClient() {
   // Optionally create diagnostic
   let diagNote = '';
   if (setupDiagnostic) {
-    const { data: diagData, error: diagError } = await db.from('diagnostics').insert({
-      client_name:         name,
-      client_email:        email,
-      client_title:        title || null,
-      client_org:          org   || null,
-      tier:                diagTier,
-      email_delivery_mode: diagDelivery,
-      client_id:           clientId,
-      status:              'setup',
-    }).select().single();
+    let diagData = null, diagError = null;
+    try {
+      const _drows = await cdInsert('diagnostics', {
+        client_name:         name,
+        client_email:        email,
+        client_title:        title || null,
+        client_org:          org   || null,
+        tier:                diagTier,
+        email_delivery_mode: diagDelivery,
+        client_id:           clientId,
+        status:              'setup',
+      });
+      diagData = Array.isArray(_drows) ? _drows[0] : _drows;
+    } catch (e) { diagError = e; }
 
     if (diagError) {
       diagNote = `<p style="font-size:12px;color:var(--red);margin-top:8px;">⚠️ Client created but diagnostic setup failed: ${diagError.message}</p>`;
@@ -2818,7 +2822,8 @@ async function saveCoachingDates(clientId) {
   };
 
   msgEl.textContent = 'Saving…';
-  const { error } = await db.from('clients').update(payload).eq('id', clientId);
+  let error = null;
+  try { await cdUpdate('clients', payload, { eq: { id: clientId } }); } catch (e) { error = e; }
 
   if (error) {
     msgEl.textContent = 'Error saving dates — try again.';
@@ -2989,7 +2994,7 @@ function archiveClient(clientId, clientName) {
     `"${clientName}" will be removed from the active dashboard but kept in the database. You can view or restore them using the Archived filter.`,
     'Archive Profile', 'btn-warning',
     async () => {
-      await db.from('clients').update({ is_archived: true }).eq('id', clientId);
+      await cdUpdate('clients', { is_archived: true }, { eq: { id: clientId } });
       allClients = allClients.map(c => c.id === clientId ? {...c, is_archived: true} : c);
       renderStats();
       renderClients();
@@ -3003,7 +3008,7 @@ function unarchiveClient(clientId, clientName) {
     `"${clientName}" will be moved back to the active dashboard.`,
     'Restore Profile', 'btn-save',
     async () => {
-      await db.from('clients').update({ is_archived: false }).eq('id', clientId);
+      await cdUpdate('clients', { is_archived: false }, { eq: { id: clientId } });
       allClients = allClients.map(c => c.id === clientId ? {...c, is_archived: false} : c);
       renderStats();
       renderClients();
@@ -3020,8 +3025,8 @@ function hardDeleteClient(clientId, clientName) {
     `This will PERMANENTLY delete "${clientName}" and ALL their check-in history. Use this ONLY for test or dummy profiles. This cannot be undone.`,
     'Delete Permanently', 'btn-danger',
     async () => {
-      await db.from('checkins').delete().eq('client_id', clientId);
-      await db.from('clients').delete().eq('id', clientId);
+      await cdDelete('checkins', { eq: { client_id: clientId } });
+      await cdDelete('clients',  { eq: { id: clientId } });
       allClients  = allClients.filter(c => c.id !== clientId);
       allCheckins = allCheckins.filter(c => c.client_id !== clientId);
       renderStats();
@@ -3619,20 +3624,11 @@ async function loadStakeholderData(clientId) {
   const el = document.getElementById('stakeholders-content-' + clientId);
   if (!el) return;
 
-  const [stakeholderRes, responseRes, tokenRes] = await Promise.all([
-    db.from('stakeholders').select('*').eq('client_id', clientId).order('created_at'),
-    db.from('survey_responses')
-      .select('stakeholder_id,checkpoint,score,open_response,comments,comments_visible_to_client,submitted_at')
-      .eq('client_id', clientId)
-      .order('submitted_at', { ascending: true }),
-    db.from('survey_tokens')
-      .select('id,checkpoint,is_used,stakeholder_id,non_response_flagged,reminder_1_sent_at,reminder_2_sent_at,reminder_3_sent_at,sent_at')
-      .eq('client_id', clientId)
+  const [stakeholders, responses, tokens] = await Promise.all([
+    cdSelect('stakeholders', { eq: { client_id: clientId }, order: { col: 'created_at', asc: true } }),
+    cdSelect('survey_responses', { eq: { client_id: clientId }, order: { col: 'submitted_at', asc: true }, select: 'stakeholder_id,checkpoint,score,open_response,comments,comments_visible_to_client,submitted_at' }),
+    cdSelect('survey_tokens', { eq: { client_id: clientId }, select: 'id,checkpoint,is_used,stakeholder_id,non_response_flagged,reminder_1_sent_at,reminder_2_sent_at,reminder_3_sent_at,sent_at' }),
   ]);
-
-  const stakeholders = stakeholderRes.data || [];
-  const responses    = responseRes.data    || [];
-  const tokens       = tokenRes.data       || [];
 
   // Group full response objects by checkpoint
   const responsesByCheckpoint = {};
@@ -3961,16 +3957,19 @@ async function saveStakeholder(clientId, btn) {
   if (!email) { errEl.textContent = 'Email is required.'; return; }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { errEl.textContent = 'Enter a valid email address.'; return; }
 
-  const { data: existing } = await db.from('stakeholders').select('id').eq('client_id', clientId).eq('is_active', true);
-  if ((existing || []).length >= 3) { errEl.textContent = 'Maximum 3 stakeholders per client.'; return; }
+  const existing = await cdSelect('stakeholders', { eq: { client_id: clientId, is_active: true }, select: 'id' });
+  if (existing.length >= 3) { errEl.textContent = 'Maximum 3 stakeholders per client.'; return; }
 
   btn.textContent = 'Saving…';
   btn.disabled = true;
 
-  const { error } = await db.from('stakeholders').insert({
-    client_id: clientId, name, email, relationship: rel,
-    is_supervisor: isSup, is_board_member: isBoard, is_active: true
-  });
+  let error = null;
+  try {
+    await cdInsert('stakeholders', {
+      client_id: clientId, name, email, relationship: rel,
+      is_supervisor: isSup, is_board_member: isBoard, is_active: true
+    });
+  } catch (e) { error = e; }
 
   if (error) {
     errEl.textContent = 'Error: ' + error.message;
@@ -3985,7 +3984,7 @@ async function removeStakeholder(stakeholderId, clientId, name, btn) {
   if (!confirm(`Remove ${name} as a stakeholder? This cannot be undone.`)) return;
   btn.textContent = 'Removing…';
   btn.disabled = true;
-  await db.from('stakeholders').update({ is_active: false }).eq('id', stakeholderId);
+  await cdUpdate('stakeholders', { is_active: false }, { eq: { id: stakeholderId } });
   loadStakeholderData(clientId);
 }
 
@@ -4048,7 +4047,8 @@ async function regenerateToken(clientId) {
   btn.textContent = 'Generating…'; btn.disabled = true;
 
   const newToken = crypto.randomUUID();
-  const { error } = await db.from('clients').update({ token: newToken }).eq('id', clientId);
+  let error = null;
+  try { await cdUpdate('clients', { token: newToken }, { eq: { id: clientId } }); } catch (e) { error = e; }
 
   if (error) {
     if (msg) msg.innerHTML = '<span style="color:var(--red);font-size:12px;">Error — try again.</span>';
