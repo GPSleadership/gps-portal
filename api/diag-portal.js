@@ -71,7 +71,10 @@ export default async function handler(req, res) {
         // touch last-used (fire and forget)
         sb(`/rest/v1/diagnostics?id=eq.${diag.id}`, 'PATCH', { leader_token_last_used_at: new Date().toISOString() }, { Prefer: 'return=minimal' }).catch(() => {});
         const rr = await sb(`/rest/v1/diagnostic_raters?diagnostic_id=eq.${diag.id}&select=id,name,email,relationship,invited_at,completed_at,is_self,token&order=created_at.asc`);
-        const raters = rr.ok ? await rr.json() : [];
+        const rrRows = rr.ok ? await rr.json() : [];
+        // Only the leader's own self row carries a token (so they can self-assess).
+        // Never hand the leader other raters' survey tokens.
+        const raters = rrRows.map(r => r.is_self ? r : { ...r, token: undefined });
         return res.status(200).json({ ok: true, diagnostic: diag, raters });
       }
       case 'leader-add-rater': {
@@ -99,7 +102,12 @@ export default async function handler(req, res) {
       case 'rater-get': {
         const rater = await raterByToken(token);
         if (!rater) return res.status(401).json({ error: 'Invalid or expired link' });
-        const dr = await sb(`/rest/v1/diagnostics?id=eq.${rater.diagnostic_id}&limit=1`);
+        // Only the fields the survey page needs — never expose the leader's private
+        // notes or self-assessment. leader_token is returned ONLY for the leader's
+        // own self-assessment (so the page can redirect back to the leader portal).
+        const cols = 'id,status,survey_closed_at,close_date,client_name,client_org,client_title,custom_g1_question,custom_g2_question'
+          + (rater.is_self ? ',leader_token' : '');
+        const dr = await sb(`/rest/v1/diagnostics?id=eq.${rater.diagnostic_id}&select=${cols}&limit=1`);
         const diags = dr.ok ? await dr.json() : [];
         const diagnostic = diags[0] || null;
         if (!diagnostic) return res.status(404).json({ error: 'Diagnostic not found' });
