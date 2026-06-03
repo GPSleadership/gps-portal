@@ -2328,6 +2328,22 @@ const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON);
 
 const token = new URLSearchParams(window.location.search).get('token');
+
+// Phase 1: sensitive reads/writes go through the token-validated server endpoint
+// (service role key) instead of the public anon key. The server derives the
+// client from `token` and scopes every operation to that client. `db` (anon) is
+// retained only for the Supabase JS load and is being phased out.
+async function portalData(action, payload = {}) {
+  const res = await fetch('/api/portal-data', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ action, token, ...payload })
+  });
+  let json = {};
+  try { json = await res.json(); } catch (_) {}
+  if (!res.ok) throw new Error(json.error || ('Request failed (' + res.status + ')'));
+  return json;
+}
 let currentClient    = null; // set when portal loads — used by submitFormA
 
 // ─────────────────────────────────────────────
@@ -2336,7 +2352,7 @@ let currentClient    = null; // set when portal loads — used by submitFormA
 async function trackActivity(clientId) {
   if (!clientId) return;
   try {
-    await db.from('clients').update({ last_active_at: new Date().toISOString() }).eq('id', clientId);
+    await portalData('touch-activity');
   } catch (_) { /* silent — never block the user */ }
 }
 let clientSurveyData = [];  // stakeholder survey responses for Results tab
@@ -2797,14 +2813,10 @@ async function addRaterFromPortal() {
   msgEl.textContent = 'Adding…'; msgEl.className = 'dc-msg';
 
   try {
-    const { error } = await db.from('diagnostic_raters').insert({
+    await portalData('diag-add-rater', {
       diagnostic_id: CLIENT_DIAG.id,
-      name,
-      email,
-      relationship: rel || null,
-      is_self: false,
+      rater: { name, email, relationship: rel || null }
     });
-    if (error) throw error;
 
     nameEl.value  = '';
     emailEl.value = '';
@@ -2812,8 +2824,8 @@ async function addRaterFromPortal() {
     msgEl.textContent = `${name} added.`; msgEl.className = 'dc-msg ok';
 
     // Refresh rater data and re-render
-    const rr = await db.from('diagnostic_raters').select('*').eq('diagnostic_id', CLIENT_DIAG.id).order('created_at', { ascending: true });
-    CLIENT_DIAG_RATERS = rr.data || [];
+    const rr = await portalData('diag-get-raters', { diagnostic_id: CLIENT_DIAG.id });
+    CLIENT_DIAG_RATERS = rr.raters || [];
     renderDiagnosticTab();
 
   } catch (err) {
@@ -2830,8 +2842,7 @@ async function removeRaterFromPortal(raterId) {
   if (!confirm(`Remove ${rater.name} from your rater list?`)) return;
 
   try {
-    const { error } = await db.from('diagnostic_raters').delete().eq('id', raterId);
-    if (error) throw error;
+    await portalData('diag-remove-rater', { diagnostic_id: CLIENT_DIAG.id, rater_id: raterId });
     CLIENT_DIAG_RATERS = CLIENT_DIAG_RATERS.filter(r => r.id !== raterId);
     renderDiagnosticTab();
   } catch (err) {
@@ -2847,8 +2858,7 @@ async function submitRaterListFromPortal() {
 
   try {
     const now = new Date().toISOString();
-    const { error } = await db.from('diagnostics').update({ raters_finalized_at: now, status: 'rater_setup' }).eq('id', CLIENT_DIAG.id);
-    if (error) throw error;
+    await portalData('diag-finalize-raters', { diagnostic_id: CLIENT_DIAG.id });
     CLIENT_DIAG.raters_finalized_at = now;
     CLIENT_DIAG.status = 'rater_setup';
     renderDiagnosticTab();
@@ -3804,8 +3814,7 @@ async function wizLockIn() {
   };
 
   try {
-    const { error } = await db.from('clients').update(updates).eq('id', wizClientId);
-    if (error) throw error;
+    await portalData('update-client', { updates });
   } catch (err) {
     wizShowError('Error saving plan. Please try again or contact alex@gpsleadership.org.');
     btn.disabled = false;
@@ -3815,32 +3824,11 @@ async function wizLockIn() {
 
   // ── Stakeholders: insert new, skip duplicates ─────────────────────────
   try {
-    const shs = (p.stakeholders||[]).filter(s => s.name && s.email);
+    const shs = (p.stakeholders||[]).filter(s => s.name && s.email)
+      .map(s => ({ name: s.name, email: s.email, relationship: s.relationship, added_by: 'client_wizard' }));
     if (shs.length > 0) {
-      // Fetch existing stakeholders for this client (by email)
-      const { data: existing } = await db
-        .from('stakeholders')
-        .select('email')
-        .eq('client_id', wizClientId)
-        .eq('is_active', true);
-      const existingEmails = new Set((existing||[]).map(s => (s.email||'').toLowerCase()));
-
-      const toInsert = shs
-        .filter(s => !existingEmails.has(s.email.toLowerCase()))
-        .map(s => ({
-          client_id:       wizClientId,
-          name:            s.name,
-          email:           s.email,
-          relationship:    s.relationship,
-          is_supervisor:   s.relationship === 'Manager',
-          is_board_member: false,
-          is_active:       true,
-          added_by:        'client_wizard',
-        }));
-
-      if (toInsert.length > 0) {
-        await db.from('stakeholders').insert(toInsert);
-      }
+      // server dedupes against existing active stakeholders by email
+      await portalData('add-stakeholders', { stakeholders: shs });
     }
   } catch (shErr) {
     // Non-blocking: stakeholder insert failure doesn't kill the plan save
@@ -4313,10 +4301,9 @@ async function saveDraft(clientId, weekNumber, noCompletion) {
   btn.textContent = 'Saving…';
   btn.disabled = true;
 
-  const { error } = await db.from('checkin_drafts').upsert(
-    { client_id: clientId, week_number: weekNumber, data, saved_at: new Date().toISOString() },
-    { onConflict: 'client_id,week_number' }
-  );
+  let error = null;
+  try { await portalData('save-draft', { week_number: weekNumber, data }); }
+  catch (e) { error = e; }
 
   btn.disabled = false;
   btn.textContent = 'Save Draft';
@@ -4332,14 +4319,10 @@ async function saveDraft(clientId, weekNumber, noCompletion) {
 }
 
 async function loadDraftIntoForm(clientId, weekNumber) {
-  const { data, error } = await db
-    .from('checkin_drafts')
-    .select('data, saved_at')
-    .eq('client_id', clientId)
-    .eq('week_number', weekNumber)
-    .maybeSingle();
-
-  if (error || !data) return;
+  let data = null;
+  try { const r = await portalData('get-draft', { week_number: weekNumber }); data = r.draft; }
+  catch (e) { return; }
+  if (!data) return;
 
   const d = data.data || {};
   const savedAt = data.saved_at;
@@ -4393,12 +4376,7 @@ async function loadDraftIntoForm(clientId, weekNumber) {
 }
 
 async function deleteDraft(clientId, weekNumber) {
-  try {
-    await db.from('checkin_drafts')
-      .delete()
-      .eq('client_id', clientId)
-      .eq('week_number', weekNumber);
-  } catch (_) { /* silent */ }
+  try { await portalData('delete-draft', { week_number: weekNumber }); } catch (_) { /* silent */ }
 }
 
 async function submitFormA(clientId, clientName, weekNumber, noCompletion) {
@@ -4453,7 +4431,9 @@ async function submitFormA(clientId, clientName, weekNumber, noCompletion) {
     submitted_at:       new Date().toISOString(),
   };
 
-  const { error: checkinError } = await db.from('checkins').insert(checkinData);
+  let checkinError = null;
+  try { await portalData('submit-checkin', { checkin: checkinData }); }
+  catch (e) { checkinError = e; }
 
   if (checkinError) {
     errEl.textContent = 'Error saving. Please try again.';
@@ -4466,8 +4446,7 @@ async function submitFormA(clientId, clientName, weekNumber, noCompletion) {
   // Delete any saved draft now that the real check-in is submitted
   await deleteDraft(clientId, weekNumber);
 
-  // Update current metric on client record
-  await db.from('clients').update({ metric_current: metricVal }).eq('id', clientId);
+  // (current metric is updated server-side by submit-checkin)
 
   // Notify Alex
   try {
@@ -4886,25 +4865,20 @@ async function submitSelfCheck() {
   btn.textContent = 'Saving…';
 
   try {
-    const { error } = await db.from('self_checks').insert({
-      client_id:    clientId,
-      sprint_number: 1,
-      checkpoint:   _scCheckpoint,
-      q1_score:     _scQ1,
-      q2_score:     _scQ2,
-      q3_response:  q3Text
-    });
-
-    if (error) {
-      // Unique violation = already submitted
-      if (error.code === '23505') {
-        // Already exists — just proceed to show results
-      } else {
-        errEl.textContent = 'Error saving: ' + error.message;
-        btn.disabled    = false;
-        btn.textContent = 'Submit & View Results';
-        return;
-      }
+    try {
+      // duplicate (already submitted) returns { duplicate:true } — proceed to results either way
+      await portalData('add-self-check', { self_check: {
+        sprint_number: 1,
+        checkpoint:    _scCheckpoint,
+        q1_score:      _scQ1,
+        q2_score:      _scQ2,
+        q3_response:   q3Text
+      }});
+    } catch (scErr) {
+      errEl.textContent = 'Error saving: ' + (scErr.message || 'unknown');
+      btn.disabled    = false;
+      btn.textContent = 'Submit & View Results';
+      return;
     }
 
     // Update local self-checks cache so modal doesn't re-trigger
@@ -6411,8 +6385,9 @@ async function addClientStakeholder(clientId) {
     return;
   }
 
-  const { data: existing } = await db.from('stakeholders').select('id').eq('client_id', clientId).eq('is_active', true);
-  if ((existing || []).length >= 3) {
+  const existingResp = await portalData('get-stakeholders');
+  const existing = existingResp.stakeholders || [];
+  if (existing.length >= 3) {
     if (errEl) { errEl.textContent = 'Maximum of 3 stakeholders allowed.'; errEl.style.display = 'block'; }
     return;
   }
@@ -6422,12 +6397,12 @@ async function addClientStakeholder(clientId) {
     return;
   }
 
-  const { error } = await db.from('stakeholders').insert({
-    client_id: clientId, name, email, relationship: rel,
-    is_supervisor: isSup, is_board_member: isBoard,
-    is_active: true, added_by: 'client'
-    // confirmed_at intentionally omitted — NULL = draft
-  });
+  let error = null;
+  try {
+    await portalData('add-stakeholders', { stakeholders: [
+      { name, email, relationship: rel, is_supervisor: isSup, is_board_member: isBoard, added_by: 'client' }
+    ]});
+  } catch (e) { error = e; }
 
   if (error) {
     if (errEl) { errEl.textContent = 'Error saving: ' + error.message; errEl.style.display = 'block'; }
@@ -6435,18 +6410,14 @@ async function addClientStakeholder(clientId) {
   }
 
   // Reload stakeholder section fresh from DB
-  const { data: fresh } = await db.from('stakeholders')
-    .select('id, name, email, relationship, is_supervisor, is_board_member, confirmed_at, created_at')
-    .eq('client_id', clientId).eq('is_active', true).order('created_at', { ascending: true });
+  const { stakeholders: fresh } = await portalData('get-stakeholders');
   renderClientStakeholderCard(clientId, fresh || []);
 }
 
 async function removeClientStakeholder(stakeholderId, clientId) {
   // Only allow removal of unconfirmed (draft) stakeholders
-  await db.from('stakeholders').update({ is_active: false }).eq('id', stakeholderId).is('confirmed_at', null);
-  const { data: fresh } = await db.from('stakeholders')
-    .select('id, name, email, relationship, is_supervisor, is_board_member, confirmed_at, created_at')
-    .eq('client_id', clientId).eq('is_active', true).order('created_at', { ascending: true });
+  await portalData('deactivate-stakeholder', { stakeholder_id: stakeholderId });
+  const { stakeholders: fresh } = await portalData('get-stakeholders');
   renderClientStakeholderCard(clientId, fresh || []);
 }
 
@@ -6454,12 +6425,8 @@ async function confirmClientStakeholders(clientId) {
   const btn = document.getElementById('csh-confirm-btn');
   if (btn) { btn.textContent = 'Confirming…'; btn.disabled = true; }
 
-  const now = new Date().toISOString();
-  const { error } = await db.from('stakeholders')
-    .update({ confirmed_at: now })
-    .eq('client_id', clientId)
-    .eq('is_active', true)
-    .is('confirmed_at', null);
+  let error = null;
+  try { await portalData('confirm-stakeholders'); } catch (e) { error = e; }
 
   if (error) {
     if (btn) { btn.textContent = '✓ Confirm Stakeholders'; btn.disabled = false; }
@@ -6467,9 +6434,7 @@ async function confirmClientStakeholders(clientId) {
     return;
   }
 
-  const { data: fresh } = await db.from('stakeholders')
-    .select('id, name, email, relationship, is_supervisor, is_board_member, confirmed_at, created_at')
-    .eq('client_id', clientId).eq('is_active', true).order('created_at', { ascending: true });
+  const { stakeholders: fresh } = await portalData('get-stakeholders');
   trackActivity(clientId);
   renderClientStakeholderCard(clientId, fresh || []);
 }
@@ -6490,7 +6455,7 @@ async function initPortalAccessCheck(client) {
   if (!client.portal_first_active_at) {
     const now = new Date().toISOString();
     try {
-      await db.from('clients').update({ portal_first_active_at: now }).eq('id', client.id);
+      await portalData('set-first-active');
       client.portal_first_active_at = now;
     } catch (_) { /* silent — never block the user */ }
     return 'active';
