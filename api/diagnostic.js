@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 // GPS Leadership Solutions — Diagnostic API (consolidated)
 // Routes all diagnostic actions through a single serverless function.
 //
@@ -27,6 +28,22 @@ const PORTAL_BASE       = process.env.PORTAL_BASE_URL     || 'https://portal.gps
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const COACH_EMAIL       = process.env.COACH_ALERT_EMAIL   || 'alex@gpsleadership.org';
 const CRON_SECRET       = process.env.CRON_SECRET;
+const COACH_SESSION_SECRET = process.env.COACH_SESSION_SECRET || '';
+
+// Verify a coach session token (HMAC) for authenticated manual cron triggers.
+function verifyCoachSession(tok) {
+  if (!tok || !COACH_SESSION_SECRET) return null;
+  const parts = String(tok).split('.');
+  if (parts.length !== 2) return null;
+  const expected = Buffer.from(crypto.createHmac('sha256', COACH_SESSION_SECRET).update(parts[0]).digest())
+    .toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const a = Buffer.from(parts[1]), b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  let p; try { p = JSON.parse(Buffer.from(parts[0].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString()); } catch { return null; }
+  if (!p || p.role !== 'coach' || typeof p.exp !== 'number' || p.exp < Date.now()) return null;
+  return p;
+}
+
 const CLAUDE_MODEL        = 'claude-sonnet-4-6';
 const CLAUDE_REPORT_MODEL = 'claude-sonnet-4-6'; // Full-quality report model — requires Vercel Pro (120s timeout)
 
@@ -1389,7 +1406,7 @@ async function handleFinalizeReport(req, res) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ACTION: reminders
 // GET|POST /api/diagnostic?action=reminders
-// Auth: x-vercel-cron header, Bearer CRON_SECRET, or { manual_trigger: true }
+// Auth: x-vercel-cron header, Bearer CRON_SECRET, or a valid coach session { session }
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function daysBetween(earlier, later) {
@@ -1578,7 +1595,7 @@ async function handleReminders(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const isVercelCron    = req.headers['x-vercel-cron'] === '1';
-  const isManualTrigger = req.method === 'POST' && req.body?.manual_trigger === true;
+  const isManualTrigger = req.method === 'POST' && !!verifyCoachSession(req.body?.session);
   const authHeader      = req.headers['authorization'] || '';
   const hasSecret       = CRON_SECRET && authHeader === `Bearer ${CRON_SECRET}`;
 

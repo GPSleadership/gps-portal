@@ -3375,15 +3375,14 @@ async function runRemindersNow() {
   btn.textContent = 'Sending…';
   btn.disabled = true;
 
-  // Get the current session password to authenticate the API call
-  const { data: pwData } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
-  const password = pwData?.value || 'GPS2026';
+  // Authenticate the manual trigger with the coach session (server verifies it)
+  const session = localStorage.getItem('gps_coach_session') || '';
 
   try {
     const res = await fetch('/api/survey-reminders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ manual_trigger: true }),
+      body: JSON.stringify({ session }),
     });
     const text = await res.text();
     let json;

@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 // GPS Leadership — Weekly Check-In Reminder
 // Vercel Cron Job: runs every Monday at 9am ET (14:00 UTC)
 // Sends a reminder only to clients who haven't submitted their check-in this week
@@ -16,6 +17,21 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const RESEND_FROM    = process.env.RESEND_FROM_EMAIL || 'noreply@portal.gpsleadership.org';
 const PORTAL_BASE    = 'https://portal.gpsleadership.org/client.html';
 const CRON_SECRET    = process.env.CRON_SECRET;
+const COACH_SESSION_SECRET = process.env.COACH_SESSION_SECRET || '';
+
+// Verify a coach session token (HMAC) for authenticated manual cron triggers.
+function verifyCoachSession(tok) {
+  if (!tok || !COACH_SESSION_SECRET) return null;
+  const parts = String(tok).split('.');
+  if (parts.length !== 2) return null;
+  const expected = Buffer.from(crypto.createHmac('sha256', COACH_SESSION_SECRET).update(parts[0]).digest())
+    .toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const a = Buffer.from(parts[1]), b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  let p; try { p = JSON.parse(Buffer.from(parts[0].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString()); } catch { return null; }
+  if (!p || p.role !== 'coach' || typeof p.exp !== 'number' || p.exp < Date.now()) return null;
+  return p;
+}
 
 // ── Date helper: parse "YYYY-MM-DD" as LOCAL midnight, not UTC ──────────────
 // new Date("2026-03-16") parses as UTC → shows as Mar 15 in US timezones.
@@ -65,7 +81,7 @@ export default async function handler(req, res) {
   const hasSecret = CRON_SECRET && authHeader === `Bearer ${CRON_SECRET}`;
 
   // Also accept POST from run-reminders-now.js (which handles its own auth)
-  const isManualTrigger = req.method === 'POST' && req.body?.manual_trigger === true;
+  const isManualTrigger = req.method === 'POST' && !!verifyCoachSession(req.body?.session);
 
   if (!isVercelCron && !hasSecret && !isManualTrigger) {
     return res.status(401).json({ error: 'Unauthorized' });

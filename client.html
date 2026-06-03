@@ -3186,7 +3186,7 @@ async function wizGoal90TriggerPrefill() {
     const resp = await fetch('/api/ask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'prefill', goal90: goal, goal30: (goal30El?.value || '').trim(), pillar: wizPlan.pillar || '' })
+      body: JSON.stringify({ action: 'prefill', token, goal90: goal, goal30: (goal30El?.value || '').trim(), pillar: wizPlan.pillar || '' })
     });
     const data = await resp.json();
     const pf = data?.prefill || {};

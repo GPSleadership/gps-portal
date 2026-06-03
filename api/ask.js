@@ -4,10 +4,31 @@
 
 const SUPABASE_URL    = process.env.SUPABASE_URL    || 'https://pbnkefuqpoztcxfagiod.supabase.co';
 const SUPABASE_SECRET = process.env.SUPABASE_SECRET_KEY;
+const PORTAL_ORIGIN   = process.env.PORTAL_BASE_URL || 'https://portal.gpsleadership.org';
+const ASK_DAILY_CAP   = 30; // server-side hard cap per client/day (UI shows a softer 20)
+
+// Validate a portal token server-side → returns the client row (or null).
+async function getClientByToken(token) {
+  if (!token || !SUPABASE_SECRET) return null;
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/clients?token=eq.${encodeURIComponent(token)}&is_archived=eq.false&select=id,ask_alex_enabled&limit=1`,
+    { headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}` } });
+  if (!r.ok) return null;
+  const rows = await r.json();
+  return Array.isArray(rows) && rows[0] ? rows[0] : null;
+}
+// Count today's Ask Alex calls for a client (server-side rate limit).
+async function countAskToday(clientId) {
+  const start = new Date().toISOString().slice(0, 10) + 'T00:00:00Z';
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/ask_alex_log?client_id=eq.${clientId}&asked_at=gte.${start}&select=id`,
+    { headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}` } });
+  if (!r.ok) return 0;
+  const rows = await r.json();
+  return Array.isArray(rows) ? rows.length : 0;
+}
 
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Origin', PORTAL_ORIGIN);
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     return res.status(200).end();
@@ -21,6 +42,7 @@ export default async function handler(req, res) {
     if (req.body.action === 'prefill') {
       const { goal90, goal30, pillar } = req.body;
       if (!goal90) return res.status(400).json({ error: 'goal90 required' });
+      if (!(await getClientByToken(req.body.token))) return res.status(401).json({ error: 'Invalid or missing token' });
 
       const prefillPrompt = `You are helping a leader build a 90-day leadership development plan. All suggestions must be written in FIRST PERSON using "I" — never "you" or "they".
 
@@ -53,7 +75,7 @@ Generate concrete, specific suggestions. Return ONLY valid JSON — no markdown,
       });
 
       const prefillData = await prefillResp.json();
-      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Origin', PORTAL_ORIGIN);
       const raw = prefillData?.content?.[0]?.text || '{}';
       const jsonStr = raw.replace(/^```json?\n?/,'').replace(/\n?```$/,'').trim();
       try {
@@ -64,6 +86,14 @@ Generate concrete, specific suggestions. Return ONLY valid JSON — no markdown,
     }
 
     const { messages, system, token } = req.body;
+
+    // ── Require a valid portal token + enforce a server-side daily cap ───────
+    const askClient = await getClientByToken(token);
+    if (!askClient) return res.status(401).json({ error: 'Invalid or missing token' });
+    if (askClient.ask_alex_enabled === false) return res.status(403).json({ error: 'Ask Alex is not enabled for your account' });
+    if ((await countAskToday(askClient.id)) >= ASK_DAILY_CAP) {
+      return res.status(429).json({ error: "You've reached today's question limit. Please try again tomorrow." });
+    }
 
     // ── Call Anthropic ──────────────────────────────────────────────────────
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -82,7 +112,7 @@ Generate concrete, specific suggestions. Return ONLY valid JSON — no markdown,
     });
 
     const data = await response.json();
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Origin', PORTAL_ORIGIN);
 
     // ── Log usage (awaited so Vercel doesn't kill the function before it runs) ──
     if (response.ok && token && SUPABASE_SECRET) {

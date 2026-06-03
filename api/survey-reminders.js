@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 // api/survey-reminders.js
 // Vercel Cron Job: runs daily at 14:00 UTC.
 // Sends stakeholder survey reminders at 2-day intervals after the initial survey send.
@@ -17,6 +18,21 @@ const SITE_URL        = process.env.SITE_URL        || 'https://portal.gpsleader
 const FROM_EMAIL      = 'alex@gpsleadership.org';
 const FROM_NAME       = 'Alex Tremble | GPS Leadership Solutions';
 const CRON_SECRET     = process.env.CRON_SECRET;
+const COACH_SESSION_SECRET = process.env.COACH_SESSION_SECRET || '';
+
+// Verify a coach session token (HMAC) for authenticated manual cron triggers.
+function verifyCoachSession(tok) {
+  if (!tok || !COACH_SESSION_SECRET) return null;
+  const parts = String(tok).split('.');
+  if (parts.length !== 2) return null;
+  const expected = Buffer.from(crypto.createHmac('sha256', COACH_SESSION_SECRET).update(parts[0]).digest())
+    .toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const a = Buffer.from(parts[1]), b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  let p; try { p = JSON.parse(Buffer.from(parts[0].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString()); } catch { return null; }
+  if (!p || p.role !== 'coach' || typeof p.exp !== 'number' || p.exp < Date.now()) return null;
+  return p;
+}
 
 const REMINDER_INTERVAL_DAYS = 2;
 
@@ -33,11 +49,11 @@ export default async function handler(req, res) {
 
   res.setHeader('Access-Control-Allow-Origin', '*');
 
-  // Auth: Vercel cron header, CRON_SECRET, or manual_trigger flag (from coach portal)
+  // Auth: Vercel cron header, CRON_SECRET, or a valid coach session (from coach portal)
   const authHeader   = req.headers['authorization'] || '';
   const isVercelCron = req.headers['x-vercel-cron'] === '1';
   const hasSecret    = CRON_SECRET && authHeader === `Bearer ${CRON_SECRET}`;
-  const isManual     = req.method === 'POST' && req.body?.manual_trigger === true;
+  const isManual     = req.method === 'POST' && !!verifyCoachSession(req.body?.session);
 
   if (!isVercelCron && !hasSecret && !isManual) {
     return res.status(401).json({ error: 'Unauthorized' });
