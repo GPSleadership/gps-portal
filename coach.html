@@ -1395,16 +1395,31 @@ let currentFilter = 'active';
 // ─────────────────────────────────────────────
 // AUTH
 // ─────────────────────────────────────────────
-const SESSION_KEY    = 'gps_coach_authed';
-const SESSION_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours in ms
+const SESSION_KEY       = 'gps_coach_authed';      // legacy timestamp (kept for migration)
+const SESSION_TOKEN_KEY = 'gps_coach_session';     // server-issued signed session token
+const SESSION_EXP_KEY   = 'gps_coach_session_exp'; // local expiry mirror
+const SESSION_EXPIRY     = 24 * 60 * 60 * 1000;    // 24 hours in ms
 
-function saveSession() {
+function saveSession(token, expiresInMs) {
+  if (token) {
+    localStorage.setItem(SESSION_TOKEN_KEY, token);
+    localStorage.setItem(SESSION_EXP_KEY, String(Date.now() + (expiresInMs || SESSION_EXPIRY)));
+  }
   localStorage.setItem(SESSION_KEY, Date.now().toString());
 }
 function clearSession() {
   localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(SESSION_TOKEN_KEY);
+  localStorage.removeItem(SESSION_EXP_KEY);
+}
+// Token sent with future service-key dashboard endpoints (Authorization: Bearer)
+function getCoachSessionToken() {
+  return localStorage.getItem(SESSION_TOKEN_KEY) || '';
 }
 function hasValidSession() {
+  const exp = parseInt(localStorage.getItem(SESSION_EXP_KEY) || '0', 10);
+  if (exp && Date.now() < exp && getCoachSessionToken()) return true;
+  // Legacy fallback: old timestamp-based session from before the hardening
   const ts = localStorage.getItem(SESSION_KEY);
   if (!ts) return false;
   return (Date.now() - parseInt(ts)) < SESSION_EXPIRY;
@@ -1424,31 +1439,31 @@ async function checkPassword() {
   const val = document.getElementById('passwordInput').value.trim();
   if (!val) return;
 
-  // Load coach password from settings
-  const { data } = await db.from('coach_settings').select('value').eq('key', 'coach_password').single();
-  const stored = (data && data.value) ? data.value : 'GPS2026'; // fallback
+  const errEl = document.getElementById('loginError');
+  errEl.textContent = '';
 
-  if (val === stored) {
-    saveSession();
-    unlockDashboard();
-    return;
+  // Password is verified SERVER-SIDE (scrypt hash) — never read into the browser.
+  // The server returns a signed, expiring session token. See api/get-client.js.
+  try {
+    const resp = await fetch('/api/get-client', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ action: 'coach-login', password: val })
+    });
+
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data && data.ok && data.session) {
+        saveSession(data.session, data.expires_in_ms);
+        unlockDashboard();
+        return;
+      }
+    }
+    errEl.textContent = 'Incorrect password.';
+    document.getElementById('passwordInput').value = '';
+  } catch (e) {
+    errEl.textContent = 'Login failed — check your connection and try again.';
   }
-
-  // Check admin accounts as fallback
-  const { data: adminData } = await db
-    .from('admin_accounts')
-    .select('password')
-    .eq('is_active', true);
-
-  const adminPasswords = (adminData || []).map(a => a.password);
-  if (adminPasswords.includes(val)) {
-    saveSession();
-    unlockDashboard();
-    return;
-  }
-
-  document.getElementById('loginError').textContent = 'Incorrect password.';
-  document.getElementById('passwordInput').value = '';
 }
 
 // ─────────────────────────────────────────────

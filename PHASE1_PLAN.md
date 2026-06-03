@@ -3,7 +3,7 @@
 **Goal:** Close the live data-exposure findings from the June 3 premortem without taking the portal down.
 **Branch:** `security-hardening-phase1` — nothing here deploys to production until Alex reviews and merges to `main`.
 **Hard constraints baked into this plan:**
-- Vercel is at the **12-function cap** (`import-clients.js` is ignored; 13 files on disk). No new `api/*.js` files without freeing a slot. New server logic is added as `?action=` routes inside existing functions.
+- ~~Vercel 12-function cap~~ — **No longer applies (on Vercel Pro as of June 2026).** New server logic *may* be a standalone `api/*.js` file now. The coach-auth code in this branch was folded into `get-client.js` while the cap still applied; it works fine as-is, but future endpoints (signed-URL report server, etc.) can be their own files for cleaner separation.
 - **No `package.json` / no npm.** Serverless functions use Node built-ins only. Password hashing uses `crypto.scryptSync`; session tokens use `crypto.createHmac`. No bcrypt.
 
 ---
