@@ -2432,12 +2432,9 @@ async function loadCloseoutData(clientId) {
   const el      = document.getElementById('closeout-content-'  + clientId);
   if (!el || !section) return;
 
-  const { data, error } = await db
-    .from('sprint_closeouts')
-    .select('*')
-    .eq('client_id', clientId)
-    .order('sprint_number', { ascending: false })
-    .limit(5);
+  let data = null, error = null;
+  try { data = await cdSelect('sprint_closeouts', { eq: { client_id: clientId }, order: { col: 'sprint_number', asc: false }, limit: 5 }); }
+  catch (e) { error = e; }
 
   if (!data || data.length === 0) {
     section.style.display = 'none'; // hide if no closeout yet
@@ -2486,11 +2483,9 @@ async function loadSprintData(clientId) {
   const el = document.getElementById('sprint-content-' + clientId);
   if (!el) return;
 
-  const { data, error } = await db
-    .from('sprints')
-    .select('*')
-    .eq('client_id', clientId)
-    .order('sprint_number', { ascending: true });
+  let data = null, error = null;
+  try { data = await cdSelect('sprints', { eq: { client_id: clientId }, order: { col: 'sprint_number', asc: true } }); }
+  catch (e) { error = e; }
 
   if (!data || data.length === 0) {
     // No sprint records yet — show a "Sprint 1 (current)" placeholder
@@ -2946,9 +2941,8 @@ async function saveDiagnosticUrl(clientId, btn) {
   const url   = input.value.trim();
   btn.textContent = 'Saving…';
   btn.disabled = true;
-  const { error } = await db.from('clients')
-    .update({ diagnostic_report_url: url || null })
-    .eq('id', clientId);
+  let error = null;
+  try { await cdUpdate('clients', { diagnostic_report_url: url || null }, { eq: { id: clientId } }); } catch (e) { error = e; }
   if (error) {
     btn.textContent = 'Error';
     btn.style.background = 'var(--red)';
@@ -3211,10 +3205,9 @@ async function loadEmailTemplates() {
   const el = document.getElementById('templatesContent');
   el.innerHTML = '<div class="spinner"></div>';
 
-  const { data, error } = await db
-    .from('email_templates')
-    .select('*')
-    .order('created_at', { ascending: true });
+  let data = null, error = null;
+  try { data = await cdSelect('email_templates', { order: { col: 'created_at', asc: true } }); }
+  catch (e) { error = e; }
 
   if (error || !data || data.length === 0) {
     el.innerHTML = `<div style="padding:24px;text-align:center;color:var(--gray-600);font-size:14px;">
@@ -3341,11 +3334,9 @@ async function loadEmailLog() {
   const el = document.getElementById('emailLogContent');
   el.innerHTML = '<div class="spinner"></div>';
 
-  const { data, error } = await db
-    .from('email_log')
-    .select('*')
-    .order('sent_at', { ascending: false })
-    .limit(100);
+  let data = null, error = null;
+  try { data = await cdSelect('email_log', { order: { col: 'sent_at', asc: false }, limit: 100 }); }
+  catch (e) { error = e; }
 
   if (error || !data) {
     el.innerHTML = `<div style="color:var(--red);font-size:13px;">Failed to load email log: ${error?.message || 'Unknown error'}</div>`;
@@ -3503,10 +3494,9 @@ async function loadAdminAccounts() {
   const el = document.getElementById('adminAccountsContent');
   el.innerHTML = '<div class="spinner"></div>';
 
-  const { data, error } = await db
-    .from('admin_accounts')
-    .select('*')
-    .order('created_at', { ascending: false });
+  let data = null, error = null;
+  try { const r = await coachData({ action: 'admin-list' }); data = r.admins || []; }
+  catch (e) { error = e; }
 
   if (error) {
     el.innerHTML = `<div style="color:var(--red);font-size:13px;">Failed to load accounts: ${error.message}</div>`;
@@ -3585,14 +3575,9 @@ async function addAdmin() {
   if (!password) { errEl.textContent = 'Password is required.'; return; }
   if (password.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; return; }
 
-  const { error } = await db.from('admin_accounts').insert({
-    name,
-    email: email || null,
-    password,
-    notes: notes || null,
-    role: 'admin',
-    is_active: true,
-  });
+  let error = null;
+  try { await coachData({ action: 'admin-add', name, email: email || null, password, notes: notes || null }); }
+  catch (e) { error = e; }
 
   if (error) {
     errEl.textContent = 'Error creating account: ' + error.message;
@@ -3603,13 +3588,13 @@ async function addAdmin() {
 }
 
 async function toggleAdminActive(id, currentlyActive) {
-  await db.from('admin_accounts').update({ is_active: !currentlyActive }).eq('id', id);
+  await coachData({ action: 'admin-update', id, is_active: !currentlyActive });
   loadAdminAccounts();
 }
 
 async function deleteAdmin(id, name) {
   if (!confirm(`Remove admin account for ${name}? This cannot be undone.`)) return;
-  await db.from('admin_accounts').delete().eq('id', id);
+  await coachData({ action: 'admin-delete', id });
   loadAdminAccounts();
 }
 
@@ -4228,9 +4213,8 @@ async function saveClientInfo(clientId) {
 
   btn.textContent = 'Saving…'; btn.disabled = true;
 
-  const { error } = await db.from('clients')
-    .update({ name, email, organization: org || null, title: title || null, industry })
-    .eq('id', clientId);
+  let error = null;
+  try { await cdUpdate('clients', { name, email, organization: org || null, title: title || null, industry }, { eq: { id: clientId } }); } catch (e) { error = e; }
 
   if (error) {
     msg.style.color = 'var(--red)'; msg.textContent = 'Error — try again.';
@@ -4311,11 +4295,9 @@ async function diagBoot() {
 }
 
 async function loadDiagnostics() {
-  const { data, error } = await db
-    .from('diagnostics')
-    .select('*')
-    .order('created_at', { ascending: false });
-  if (error) { console.error(error); return; }
+  let data = null;
+  try { data = await cdSelect('diagnostics', { order: { col: 'created_at', asc: false } }); }
+  catch (e) { console.error(e); return; }
   ALL_DIAGS = data || [];
 
   // Batch-fetch rater stats for all open diagnostics
@@ -4323,11 +4305,7 @@ async function loadDiagnostics() {
   DIAG_RATER_STATS = {};
   if (openDiags.length > 0) {
     const ids = openDiags.map(d => d.id);
-    const { data: raterData } = await db
-      .from('diagnostic_raters')
-      .select('diagnostic_id,completed_at,is_self')
-      .in('diagnostic_id', ids)
-      .eq('is_self', false);
+    const raterData = await cdSelect('diagnostic_raters', { in: { diagnostic_id: ids }, eq: { is_self: false }, select: 'diagnostic_id,completed_at,is_self' });
     (raterData || []).forEach(r => {
       if (!DIAG_RATER_STATS[r.diagnostic_id]) DIAG_RATER_STATS[r.diagnostic_id] = { total: 0, responded: 0 };
       DIAG_RATER_STATS[r.diagnostic_id].total++;
@@ -4343,10 +4321,9 @@ async function loadDiagnostics() {
 }
 
 async function diagLoadClients() {
-  const { data } = await db
-    .from('clients')
-    .select('id,name,email,org,title,token,last_active_at,current_sprint_number,is_active,is_archived,plan_submitted_at')
-    .order('name');
+  let data = null;
+  try { data = await cdSelect('clients', { select: 'id,name,email,org,title,token,last_active_at,current_sprint_number,is_active,is_archived,plan_submitted_at', order: { col: 'name', asc: true } }); }
+  catch (e) { return; }
   if (!data) return;
   DIAG_CLIENTS = data;
 
@@ -4359,11 +4336,7 @@ async function diagLoadClients() {
   const activeClients = data.filter(c => c.is_active && !c.is_archived);
   if (activeClients.length > 0) {
     const ids = activeClients.map(c => c.id);
-    const { data: ciData } = await db
-      .from('checkins')
-      .select('client_id,week_number,submitted_at,completion_status')
-      .in('client_id', ids)
-      .order('submitted_at', { ascending: false });
+    const ciData = await cdSelect('checkins', { in: { client_id: ids }, order: { col: 'submitted_at', asc: false }, select: 'client_id,week_number,submitted_at,completion_status' });
     const today = new Date();
     DIAG_COACHING_CLIENTS = activeClients.map(c => {
       const clientCIs = (ciData || []).filter(ci => ci.client_id === c.id)
@@ -4759,12 +4732,10 @@ async function openDiag(id) {
     ? (DIAG_CLIENTS.find(c => c.id === DIAG_SEL.client_id) || null)
     : null;
 
-  const { data: raterData } = await db
-    .from('diagnostic_raters').select('*').eq('diagnostic_id', id).order('created_at', { ascending: true });
+  const raterData = await cdSelect('diagnostic_raters', { eq: { diagnostic_id: id }, order: { col: 'created_at', asc: true } });
   DIAG_RATERS = raterData || [];
 
-  const { data: ovData } = await db
-    .from('diagnostic_question_overrides').select('question_code, override_text, override_note').eq('diagnostic_id', id);
+  const ovData = await cdSelect('diagnostic_question_overrides', { eq: { diagnostic_id: id }, select: 'question_code,override_text,override_note' });
   DIAG_OVERRIDES = {};
   (ovData || []).forEach(o => { DIAG_OVERRIDES[o.question_code] = { text: o.override_text, note: o.override_note }; });
 
@@ -5157,10 +5128,8 @@ async function toggleRaterInterview(raterId, currentState) {
     return;
   }
 
-  const { error } = await db
-    .from('diagnostic_raters')
-    .update({ will_interview: !currentState })
-    .eq('id', raterId);
+  let error = null;
+  try { await cdUpdate('diagnostic_raters', { will_interview: !currentState }, { eq: { id: raterId } }); } catch (e) { error = e; }
 
   if (!error) {
     DIAG_RATERS = DIAG_RATERS.map(r => r.id === raterId ? { ...r, will_interview: !currentState } : r);
@@ -5391,10 +5360,14 @@ async function markIntakeComplete() {
   await updateDiag({ status: 'self_assessment_pending', intake_completed_at: new Date().toISOString() });
   const existing = DIAG_RATERS.find(r => r.is_self);
   if (!existing) {
-    const { data } = await db.from('diagnostic_raters').insert({
-      diagnostic_id: DIAG_SEL.id, name: DIAG_SEL.client_name,
-      email: DIAG_SEL.client_email, relationship: 'Self', is_self: true,
-    }).select().single();
+    let data = null;
+    try {
+      const _r = await cdInsert('diagnostic_raters', {
+        diagnostic_id: DIAG_SEL.id, name: DIAG_SEL.client_name,
+        email: DIAG_SEL.client_email, relationship: 'Self', is_self: true,
+      });
+      data = Array.isArray(_r) ? _r[0] : _r;
+    } catch (e) { data = null; }
     if (data) DIAG_RATERS.push(data);
   }
   await refreshSelected();
@@ -5638,14 +5611,9 @@ async function openReportPreview() {
 
   // Fetch latest report draft
   try {
-    const { data: drafts, error } = await db
-      .from('diagnostic_report_drafts')
-      .select('*')
-      .eq('diagnostic_id', d.id)
-      .order('generated_at', { ascending: false })
-      .limit(1);
+    const drafts = await cdSelect('diagnostic_report_drafts', { eq: { diagnostic_id: d.id }, order: { col: 'generated_at', asc: false }, limit: 1 });
 
-    if (error || !drafts || drafts.length === 0) {
+    if (!drafts || drafts.length === 0) {
       bodyEl.innerHTML = `<div class="rp-loading" style="color:#dc2626;">
         No report draft found. Generate the report first, then return here to finalize.
       </div>`;
@@ -5746,11 +5714,8 @@ async function markDebriefComplete() {
   await updateDiag({ status: 'debrief_complete', debrief_completed_at: new Date().toISOString() });
 
   if (hasClient) {
-    const { data: clientData } = await db
-      .from('clients')
-      .select('name, email, token')
-      .eq('id', DIAG_SEL.client_id)
-      .single();
+    const _cd = await cdSelect('clients', { eq: { id: DIAG_SEL.client_id }, select: 'name,email,token', limit: 1 });
+    const clientData = _cd[0];
     if (clientData && clientData.token) {
       const portalURL = PORTAL_BASE_URL + '?token=' + clientData.token;
       // Save portal URL on the diagnostic so the leader portal can show the button
@@ -5946,11 +5911,7 @@ async function exportDiagData(format = 'csv') {
   if (btn) { btn.textContent = '⏳ Loading…'; btn.disabled = true; }
 
   try {
-    const { data: responses, error } = await db
-      .from('diagnostic_responses')
-      .select('rater_id, question_code, score, text_response')
-      .eq('diagnostic_id', DIAG_SEL.id);
-    if (error) throw error;
+    const responses = await cdSelect('diagnostic_responses', { eq: { diagnostic_id: DIAG_SEL.id }, select: 'rater_id,question_code,score,text_response' });
 
     // Build lookup maps
     const raterMap = {};
@@ -6188,10 +6149,9 @@ let ALL_TEAM_REPORTS  = [];
 let TEAM_RPT_SELECTED = new Set();
 
 async function loadTeamReports() {
-  const { data, error } = await db
-    .from('diagnostic_team_reports')
-    .select('*')
-    .order('generated_at', { ascending: false });
+  let data = null, error = null;
+  try { data = await cdSelect('diagnostic_team_reports', { order: { col: 'generated_at', asc: false } }); }
+  catch (e) { error = e; }
   if (!error) ALL_TEAM_REPORTS = data || [];
 }
 
