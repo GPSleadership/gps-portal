@@ -330,8 +330,8 @@ const QUESTION_BANK = [
 
   // ── SECTION D: OVERALL IMPACT ─────────────────────────────────────────────
   { sec:'D', code:'D1', type:'rated_10',
-    text_rater:'On a scale of 1–10, how would you rate [First Name]\'s overall impact on the organization?',
-    text_self: 'On a scale of 1–10, how would you honestly rate your own overall impact on the organization?' },
+    text_rater:'On a scale of 1–5 (1 = very low impact, 3 = acceptable/needs development, 5 = exceptional impact), how would you rate [First Name]\'s overall impact on the organization?',
+    text_self: 'On a scale of 1–5 (1 = very low impact, 3 = acceptable/needs development, 5 = exceptional impact), how would you honestly rate your own overall impact on the organization?' },
   { sec:'D', code:'D2', type:'open',
     text_rater:'In 3–5 words or a short phrase, how would you describe [First Name]\'s leadership style and presence?',
     text_self: 'In 3–5 words or a short phrase, how would you honestly describe your own leadership style and presence?' },
@@ -528,7 +528,7 @@ function renderSection(idx) {
     <div style="font-size:12px;color:var(--mid);margin-bottom:16px;">
       ${(secCode === 'A' || secCode === 'B' || secCode === 'C' || secCode === 'F')
         ? '1 = Strongly Disagree &nbsp;·&nbsp; 5 = Strongly Agree'
-        : secCode === 'D' ? '1–10 scale for the first question'
+        : secCode === 'D' ? '1–5 impact scale for the first question'
         : secCode === 'E' ? 'Your responses are confidential and appear only in your copy of the report.'
         : ''}
     </div>
@@ -594,10 +594,10 @@ function buildQuestionHtml(q) {
       <div class="scale-hint"><span>Strongly Disagree</span><span>Strongly Agree</span></div>`;
   } else if (q.type === 'rated_10') {
     inputHtml = `
-      <div class="scale-10" id="scale10-${q.code}" role="group" aria-label="Rating 1 to 10">
-        ${[1,2,3,4,5,6,7,8,9,10].map(n => `<div class="scale-10-opt" data-code="${q.code}" data-val="${n}" onclick="selectScore10('${q.code}',${n})">${n}</div>`).join('')}
+      <div class="scale-10" id="scale10-${q.code}" role="group" aria-label="Rating 1 to 5">
+        ${[1,2,3,4,5].map(n => `<div class="scale-10-opt" data-code="${q.code}" data-val="${n}" onclick="selectScore10('${q.code}',${n})">${n}</div>`).join('')}
       </div>
-      <div class="scale-hint"><span>Minimal impact</span><span>Exceptional impact</span></div>`;
+      <div class="scale-hint"><span>1 = very low impact</span><span>5 = exceptional impact</span></div>`;
   } else if (q.type === 'open_long') {
     inputHtml = `<textarea class="tall" id="ta-${q.code}" placeholder="Your response…" oninput="saveText('${q.code}',this.value)" rows="5"></textarea>`;
   } else {

@@ -644,7 +644,7 @@ const QUESTIONS = {
   C4: 'Helps others use their time effectively (tight meetings, clear direction).',
   C5: 'Eliminates or delegates low-value work rather than doing it themselves.',
   C6: 'Produces consistent, high-quality output without constant follow-up.',
-  D1: 'Overall leadership impact on the organization (1–10 scale).',
+  D1: 'Overall leadership impact on the organization.',
   F1: 'Actively develops the people around them to be stronger leaders.',
   F2: 'Is building a team that could operate effectively without them.',
 };
@@ -679,7 +679,7 @@ function label(score, scale = 5) {
   return 'Needs Attention';
 }
 
-function buildScoreSummary(responses) {
+function buildScoreSummary(responses, impactScale = 10) {
   const byCode = {};
   for (const r of responses) {
     if (r.score == null) continue;
@@ -705,7 +705,7 @@ function buildScoreSummary(responses) {
 
   return {
     trustScore, proactivityScore, productivityScore,
-    tp3Index, impactScore, benchScore, g1Score, g2Score,
+    tp3Index, impactScore, benchScore, g1Score, g2Score, impactScale,
     perQuestion,
     raterCount: new Set(responses.map(r => r.rater_id)).size,
   };
@@ -741,13 +741,13 @@ function formatScoresForPrompt(scores) {
   section(['C1','C2','C3','C4','C5','C6'], 'Productivity (C1-C6, scale 1-5)');
   lines.push(`  → Productivity Score: ${scores.productivityScore?.toFixed(2) ?? 'n/a'}/5.0 — ${label(scores.productivityScore)}`);
   const d1 = perQuestion['D1'];
-  lines.push(`\nOverall Impact (D1, scale 1-10):\n  D1: ${d1?.avg?.toFixed(2) ?? 'n/a'}/10.0 (n=${d1?.n ?? 0})`);
+  lines.push(`\nOverall Impact (D1, scale 1-${scores.impactScale}):\n  D1: ${d1?.avg?.toFixed(2) ?? 'n/a'}/${scores.impactScale}.0 (n=${d1?.n ?? 0})`);
   lines.push(`\nBench / Succession Readiness (F1-F2, scale 1-5):`);
   lines.push(`  F1: ${perQuestion['F1']?.avg?.toFixed(2) ?? 'n/a'}/5.0 — ${label(perQuestion['F1']?.avg)}`);
   lines.push(`  F2: ${perQuestion['F2']?.avg?.toFixed(2) ?? 'n/a'}/5.0 — ${label(perQuestion['F2']?.avg)}`);
   if (scores.g1Score != null) lines.push(`\nCustom Question G1 (vision alignment, scale 1-5): ${scores.g1Score?.toFixed(2) ?? 'n/a'}/5.0`);
   if (scores.g2Score != null) lines.push(`Custom Question G2 (GPS gap probe, scale 1-5): ${scores.g2Score?.toFixed(2) ?? 'n/a'}/5.0`);
-  lines.push(`\nSummary:\n  TP3 Index: ${scores.tp3Index?.toFixed(2) ?? 'n/a'}/5.0\n  Overall Impact: ${scores.impactScore?.toFixed(2) ?? 'n/a'}/10.0\n  Total raters (others): ${scores.raterCount}`);
+  lines.push(`\nSummary:\n  TP3 Index: ${scores.tp3Index?.toFixed(2) ?? 'n/a'}/5.0\n  Overall Impact: ${scores.impactScore?.toFixed(2) ?? 'n/a'}/${scores.impactScale}.0\n  Total raters (others): ${scores.raterCount}`);
   return lines.join('\n');
 }
 
@@ -870,7 +870,7 @@ function formatRaterGroupDataForPrompt(gd, diag) {
   lines.push(row('Proactivity (B1-B6)', 'proactivityAvg'));
   lines.push(row('Productivity (C1-C6)', 'productivityAvg'));
   lines.push(row('TP3 Index', 'tp3Index'));
-  lines.push(row('Impact D1 (1-10 scale)', 'impactAvg'));
+  lines.push(row('Impact D1', 'impactAvg'));
   lines.push(row('Bench (F1-F2)', 'benchAvg'));
   if (gd.all_others?.g1Avg != null || gd.self?.g1Avg != null) lines.push(row('G1 Vision Align', 'g1Avg'));
   if (gd.all_others?.g2Avg != null || gd.self?.g2Avg != null) lines.push(row('G2 GPS Gap Probe', 'g2Avg'));
@@ -938,11 +938,11 @@ THE GPS TP3™ FRAMEWORK:
 Trust (A1–A7): Consistency, follow-through, psychological safety, honest conversation.
 Proactivity (B1–B6): Anticipating problems, bringing solutions, moving without being pushed.
 Productivity (C1–C6): High-value output, time leverage, helping others perform.
-Overall Impact (D1): Direct 1–10 rating by raters.
+Overall Impact (D1): Direct overall-impact rating by raters (the score line states its scale).
 Bench Strength (F1–F2): Developing the people around this leader.
 Custom items (G1, G2): Diagnostic-specific questions.
 
-SCORING (1–5 unless noted for D1):
+SCORING TIERS (1–5 scale):
 4.5–5.0 = Exceptional | 4.0–4.4 = Strong | 3.5–3.9 = Solid | 3.0–3.4 = Developing | 2.5–2.9 = Needs Attention | Below 2.5 = Critical Gap
 
 RATER GROUPS: Direct Reports — daily trust and safety. Peers — cross-functional follow-through. Supervisors — strategic presence, upward accountability. Internal Partners — coordination reliability. Self vs. All Others: Self higher = possible gap in self-perception; Self lower = under-confidence or self-awareness.
@@ -1117,7 +1117,7 @@ async function handleGenerateReport(req, res) {
 
   try {
     const diagRes = await sb(
-      `/rest/v1/diagnostics?id=eq.${diagnostic_id}&select=id,client_name,client_title,client_org,close_date,tier,custom_g1_question,custom_g2_question,self_three_year_vision,self_future_self_capabilities,self_immediate_successor_view,self_successor_candidates,self_successor_development_actions,intake_notes,coaching_notes,interview_notes&limit=1`
+      `/rest/v1/diagnostics?id=eq.${diagnostic_id}&select=id,client_name,client_title,client_org,close_date,tier,custom_g1_question,custom_g2_question,self_three_year_vision,self_future_self_capabilities,self_immediate_successor_view,self_successor_candidates,self_successor_development_actions,intake_notes,coaching_notes,interview_notes,impact_scale&limit=1`
     );
     const diags = await diagRes.json();
     if (!Array.isArray(diags) || diags.length === 0) return res.status(404).json({ error: 'Diagnostic not found' });
@@ -1158,7 +1158,7 @@ async function handleGenerateReport(req, res) {
     // Also compute aggregate scores (non-self only) for scores_json backward compat
     const raterMetaMap = new Map(allRaters.map(r => [r.id, r]));
     const nonSelfResponses = responses.filter(r => !raterMetaMap.get(r.rater_id)?.is_self);
-    const scores = buildScoreSummary(nonSelfResponses);
+    const scores = buildScoreSummary(nonSelfResponses, (diag.impact_scale != null ? diag.impact_scale : 10));
 
     const versionsRes = await sb(
       `/rest/v1/diagnostic_report_drafts?diagnostic_id=eq.${diagnostic_id}&select=version&order=version.desc&limit=1`
@@ -1999,7 +1999,7 @@ function buildTeamReportPrompt({ org_name, team_name, prepared_for_name, prepare
     lines.push(`  PROACTIVITY (B1–B6, 1–5):        Self ${fmt(l.selfScores.proactivity)}  | Others ${fmt(l.othersScores.proactivity)}  | Gap ${gap(l.selfScores.proactivity, l.othersScores.proactivity)}`);
     lines.push(`  PRODUCTIVITY (C1–C6, 1–5):       Self ${fmt(l.selfScores.productivity)}  | Others ${fmt(l.othersScores.productivity)}  | Gap ${gap(l.selfScores.productivity, l.othersScores.productivity)}`);
     lines.push(`  TP3 Index (others avg, 1–5):     ${fmt(l.othersScores.tp3)} — ${label(l.othersScores.tp3)}`);
-    lines.push(`  Overall Impact D1 (1–10 scale):  Self ${l.selfScores.impact != null ? l.selfScores.impact.toFixed(1) : 'n/a'} | Others ${l.othersScores.impact != null ? l.othersScores.impact.toFixed(2) : 'n/a'}`);
+    lines.push(`  Overall Impact D1:  Self ${l.selfScores.impact != null ? l.selfScores.impact.toFixed(1) : 'n/a'} | Others ${l.othersScores.impact != null ? l.othersScores.impact.toFixed(2) : 'n/a'}`);
     lines.push(`  Bench / Succession (F1–F2, 1–5): Others ${fmt(l.othersScores.bench)}`);
   }
 
@@ -2022,7 +2022,7 @@ function buildTeamReportPrompt({ org_name, team_name, prepared_for_name, prepare
   lines.push(`  Proactivity avg:    ${fmt(teamPr)}/5.0 — ${label(teamPr)}`);
   lines.push(`  Productivity avg:   ${fmt(teamPd)}/5.0 — ${label(teamPd)}`);
   lines.push(`  TP3 Index avg:      ${fmt(teamTP)}/5.0 — ${label(teamTP)}`);
-  lines.push(`  Impact D1 avg:      ${fmt(teamIm)}/10.0`);
+  lines.push(`  Impact D1 avg:      ${fmt(teamIm)}`);
   lines.push(`  Bench avg:          ${fmt(teamBn)}/5.0 — ${label(teamBn)}`);
 
   // Self vs others gap flags
