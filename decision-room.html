@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GPS Decision Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --navy:#004369; --red:#DB1F48; --teal:#01949A; --sand:#E5DDC8; --navy-dark:#002D47;
+    --light-teal:#E8F7F7; --light-sand:#F7F4EE; --white:#fff; --gray-100:#f5f5f5; --gray-200:#e8e8e8;
+    --gray-300:#d0d0d0; --gray-600:#666; --text:#1a1a1a; --trust:#1565c0; --proactivity:#2e7d32; --productivity:#e65100;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Open Sans',sans-serif; background:var(--gray-100); color:var(--text); min-height:100vh; padding-bottom:40px; }
+  .top-bar { height:6px; background:linear-gradient(to right,var(--navy),var(--teal),var(--red)); }
+  .bottom-bar { position:fixed; bottom:0; left:0; right:0; height:4px; background:linear-gradient(to right,var(--teal),var(--navy)); z-index:50; }
+  .header { background:var(--navy); padding:16px 32px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+  .header-left { display:flex; align-items:center; gap:14px; }
+  .header-logo-text { font-family:'Montserrat',sans-serif; font-size:22px; font-weight:800; color:var(--sand); letter-spacing:1px; }
+  .header-title { color:rgba(255,255,255,0.75); font-size:11px; text-transform:uppercase; letter-spacing:0.6px; font-weight:600; }
+  .header-sub { color:var(--white); font-family:'Montserrat',sans-serif; font-size:15px; font-weight:700; }
+  .header-who { color:rgba(255,255,255,0.8); font-size:12px; }
+  .wrap { max-width:1080px; margin:0 auto; padding:22px 24px; }
+  .team-bar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:18px; }
+  .team-select { font-family:'Open Sans',sans-serif; font-size:14px; padding:9px 14px; border:1.5px solid var(--gray-300); border-radius:8px; background:#fff; min-width:300px; font-weight:600; color:var(--navy); }
+  .team-meta { font-size:12px; color:var(--gray-600); }
+  .card { background:#fff; border-radius:8px; box-shadow:0 2px 12px rgba(0,0,0,.07); padding:20px 22px; margin-bottom:16px; }
+  .card-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:8px; }
+  .card-title { font-family:'Montserrat',sans-serif; font-size:15px; font-weight:800; color:var(--navy); display:flex; align-items:center; gap:9px; }
+  .card-title .dot { width:9px; height:9px; border-radius:50%; background:var(--teal); }
+  .card-sub { font-size:12px; color:var(--gray-600); margin-top:2px; }
+  .section-note { font-size:11px; color:var(--gray-600); font-style:italic; }
+  .quick-read { font-size:14.5px; font-weight:600; color:var(--navy-dark); line-height:1.5; background:var(--light-teal); border-left:3px solid var(--teal); border-radius:6px; padding:10px 13px; margin-bottom:12px; }
+  .asof-stamp { font-size:11px; font-weight:700; color:var(--gray-600); background:var(--gray-100); border-radius:12px; padding:4px 11px; white-space:nowrap; }
+  .snapshot-summary { font-size:14px; line-height:1.6; color:var(--text); background:var(--light-sand); border-radius:8px; padding:14px 16px; margin-bottom:16px; }
+  .prelim-banner { font-size:13px; line-height:1.55; color:var(--navy-dark); background:var(--light-teal); border:1px solid #bfe6e6; border-radius:8px; padding:13px 15px; margin-bottom:16px; }
+  .tp3-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+  @media (max-width:720px){ .tp3-grid { grid-template-columns:1fr; } }
+  .tp3-cell { border:1px solid var(--gray-200); border-radius:8px; padding:13px 15px; }
+  .tp3-name { font-family:'Montserrat',sans-serif; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; display:flex; align-items:center; justify-content:space-between; }
+  .tp3-trust .tp3-name { color:var(--trust); } .tp3-proactivity .tp3-name { color:var(--proactivity); } .tp3-productivity .tp3-name { color:var(--productivity); }
+  .tp3-score { font-family:'Montserrat',sans-serif; font-size:26px; font-weight:800; color:var(--navy); margin:4px 0; }
+  .tp3-score span { font-size:13px; color:var(--gray-600); font-weight:600; }
+  .bar-track { background:var(--gray-200); height:8px; border-radius:4px; overflow:hidden; margin:6px 0 7px; }
+  .bar-track.big { height:11px; }
+  .bar-fill { height:100%; border-radius:4px; }
+  .tp3-trust .bar-fill { background:var(--trust); } .tp3-proactivity .bar-fill { background:var(--proactivity); } .tp3-productivity .bar-fill { background:var(--productivity); }
+  .bar-fill.teal { background:linear-gradient(to right,var(--teal),var(--navy)); }
+  .trend { font-size:11px; font-weight:700; } .trend.flat { color:var(--gray-600); }
+  .tp3-prior { font-size:10.5px; color:var(--gray-600); margin-top:6px; line-height:1.35; }
+  .completion-strip { display:flex; gap:24px; margin-top:14px; padding-top:14px; border-top:1px solid var(--gray-200); flex-wrap:wrap; }
+  .comp-item { font-size:12px; color:var(--gray-600); } .comp-item b { font-family:'Montserrat',sans-serif; font-size:18px; color:var(--navy); display:block; }
+  .doc-row { display:flex; align-items:center; gap:12px; padding:11px 0; border-bottom:1px solid var(--gray-200); } .doc-row:last-child { border-bottom:none; }
+  .doc-icon { width:38px; height:38px; border-radius:7px; background:var(--navy); color:var(--sand); display:flex; align-items:center; justify-content:center; font-family:'Montserrat',sans-serif; font-weight:800; font-size:11px; flex-shrink:0; }
+  .doc-info { flex:1; min-width:0; } .doc-title { font-weight:700; font-size:13.5px; color:var(--text); } .doc-meta { font-size:12px; color:var(--gray-600); margin-top:2px; }
+  .tag { display:inline-block; font-size:10px; font-weight:700; padding:2px 8px; border-radius:10px; background:var(--light-sand); color:var(--navy-dark); margin-left:6px; }
+  .tag.primary { background:var(--teal); color:#fff; }
+  .rec { border:1px solid var(--gray-200); border-left-width:4px; border-radius:8px; padding:13px 16px; margin-bottom:10px; } .rec.scope { border-left-color:var(--proactivity); } .rec.accel { border-left-color:var(--productivity); }
+  .rec-title { font-family:'Montserrat',sans-serif; font-weight:700; font-size:14px; color:var(--navy); }
+  .rec-meta { font-size:11.5px; font-weight:700; color:var(--navy); margin-top:5px; }
+  .rec-desc { font-size:13px; line-height:1.55; color:var(--text); margin-top:5px; }
+  .rec-foot { font-size:11px; color:var(--gray-600); margin-top:8px; }
+  .rec-group-title { font-family:'Montserrat',sans-serif; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:0.6px; margin:4px 0 10px; display:flex; align-items:center; gap:8px; } .rec-group-title .gline { flex:1; height:1px; background:var(--gray-200); }
+  .cta-btn { display:inline-block; background:var(--red); color:#fff; font-family:'Montserrat',sans-serif; font-weight:800; font-size:14px; padding:13px 28px; border-radius:8px; text-decoration:none; cursor:pointer; border:none; letter-spacing:0.4px; }
+  .signal { padding:11px 0; border-bottom:1px solid var(--gray-200); } .signal:last-child { border-bottom:none; }
+  .signal.sig-green { background:#f3faf4; border-radius:6px; padding-left:10px; border-left:3px solid #cdebd3; }
+  .signal.sig-yellow { background:#fffaf0; border-radius:6px; padding-left:10px; border-left:3px solid #ffe0b3; }
+  .signal.sig-red { background:#fdf3f5; border-radius:6px; padding-left:10px; border-left:3px solid #f3c2cc; }
+  .signal-head { display:flex; align-items:center; gap:9px; flex-wrap:wrap; font-size:11px; color:var(--gray-600); }
+  .signal-text { font-size:13px; line-height:1.5; margin-top:4px; color:var(--text); }
+  .sig-chip { font-size:10px; font-weight:700; padding:2px 8px; border-radius:10px; text-transform:uppercase; letter-spacing:0.3px; }
+  .sig-chip.sig-green { background:#e8f5e9; color:var(--proactivity); } .sig-chip.sig-yellow { background:#fff0d6; color:#b9770e; } .sig-chip.sig-red { background:#fdeef0; color:var(--red); }
+  .badge { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:12px; font-size:10.5px; font-weight:700; font-family:'Montserrat',sans-serif; text-transform:uppercase; letter-spacing:0.3px; }
+  .b-flag-red { background:#fdeef0; color:var(--red); } .b-flag-amber { background:#fff0d6; color:#b9770e; } .b-flag-green { background:#e8f5e9; color:var(--proactivity); }
+  .b-sub { background:var(--gray-200); color:var(--gray-600); font-size:9.5px; padding:2px 8px; } .b-sub-warn { background:#fff0d6; color:#b9770e; } .b-draft { background:var(--gray-200); color:var(--gray-600); } .b-channel { background:#e3edf9; color:var(--trust); }
+  .roster-chips { display:flex; align-items:center; gap:7px; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end; } .status-chip { font-size:11px; padding:4px 12px; }
+  .btn-sm { font-size:11px; padding:5px 11px; border-radius:5px; cursor:pointer; font-family:'Open Sans',sans-serif; font-weight:600; border:1px solid var(--gray-300); background:#fff; color:var(--navy); }
+  .btn-sm:hover { background:var(--gray-100); }
+  .btn { font-family:'Montserrat',sans-serif; font-size:12px; font-weight:700; border-radius:6px; cursor:pointer; padding:8px 16px; border:none; letter-spacing:0.3px; }
+  .btn-navy { background:var(--navy); color:#fff; } .btn-ghost { background:#fff; border:1.5px solid var(--gray-300); color:var(--navy); }
+  /* individual */
+  .ind-header { display:flex; align-items:center; gap:15px; } .ind-avatar { width:54px; height:54px; border-radius:50%; background:var(--navy); color:var(--sand); display:flex; align-items:center; justify-content:center; font-family:'Montserrat',sans-serif; font-weight:800; font-size:18px; flex-shrink:0; }
+  .ind-name { font-family:'Montserrat',sans-serif; font-weight:800; font-size:20px; color:var(--navy); } .ind-role { font-size:13px; color:var(--gray-600); margin-top:3px; }
+  .ind-summary { font-size:13.5px; font-weight:600; color:var(--navy-dark); line-height:1.5; margin-top:13px; padding-top:13px; border-top:1px solid var(--gray-200); }
+  .gap-pill { font-size:9.5px; font-weight:700; padding:2px 8px; border-radius:10px; text-transform:uppercase; letter-spacing:0.3px; } .gap-blind { background:#fdeef0; color:var(--red); } .gap-hidden { background:#e8f5e9; color:var(--proactivity); } .gap-aligned { background:var(--gray-200); color:var(--gray-600); }
+  .attention-banner { border-radius:8px; padding:14px 16px; margin-bottom:16px; border:1px solid; } .attention-banner.attn-red { background:#fdeef0; border-color:#f3c2cc; border-left:4px solid var(--red); } .attention-banner.attn-amber { background:#fff6e8; border-color:#f0d6b0; border-left:4px solid var(--productivity); }
+  .attn-title { font-family:'Montserrat',sans-serif; font-weight:800; font-size:12.5px; text-transform:uppercase; letter-spacing:0.5px; } .attn-red .attn-title { color:var(--red); } .attn-amber .attn-title { color:#b9770e; }
+  .attn-list { margin:9px 0 0 4px; font-size:13px; line-height:1.7; color:var(--navy-dark); list-style:none; }
+  .fl-tag { font-weight:700; font-size:9.5px; padding:1px 7px; border-radius:8px; margin-right:7px; text-transform:uppercase; } .fl-red { background:#fdeef0; color:var(--red); } .fl-amber { background:#fff0d6; color:#b9770e; }
+  .attn-decision { font-size:13px; line-height:1.6; color:var(--navy-dark); background:#fff; border:1px solid #f3c2cc; border-radius:8px; padding:11px 13px; margin-top:11px; }
+  .attn-policy { font-size:11.5px; color:var(--gray-600); line-height:1.5; margin-top:11px; border-top:1px solid rgba(0,0,0,0.08); padding-top:9px; }
+  .progress { border-top:4px solid var(--gray-300); } .progress.p-green { border-top-color:var(--proactivity); } .progress.p-amber { border-top-color:var(--productivity); } .progress.p-red { border-top-color:var(--red); }
+  .verdict-bigrow { display:flex; align-items:center; justify-content:center; gap:26px; margin:10px 0 16px; } .vb { text-align:center; } .vb-num { font-family:'Montserrat',sans-serif; font-weight:800; font-size:34px; color:var(--navy); line-height:1; } .vb-lbl { font-size:10.5px; color:var(--gray-600); text-transform:uppercase; letter-spacing:0.5px; margin-top:4px; } .vb-arrow { font-family:'Montserrat',sans-serif; font-weight:800; font-size:16px; color:var(--gray-600); }
+  .band-wrap { margin:4px 0 2px; } .band-track { position:relative; display:flex; height:12px; border-radius:6px; overflow:hidden; } .band-seg { height:100%; } .band-red { background:#f3c2cc; } .band-amber { background:#ffe0b3; } .band-green { background:#cdebd3; }
+  .band-now { position:absolute; top:-4px; width:0; height:0; border-left:7px solid transparent; border-right:7px solid transparent; border-top:11px solid var(--navy); margin-left:-7px; } .band-base { position:absolute; top:-3px; height:18px; border-left:2px dashed var(--gray-600); margin-left:-1px; }
+  .band-legend { display:flex; justify-content:space-between; margin-top:9px; font-size:10.5px; font-weight:700; } .bl-red { color:#c0392b; } .bl-amber { color:#b9770e; } .bl-green { color:var(--proactivity); } .band-marks { display:flex; justify-content:space-between; font-size:10px; color:var(--gray-600); margin-top:4px; }
+  .focus-goal { font-size:14px; line-height:1.55; background:var(--light-sand); border-radius:8px; padding:12px 14px; } .focus-label { font-size:11px; font-weight:700; color:var(--gray-600); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; display:block; } .focus-list { margin:0 0 0 18px; font-size:13.5px; line-height:1.65; }
+  .metric-line { margin-bottom:4px; } .metric-label { font-size:13px; font-weight:600; margin-bottom:5px; } .metric-primary { background:var(--light-teal); border-radius:8px; padding:11px 13px; } .metric-primary .metric-label { font-weight:700; color:var(--navy); } .metric-secondary { opacity:0.9; padding:4px 0; } .metric-nums { font-size:11px; color:var(--gray-600); margin-top:5px; }
+  .sb-summary { font-size:13.5px; font-weight:600; color:var(--navy-dark); background:var(--light-sand); border-radius:7px; padding:10px 13px; margin-bottom:4px; }
+  .sh-table { width:100%; border-collapse:collapse; font-size:13px; } .sh-table th { background:var(--navy); color:#fff; padding:8px 11px; text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:0.4px; font-family:'Montserrat',sans-serif; font-weight:700; } .sh-table td { padding:8px 11px; border-bottom:1px solid var(--gray-200); } .sh-table tr:nth-child(even) td { background:var(--light-sand); } .sh-na { color:var(--gray-300); } .sh-table tr.sh-avg td { font-weight:800; color:var(--navy); background:var(--light-teal); border-top:2px solid var(--teal); font-family:'Montserrat',sans-serif; }
+  .eng-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; } @media (max-width:600px){ .eng-grid { grid-template-columns:1fr; } } .eng-stat { border:1px solid var(--gray-200); border-radius:8px; padding:15px; text-align:center; } .eng-stat.good { border-top:3px solid var(--proactivity); } .eng-stat.warn { border-top:3px solid var(--productivity); } .eng-stat.bad { border-top:3px solid var(--red); } .eng-num { font-family:'Montserrat',sans-serif; font-weight:800; font-size:24px; color:var(--navy); } .eng-lbl { font-size:11.5px; color:var(--gray-600); margin-top:5px; line-height:1.35; } .eng-sub { font-size:10.5px; color:var(--gray-600); margin-top:4px; }
+  .succ-line { font-size:13px; line-height:1.55; color:var(--navy-dark); margin-bottom:7px; } .succ-summary { font-size:13px; line-height:1.55; color:var(--navy-dark); background:var(--light-sand); border-radius:7px; padding:10px 13px; margin-bottom:12px; } .succ-sub { font-size:11px; color:var(--gray-600); margin-top:2px; }
+  .grid9 { display:grid; grid-template-columns:auto 1fr 1fr 1fr; gap:6px; margin-top:6px; } .grid9-axisY { font-size:9.5px; font-weight:700; color:var(--gray-600); display:flex; align-items:center; justify-content:flex-end; padding-right:8px; text-transform:uppercase; letter-spacing:0.3px; text-align:right; min-width:70px; } .grid9-cell { min-height:62px; border-radius:7px; padding:7px; display:flex; flex-wrap:wrap; gap:5px; align-content:flex-start; border:1px solid rgba(0,0,0,0.05); } .g9-green { background:#eaf6ec; } .g9-amber { background:#fff6e8; } .g9-red { background:#fdeef0; } .grid9-axisX { font-size:9.5px; font-weight:700; color:var(--gray-600); text-align:center; text-transform:uppercase; letter-spacing:0.3px; padding-top:4px; } .grid-chip { width:30px; height:30px; border-radius:50%; background:var(--navy); color:var(--sand); font-family:'Montserrat',sans-serif; font-weight:800; font-size:11px; display:flex; align-items:center; justify-content:center; } .grid-legend { display:flex; flex-wrap:wrap; gap:14px; margin-top:12px; font-size:11px; color:var(--gray-600); } .grid-legend-item b { color:var(--navy); }
+  .theme-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; } @media (max-width:680px){ .theme-grid { grid-template-columns:1fr; } } .theme-col { border:1px solid var(--gray-200); border-radius:8px; padding:13px 15px; } .theme-head { font-family:'Montserrat',sans-serif; font-weight:800; font-size:12px; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:9px; } .theme-head.theme-good { color:var(--proactivity); } .theme-head.theme-risk { color:var(--red); } .theme-list { margin:0 0 0 17px; font-size:13px; line-height:1.55; color:var(--navy-dark); }
+  .ssc-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; } @media (max-width:680px){ .ssc-grid { grid-template-columns:1fr; } } .ssc-col { border:1px solid var(--gray-200); border-radius:8px; padding:13px 15px; } .ssc-head { font-family:'Montserrat',sans-serif; font-weight:800; font-size:12px; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:9px; } .ssc-start { color:var(--proactivity); } .ssc-stop { color:var(--red); } .ssc-continue { color:var(--teal); }
+  .ii-note { font-size:12px; color:var(--gray-600); line-height:1.5; margin-bottom:12px; } .ii-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:10px; } @media (max-width:680px){ .ii-row { grid-template-columns:1fr; } } .ii-cell { font-size:13px; line-height:1.5; border-radius:8px; padding:11px 13px; } .ii-intent { background:var(--light-teal); } .ii-impact { background:#fff6e8; } .ii-tag { display:block; font-family:'Montserrat',sans-serif; font-size:9.5px; font-weight:800; text-transform:uppercase; letter-spacing:0.4px; color:var(--teal); margin-bottom:4px; } .ii-tag-impact { color:#b9770e; }
+  .conf-banner { background:#eef2f7; border:1px solid #d4dde8; border-left:4px solid var(--navy); border-radius:8px; padding:12px 15px; margin-bottom:16px; font-size:12.5px; line-height:1.5; color:var(--navy-dark); } .conf-note { font-size:12.5px; line-height:1.55; color:var(--navy-dark); } .lim-move { font-size:13.5px; font-weight:600; color:var(--navy-dark); margin-bottom:11px; }
+  .gate-card { background:#fff; border-radius:10px; box-shadow:0 2px 12px rgba(0,0,0,.07); border-top:4px solid var(--red); padding:30px 28px; max-width:680px; margin:8px auto 0; } .gate-lock { font-family:'Montserrat',sans-serif; font-weight:800; font-size:11px; text-transform:uppercase; letter-spacing:0.6px; color:var(--red); } .gate-title { font-family:'Montserrat',sans-serif; font-weight:800; font-size:22px; color:var(--navy); margin:6px 0 8px; } .gate-sub { font-size:13.5px; line-height:1.6; color:var(--gray-600); margin-bottom:18px; } .gate-list { display:flex; flex-direction:column; gap:10px; } .gate-row { display:flex; align-items:center; justify-content:space-between; gap:12px; border:1px solid var(--gray-200); border-left:4px solid var(--productivity); border-radius:8px; padding:13px 16px; } .gate-name { font-family:'Montserrat',sans-serif; font-weight:700; font-size:14px; color:var(--navy); } .gate-role { font-size:12px; color:var(--gray-600); margin-top:2px; }
+  .empty { font-size:13px; color:var(--gray-600); font-style:italic; padding:8px 0; }
+  .loading { text-align:center; padding:60px 20px; color:var(--gray-600); }
+  .spinner { width:36px; height:36px; border:4px solid var(--gray-300); border-top-color:var(--teal); border-radius:50%; animation:spin .8s linear infinite; margin:0 auto 16px; } @keyframes spin { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="top-bar"></div>
+<header class="header">
+  <div class="header-left">
+    <div class="header-logo-text">GPS</div>
+    <div><div class="header-title">Leadership Solutions</div><div class="header-sub">Decision Room</div></div>
+  </div>
+  <div class="header-who" id="headerWho"></div>
+</header>
+<div class="wrap">
+  <div class="team-bar" id="teamBar" style="display:none;">
+    <select class="team-select" id="teamSelect" onchange="loadTeam(this.value)"></select>
+    <span class="team-meta" id="teamMeta"></span>
+  </div>
+  <div id="view"><div class="loading"><div class="spinner"></div>Loading your Decision Room…</div></div>
+</div>
+<div class="bottom-bar"></div>
+
+<script>
+/* GPS Decision Room — read-only sponsor page.
+   All access control + confidentiality is enforced server-side by
+   /api/sponsor-data. This page renders ONLY what the endpoint returns:
+   if a field (e.g. selfVsRaters) is absent, it simply isn't shown. There is
+   no mock data, no role switch, no preview-bypass, and no client-side gate. */
+
+var TOKEN = new URLSearchParams(location.search).get('token') || '';
+var CURRENT_TEAM = null;
+var DATA = null;   // last 'team' payload
+
+function esc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function initials(n){ var p=String(n||'').trim().split(/\s+/); return ((p[0]||'')[0]||'')+((p[1]||'')[0]||''); }
+function fmtDate(d){ if(!d) return ''; var s=String(d).slice(0,10).split('-'); if(s.length<3) return String(d); var m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return m[parseInt(s[1],10)-1]+' '+parseInt(s[2],10)+', '+s[0]; }
+function avgOf(arr){ var s=0,n=0; for(var i=0;i<arr.length;i++){ if(arr[i]!=null&&!isNaN(arr[i])){ s+=Number(arr[i]); n++; } } return n? Math.round(s/n*100)/100 : null; }
+function band(v){ if(v==null) return null; return v>=4.0?'green':(v>=3.0?'amber':'red'); }
+
+function api(action, extra){
+  var body = Object.assign({ action:action, token:TOKEN }, extra||{});
+  return fetch('/api/sponsor-data', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
+    .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||('HTTP '+r.status)); return j; }); });
+}
+
+function init(){
+  if(!TOKEN){ document.getElementById('view').innerHTML='<div class="card"><div class="empty">This link is missing its access token. Please use the link from your invitation email.</div></div>'; return; }
+  api('list-teams').then(function(res){
+    document.getElementById('headerWho').textContent = res.sponsor ? res.sponsor.name : '';
+    var teams = res.teams||[];
+    if(!teams.length){ document.getElementById('view').innerHTML='<div class="card"><div class="empty">No teams are shared with you yet.</div></div>'; return; }
+    var sel=document.getElementById('teamSelect');
+    sel.innerHTML = teams.map(function(t){ return '<option value="'+t.id+'">'+esc(t.client_org_name||t.name)+' — '+esc(t.name)+'</option>'; }).join('');
+    document.getElementById('teamBar').style.display = teams.length>1 ? 'flex' : 'none';
+    loadTeam(teams[0].id);
+  }).catch(showError);
+}
+function showError(err){ document.getElementById('view').innerHTML='<div class="card"><div class="empty">'+esc(err.message||'Could not load. Please try your link again.')+'</div></div>'; }
+
+function loadTeam(teamId){
+  CURRENT_TEAM = teamId;
+  document.getElementById('view').innerHTML='<div class="loading"><div class="spinner"></div>Loading…</div>';
+  api('team', { team_id:teamId }).then(function(res){
+    if(res.gated){ renderGate(res); return; }
+    DATA = res;
+    var t=res.team;
+    document.getElementById('teamMeta').textContent = (t.team_type||'')+' team · Sponsor: '+(t.primary_sponsor||'');
+    renderTeam();
+    window.scrollTo(0,0);
+  }).catch(showError);
+}
+
+/* ───────── GATE ───────── */
+function renderGate(res){
+  var t=res.team||{};
+  var rows=(res.owed||[]).map(function(o){
+    return '<div class="gate-row"><div><div class="gate-name">'+esc(o.role||'Leader')+'</div><div class="gate-role">'+esc(cpLabel(o.checkpoint))+' review due</div></div>'
+      + '<a class="btn btn-navy" style="text-decoration:none;" href="'+esc(o.survey_url)+'">Provide feedback</a></div>';
+  }).join('');
+  document.getElementById('view').innerHTML='<div class="gate-card">'
+    + '<div class="gate-lock">Team view locked</div>'
+    + '<div class="gate-title">Complete your feedback to unlock '+esc(t.client_org_name||t.name||'this team')+'</div>'
+    + '<div class="gate-sub">You owe feedback on '+(res.owed||[]).length+' '+(((res.owed||[]).length===1)?'person':'people')+' you are responsible for on this team. The full team view opens the moment you submit. No one gets judged on feedback that was never given, including by you.</div>'
+    + '<div class="gate-list">'+rows+'</div></div>';
+}
+function cpLabel(cp){ cp=String(cp||'').toLowerCase(); return (cp.indexOf('90')>=0)?'90-day':((cp.indexOf('30')>=0)?'30-day':'Baseline'); }
+
+/* ───────── helpers over the payload ───────── */
+function memberStanding(m){
+  if(m.scoreboard && m.scoreboard.length){
+    var cp = scoreboardCheckpoint(m.scoreboard);
+    return avgOf(m.scoreboard.map(function(s){ return s[cp]; }));
+  }
+  if(m.selfVsRaters && m.selfVsRaters.tp3){
+    var tp=m.selfVsRaters.tp3; return avgOf([tp.trust&&tp.trust.raters, tp.proactivity&&tp.proactivity.raters, tp.productivity&&tp.productivity.raters]);
+  }
+  return null;
+}
+function scoreboardCheckpoint(sb){
+  var has=function(k){ for(var i=0;i<sb.length;i++) if(sb[i][k]!=null) return true; return false; };
+  if(has('d90')) return 'd90'; if(has('d30')) return 'd30'; return 'baseline';
+}
+function computeStatus(m){
+  if(m.surveyOpen) return { key:'pending', label:'Survey open', cls:'b-draft' };
+  var v=memberStanding(m);
+  var lowEng = m.engagement && m.engagement.checkinRate!=null && m.engagement.checkinRate<0.6;
+  if(v!=null && v<3.0) return { key:'risk', label:'At risk', cls:'b-flag-red' };
+  if(lowEng && (v==null||v<4.0)) return { key:'risk', label:'At risk', cls:'b-flag-red' };
+  if(v!=null && v<4.0) return { key:'dev', label:'Developing', cls:'b-flag-amber' };
+  if(v!=null) return { key:'ontrack', label:'On track', cls:'b-flag-green' };
+  return { key:'pending', label:'No score yet', cls:'b-draft' };
+}
+
+/* ───────── TEAM VIEW ───────── */
+function renderTeam(){
+  var t=DATA.team, members=DATA.members||[];
+  var html='';
+  if(DATA.confidentiality==='private'){
+    html += '<div class="conf-banner"><b>Confidential engagement.</b> Each leader\'s individual diagnostic scores (self vs raters) stay private to them and are not shown here. Everything else — the 90-day plan, stakeholder progress, and engagement — is shared.</div>';
+  }
+  html += renderSnapshot(t);
+  html += renderMomentum(members);
+  html += renderThemes(t.themes);
+  html += renderIntentImpact(t.intent_impact);
+  html += renderSSC(t.start_stop_continue);
+  html += renderRoster(members);
+  if(DATA.show_succession!==false) html += renderTeamSuccession(members);
+  if(DATA.show_succession!==false) html += renderTalentGrid(members);
+  html += renderRecs(DATA.recommendations||[]);
+  html += renderSignals(DATA.signals||[]);
+  document.getElementById('view').innerHTML = html;
+}
+
+function renderSnapshot(t){
+  var s=t.snapshot||{};
+  var quick = t.quick_read ? '<div class="quick-read">'+esc(t.quick_read)+'</div>' : '';
+  var stamp = (s.surveyClosed===false)
+      ? 'Survey open'+(s.closesOn?' · closes '+fmtDate(s.closesOn):'')
+      : (s.asOf ? 'As of survey close · '+fmtDate(s.asOf) : (t.last_updated?'Last updated: '+fmtDate(t.last_updated):''));
+  var body='';
+  if(s.surveyClosed===false){
+    body = '<div class="prelim-banner"><b>Survey in progress.</b> Scores publish here once the survey window closes'+(s.closesOn?' on '+fmtDate(s.closesOn):'')+'.</div>';
+  } else if(s.tp3){
+    var cells=[['Trust','trust'],['Proactivity','proactivity'],['Productivity','productivity']].map(function(p){
+      var d=s.tp3[p[1]]||{}; var v=d.score; var pct=v!=null?Math.round(v/5*100):0;
+      var tagTxt = (d.prior!=null) ? '' : '<span class="trend flat">point in time</span>';
+      var priorLine = (d.prior!=null) ? '<div class="tp3-prior">vs. prior cycle: '+Number(d.prior).toFixed(1)+'</div>' : '';
+      return '<div class="tp3-cell tp3-'+p[1]+'"><div class="tp3-name">'+p[0]+tagTxt+'</div>'
+        +'<div class="tp3-score">'+(v!=null?Number(v).toFixed(1):'—')+'<span> / 5.0</span></div>'
+        +'<div class="bar-track"><div class="bar-fill" style="width:'+pct+'%"></div></div>'+priorLine+'</div>';
+    }).join('');
+    body = '<div class="tp3-grid">'+cells+'</div>'
+      + (s.asOf?'<div class="section-note" style="display:block;margin-top:9px;">TP3 is from the diagnostic on '+fmtDate(s.asOf)+', a point-in-time read. It changes only with a new diagnostic. Week-to-week progress shows in Team Stakeholder Momentum below.</div>':'');
+  }
+  var comp = s.completion ? '<div class="completion-strip">'
+      +'<div class="comp-item"><b>'+esc(s.completion.raters||'—')+'</b>Rater completion</div>'
+      +'<div class="comp-item"><b>'+esc(s.completion.selfDone||'—')+'</b>Leader self-assessment</div>'
+      +'<div class="comp-item"><b>'+esc(s.completion.surveyWindow||'—')+'</b>Survey window</div></div>' : '';
+  return '<div class="card"><div class="card-head"><div><div class="card-title"><span class="dot"></span>Snapshot</div>'
+    + '<div class="card-sub">TP3™ · Trust, Proactivity, Productivity → Profitability</div></div>'
+    + (stamp?'<span class="asof-stamp">'+esc(stamp)+'</span>':'')+'</div>'
+    + quick + (t.summary?'<div class="snapshot-summary">'+esc(t.summary)+'</div>':'') + body + comp + '</div>';
+}
+
+function teamMomentum(members){
+  var bV=[],cV=[],n=0;
+  members.forEach(function(m){
+    if(!m.scoreboard||!m.scoreboard.length) return;
+    var cp=scoreboardCheckpoint(m.scoreboard);
+    var b=avgOf(m.scoreboard.map(function(s){return s.baseline;}));
+    var c=avgOf(m.scoreboard.map(function(s){return s[cp];}));
+    if(b!=null){ bV.push(b); } if(c!=null){ cV.push(c); } if(b!=null||c!=null) n++;
+  });
+  var b=avgOf(bV), c=avgOf(cV); if(b==null||c==null) return null; return { n:n, base:b, cur:c };
+}
+function renderMomentum(members){
+  var head='<div class="card-head"><div class="card-title"><span class="dot"></span>Team Stakeholder Momentum</div></div>';
+  var mo=teamMomentum(members);
+  if(!mo) return '<div class="card">'+head+'<div class="empty">No active 90-day plans on this team yet, so there is nothing moving to track yet.</div></div>';
+  var delta=mo.cur-mo.base, dir=(delta>0.05)?'up':((delta<-0.05)?'down':'flat'), cls=(mo.cur>=4?'p-green':(mo.cur>=3?'p-amber':'p-red')), arrow=(dir==='up'?'&uarr;':(dir==='down'?'&darr;':'&rarr;'));
+  return '<div class="card progress '+cls+'">'+head
+    + '<div class="verdict-bigrow"><div class="vb"><div class="vb-num">'+mo.base.toFixed(1)+'</div><div class="vb-lbl">Baseline</div></div>'
+    + '<div class="vb-arrow">'+arrow+' '+(delta>=0?'+':'')+delta.toFixed(1)+'</div>'
+    + '<div class="vb"><div class="vb-num">'+mo.cur.toFixed(1)+'</div><div class="vb-lbl">Now</div></div></div>'
+    + '<div class="sb-summary">Across '+mo.n+' leader'+(mo.n===1?'':'s')+' in active 90-day plans, stakeholder ratings are '+dir+' since baseline (Avg '+mo.base.toFixed(1)+' &rarr; '+mo.cur.toFixed(1)+'). This is what moves between diagnostics. The TP3 scores re-measure only with a new diagnostic.</div></div>';
+}
+
+function renderThemes(th){
+  if(!th) return '';
+  var head='<div class="card-head"><div><div class="card-title"><span class="dot"></span>Aggregated Team Themes</div><div class="card-sub">Patterns across the team, not individual scores or comments</div></div></div>';
+  function list(items){ return (items&&items.length)?'<ul class="theme-list">'+items.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul>':'<div class="empty">None recorded.</div>'; }
+  return '<div class="card">'+head+'<div class="theme-grid">'
+    +'<div class="theme-col"><div class="theme-head theme-good">Common strengths</div>'+list(th.strengths)+'</div>'
+    +'<div class="theme-col"><div class="theme-head theme-risk">Recurring risk patterns</div>'+list(th.riskPatterns)+'</div></div>'
+    +'<div class="section-note" style="display:block;margin-top:11px;">Suggested focus areas for the next 90 days are in Recommendations below.</div></div>';
+}
+function renderIntentImpact(ii){
+  if(!ii||!ii.length) return '';
+  var rows=ii.map(function(p){ return '<div class="ii-row"><div class="ii-cell ii-intent"><span class="ii-tag">Intent</span>'+esc(p.intent)+'</div><div class="ii-cell ii-impact"><span class="ii-tag ii-tag-impact">Impact</span>'+esc(p.impact)+'</div></div>'; }).join('');
+  return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Intent vs. Impact</div></div><div class="ii-note">Aggregated gaps between what the team intends and how it is experienced.</div>'+rows+'</div>';
+}
+function renderSSC(ssc){
+  if(!ssc) return '';
+  function col(title,items,cls){ var list=(items&&items.length)?'<ul class="theme-list">'+items.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul>':'<div class="empty">None.</div>'; return '<div class="ssc-col"><div class="ssc-head '+cls+'">'+title+'</div>'+list+'</div>'; }
+  return '<div class="card"><div class="card-head"><div><div class="card-title"><span class="dot"></span>Start / Stop / Continue</div><div class="card-sub">Team-level patterns, not individual feedback</div></div></div>'
+    +'<div class="ssc-grid">'+col('Start',ssc.start,'ssc-start')+col('Stop',ssc.stop,'ssc-stop')+col('Continue',ssc.continue,'ssc-continue')+'</div></div>';
+}
+
+function renderRoster(members){
+  var ORDER={risk:0,dev:1,ontrack:2,pending:3};
+  var ms=members.slice().sort(function(a,b){ var sa=computeStatus(a),sb=computeStatus(b); if(ORDER[sa.key]!==ORDER[sb.key]) return ORDER[sa.key]-ORDER[sb.key]; return String(a.role||'').localeCompare(String(b.role||'')); });
+  var rows=ms.map(function(m,i){
+    var st=computeStatus(m);
+    var name = (m.report_json&&m.report_json.name) || m.coach_name || ('Leader '+(i+1));
+    name = m.name || name;
+    var pills=''; if(m.is_coaching_client) pills+='<span class="badge b-sub">Coaching</span>'; else pills+='<span class="badge b-sub">Diagnostic only</span>';
+    if(m.is_coaching_client && m.engagement && m.engagement.checkinRate!=null && m.engagement.checkinRate<0.6) pills+='<span class="badge b-sub b-sub-warn">Low engagement</span>';
+    return '<div class="doc-row"><div class="doc-icon">'+esc(initials(name))+'</div>'
+      +'<div class="doc-info"><div class="doc-title">'+esc(name)+'</div><div class="doc-meta">'+esc(m.role||'')+'</div></div>'
+      +'<div class="roster-chips"><span class="badge status-chip '+st.cls+'">'+st.label+'</span>'+pills
+      +'<button class="btn-sm" onclick="viewMember('+i+')">View report</button></div></div>';
+  }).join('');
+  return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Leadership Team</div><span class="section-note">Sorted by status · open a leader for their report</span></div>'+(rows||'<div class="empty">No team members.</div>')+'</div>';
+}
+
+function renderTeamSuccession(members){
+  var head='<div class="card-head"><div><div class="card-title"><span class="dot"></span>Succession &amp; Bench Risk</div><div class="card-sub">Where the team has cover, and where a departure would leave a hole</div></div></div>';
+  var withS=members.filter(function(m){ return m.report_json && m.report_json.succession; });
+  if(!withS.length) return '<div class="card">'+head+'<div class="empty">Succession and bench are mapped once the diagnostic closes.</div></div>';
+  var noSucc=withS.filter(function(m){ return !m.report_json.succession.successorIdentified; });
+  var rows=withS.map(function(m){
+    var s=m.report_json.succession, st=computeStatus(m), name=m.name||m.role||'Leader';
+    var succ=s.successorIdentified?'<span class="badge b-flag-green">Yes</span>':'<span class="badge b-flag-red">None yet</span>';
+    var risk=(!s.successorIdentified && st.key==='risk')?' <span class="badge b-flag-red">Key-person risk</span>':'';
+    return '<tr><td>'+esc(name)+'<div class="succ-sub">'+esc(m.role||'')+'</div></td><td>'+succ+risk+'</td><td>'+esc(s.readiness||'')+'</td></tr>';
+  }).join('');
+  return '<div class="card">'+head+'<div class="succ-summary"><b>'+noSucc.length+' of '+withS.length+'</b> leaders have no identified successor'+(noSucc.length?'. Each is a key-person risk: if they leave, the seat has no ready backup.':'.')+'</div>'
+    +'<table class="sh-table"><thead><tr><th>Leader</th><th>Successor in place</th><th>Readiness for more</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+
+function renderTalentGrid(members){
+  var head='<div class="card-head"><div><div class="card-title"><span class="dot"></span>Talent &amp; Readiness Grid</div><div class="card-sub">Up = readiness for more · across = how they are landing now</div></div></div>';
+  var ms=members.filter(function(m){ return m.report_json && m.report_json.succession; });
+  if(!ms.length) return '';
+  function rRow(m){ var lvl=(m.report_json&&m.report_json.readinessLevel)||'developing'; return lvl==='ready'?2:(lvl==='not_ready'?0:1); }
+  function sCol(m){ var v=memberStanding(m); if(v==null) return 1; return v<3?0:(v<4?1:2); }
+  function tone(r,c){ var s=r+c; return s>=3?'g9-green':(s===2?'g9-amber':'g9-red'); }
+  var cells=[[[],[],[]],[[],[],[]],[[],[],[]]];
+  ms.forEach(function(m){ cells[rRow(m)][sCol(m)].push(m); });
+  var rowLabel={2:'Ready',1:'Developing',0:'Not ready'};
+  var grid='<div class="grid9">';
+  for(var r=2;r>=0;r--){ grid+='<div class="grid9-axisY">'+rowLabel[r]+'</div>'; for(var c=0;c<3;c++){ var chips=cells[r][c].map(function(m){ return '<span class="grid-chip" title="'+esc(m.name||m.role)+'">'+esc(initials(m.name||m.role))+'</span>'; }).join(''); grid+='<div class="grid9-cell '+tone(r,c)+'">'+chips+'</div>'; } }
+  grid+='<div></div><div class="grid9-axisX">Low</div><div class="grid9-axisX">Developing</div><div class="grid9-axisX">Strong</div></div>';
+  var legend=ms.map(function(m){ return '<span class="grid-legend-item"><b>'+esc(initials(m.name||m.role))+'</b> '+esc(m.name||m.role)+'</span>'; }).join('');
+  return '<div class="card">'+head+grid+'<div class="grid-legend">'+legend+'</div></div>';
+}
+
+function recCat(r){ return (r.category==='included_in_current_scope') ? 'scope' : 'accel'; }
+function renderRecs(recs){
+  var scope=recs.filter(function(r){ return r.category==='included_in_current_scope'; });
+  var accel=recs.filter(function(r){ return r.category!=='included_in_current_scope'; });
+  function card(r){ return '<div class="rec '+recCat(r)+'"><div class="rec-title">'+esc(r.short_title)+'</div>'
+    + ((r.owner||r.timeframe)?'<div class="rec-meta">'+(r.owner?'Owner: '+esc(r.owner):'')+(r.owner&&r.timeframe?' &middot; ':'')+(r.timeframe?'Timeframe: '+esc(r.timeframe):'')+'</div>':'')
+    + '<div class="rec-desc">'+esc(r.description)+'</div>'+(r.updated_at?'<div class="rec-foot">Updated '+fmtDate(r.updated_at)+'</div>':'')+'</div>'; }
+  var s=scope.length?scope.map(card).join(''):'<div class="empty">Nothing in motion to show yet.</div>';
+  var a=accel.length?accel.map(card).join(''):'<div class="empty">No optional accelerators at this time.</div>';
+  return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Recommendations</div></div>'
+    +'<div class="rec-group-title" style="color:var(--proactivity);">In Progress — Included in current scope<span class="gline"></span></div>'+s
+    +'<div class="rec-group-title" style="color:var(--productivity);margin-top:16px;">Optional Accelerators — available, not yet in scope<span class="gline"></span></div>'+a
+    +'<div style="text-align:center;margin-top:20px;"><a class="cta-btn" href="https://gpsleadership.org/discuss">Discuss these options</a></div></div>';
+}
+
+var SIG={green:'On track',yellow:'Watch',red:'Off track'};
+function renderSignals(signals){
+  var rows=signals.map(function(s){ var lv=s.level||'yellow'; return '<div class="signal sig-'+lv+'"><div class="signal-head">'+fmtDate(s.date_observed)+' · '+esc(s.by_role||'')+' <span class="sig-chip sig-'+lv+'">'+(SIG[lv]||'Watch')+'</span></div><div class="signal-text">'+esc(s.summary)+'</div></div>'; }).join('');
+  return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>What We Are Seeing</div></div>'+(rows||'<div class="empty">No observations to show yet.</div>')+'</div>';
+}
+
+/* ───────── INDIVIDUAL ───────── */
+function viewMember(idx){
+  var m=(DATA.members||[])[idx]; if(!m) return;
+  var t=DATA.team, name=m.name||m.role||'Leader', first=String(name).split(' ')[0];
+  var out='<div style="margin-bottom:14px;"><button class="btn btn-ghost btn-sm" onclick="renderTeam();window.scrollTo(0,0);">&larr; Back to '+esc(t.client_org_name||t.name)+' team</button></div>';
+  var engBadge = m.is_coaching_client ? '<span class="tag primary">Coaching client</span>' : '<span class="tag">Diagnostic only</span>';
+  var sLine = m.coach_summary || (m.report_json&&m.report_json.summaryLine) || '';
+  out += '<div class="card"><div class="ind-header"><div class="ind-avatar">'+esc(initials(name))+'</div><div><div class="ind-name">'+esc(name)+'</div>'
+    + '<div class="ind-role">'+esc(m.role||'')+' &middot; '+esc(t.client_org_name||t.name)+' '+engBadge+'</div></div></div>'+(sLine?'<div class="ind-summary">'+esc(sLine)+'</div>':'')+'</div>';
+
+  out += attentionBanner(m, first);
+  out += progressCard(m);
+  // Confidential 360 detail only if the endpoint included it (omitted server-side in private mode)
+  if(m.selfVsRaters) out += selfVsRatersCard(m.selfVsRaters);
+  out += focusCard(m, first);
+  out += scoreboardCard(m, first);
+  out += engagementCard(m);
+  out += successionCard(m);
+  document.getElementById('view').innerHTML = out;
+}
+
+function flagItems(m){
+  var out=[];
+  function sev(v){ if(v==null) return null; return v<3?'red':(v<4?'amber':null); }
+  if(m.scoreboard && m.scoreboard.length){
+    var cp=scoreboardCheckpoint(m.scoreboard);
+    var sup=m.scoreboard.filter(function(s){return s.supervisor;})[0];
+    if(sup){ var sv=sup[cp], ss=sev(sv); if(ss) out.push({sev:ss,text:'Their supervisor currently rates them '+Number(sv).toFixed(1)+'.'}); }
+    var ca=avgOf(m.scoreboard.map(function(s){return s[cp];})), cs=sev(ca); if(cs) out.push({sev:cs,text:'Stakeholders currently rate them '+ca.toFixed(1)+' on average.'});
+  } else if(m.selfVsRaters && m.selfVsRaters.tp3){
+    var tp=m.selfVsRaters.tp3; [['Trust','trust'],['Proactivity','proactivity'],['Productivity','productivity']].forEach(function(p){ var v=tp[p[1]]&&tp[p[1]].raters, s=sev(v); if(s) out.push({sev:s,text:p[0]+' is rated '+Number(v).toFixed(1)+' by the diagnostic raters.'}); });
+  }
+  return out;
+}
+function attentionBanner(m, first){
+  var flags=flagItems(m); if(!flags.length) return '';
+  var anyRed=flags.some(function(f){return f.sev==='red';});
+  var items=flags.map(function(f){ return '<li><span class="fl-tag fl-'+f.sev+'">'+(f.sev==='red'?'Below 3':'At a 3')+'</span> '+esc(f.text)+'</li>'; }).join('');
+  var closing;
+  if(anyRed){ var st=memberStanding(m); closing='<div class="attn-decision">Stakeholders currently rate this leader at '+(st!=null?st.toFixed(1)+'/5 on average':'below the bar')+'. On the GPS scale, 4 and up is where you want everyone; a 3 (including a 3.9) means not there yet, build a plan to get them to a 4; below 3 is a role-fit problem. Decide whether to (a) invest in a clear 90-day turnaround with support, or (b) start planning a different seat.</div>'; }
+  else { closing='<div class="attn-policy">The GPS scale: 4 and up is where you want everyone (green). A 3, and that includes a 3.9, means not there yet, build a plan to get them to a 4 (orange). Below a 3 is a role-fit problem (red).</div>'; }
+  return '<div class="attention-banner '+(anyRed?'attn-red':'attn-amber')+'"><div class="attn-title">'+(anyRed?'Below the bar — needs a decision':'Development focus')+'</div><ul class="attn-list">'+items+'</ul>'+closing+'</div>';
+}
+function progressCard(m){
+  if(!m.scoreboard || !m.scoreboard.length) return '';
+  var cp=scoreboardCheckpoint(m.scoreboard), isFinal=(cp==='d90');
+  var b=avgOf(m.scoreboard.map(function(s){return s.baseline;})), c=avgOf(m.scoreboard.map(function(s){return s[cp];}));
+  if(b==null||c==null) return '';
+  var delta=c-b, arrow=(delta>0?'&uarr;':(delta<0?'&darr;':'&rarr;')), cls=(c>=4?'p-green':(c>=3?'p-amber':'p-red'));
+  function pos(v){ return Math.max(0,Math.min(100,(v-1)/4*100)); }
+  var band='<div class="band-wrap"><div class="band-track"><div class="band-seg band-red" style="width:50%"></div><div class="band-seg band-amber" style="width:25%"></div><div class="band-seg band-green" style="width:25%"></div><div class="band-base" style="left:'+pos(b)+'%"></div><div class="band-now" style="left:'+pos(c)+'%"></div></div>'
+    +'<div class="band-legend"><span class="bl-red">Below 3 &middot; move on</span><span class="bl-amber">3s &middot; build a plan</span><span class="bl-green">4&ndash;5 &middot; keep &amp; grow</span></div>'
+    +'<div class="band-marks"><span>Dashed = baseline</span><span>Marker = now</span></div></div>';
+  return '<div class="card progress '+cls+'"><div class="card-head"><div class="card-title"><span class="dot"></span>Stakeholder progress, baseline to '+(isFinal?'90 days':cpLabel(cp))+'</div><span class="asof-stamp">'+(isFinal?'90-day checkpoint':cpLabel(cp)+' checkpoint')+'</span></div>'
+    +'<div class="verdict-bigrow"><div class="vb"><div class="vb-num">'+b.toFixed(1)+'</div><div class="vb-lbl">Baseline</div></div><div class="vb-arrow">'+arrow+' '+(delta>=0?'+':'')+delta.toFixed(1)+'</div><div class="vb"><div class="vb-num">'+c.toFixed(1)+'</div><div class="vb-lbl">'+(isFinal?'At 90 days':cpLabel(cp))+'</div></div></div>'
+    +band+(isFinal?'':'<div class="section-note" style="display:block;margin-top:11px;">Interim read. The 90-day checkpoint is the accountability point.</div>')+'</div>';
+}
+function selfVsRatersCard(sv){
+  if(sv.surveyClosed===false) return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Leadership Scores</div><span class="asof-stamp">Survey open</span></div><div class="prelim-banner">Scores publish once the survey window closes'+(sv.closesOn?' on '+fmtDate(sv.closesOn):'')+'.</div></div>';
+  var tp=sv.tp3||{};
+  var cells=[['Trust','trust'],['Proactivity','proactivity'],['Productivity','productivity']].map(function(p){
+    var d=tp[p[1]]||{}; var r=d.raters, self=d.self; var pct=r!=null?Math.round(r/5*100):0;
+    var gap=(self!=null&&r!=null)?(self-r):null; var gp,gc;
+    if(gap==null){ gp='—'; gc='gap-aligned'; } else if(gap>=0.6){ gp='Blind spot +'+gap.toFixed(1); gc='gap-blind'; } else if(gap<=-0.4){ gp='Hidden strength '+gap.toFixed(1); gc='gap-hidden'; } else { gp='Aligned'; gc='gap-aligned'; }
+    return '<div class="tp3-cell tp3-'+p[1]+'"><div class="tp3-name">'+p[0]+'<span class="gap-pill '+gc+'">'+gp+'</span></div><div class="tp3-score">'+(r!=null?Number(r).toFixed(1):'—')+'<span> / 5.0 raters</span></div><div class="bar-track"><div class="bar-fill" style="width:'+pct+'%"></div></div><div class="tp3-prior">Self-rating: '+(self!=null?Number(self).toFixed(1):'—')+'</div></div>';
+  }).join('');
+  return '<div class="card"><div class="card-head"><div><div class="card-title"><span class="dot"></span>Leadership Scores &mdash; Self vs. Raters</div><div class="card-sub">From the diagnostic &middot; confidential rater pool</div></div>'+(sv.asOf?'<span class="asof-stamp">As of survey close &middot; '+fmtDate(sv.asOf)+'</span>':'')+'</div><div class="tp3-grid">'+cells+'</div></div>';
+}
+function metricBar(mm, primary){
+  if(!mm) return ''; var lo=Math.min(mm.baseline,mm.target), hi=Math.max(mm.baseline,mm.target), range=(hi-lo)||1; var pct=Math.max(4,Math.min(100,Math.round((mm.current-lo)/range*100)));
+  return '<div class="metric-line'+(primary?' metric-primary':' metric-secondary')+'"><div class="metric-label">'+esc(mm.label)+'</div><div class="bar-track big"><div class="bar-fill teal" style="width:'+pct+'%"></div></div><div class="metric-nums">Baseline '+esc(mm.baseline)+esc(mm.unit||'')+' &rarr; Now '+esc(mm.current)+esc(mm.unit||'')+' &rarr; Target '+esc(mm.target)+esc(mm.unit||'')+'</div></div>';
+}
+function focusCard(m, first){
+  var f=m.report_json&&m.report_json.focus; if(!f) return '';
+  var beh=(f.behaviors||[]).map(function(b){return '<li>'+esc(b)+'</li>';}).join('');
+  return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>90-Day Focus</div></div>'
+    +'<span class="focus-label">Goal</span><div class="focus-goal">'+esc(f.goal90)+'</div>'
+    +(beh?'<span class="focus-label" style="margin-top:14px;">Behaviors being practiced</span><ul class="focus-list">'+beh+'</ul>':'')
+    +(f.stakeholderMetric?'<span class="focus-label" style="margin-top:14px;">Primary metric &mdash; how stakeholders rate the behavior</span>'+metricBar(f.stakeholderMetric,true):'')
+    +(f.selfMetric?'<span class="focus-label" style="margin-top:12px;">Secondary &mdash; the leader\'s own tracking metric</span>'+metricBar(f.selfMetric,false):'')+'</div>';
+}
+function scoreboardCard(m, first){
+  if(!m.scoreboard || !m.scoreboard.length) return '';
+  var cp=scoreboardCheckpoint(m.scoreboard);
+  var b=avgOf(m.scoreboard.map(function(s){return s.baseline;})), c=avgOf(m.scoreboard.map(function(s){return s[cp];}));
+  var dir=(c!=null&&b!=null)?((c>b+0.05)?'up':((c<b-0.05)?'down':'flat')):'flat';
+  function cell(v){ return v==null?'<td class="sh-na">&mdash;</td>':'<td>'+Number(v).toFixed(1)+'</td>'; }
+  var rows=m.scoreboard.map(function(s){ return '<tr><td>'+esc(s.role)+'</td>'+cell(s.baseline)+cell(s.d30)+cell(s.d90)+'</tr>'; }).join('');
+  var ab=avgOf(m.scoreboard.map(function(s){return s.baseline;})), a30=avgOf(m.scoreboard.map(function(s){return s.d30;})), a90=avgOf(m.scoreboard.map(function(s){return s.d90;}));
+  rows+='<tr class="sh-avg"><td>Average</td>'+cell(ab)+cell(a30)+cell(a90)+'</tr>';
+  return '<div class="card"><div class="card-head"><div><div class="card-title"><span class="dot"></span>90-Day Stakeholder Scoreboard</div><div class="card-sub">Up to 5 stakeholders the leader selected · by role</div></div></div>'
+    +'<div class="sb-summary">Stakeholder ratings are '+dir+' since baseline (Avg: '+(b!=null?b.toFixed(1):'—')+' &rarr; '+(c!=null?c.toFixed(1):'—')+').</div>'
+    +'<table class="sh-table"><thead><tr><th>Stakeholder (by role)</th><th>Baseline</th><th>30 days</th><th>90 days</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+function engagementCard(m){
+  var e=m.engagement; if(!e || !m.is_coaching_client) return '';
+  var wk=e.weeksElapsed||0, ci=Math.round((e.checkinRate||0)*wk), bh=Math.round((e.behaviorRate||0)*wk);
+  function tone(r){ return r>=0.8?'good':(r>=0.6?'warn':'bad'); }
+  function stat(v,l,sub,t){ return '<div class="eng-stat '+t+'"><div class="eng-num">'+v+'</div><div class="eng-lbl">'+esc(l)+'</div><div class="eng-sub">'+esc(sub)+'</div></div>'; }
+  var coachPct=e.coachingTotal?e.coachingAttended/e.coachingTotal:0;
+  return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Engagement &amp; Accountability (last '+wk+' weeks)</div></div><div class="eng-grid">'
+    +stat(Math.round((e.checkinRate||0)*100)+'%','Weekly check-ins submitted',ci+' of '+wk+' weeks',tone(e.checkinRate||0))
+    +stat(Math.round((e.behaviorRate||0)*100)+'%','Weeks they practiced the behavior',bh+' of '+wk+' weeks',tone(e.behaviorRate||0))
+    +stat((e.coachingAttended||0)+' / '+(e.coachingTotal||0),'Coaching sessions attended','of '+(e.coachingTotal||0)+' scheduled',tone(coachPct))+'</div></div>';
+}
+function successionCard(m){
+  var s=m.report_json&&m.report_json.succession; if(!s) return '';
+  var badge=s.successorIdentified?'<span class="badge b-flag-green">Successor identified</span>':'<span class="badge b-flag-red">No successor yet</span>';
+  var benchRows=(s.bench||[]).map(function(b){ return '<tr><td>'+esc(b.role)+'</td><td>'+esc(b.readiness)+'</td><td>'+esc(b.timeline)+'</td><td>'+esc(b.gap)+'</td></tr>'; }).join('');
+  var benchTable=benchRows?'<table class="sh-table" style="margin-top:10px;"><thead><tr><th>On their bench</th><th>Readiness</th><th>Timeline</th><th>Primary gap</th></tr></thead><tbody>'+benchRows+'</tbody></table>':'';
+  return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Succession &amp; Bench</div>'+badge+'</div>'
+    +(s.readiness?'<div class="succ-line"><b>Readiness for more:</b> '+esc(s.readiness)+'</div>':'')+(s.benchNote?'<div class="succ-line">'+esc(s.benchNote)+'</div>':'')+benchTable+'</div>';
+}
+
+init();
+</script>
+</body>
+</html>
