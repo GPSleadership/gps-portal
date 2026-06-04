@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPS Leadership — Share Your Input</title>
+<style>
+  :root{ --navy:#1A3D6E; --gold:#C09A2A; --text:#1a1a1a; --mid:#666; --border:#d8d8d8; --bg:#f4f6f9; }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Open Sans',Arial,sans-serif;background:var(--bg);color:var(--text);}
+  .wrap{max-width:620px;margin:0 auto;padding:0 16px 40px;}
+  .head{background:var(--navy);padding:22px 28px;border-radius:0 0 0 0;}
+  .head .k{color:var(--gold);font-size:11px;text-transform:uppercase;letter-spacing:1px;}
+  .head .t{color:#fff;font-size:20px;font-weight:700;margin-top:3px;}
+  .card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:24px;margin-top:22px;box-shadow:0 2px 14px rgba(0,0,0,.05);}
+  label{display:block;font-size:13px;font-weight:700;color:var(--navy);margin:16px 0 6px;}
+  textarea{width:100%;min-height:130px;padding:11px 13px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;}
+  .levels{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;}
+  .lv{flex:1;min-width:120px;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;cursor:pointer;font-size:13px;text-align:center;}
+  .lv.sel{border-color:var(--navy);background:#eef3fb;font-weight:700;}
+  .lv .em{font-size:18px;display:block;margin-bottom:2px;}
+  .btn{margin-top:22px;width:100%;background:var(--navy);color:#fff;border:none;border-radius:8px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;}
+  .btn:disabled{opacity:.5;cursor:default;}
+  .muted{font-size:13px;color:var(--mid);line-height:1.6;}
+  .msg{margin-top:14px;font-size:14px;}
+  .center{text-align:center;padding:34px 10px;}
+  .center .big{font-size:40px;}
+</style>
+</head>
+<body>
+<div class="head"><div class="wrap" style="padding-top:0;padding-bottom:0;"><div class="k">GPS Leadership Solutions</div><div class="t">Share Your Input</div></div></div>
+<div class="wrap">
+  <div id="view" class="card"><div class="muted">Loading…</div></div>
+</div>
+<script>
+var TOKEN = new URLSearchParams(location.search).get('token') || '';
+var LEVEL = 'yellow';
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+async function api(action, body){
+  var r = await fetch('/api/diagnostic?action='+action, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{}) });
+  var j = await r.json().catch(function(){return{};});
+  if(!r.ok) throw new Error(j.error || ('Request failed ('+r.status+')'));
+  return j;
+}
+function thanks(){ document.getElementById('view').innerHTML = '<div class="center"><div class="big">✓</div><div style="font-size:18px;font-weight:700;color:#1A3D6E;margin-top:8px;">Thank you</div><div class="muted" style="margin-top:8px;">Your input has been recorded. You can close this window.</div></div>'; }
+function errorBox(msg){ document.getElementById('view').innerHTML = '<div class="center"><div class="muted">'+esc(msg)+'</div></div>'; }
+
+function pickLevel(el, lv){ LEVEL=lv; document.querySelectorAll('.lv').forEach(function(x){x.classList.remove('sel');}); el.classList.add('sel'); }
+
+function renderForm(ctx){
+  document.getElementById('view').innerHTML =
+    '<div class="muted">Hi '+esc((ctx.name||'').split(' ')[0]||'there')+', thank you for taking a moment. Your candid observation about the <b>'+esc(ctx.team_name)+'</b> leadership team helps inform our work. It is not attributed to you individually in any scorecard.</div>'
+    + '<label>How are things landing overall?</label>'
+    + '<div class="levels">'
+    + '<div class="lv" onclick="pickLevel(this,\'green\')"><span class="em">🟢</span>On track</div>'
+    + '<div class="lv sel" onclick="pickLevel(this,\'yellow\')"><span class="em">🟡</span>Some concerns</div>'
+    + '<div class="lv" onclick="pickLevel(this,\'red\')"><span class="em">🔴</span>Off track</div>'
+    + '</div>'
+    + '<label>Your observation</label>'
+    + '<textarea id="obs" placeholder="What are you seeing? Be specific and candid — strengths, concerns, or both."></textarea>'
+    + '<button class="btn" id="sub" onclick="submit()">Submit my input</button>'
+    + '<div class="msg" id="m"></div>';
+}
+async function submit(){
+  var obs = (document.getElementById('obs').value||'').trim();
+  var m = document.getElementById('m'); var btn=document.getElementById('sub');
+  if(!obs){ m.style.color='#b00'; m.textContent='Please add a short observation before submitting.'; return; }
+  btn.disabled=true; btn.textContent='Submitting…';
+  try{ await api('submit-external-feedback', { token:TOKEN, summary:obs, level:LEVEL }); thanks(); }
+  catch(e){ m.style.color='#b00'; m.textContent=e.message; btn.disabled=false; btn.textContent='Submit my input'; }
+}
+(async function(){
+  if(!TOKEN){ errorBox('This link is missing its token. Please use the link from your email.'); return; }
+  try{
+    var ctx = await api('feedback-context', { token:TOKEN });
+    if(ctx.submitted){ thanks(); return; }
+    renderForm(ctx);
+  }catch(e){ errorBox(e.message); }
+})();
+</script>
+</body>
+</html>

@@ -29,6 +29,10 @@
       "destination": "/decision-room.html"
     },
     {
+      "source": "/feedback",
+      "destination": "/feedback.html"
+    },
+    {
       "source": "/diagnostic-sandbox",
       "destination": "/diagnostic-sandbox.html"
     }

@@ -168,9 +168,12 @@ export default async function handler(req, res) {
     case 'sign-report-upload':   return handleSignReportUpload(req, res);
     case 'sign-team-report-upload': return handleSignTeamReportUpload(req, res);
     case 'generate-dr-content':  return handleGenerateDRContent(req, res);
+    case 'request-external-feedback': return handleRequestExternalFeedback(req, res);
+    case 'feedback-context':     return handleFeedbackContext(req, res);
+    case 'submit-external-feedback': return handleSubmitExternalFeedback(req, res);
     case 'reminders':            return handleReminders(req, res);
     default:
-      return res.status(400).json({ error: `Unknown action: "${action}". Valid: send-invites, send-leader-link, generate-question, generate-g2-question, generate-report, generate-team-report, finalize-report, sign-report-upload, generate-dr-content, reminders` });
+      return res.status(400).json({ error: `Unknown action: "${action}". Valid: send-invites, send-leader-link, generate-question, generate-g2-question, generate-report, generate-team-report, finalize-report, sign-report-upload, generate-dr-content, request-external-feedback, feedback-context, submit-external-feedback, reminders` });
   }
 }
 
@@ -1839,6 +1842,89 @@ async function handleGenerateDRContent(req, res) {
   }
 }
 function enc4(v) { return encodeURIComponent(String(v)); }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ACTIONS: ad-hoc external feedback (coach requests → emailed link → observation
+// lands as an external_signal the coach approves before the sponsor sees it).
+// ═══════════════════════════════════════════════════════════════════════════════
+function buildExternalFeedbackEmail({ name, teamName, link }) {
+  const first = (name || '').split(' ')[0] || 'there';
+  return `
+  <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
+    <div style="background:#1A3D6E;padding:20px 28px;border-radius:8px 8px 0 0;">
+      <div style="color:#C09A2A;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">GPS Leadership Solutions</div>
+      <div style="color:#ffffff;font-size:20px;font-weight:700;">A quick request for your input</div>
+    </div>
+    <div style="background:#ffffff;padding:28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
+      <p>Hi ${first},</p>
+      <p>As part of our work with the <strong>${teamName}</strong> leadership team, I'd value a short, candid observation from you. It takes about two minutes.</p>
+      <div style="margin:26px 0;text-align:center;">
+        <a href="${link}" style="background:#1A3D6E;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;display:inline-block;">Share your input →</a>
+      </div>
+      <p style="font-size:13px;color:#666;">This link is unique to you. – Alex Tremble, GPS Leadership Solutions</p>
+    </div>
+  </div>`;
+}
+
+async function handleRequestExternalFeedback(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const { team_id, name, email, by_role, session } = req.body || {};
+  if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
+  if (!team_id || !name || !email) return res.status(400).json({ error: 'team_id, name, and email are required' });
+  try {
+    const teamRows = await (await sb(`/rest/v1/teams?id=eq.${team_id}&select=name,client_org_name`)).json();
+    const team = Array.isArray(teamRows) && teamRows[0];
+    if (!team) return res.status(404).json({ error: 'Team not found' });
+    const token = crypto.randomUUID().replace(/-/g, '');
+    await sb('/rest/v1/external_feedback_invites', 'POST', { token, team_id, name, email, by_role: by_role || null }, { Prefer: 'return=minimal' });
+    const link = `${PORTAL_BASE}/feedback?token=${token}`;
+    let emailSent = false;
+    try {
+      await sendEmail({ to: email, subject: `A quick request for your input — ${team.client_org_name || team.name} leadership team`, html: buildExternalFeedbackEmail({ name, teamName: team.client_org_name || team.name, link }), emailType: 'external_feedback_invite', recipientName: name });
+      emailSent = true;
+    } catch (_) {}
+    return res.status(200).json({ ok: true, link, email_sent: emailSent });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+}
+
+async function handleFeedbackContext(req, res) {
+  const token = req.body?.token || req.query?.token;
+  if (!token) return res.status(400).json({ error: 'token required' });
+  try {
+    const rows = await (await sb(`/rest/v1/external_feedback_invites?token=eq.${enc4(token)}&select=name,submitted_at,team_id`)).json();
+    const inv = Array.isArray(rows) && rows[0];
+    if (!inv) return res.status(404).json({ error: 'This link is invalid or has expired.' });
+    const teamRows = await (await sb(`/rest/v1/teams?id=eq.${inv.team_id}&select=name,client_org_name`)).json();
+    const team = (Array.isArray(teamRows) && teamRows[0]) || {};
+    return res.status(200).json({ ok: true, name: inv.name, team_name: team.client_org_name || team.name || 'the leadership team', submitted: !!inv.submitted_at });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+}
+
+async function handleSubmitExternalFeedback(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const { token, summary, level } = req.body || {};
+  if (!token || !summary || !String(summary).trim()) return res.status(400).json({ error: 'token and a written observation are required' });
+  const lv = ['green', 'yellow', 'red'].includes(level) ? level : 'yellow';
+  try {
+    const rows = await (await sb(`/rest/v1/external_feedback_invites?token=eq.${enc4(token)}&select=id,team_id,name,by_role,submitted_at`)).json();
+    const inv = Array.isArray(rows) && rows[0];
+    if (!inv) return res.status(404).json({ error: 'This link is invalid or has expired.' });
+    if (inv.submitted_at) return res.status(409).json({ error: 'This feedback has already been submitted. Thank you.' });
+    await sb('/rest/v1/external_signals', 'POST', {
+      team_id: inv.team_id, by_name: inv.name || null, by_role: inv.by_role || null,
+      channel: 'External feedback', level: lv, summary: String(summary).slice(0, 2000),
+      date_observed: new Date().toISOString().slice(0, 10), visible_to_client: false,
+    }, { Prefer: 'return=minimal' });
+    await sb(`/rest/v1/external_feedback_invites?id=eq.${inv.id}`, 'PATCH', { submitted_at: new Date().toISOString() }, { Prefer: 'return=minimal' });
+    return res.status(200).json({ ok: true });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+}
 
 async function handleReminders(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });

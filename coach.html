@@ -6742,12 +6742,31 @@ function drSignalsPanel(t, signals){
     +'<div style="display:flex;gap:8px;align-items:center;"><select id="dr_slevel" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;"><option value="green">Green — on track</option><option value="yellow" selected>Yellow — watch</option><option value="red">Red — off track</option></select>'
     +'<input id="dr_sdate" type="date" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;" />'
     +'<button class="btn-add" onclick="drAddSignal(\''+t.id+'\')">Add (internal)</button></div></div>';
-  return drCard('External signals', list+add);
+  var req='<div style="margin-top:16px;border-top:1px solid #eee;padding-top:12px;">'
+    +'<div style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;margin-bottom:6px;">Request external feedback by email</div>'
+    +'<div style="font-size:11px;color:#888;margin-bottom:8px;">Sends a unique link; their observation lands here as an internal signal you can then make visible.</div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'
+    +'<input id="dr_efname" placeholder="Name" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;" />'
+    +'<input id="dr_efemail" placeholder="Email" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;" />'
+    +'<input id="dr_efrole" placeholder="Role (optional, e.g. Board)" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;" />'
+    +'<button class="btn-add" style="background:#004369;" onclick="drRequestFeedback(\''+t.id+'\')">Send feedback request</button></div></div>';
+  return drCard('External signals', list+add+req);
 }
 async function drAddSignal(teamId){
   if(!drVal('dr_ssum')){ alert('Summary required.'); return; }
   try{ await cdInsert('external_signals',{ team_id:teamId, by_role:drVal('dr_srole')||null, channel:'Coach', summary:drVal('dr_ssum'), level:drVal('dr_slevel'), date_observed:drVal('dr_sdate')||null, visible_to_client:false }); drManageTeam(teamId); }
   catch(e){ alert('Could not add: '+e.message); }
+}
+async function drRequestFeedback(teamId){
+  var name=drVal('dr_efname'), email=drVal('dr_efemail'), role=drVal('dr_efrole');
+  if(!name||!email){ alert('Name and email are required.'); return; }
+  try{
+    var r=await fetch('/api/diagnostic?action=request-external-feedback',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ team_id:teamId, name:name, email:email, by_role:role||null, session:getCoachSessionToken() }) });
+    var j=await r.json().catch(function(){return{};});
+    if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+    alert('Feedback request created.'+(j.email_sent?'\n\nEmail sent to '+email+'.':'\n\nEmail could not be sent — share this link manually:\n'+j.link));
+    drManageTeam(teamId);
+  }catch(e){ alert('Could not send request: '+e.message); }
 }
 async function drSigVis(id, vis, teamId){ try{ await cdUpdate('external_signals',{ visible_to_client:vis },{ eq:{id:id} }); drManageTeam(teamId); }catch(e){ alert(e.message); } }
 
