@@ -2035,6 +2035,12 @@ function buildTeamReportPrompt({ org_name, team_name, prepared_for_name, prepare
     '=== INDIVIDUAL LEADER SCORES ===',
   ];
 
+  if (leaders.length === 1) {
+    lines.splice(6, 0,
+      'NOTE: Only ONE leader was assessed. Write this as a leadership assessment for this single leader, not a cross-leader comparison. Do not refer to "the team," "other leaders," "across leaders," or imply that multiple people were assessed. Focus the recommendations on this individual and on the organizational system around them.'
+    );
+  }
+
   for (const l of leaders) {
     lines.push('');
     lines.push(`Leader: ${l.name}${l.title ? `, ${l.title}` : ''}${l.org ? ` (${l.org})` : ''}`);
@@ -2180,8 +2186,8 @@ async function handleGenerateTeamReport(req, res) {
 
   const { diagnostic_ids, org_name, team_name, prepared_for_name, prepared_for_title, assessment_date_range, sector_type } = req.body || {};
 
-  if (!Array.isArray(diagnostic_ids) || diagnostic_ids.length < 2) {
-    return res.status(400).json({ error: 'At least 2 diagnostic_ids are required for a team report.' });
+  if (!Array.isArray(diagnostic_ids) || diagnostic_ids.length < 1) {
+    return res.status(400).json({ error: 'At least 1 diagnostic_id is required for a team report.' });
   }
   if (!team_name) {
     return res.status(400).json({ error: 'team_name is required.' });
@@ -2194,8 +2200,8 @@ async function handleGenerateTeamReport(req, res) {
       `/rest/v1/diagnostics?id=in.(${idFilter})&select=id,client_name,client_title,client_org`
     );
     const diags = await diagsRes.json();
-    if (!Array.isArray(diags) || diags.length < 2) {
-      return res.status(400).json({ error: 'Could not find at least 2 valid diagnostics for the provided IDs.' });
+    if (!Array.isArray(diags) || diags.length < 1) {
+      return res.status(400).json({ error: 'Could not find a valid diagnostic for the provided IDs.' });
     }
 
     // ── 2. For each diagnostic, compute self + others scores ──────────────────

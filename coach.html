@@ -1026,7 +1026,7 @@
 
       <!-- Step 1: Select Leaders -->
       <div style="font-size:12px;font-weight:700;color:var(--d-blue);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;">
-        Select Leaders — choose 2 or more
+        Select Leaders — choose one or more
       </div>
       <div id="tr-leader-list" style="margin-bottom:20px;">
         <div style="font-size:13px;color:var(--d-mid);">Loading diagnostics…</div>
@@ -6189,13 +6189,13 @@ function renderTeamReportsCard() {
         <button class="dbtn dbtn-outline dbtn-sm" onclick="openTeamReport('${r.id}')">Review →</button>
       </div>`).join('');
   } else {
-    html = `<div style="font-size:13px;color:var(--d-mid);">No team reports yet. Select 2+ leaders with completed diagnostics to generate one.</div>`;
+    html = `<div style="font-size:13px;color:var(--d-mid);">No team reports yet. Select one or more leaders with completed diagnostics to generate one.</div>`;
   }
 
   const eligible = ALL_DIAGS.filter(d => ['survey_closed','report_draft','report_final'].includes(d.status));
-  const btnHtml  = eligible.length >= 2
+  const btnHtml  = eligible.length >= 1
     ? `<button class="dbtn dbtn-primary dbtn-sm" onclick="openTeamReportModal()">+ Create Team Report</button>`
-    : `<button class="dbtn dbtn-outline dbtn-sm" disabled title="Need 2+ completed diagnostics">+ Create Team Report</button>`;
+    : `<button class="dbtn dbtn-outline dbtn-sm" disabled title="Need at least one completed diagnostic">+ Create Team Report</button>`;
 
   return `<div class="card" style="margin-bottom:20px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
@@ -6227,7 +6227,7 @@ function renderTeamReportLeaderList() {
   const el = document.getElementById('tr-leader-list');
   if (!el) return;
   if (eligible.length === 0) {
-    el.innerHTML = `<div style="font-size:13px;color:var(--d-mid);padding:8px 0;">No completed diagnostics available. At least 2 leaders with closed surveys are required.</div>`;
+    el.innerHTML = `<div style="font-size:13px;color:var(--d-mid);padding:8px 0;">No completed diagnostics available. At least one leader with a closed survey is required.</div>`;
     return;
   }
   el.innerHTML = eligible.map(d => `
@@ -6254,11 +6254,11 @@ function toggleTeamReportLeader(id, rowEl) {
     if (chk) chk.checked = true;
   }
   const btn = document.getElementById('tr-generate-btn');
-  if (btn) btn.disabled = TEAM_RPT_SELECTED.size < 2;
+  if (btn) btn.disabled = TEAM_RPT_SELECTED.size < 1;
 }
 
 async function generateTeamReport() {
-  if (TEAM_RPT_SELECTED.size < 2) { alert('Please select at least 2 leaders.'); return; }
+  if (TEAM_RPT_SELECTED.size < 1) { alert('Please select at least one leader.'); return; }
   const team_name            = document.getElementById('tr-team-name').value.trim();
   const org_name             = document.getElementById('tr-org-name').value.trim();
   const prepared_for_name    = document.getElementById('tr-prepared-for-name').value.trim();
@@ -6291,7 +6291,7 @@ async function generateTeamReport() {
     if (ALL_TEAM_REPORTS.length > 0) openTeamReport(ALL_TEAM_REPORTS[0].id);
   } catch (err) {
     alert(`Error generating team report: ${err.message}`);
-    btn.disabled = TEAM_RPT_SELECTED.size < 2;
+    btn.disabled = TEAM_RPT_SELECTED.size < 1;
     btn.textContent = orig;
   }
 }
