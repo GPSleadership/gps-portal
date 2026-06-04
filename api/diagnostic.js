@@ -165,9 +165,10 @@ export default async function handler(req, res) {
     case 'import-survey-data':   return handleImportSurveyData(req, res);
     case 'generate-team-report': return handleGenerateTeamReport(req, res);
     case 'finalize-report':      return handleFinalizeReport(req, res);
+    case 'sign-report-upload':   return handleSignReportUpload(req, res);
     case 'reminders':            return handleReminders(req, res);
     default:
-      return res.status(400).json({ error: `Unknown action: "${action}". Valid: send-invites, send-leader-link, generate-question, generate-g2-question, generate-report, generate-team-report, finalize-report, reminders` });
+      return res.status(400).json({ error: `Unknown action: "${action}". Valid: send-invites, send-leader-link, generate-question, generate-g2-question, generate-report, generate-team-report, finalize-report, sign-report-upload, reminders` });
   }
 }
 
@@ -1589,6 +1590,49 @@ function buildDeliveryAlertEmail({ errorCount, totalCount, errSummary }) {
       </div>
     `,
   };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ACTION: sign-report-upload
+// POST /api/diagnostic?action=sign-report-upload
+// Body: { diagnostic_id, session }
+//
+// Post-v26 lockdown the browser's anon key can no longer INSERT into Storage, so
+// the old direct db.storage.upload() of the final report PDF fails with
+// "new row violates row-level security policy". This action uses the service key
+// to mint a short-lived Storage signed upload URL (scoped to this diagnostic's
+// report path) and returns its token. The coach's browser then uploads with
+// db.storage.uploadToSignedUrl(path, token, file) — no anon write needed.
+// Gated by the coach session token, same pattern as the other coach endpoints.
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleSignReportUpload(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const { diagnostic_id, session } = req.body || {};
+  if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
+  if (!diagnostic_id)               return res.status(400).json({ error: 'diagnostic_id required' });
+
+  const path = `${diagnostic_id}/report.pdf`;
+
+  try {
+    // x-upsert lets the coach replace a previously uploaded report at the same path.
+    const signRes = await sb(
+      `/storage/v1/object/upload/sign/diagnostic-reports/${path}`,
+      'POST', {}, { 'x-upsert': 'true' }
+    );
+    if (!signRes.ok) {
+      const t = await signRes.text();
+      return res.status(502).json({ error: `Storage sign failed (${signRes.status}): ${t.slice(0, 200)}` });
+    }
+    const signJson = await signRes.json(); // { url: "/object/upload/sign/diagnostic-reports/<path>?token=<jwt>" }
+    const token = new URL('http://x' + signJson.url).searchParams.get('token');
+    if (!token) return res.status(502).json({ error: 'No upload token returned by Storage' });
+
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/diagnostic-reports/${path}`;
+    return res.status(200).json({ token, path, publicUrl });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
 }
 
 async function handleReminders(req, res) {

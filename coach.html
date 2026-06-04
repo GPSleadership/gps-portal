@@ -5784,9 +5784,29 @@ async function uploadFinalReport() {
   if (msg) { msg.style.display = 'none'; }
 
   const path = DIAG_SEL.id + '/report.pdf';
+
+  // Post-lockdown the anon key can't write to Storage directly. Get a service-key
+  // signed upload URL from the gated endpoint, then upload with its token.
+  let uploadToken, pdfUrl;
+  try {
+    const r = await fetch('/api/diagnostic?action=sign-report-upload', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ diagnostic_id: DIAG_SEL.id, session: getCoachSessionToken() }),
+    });
+    const j = await r.json();
+    if (!r.ok || !j.token) throw new Error(j.error || ('HTTP ' + r.status));
+    uploadToken = j.token;
+    pdfUrl      = j.publicUrl;
+  } catch (e) {
+    if (msg) { msg.style.display = 'block'; msg.style.color = 'var(--d-red)'; msg.textContent = 'Upload failed: ' + e.message; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Upload & Finalize Report'; }
+    return;
+  }
+
   const { error: upErr } = await db.storage
     .from('diagnostic-reports')
-    .upload(path, _finalReportFile, { contentType: 'application/pdf', upsert: true });
+    .uploadToSignedUrl(path, uploadToken, _finalReportFile, { contentType: 'application/pdf', upsert: true });
 
   if (upErr) {
     if (msg) { msg.style.display = 'block'; msg.style.color = 'var(--d-red)'; msg.textContent = 'Upload failed: ' + upErr.message; }
@@ -5794,8 +5814,6 @@ async function uploadFinalReport() {
     return;
   }
 
-  const { data: urlData } = db.storage.from('diagnostic-reports').getPublicUrl(path);
-  const pdfUrl = urlData.publicUrl;
   const now = new Date().toISOString();
 
   await updateDiag({ report_pdf_url: pdfUrl, report_finalized_at: now, status: 'report_final' });
