@@ -6573,23 +6573,33 @@ function drMembersPanel(t, members, clients, nameById){
       +'<div><b>'+drEsc(nameById[m.client_id]||'(client)')+'</b> — '+drEsc(m.role||'')+(m.is_coaching_client?' <span style="font-size:10px;background:#E8F7F7;color:#01949A;padding:1px 7px;border-radius:8px;">Coaching</span>':'')+'</div>'
       +'<button class="btn-add" style="background:#fff;color:#DB1F48;border:1px solid #DB1F48;padding:4px 10px;font-size:11px;" onclick="drRemoveMember(\''+m.id+'\',\''+t.id+'\')">Remove</button></div>';
   }).join('') || '<div style="color:#666;font-size:13px;">No members yet.</div>';
-  var opts=clients.map(function(c){ return '<option value="'+c.id+'" data-title="'+drEsc(c.title||'')+'">'+drEsc(c.name)+'</option>'; }).join('');
-  var add='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;border-top:1px solid #eee;padding-top:12px;">'
-    +'<select id="dr_mclient" onchange="drFillRole()" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;min-width:200px;">'+opts+'</select>'
-    +'<input id="dr_mrole" placeholder="Role (auto-fills from profile)" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;" />'
-    +'<label style="font-size:13px;"><input type="checkbox" id="dr_mcoach" /> Coaching client</label>'
-    +'<button class="btn-add" onclick="drAddMember(\''+t.id+'\')">Add member</button></div>';
+  var existing={}; members.forEach(function(m){ existing[m.client_id]=1; });
+  var opts=clients.filter(function(c){ return !existing[c.id]; }).map(function(c){ return '<option value="'+c.id+'" data-title="'+drEsc(c.title||'')+'">'+drEsc(c.name)+(c.title?' — '+drEsc(c.title):'')+'</option>'; }).join('');
+  var add = opts
+    ? '<div style="margin-top:12px;border-top:1px solid #eee;padding-top:12px;">'
+      +'<div style="font-size:11px;color:#666;margin-bottom:6px;">Select one or more people (Cmd/Ctrl-click for several). Each person\'s role auto-fills from their profile.</div>'
+      +'<select id="dr_mclients" multiple size="6" style="width:100%;padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;">'+opts+'</select>'
+      +'<div style="display:flex;gap:14px;align-items:center;margin-top:8px;flex-wrap:wrap;"><label style="font-size:13px;"><input type="checkbox" id="dr_mcoach" /> Mark selected as coaching clients</label>'
+      +'<button class="btn-add" onclick="drAddMembers(\''+t.id+'\')">Add selected members</button></div></div>'
+    : '<div style="margin-top:12px;border-top:1px solid #eee;padding-top:12px;font-size:12px;color:#888;">Every client is already on this team.</div>';
   return drCard('Leadership Team members', list+add);
 }
 function drFillRole(){
   var sel=document.getElementById('dr_mclient'); var ro=document.getElementById('dr_mrole');
   if(sel && ro){ var opt=sel.options[sel.selectedIndex]; ro.value = (opt && opt.getAttribute('data-title')) || ''; }
 }
-async function drAddMember(teamId){
-  var sel=document.getElementById('dr_mclient'); var cid=drVal('dr_mclient'); if(!cid){ alert('Pick a client.'); return; }
-  var role=drVal('dr_mrole'); if(!role && sel){ var opt=sel.options[sel.selectedIndex]; role=(opt && opt.getAttribute('data-title'))||''; }
-  try{ await cdInsert('team_members',{ team_id:teamId, client_id:cid, role:role||null, is_coaching_client:drChecked('dr_mcoach') }); drManageTeam(teamId); }
-  catch(e){ alert('Could not add: '+e.message); }
+async function drAddMembers(teamId){
+  var sel=document.getElementById('dr_mclients'); if(!sel){ return; }
+  var chosen=Array.prototype.filter.call(sel.options, function(o){ return o.selected; });
+  if(!chosen.length){ alert('Select at least one person.'); return; }
+  var coach=drChecked('dr_mcoach');
+  try{
+    for(var i=0;i<chosen.length;i++){
+      var o=chosen[i];
+      await cdInsert('team_members',{ team_id:teamId, client_id:o.value, role:(o.getAttribute('data-title')||null), is_coaching_client:coach });
+    }
+    drManageTeam(teamId);
+  }catch(e){ alert('Could not add members: '+e.message); }
 }
 async function drRemoveMember(id, teamId){ try{ await cdDelete('team_members',{ eq:{id:id} }); drManageTeam(teamId); }catch(e){ alert(e.message); } }
 
@@ -6728,18 +6738,28 @@ async function drOpenSponsor(preTeamId){
   showSection('decisionroom', true);
   var el=document.getElementById('drAdmin'); el.innerHTML='<div class="spinner"></div>';
   var teams=[]; try{ teams=await cdSelect('teams',{ order:{col:'created_at',asc:true} }); }catch(e){}
+  var clients=[]; try{ clients=await cdSelect('clients',{ select:'id,name,email', order:{col:'name',asc:true} }); }catch(e){}
   var topts=teams.map(function(t){ return '<option value="'+t.id+'"'+(t.id===preTeamId?' selected':'')+'>'+drEsc((t.client_org_name||t.name)+' — '+t.name)+'</option>'; }).join('');
+  var copts='<option value="">— New person (type name + email below) —</option>'+clients.map(function(c){ return '<option value="'+c.id+'" data-name="'+drEsc(c.name||'')+'" data-email="'+drEsc(c.email||'')+'">'+drEsc(c.name)+(c.email?' · '+drEsc(c.email):'')+'</option>'; }).join('');
   var memBlock='<div id="dr_spmembers" style="font-size:12px;color:#666;">Select a team to choose who they supervise.</div>';
   el.innerHTML='<div style="margin-bottom:14px;"><button class="btn-add" style="background:#fff;color:#004369;border:1.5px solid #d0d0d0;" onclick="drRender()">← Back</button></div>'
     +drCard('Add Sponsor',
       '<div style="display:grid;gap:10px;max-width:620px;">'
       +'<div style="font-size:12.5px;color:#666;">A sponsor views a team\'s Decision Room. No goals, plan, or check-ins — token access only.</div>'
+      +'<div><label style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;">Existing person (optional)</label><select id="dr_spexisting" onchange="drFillSponsorFromClient()" style="width:100%;padding:9px 12px;border:1.5px solid #d0d0d0;border-radius:6px;">'+copts+'</select><div style="font-size:11px;color:#888;margin-top:3px;">Pick someone already in the system to auto-fill their name and email, or leave on "New person" and type them in.</div></div>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"><input id="dr_spname" placeholder="Full name" style="padding:9px 12px;border:1.5px solid #d0d0d0;border-radius:6px;" /><input id="dr_spemail" placeholder="Email" style="padding:9px 12px;border:1.5px solid #d0d0d0;border-radius:6px;" /></div>'
       +'<div><label style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;">Team they sponsor</label><select id="dr_spteam" onchange="drSponsorMembers()" style="width:100%;padding:9px 12px;border:1.5px solid #d0d0d0;border-radius:6px;">'+topts+'</select></div>'
       +'<div><label style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;">Confidentiality</label><select id="dr_spconf" style="width:100%;padding:9px 12px;border:1.5px solid #d0d0d0;border-radius:6px;"><option value="standard">Standard — sponsor can open individual reports</option><option value="private">Private — individual diagnostic scores hidden; team patterns + decision status only</option></select></div>'
       +'<div><label style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;">Who do they supervise on this team?</label>'+memBlock+'</div>'
       +'<div style="text-align:right;"><button class="btn-save" onclick="drSaveSponsor()">Create sponsor</button></div></div>');
   drSponsorMembers();
+}
+function drFillSponsorFromClient(){
+  var sel=document.getElementById('dr_spexisting'); if(!sel) return;
+  var opt=sel.options[sel.selectedIndex]; if(!opt || !opt.value) return;
+  var n=document.getElementById('dr_spname'), e=document.getElementById('dr_spemail');
+  if(n) n.value=opt.getAttribute('data-name')||'';
+  if(e) e.value=opt.getAttribute('data-email')||'';
 }
 async function drSponsorMembers(){
   var teamId=drVal('dr_spteam'); var box=document.getElementById('dr_spmembers'); if(!box) return;

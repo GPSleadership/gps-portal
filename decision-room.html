@@ -229,6 +229,16 @@ function renderTeam(){
   if(DATA.confidentiality==='private'){
     html += '<div class="conf-banner"><b>Confidential engagement.</b> Each leader\'s individual diagnostic scores (self vs raters) stay private to them and are not shown here. Everything else — the 90-day plan, stakeholder progress, and engagement — is shared.</div>';
   }
+  // One-person team: land directly on that leader's report (with recommendations
+  // and succession), not a blank team dashboard.
+  if(members.length===1){
+    html += memberReportHtml(members[0]);
+    html += renderRecs(DATA.recommendations||[]);
+    html += renderSignals(DATA.signals||[]);
+    html += renderTeamReport(DATA.team_report);
+    document.getElementById('view').innerHTML = html;
+    return;
+  }
   html += renderSnapshot(t);
   html += renderMomentum(members);
   html += renderThemes(t.themes);
@@ -396,15 +406,14 @@ function renderTeamReport(tr){
 }
 
 /* ───────── INDIVIDUAL ───────── */
-function viewMember(idx){
-  var m=(DATA.members||[])[idx]; if(!m) return;
+// Builds the full individual report card stack (no nav chrome) so it can be
+// reused both for the drill-down AND as the landing for a one-person team.
+function memberReportHtml(m){
   var t=DATA.team, name=m.name||m.role||'Leader', first=String(name).split(' ')[0];
-  var out='<div style="margin-bottom:14px;"><button class="btn btn-ghost btn-sm" onclick="renderTeam();window.scrollTo(0,0);">&larr; Back to '+esc(t.client_org_name||t.name)+' team</button></div>';
   var engBadge = m.is_coaching_client ? '<span class="tag primary">Coaching client</span>' : '<span class="tag">Diagnostic only</span>';
   var sLine = m.coach_summary || (m.report_json&&m.report_json.summaryLine) || '';
-  out += '<div class="card"><div class="ind-header"><div class="ind-avatar">'+esc(initials(name))+'</div><div><div class="ind-name">'+esc(name)+'</div>'
+  var out = '<div class="card"><div class="ind-header"><div class="ind-avatar">'+esc(initials(name))+'</div><div><div class="ind-name">'+esc(name)+'</div>'
     + '<div class="ind-role">'+esc(m.role||'')+' &middot; '+esc(t.client_org_name||t.name)+' '+engBadge+'</div></div></div>'+(sLine?'<div class="ind-summary">'+esc(sLine)+'</div>':'')+'</div>';
-
   out += attentionBanner(m, first);
   out += progressCard(m);
   // Confidential 360 detail only if the endpoint included it (omitted server-side in private mode)
@@ -413,6 +422,13 @@ function viewMember(idx){
   out += scoreboardCard(m, first);
   out += engagementCard(m);
   out += successionCard(m);
+  return out;
+}
+function viewMember(idx){
+  var m=(DATA.members||[])[idx]; if(!m) return;
+  var t=DATA.team;
+  var out='<div style="margin-bottom:14px;"><button class="btn btn-ghost btn-sm" onclick="renderTeam();window.scrollTo(0,0);">&larr; Back to '+esc(t.client_org_name||t.name)+' team</button></div>';
+  out += memberReportHtml(m);
   document.getElementById('view').innerHTML = out;
 }
 
