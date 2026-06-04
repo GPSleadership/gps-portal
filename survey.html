@@ -262,10 +262,9 @@
       </div>
 
       <div class="anchor-row">
-        <div class="anchor-item"><div class="score">1–3</div><div class="label">Rarely or never</div></div>
-        <div class="anchor-item"><div class="score">4–6</div><div class="label">Sometimes — inconsistent</div></div>
-        <div class="anchor-item"><div class="score">7–8</div><div class="label">Usually — still developing</div></div>
-        <div class="anchor-item"><div class="score">9–10</div><div class="label">Consistently and effectively</div></div>
+        <div class="anchor-item"><div class="score">1</div><div class="label">Rarely or never</div></div>
+        <div class="anchor-item"><div class="score">3</div><div class="label">Sometimes — inconsistent</div></div>
+        <div class="anchor-item"><div class="score">5</div><div class="label">Consistently and effectively</div></div>
       </div>
 
       <div class="rating-row" id="ratingRow" style="margin-top:18px;"></div>
@@ -377,9 +376,9 @@ function buildSurvey() {
   // Visibility toggle client name
   document.querySelectorAll('.clientFirstVis').forEach(el => el.textContent = clientFirst);
 
-  // Build rating buttons 1–10
+  // Build rating buttons 1–5
   const ratingRow = document.getElementById('ratingRow');
-  for (let i = 1; i <= 10; i++) {
+  for (let i = 1; i <= 5; i++) {
     const btn = document.createElement('button');
     btn.className   = 'rating-btn';
     btn.textContent = i;
@@ -412,8 +411,8 @@ function selectScore(val) {
     btn.classList.remove('selected','high','mid','low');
     if (idx + 1 === val) {
       btn.classList.add('selected');
-      if (val >= 9)      btn.classList.add('high');
-      else if (val >= 7) btn.classList.add('mid');
+      if (val >= 4)      btn.classList.add('high');
+      else if (val >= 3) btn.classList.add('mid');
       else               btn.classList.add('low');
     }
   });

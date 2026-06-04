@@ -113,7 +113,7 @@ function buildSendEmailHtml(stakeholderName, clientName, checkpoint, priorityBeh
       ${p(`${clientFirst} has started a focused 90-day leadership sprint and has asked you to be one of their key stakeholders.`)}
       ${p(`You'll find a short 2-question survey below. It should take less than 3 minutes. You'll be asked to:`)}
       <ol style="margin:0 0 14px;padding-left:22px;">
-        ${li(`Rate, on a 1–10 scale, how consistently ${clientFirst} has <strong>${priorityBehavior}</strong> over the last 2 weeks.`)}
+        ${li(`Rate, on a 1–5 scale, how consistently ${clientFirst} has <strong>${priorityBehavior}</strong> over the last 2 weeks.`)}
         ${li(`(Optional) Share one brief example of how their current behavior around this affects you or the team.`)}
       </ol>
       ${ctaBtn}
@@ -128,7 +128,7 @@ function buildSendEmailHtml(stakeholderName, clientName, checkpoint, priorityBeh
       ${p(`You previously shared baseline feedback as one of their key stakeholders.`)}
       ${p(`We're now at the midpoint and would value a quick update from you. Please complete this very short check-in (1 question):`)}
       ${ctaBtn}
-      ${p(`You'll be asked to rate, on a 1–10 scale, how consistently ${clientFirst} has demonstrated the behavior above over the last 2 weeks, plus an optional comment field.`)}
+      ${p(`You'll be asked to rate, on a 1–5 scale, how consistently ${clientFirst} has demonstrated the behavior above over the last 2 weeks, plus an optional comment field.`)}
       ${p(`Your numeric rating will be visible to both ${clientFirst} and their coach. For any written comments, you can again choose whether they are shared with both or only with the coach.`)}
       ${p(`${clientFirst} and their coach are copied here so everyone knows this request was sent. Your responses are still used for development, not formal evaluation.`)}
       ${p(`Thank you again for your support and candor.`)}`;
@@ -141,7 +141,7 @@ function buildSendEmailHtml(stakeholderName, clientName, checkpoint, priorityBeh
       ${ctaBtn}
       ${p(`You'll be asked to:`)}
       <ol style="margin:0 0 14px;padding-left:22px;">
-        ${li(`Rate, on a 1–10 scale, how consistently ${clientFirst} has demonstrated the behavior above over the last 2 weeks.`)}
+        ${li(`Rate, on a 1–5 scale, how consistently ${clientFirst} has demonstrated the behavior above over the last 2 weeks.`)}
         ${li(`Share, in one sentence, the most noticeable change you've experienced in the last 2–4 weeks related to this behavior, with a brief example if possible.`)}
         ${li(`(Optional) Add any additional comments, with the option to share them with both ${clientFirst} and their coach, or with the coach only.`)}
       </ol>
@@ -411,7 +411,7 @@ async function sendResponseNotifications({ client_id, stakeholder_id, checkpoint
     await sendNotificationEmail(client.email, clientSubject, clientHtml, client_id, client.name, 'survey_response_client');
   }
 
-  const alexSubject = `[GPS] ${clientFirst}'s ${checkpointLabel} feedback — ${stakeholderName} | ${score}/10`;
+  const alexSubject = `[GPS] ${clientFirst}'s ${checkpointLabel} feedback — ${stakeholderName} | ${score}/5`;
   const alexHtml    = buildAlexNotificationHtml(client.name, stakeholderName, checkpointLabel, score, stakeholder.role || '');
   await sendNotificationEmail(ALEX_EMAIL, alexSubject, alexHtml, client_id, client.name, 'survey_response_alex');
 }
@@ -432,7 +432,7 @@ function buildClientNotificationHtml(clientFirst, stakeholderName, checkpointLab
       ${p(`<strong>${stakeholderName}</strong> just completed your ${checkpointLabel} survey.`)}
       <div style="background:#F5F6F8;border-left:3px solid #C9A84C;padding:14px 18px;margin:14px 0;border-radius:0 6px 6px 0;">
         <div style="font-size:13px;color:#6B7280;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Score</div>
-        <div style="font-size:28px;font-weight:700;color:#1B2A4A;">${score}<span style="font-size:16px;color:#9CA3AF;">/10</span></div>
+        <div style="font-size:28px;font-weight:700;color:#1B2A4A;">${score}<span style="font-size:16px;color:#9CA3AF;">/5</span></div>
       </div>
       ${p(`Log in to your portal to see the full picture once all responses are in.`)}
       <hr style="border:none;border-top:1px solid #E5E7EB;margin:24px 0 18px;" />
@@ -444,7 +444,7 @@ function buildClientNotificationHtml(clientFirst, stakeholderName, checkpointLab
 }
 
 function buildAlexNotificationHtml(clientName, stakeholderName, checkpointLabel, score, stakeholderRole) {
-  const scoreColor = score >= 8 ? '#16a34a' : score >= 5 ? '#d97706' : '#dc2626';
+  const scoreColor = score >= 4 ? '#16a34a' : score >= 3 ? '#d97706' : '#dc2626';
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8"></head>
@@ -457,7 +457,7 @@ function buildAlexNotificationHtml(clientName, stakeholderName, checkpointLabel,
       <tr><td style="padding:6px 0;color:#6B7280;width:140px;">Client</td><td style="padding:6px 0;font-weight:600;">${clientName}</td></tr>
       <tr><td style="padding:6px 0;color:#6B7280;">Stakeholder</td><td style="padding:6px 0;">${stakeholderName}${stakeholderRole ? ` <span style="color:#9CA3AF;font-size:12px;">(${stakeholderRole})</span>` : ''}</td></tr>
       <tr><td style="padding:6px 0;color:#6B7280;">Checkpoint</td><td style="padding:6px 0;">${checkpointLabel}</td></tr>
-      <tr><td style="padding:6px 0;color:#6B7280;">Score</td><td style="padding:6px 0;font-size:20px;font-weight:700;color:${scoreColor};">${score}<span style="font-size:13px;color:#9CA3AF;">/10</span></td></tr>
+      <tr><td style="padding:6px 0;color:#6B7280;">Score</td><td style="padding:6px 0;font-size:20px;font-weight:700;color:${scoreColor};">${score}<span style="font-size:13px;color:#9CA3AF;">/5</span></td></tr>
       <tr><td style="padding:6px 0;color:#6B7280;">Submitted</td><td style="padding:6px 0;">${new Date().toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })} ET</td></tr>
     </table>
   </div>
@@ -486,8 +486,8 @@ async function handleSubmit(req, res) {
     if (!token || !client_id || !stakeholder_id || !checkpoint || score == null) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
-    if (score < 1 || score > 10 || !Number.isInteger(score)) {
-      return res.status(400).json({ error: 'Score must be an integer between 1 and 10' });
+    if (score < 1 || score > 5 || !Number.isInteger(score)) {
+      return res.status(400).json({ error: 'Score must be an integer between 1 and 5' });
     }
 
     const tokenRes = await sbFetch(`/rest/v1/survey_tokens?token=eq.${encodeURIComponent(token)}&client_id=eq.${client_id}&select=*`);
@@ -502,7 +502,7 @@ async function handleSubmit(req, res) {
     }
 
     const insertRes = await sbFetch('/rest/v1/survey_responses', 'POST', {
-      client_id, stakeholder_id, token_id: tokenRecord.id, checkpoint, score,
+      client_id, stakeholder_id, token_id: tokenRecord.id, checkpoint, score, scale: 5,
       open_response: open_response || null,
       comments:      comments      || null,
       comments_visible_to_client: comments_visible_to_client !== false
