@@ -775,6 +775,16 @@
 
     <!-- ═══ DASHBOARD SECTION ═══ -->
     <div id="section-dashboard" class="diag-scope">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+        <div style="position:relative;display:inline-block;">
+          <button class="btn-add" onclick="drToggleAddDash(event)">+ Add ▾</button>
+          <div id="drAddMenuDash" style="display:none;position:absolute;right:0;top:46px;background:#fff;border:1px solid #e8e8e8;border-radius:9px;box-shadow:0 8px 28px rgba(0,0,0,0.14);min-width:240px;z-index:60;overflow:hidden;text-align:left;">
+            <div onclick="drCloseAddDash();openAddModal();" style="padding:11px 15px;cursor:pointer;border-bottom:1px solid #f5f5f5;"><b style="font-family:'Montserrat',sans-serif;color:#004369;font-size:13px;">Member</b><div style="font-size:11px;color:#666;">Add a person; set diagnostic and/or coaching in the form</div></div>
+            <div onclick="drCloseAddDash();showSection('decisionroom');setTimeout(drCreateTeam,60);" style="padding:11px 15px;cursor:pointer;border-bottom:1px solid #f5f5f5;"><b style="font-family:'Montserrat',sans-serif;color:#004369;font-size:13px;">Team</b><div style="font-size:11px;color:#666;">Create a leadership team for the Decision Room</div></div>
+            <div onclick="drCloseAddDash();showSection('decisionroom');setTimeout(function(){drOpenSponsor(null);},60);" style="padding:11px 15px;cursor:pointer;"><b style="font-family:'Montserrat',sans-serif;color:#004369;font-size:13px;">Sponsor</b><div style="font-size:11px;color:#666;">Provision an executive sponsor (Decision Room access)</div></div>
+          </div>
+        </div>
+      </div>
       <div id="dashboardContent">
         <div class="spinner"></div>
       </div>
@@ -6211,13 +6221,10 @@ function renderTeamReportsCard() {
         <button class="dbtn dbtn-outline dbtn-sm" onclick="openTeamReport('${r.id}')">Review →</button>
       </div>`).join('');
   } else {
-    html = `<div style="font-size:13px;color:var(--d-mid);">No team reports yet. Select one or more leaders with completed diagnostics to generate one.</div>`;
+    html = `<div style="font-size:13px;color:var(--d-mid);">No team reports yet. Reports are generated per team in the Decision Room — open a team and use the Team Report panel.</div>`;
   }
 
-  const eligible = ALL_DIAGS.filter(d => ['survey_closed','report_draft','report_final'].includes(d.status));
-  const btnHtml  = eligible.length >= 1
-    ? `<button class="dbtn dbtn-primary dbtn-sm" onclick="openTeamReportModal()">+ Create Team Report</button>`
-    : `<button class="dbtn dbtn-outline dbtn-sm" disabled title="Need at least one completed diagnostic">+ Create Team Report</button>`;
+  const btnHtml = `<button class="dbtn dbtn-primary dbtn-sm" onclick="showSection('decisionroom')">Manage in Decision Room →</button>`;
 
   return `<div class="card" style="margin-bottom:20px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
@@ -6469,6 +6476,8 @@ function diagCopyText(text) {
    ==================================================================== */
 function drEsc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function drToggleAdd(e){ e.stopPropagation(); var m=document.getElementById('drAddMenu'); if(m) m.style.display = (m.style.display==='block')?'none':'block'; }
+function drToggleAddDash(e){ e.stopPropagation(); var m=document.getElementById('drAddMenuDash'); if(m) m.style.display = (m.style.display==='block')?'none':'block'; }
+function drCloseAddDash(){ var m=document.getElementById('drAddMenuDash'); if(m) m.style.display='none'; }
 document.addEventListener('click', function(){ var m=document.getElementById('drAddMenu'); if(m) m.style.display='none'; });
 function drVal(id){ var el=document.getElementById(id); return el? el.value : ''; }
 function drChecked(id){ var el=document.getElementById(id); return el? el.checked : false; }
@@ -6502,7 +6511,7 @@ async function drCreateTeam(){
 async function drManageTeam(teamId){
   if(!teamId){ drRender(); return; }
   var el=document.getElementById('drAdmin'); el.innerHTML='<div class="spinner"></div>';
-  var team, members=[], clients=[], recs=[], signals=[], links=[], sponsors=[];
+  var team, members=[], clients=[], recs=[], signals=[], links=[], sponsors=[], reports=[], diags=[];
   try {
     var tr=await cdSelect('teams',{ eq:{id:teamId} }); team=tr[0];
     members=await cdSelect('team_members',{ eq:{team_id:teamId}, order:{col:'sort_order',asc:true} });
@@ -6511,12 +6520,16 @@ async function drManageTeam(teamId){
     signals=await cdSelect('external_signals',{ eq:{team_id:teamId}, order:{col:'date_observed',asc:false} });
     links=await cdSelect('sponsor_teams',{ eq:{team_id:teamId} });
     if(links.length){ sponsors=await cdSelect('sponsors',{ in:{ id: links.map(function(l){return l.sponsor_id;}) } }); }
+    reports=await cdSelect('diagnostic_team_reports',{ eq:{team_id:teamId}, order:{col:'generated_at',asc:false} });
+    var memberCids=members.map(function(m){return m.client_id;}).filter(Boolean);
+    if(memberCids.length){ diags=await cdSelect('diagnostics',{ in:{ client_id:memberCids }, select:'id,client_id,status,created_at', order:{col:'created_at',asc:false} }); }
   } catch(e){ el.innerHTML='<div style="color:#b00;padding:16px;">Load failed: '+drEsc(e.message)+'</div>'; return; }
   if(!team){ drRender(); return; }
   var nameById={}; clients.forEach(function(c){ nameById[c.id]=c.name; });
 
   // panels
   var panelMembers=drMembersPanel(team, members, clients, nameById);
+  var panelReport=drTeamReportPanel(team, reports, members, nameById, diags);
   var panelRecs=drRecsPanel(team, recs);
   var panelSignals=drSignalsPanel(team, signals);
   var panelSponsors=drSponsorsPanel(team, links, sponsors, members, nameById);
@@ -6525,7 +6538,7 @@ async function drManageTeam(teamId){
   el.innerHTML='<div style="margin-bottom:14px;"><button class="btn-add" style="background:#fff;color:#004369;border:1.5px solid #d0d0d0;" onclick="drRender()">← All teams</button></div>'
     +'<h2 style="font-family:\'Montserrat\',sans-serif;color:#004369;font-size:20px;">'+drEsc(team.client_org_name||team.name)+' — '+drEsc(team.name)+'</h2>'
     +'<div style="font-size:12px;color:#666;margin-bottom:16px;">'+drEsc(team.team_type)+' team</div>'
-    +panelNarr+panelMembers+panelSponsors+panelRecs+panelSignals;
+    +panelNarr+panelMembers+panelReport+panelSponsors+panelRecs+panelSignals;
   try{ drFillRole(); }catch(e){}
 }
 
@@ -6574,6 +6587,73 @@ async function drAddMember(teamId){
   catch(e){ alert('Could not add: '+e.message); }
 }
 async function drRemoveMember(id, teamId){ try{ await cdDelete('team_members',{ eq:{id:id} }); drManageTeam(teamId); }catch(e){ alert(e.message); } }
+
+// ── Team Report (drafted from this team's members, coach-approved before sponsor sees it) ──
+var DR_DONE_STATUS={ survey_closed:1, report_draft:1, report_final:1 };
+function drBestDiagByClient(diags){
+  var best={}; (diags||[]).forEach(function(d){ if(DR_DONE_STATUS[d.status] && !best[d.client_id]) best[d.client_id]=d; });
+  return best;
+}
+function drTeamReportPanel(t, reports, members, nameById, diags){
+  var best=drBestDiagByClient(diags);
+  var scored=[], roster=[];
+  members.forEach(function(m){ if(best[m.client_id]) scored.push(m); else roster.push(m); });
+  var chip=function(txt,color,bg){ return '<span style="display:inline-block;font-size:11px;font-weight:600;color:'+color+';background:'+bg+';border-radius:10px;padding:2px 9px;margin:2px 4px 2px 0;">'+drEsc(txt)+'</span>'; };
+  var scoredHtml = scored.length ? scored.map(function(m){ return chip(nameById[m.client_id]||'leader','#1b6e3c','#e7f5ec'); }).join('') : '<span style="color:#888;font-size:12px;">none yet</span>';
+  var rosterHtml = roster.length ? roster.map(function(m){ return chip((nameById[m.client_id]||'member')+(m.role?' · '+m.role:''),'#555','#f0f0f0'); }).join('') : '<span style="color:#888;font-size:12px;">none</span>';
+  var genBtn = scored.length
+    ? '<button class="btn-add" id="dr_genreport_btn" onclick="drGenerateTeamReport(\''+t.id+'\')">⚙ Generate draft report</button>'
+    : '<button class="btn-add" disabled title="No member has a completed diagnostic yet" style="opacity:.5;cursor:not-allowed;">⚙ Generate draft report</button>';
+  var repHtml = (reports&&reports.length) ? reports.map(function(r){
+    var pub=!!r.sponsor_visible;
+    var status = pub ? '<span style="color:#2e7d32;font-weight:700;">Published to sponsor</span>' : '<span style="color:#DB1F48;font-weight:700;">Draft — not shown to sponsor</span>';
+    var when = (typeof diagFormatDate==='function') ? diagFormatDate(r.generated_at) : (r.generated_at||'');
+    return '<div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">'
+      +'<div style="font-size:13px;"><b>Team report</b> · '+drEsc(when)+' · '+drEsc(String(r.num_leaders||0))+' scored · '+status+'</div>'
+      +'<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">'
+      +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#fff;color:#004369;border:1px solid #004369;" onclick="drToggleReportBody(\''+r.id+'\')">View / hide</button>'
+      +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#fff;color:#01949A;border:1px solid #01949A;" onclick="drReportVis(\''+r.id+'\','+(!pub)+',\''+t.id+'\')">'+(pub?'Unpublish':'Publish to sponsor')+'</button>'
+      +'</div>'
+      +'<div id="dr_rbody_'+r.id+'" style="display:none;margin-top:8px;white-space:pre-wrap;font-size:12.5px;line-height:1.55;color:#222;background:#f8f9fb;border:1px solid #eee;border-radius:6px;padding:12px;max-height:440px;overflow:auto;">'+drEsc(r.content_text||'')+'</div>'
+      +'</div>';
+  }).join('') : '<div style="color:#666;font-size:13px;">No report generated yet.</div>';
+  var inner='<div style="font-size:12.5px;color:#555;margin-bottom:12px;">A written assessment drafted from this team\'s members who have completed diagnostics. It stays a draft until you publish it to the sponsor\'s Decision Room page.</div>'
+    +'<div style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;">Scored — completed diagnostics ('+scored.length+')</div><div style="margin:4px 0 10px;">'+scoredHtml+'</div>'
+    +'<div style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;">Roster — context only ('+roster.length+')</div><div style="margin:4px 0 12px;">'+rosterHtml+'</div>'
+    +'<div style="border-top:1px solid #eee;padding-top:12px;margin-bottom:12px;">'+genBtn+'</div>'
+    +repHtml;
+  return drCard('Team Report', inner);
+}
+function drToggleReportBody(id){ var el=document.getElementById('dr_rbody_'+id); if(el) el.style.display=(el.style.display==='none'?'block':'none'); }
+async function drReportVis(reportId, vis, teamId){
+  try{ await cdUpdate('diagnostic_team_reports',{ sponsor_visible:vis, approved_at: vis? new Date().toISOString():null, updated_at:new Date().toISOString() },{ eq:{id:reportId} }); drManageTeam(teamId); }
+  catch(e){ alert('Could not update visibility: '+e.message); }
+}
+async function drGenerateTeamReport(teamId){
+  var btn=document.getElementById('dr_genreport_btn');
+  try{
+    var tr=await cdSelect('teams',{ eq:{id:teamId} }); var team=tr[0]; if(!team){ alert('Team not found.'); return; }
+    var members=await cdSelect('team_members',{ eq:{team_id:teamId} });
+    var clients=await cdSelect('clients',{ select:'id,name,title' });
+    var nameById={}; clients.forEach(function(c){ nameById[c.id]=c.name; });
+    var cids=members.map(function(m){return m.client_id;}).filter(Boolean);
+    var diags=cids.length? await cdSelect('diagnostics',{ in:{client_id:cids}, select:'id,client_id,status,created_at', order:{col:'created_at',asc:false} }) : [];
+    var best=drBestDiagByClient(diags);
+    var diagnostic_ids=[], roster=[];
+    members.forEach(function(m){ var d=best[m.client_id]; if(d){ diagnostic_ids.push(d.id); } else { roster.push({ name:nameById[m.client_id]||'Team member', role:m.role||'' }); } });
+    if(!diagnostic_ids.length){ alert('No member has a completed diagnostic yet, so there is nothing to score. Add a member who has a closed diagnostic, or wait until a survey closes.'); return; }
+    if(!confirm('Generate a draft team report for "'+(team.name||'this team')+'"?\n\nScored: '+diagnostic_ids.length+' leader(s) with completed diagnostics.\nRoster (context only): '+roster.length+'.\n\nTakes ~30–60 seconds. Creates a DRAFT — the sponsor does not see it until you publish.')) return;
+    if(btn){ btn.disabled=true; btn.textContent='Generating… (30–60s)'; }
+    var resp=await fetch('/api/diagnostic?action=generate-team-report',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+      team_id:teamId, diagnostic_ids:diagnostic_ids, roster:roster,
+      team_name:team.name||'', org_name:team.client_org_name||'',
+      assessment_date_range:String(new Date().getFullYear()), sector_type:'private'
+    }) });
+    var j=await resp.json().catch(function(){return{};});
+    if(!resp.ok) throw new Error(j.error||('HTTP '+resp.status));
+    drManageTeam(teamId);
+  }catch(e){ alert('Could not generate report: '+e.message); if(btn){ btn.disabled=false; btn.textContent='⚙ Generate draft report'; } }
+}
 
 function drRecsPanel(t, recs){
   var list=recs.map(function(r){

@@ -239,6 +239,7 @@ function renderTeam(){
   if(DATA.show_succession!==false) html += renderTalentGrid(members);
   html += renderRecs(DATA.recommendations||[]);
   html += renderSignals(DATA.signals||[]);
+  html += renderTeamReport(DATA.team_report);
   document.getElementById('view').innerHTML = html;
 }
 
@@ -385,6 +386,13 @@ var SIG={green:'On track',yellow:'Watch',red:'Off track'};
 function renderSignals(signals){
   var rows=signals.map(function(s){ var lv=s.level||'yellow'; return '<div class="signal sig-'+lv+'"><div class="signal-head">'+fmtDate(s.date_observed)+' · '+esc(s.by_role||'')+' <span class="sig-chip sig-'+lv+'">'+(SIG[lv]||'Watch')+'</span></div><div class="signal-text">'+esc(s.summary)+'</div></div>'; }).join('');
   return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>What We Are Seeing</div></div>'+(rows||'<div class="empty">No observations to show yet.</div>')+'</div>';
+}
+
+function renderTeamReport(tr){
+  if(!tr || !tr.content_text) return '';
+  return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Written Team Report</div></div>'
+    + '<div style="font-size:12px;color:var(--gray-600);margin-bottom:10px;">Prepared by GPS Leadership'+(tr.generated_at?(' &middot; '+fmtDate(tr.generated_at)):'')+'</div>'
+    + '<div style="white-space:pre-wrap;font-size:13.5px;line-height:1.62;color:var(--text);">'+esc(tr.content_text)+'</div></div>';
 }
 
 /* ───────── INDIVIDUAL ───────── */

@@ -248,6 +248,10 @@ export default async function handler(req, res) {
       const recsRaw = await sbGet(`/rest/v1/recommendations?team_id=eq.${enc(teamId)}&status=eq.approved&visible_to_client=eq.true&select=*&order=updated_at.desc`);
       const signalsRaw = await sbGet(`/rest/v1/external_signals?team_id=eq.${enc(teamId)}&visible_to_client=eq.true&select=*&order=date_observed.desc`);
 
+      // Written team report — only the coach-approved (sponsor_visible) latest one.
+      const trRaw = await sbGet(`/rest/v1/diagnostic_team_reports?team_id=eq.${enc(teamId)}&sponsor_visible=eq.true&select=content_text,generated_at&order=generated_at.desc&limit=1`);
+      const teamReport = (trRaw && trRaw[0]) ? { content_text: trRaw[0].content_text, generated_at: trRaw[0].generated_at } : null;
+
       return res.status(200).json({
         ok: true,
         sponsor: { name: sponsor.name },
@@ -263,6 +267,7 @@ export default async function handler(req, res) {
         members: memberReports,
         recommendations: recsRaw,
         signals: signalsRaw,
+        team_report: teamReport,
       });
     }
 

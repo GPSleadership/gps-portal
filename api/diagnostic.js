@@ -2013,7 +2013,8 @@ GUARDRAILS for this section:
 - Keep this section to 120–200 words maximum.
 ────────────────────────────────────────────────────────────────────────────────`;
 
-function buildTeamReportPrompt({ org_name, team_name, prepared_for_name, prepared_for_title, assessment_date_range, sector_type, leaders, total_raters, verbatims }) {
+function buildTeamReportPrompt({ org_name, team_name, prepared_for_name, prepared_for_title, assessment_date_range, sector_type, leaders, total_raters, verbatims, roster }) {
+  const rosterList = Array.isArray(roster) ? roster : [];
   const fmt  = (n) => n != null ? n.toFixed(2) : 'n/a';
   const gap  = (self, others) => {
     if (self == null || others == null) return 'n/a';
@@ -2051,6 +2052,17 @@ function buildTeamReportPrompt({ org_name, team_name, prepared_for_name, prepare
     lines.push(`  TP3 Index (others avg, 1–5):     ${fmt(l.othersScores.tp3)} — ${label(l.othersScores.tp3)}`);
     lines.push(`  Overall Impact D1:  Self ${l.selfScores.impact != null ? l.selfScores.impact.toFixed(1) : 'n/a'} | Others ${l.othersScores.impact != null ? l.othersScores.impact.toFixed(2) : 'n/a'}`);
     lines.push(`  Bench / Succession (F1–F2, 1–5): Others ${fmt(l.othersScores.bench)}`);
+  }
+
+  // Team roster — members WITHOUT diagnostic data (non-participating buyer,
+  // coaching-only members, or someone mid-cycle). Context only, never scored.
+  if (rosterList.length) {
+    lines.push('');
+    lines.push('=== TEAM ROSTER (no diagnostic data — context only, do NOT score) ===');
+    for (const r of rosterList) {
+      lines.push(`- ${r.name || 'Team member'}${r.role ? `, ${r.role}` : ''}${r.note ? ` (${r.note})` : ''}`);
+    }
+    lines.push('Acknowledge these people as part of the team where relevant (e.g., bench, span of control, who is and isn\'t in the feedback picture), but do not assign them scores or invent assessment data for them.');
   }
 
   // Team aggregate
@@ -2184,10 +2196,11 @@ async function handleGenerateTeamReport(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
 
-  const { diagnostic_ids, org_name, team_name, prepared_for_name, prepared_for_title, assessment_date_range, sector_type } = req.body || {};
+  const { diagnostic_ids, org_name, team_name, prepared_for_name, prepared_for_title, assessment_date_range, sector_type, team_id, roster } = req.body || {};
+  const rosterList = Array.isArray(roster) ? roster : [];
 
   if (!Array.isArray(diagnostic_ids) || diagnostic_ids.length < 1) {
-    return res.status(400).json({ error: 'At least 1 diagnostic_id is required for a team report.' });
+    return res.status(400).json({ error: 'At least 1 leader with a completed diagnostic is required for a team report.' });
   }
   if (!team_name) {
     return res.status(400).json({ error: 'team_name is required.' });
@@ -2290,14 +2303,17 @@ async function handleGenerateTeamReport(req, res) {
       leaders,
       total_raters: totalRaters,
       verbatims:    allVerbatims,
+      roster:       rosterList,
     });
 
     const reportText = await callClaude(TEAM_REPORT_SYSTEM_PROMPT, userPrompt, 8192);
     if (!reportText) return res.status(500).json({ error: 'Claude returned an empty response.' });
 
     // ── 4. Store in Supabase ───────────────────────────────────────────────────
+    // Stored UNAPPROVED (sponsor_visible:false): the coach reviews, then publishes
+    // it to the sponsor's Decision Room page from the team management view.
     const now = new Date().toISOString();
-    await sb('/rest/v1/diagnostic_team_reports', 'POST', {
+    const storeRes = await sb('/rest/v1/diagnostic_team_reports', 'POST', {
       org_name:              org_name   || '',
       team_name:             team_name  || '',
       prepared_for_name:     prepared_for_name  || '',
@@ -2305,17 +2321,24 @@ async function handleGenerateTeamReport(req, res) {
       assessment_date_range: assessment_date_range || '',
       sector_type:           sector_type || 'private',
       diagnostic_ids:        JSON.stringify(diagnostic_ids),
+      team_id:               team_id || null,
+      roster_json:           JSON.stringify(rosterList),
+      sponsor_visible:       false,
       num_leaders:           leaders.length,
       total_raters:          totalRaters,
       content_text:          reportText,
       generated_at:          now,
       updated_at:            now,
-    }, { Prefer: 'return=minimal' });
+    }, { Prefer: 'return=representation' });
+    let newId = null;
+    try { const rows = await storeRes.json(); if (Array.isArray(rows) && rows[0]) newId = rows[0].id; } catch (_) {}
 
     return res.status(200).json({
+      id:           newId,
       report:       reportText,
       num_leaders:  leaders.length,
       total_raters: totalRaters,
+      roster_count: rosterList.length,
       generated_at: now,
     });
 
