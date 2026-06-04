@@ -6631,18 +6631,26 @@ function drTeamReportPanel(t, reports, members, nameById, diags){
     : '<button class="btn-add" disabled title="No member has a completed diagnostic yet" style="opacity:.5;cursor:not-allowed;">⚙ Generate draft report</button>';
   var repHtml = (reports&&reports.length) ? reports.map(function(r){
     var pub=!!r.sponsor_visible;
-    var status = pub ? '<span style="color:#2e7d32;font-weight:700;">Published to sponsor</span>' : '<span style="color:#DB1F48;font-weight:700;">Draft — not shown to sponsor</span>';
+    var hasPdf=!!r.report_pdf_url;
+    var status = pub ? (hasPdf?'<span style="color:#2e7d32;font-weight:700;">Published to sponsor</span>':'<span style="color:#c77700;font-weight:700;">Published, but no PDF uploaded — sponsor sees nothing</span>')
+                     : '<span style="color:#DB1F48;font-weight:700;">Draft — not shown to sponsor</span>';
     var when = (typeof diagFormatDate==='function') ? diagFormatDate(r.generated_at) : (r.generated_at||'');
+    var pdfLine = hasPdf
+      ? '<div style="font-size:12px;margin-top:6px;color:#2e7d32;">✓ Branded PDF on file — <a href="'+drEsc(r.report_pdf_url)+'" target="_blank" style="color:#01949A;font-weight:700;">View</a></div>'
+      : '<div style="font-size:12px;margin-top:6px;color:#888;">No branded PDF uploaded yet. The sponsor sees the PDF, not the draft text.</div>';
     return '<div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">'
       +'<div style="font-size:13px;"><b>Team report</b> · '+drEsc(when)+' · '+drEsc(String(r.num_leaders||0))+' scored · '+status+'</div>'
-      +'<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">'
-      +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#fff;color:#004369;border:1px solid #004369;" onclick="drToggleReportBody(\''+r.id+'\')">View / hide</button>'
-      +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#fff;color:#01949A;border:1px solid #01949A;" onclick="drReportVis(\''+r.id+'\','+(!pub)+',\''+t.id+'\')">'+(pub?'Unpublish':'Publish to sponsor')+'</button>'
+      +pdfLine
+      +'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">'
+      +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#fff;color:#004369;border:1px solid #004369;" onclick="drToggleReportBody(\''+r.id+'\')">View draft (coach only)</button>'
+      +'<input type="file" accept="application/pdf" id="dr_trpdf_'+r.id+'" style="display:none;" onchange="drUploadTeamReportPdf(\''+r.id+'\',\''+t.id+'\',this)">'
+      +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#004369;" onclick="document.getElementById(\'dr_trpdf_'+r.id+'\').click()">'+(hasPdf?'Replace branded PDF':'Upload branded PDF')+'</button>'
+      +(hasPdf?'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#fff;color:#01949A;border:1px solid #01949A;" onclick="drReportVis(\''+r.id+'\','+(!pub)+',\''+t.id+'\')">'+(pub?'Unpublish':'Publish to sponsor')+'</button>':'')
       +'</div>'
       +'<div id="dr_rbody_'+r.id+'" style="display:none;margin-top:8px;white-space:pre-wrap;font-size:12.5px;line-height:1.55;color:#222;background:#f8f9fb;border:1px solid #eee;border-radius:6px;padding:12px;max-height:440px;overflow:auto;">'+drEsc(r.content_text||'')+'</div>'
       +'</div>';
   }).join('') : '<div style="color:#666;font-size:13px;">No report generated yet.</div>';
-  var inner='<div style="font-size:12.5px;color:#555;margin-bottom:12px;">A written assessment drafted from this team\'s members who have completed diagnostics. It stays a draft until you publish it to the sponsor\'s Decision Room page.</div>'
+  var inner='<div style="font-size:12.5px;color:#555;margin-bottom:12px;">Generate a DRAFT from this team\'s members who have completed diagnostics, polish it into a branded PDF in your own tool, upload it here, then publish. The sponsor sees the uploaded PDF — never the draft text.</div>'
     +'<div style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;">Scored — completed diagnostics ('+scored.length+')</div><div style="margin:4px 0 10px;">'+scoredHtml+'</div>'
     +'<div style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;">Roster — context only ('+roster.length+')</div><div style="margin:4px 0 12px;">'+rosterHtml+'</div>'
     +'<div style="border-top:1px solid #eee;padding-top:12px;margin-bottom:12px;">'+genBtn+'</div>'
@@ -6653,6 +6661,19 @@ function drToggleReportBody(id){ var el=document.getElementById('dr_rbody_'+id);
 async function drReportVis(reportId, vis, teamId){
   try{ await cdUpdate('diagnostic_team_reports',{ sponsor_visible:vis, approved_at: vis? new Date().toISOString():null, updated_at:new Date().toISOString() },{ eq:{id:reportId} }); drManageTeam(teamId); }
   catch(e){ alert('Could not update visibility: '+e.message); }
+}
+async function drUploadTeamReportPdf(reportId, teamId, input){
+  var file=input&&input.files&&input.files[0]; if(!file) return;
+  if(file.size > 30*1024*1024){ alert('File too large — max 30 MB.'); input.value=''; return; }
+  try{
+    var r=await fetch('/api/diagnostic?action=sign-team-report-upload',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ report_id:reportId, session:getCoachSessionToken() }) });
+    var j=await r.json().catch(function(){return{};});
+    if(!r.ok||!j.token) throw new Error(j.error||('HTTP '+r.status));
+    var up=await db.storage.from('diagnostic-reports').uploadToSignedUrl(j.path, j.token, file, { contentType:'application/pdf', upsert:true });
+    if(up.error) throw new Error(up.error.message);
+    await cdUpdate('diagnostic_team_reports',{ report_pdf_url:j.publicUrl, updated_at:new Date().toISOString() },{ eq:{id:reportId} });
+    drManageTeam(teamId);
+  }catch(e){ alert('Upload failed: '+e.message); input.value=''; }
 }
 async function drGenerateTeamReport(teamId){
   var btn=document.getElementById('dr_genreport_btn');

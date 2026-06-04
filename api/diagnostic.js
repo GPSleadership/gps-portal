@@ -166,6 +166,7 @@ export default async function handler(req, res) {
     case 'generate-team-report': return handleGenerateTeamReport(req, res);
     case 'finalize-report':      return handleFinalizeReport(req, res);
     case 'sign-report-upload':   return handleSignReportUpload(req, res);
+    case 'sign-team-report-upload': return handleSignTeamReportUpload(req, res);
     case 'generate-dr-content':  return handleGenerateDRContent(req, res);
     case 'reminders':            return handleReminders(req, res);
     default:
@@ -1629,6 +1630,39 @@ async function handleSignReportUpload(req, res) {
     const token = new URL('http://x' + signJson.url).searchParams.get('token');
     if (!token) return res.status(502).json({ error: 'No upload token returned by Storage' });
 
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/diagnostic-reports/${path}`;
+    return res.status(200).json({ token, path, publicUrl });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ACTION: sign-team-report-upload
+// POST /api/diagnostic?action=sign-team-report-upload   Body: { report_id, session }
+// Mints a service-key signed upload URL so the coach can upload the branded team
+// report PDF (anon storage writes are blocked post-v26). Path is scoped to the
+// report id. Same mechanism as the individual report finalize.
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleSignTeamReportUpload(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const { report_id, session } = req.body || {};
+  if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
+  if (!report_id) return res.status(400).json({ error: 'report_id required' });
+
+  const path = `team-reports/${report_id}.pdf`;
+  try {
+    const signRes = await sb(
+      `/storage/v1/object/upload/sign/diagnostic-reports/${path}`,
+      'POST', {}, { 'x-upsert': 'true' }
+    );
+    if (!signRes.ok) {
+      const t = await signRes.text();
+      return res.status(502).json({ error: `Storage sign failed (${signRes.status}): ${t.slice(0, 200)}` });
+    }
+    const signJson = await signRes.json();
+    const token = new URL('http://x' + signJson.url).searchParams.get('token');
+    if (!token) return res.status(502).json({ error: 'No upload token returned by Storage' });
     const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/diagnostic-reports/${path}`;
     return res.status(200).json({ token, path, publicUrl });
   } catch (e) {
