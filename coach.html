@@ -780,8 +780,8 @@
           <button class="btn-add" onclick="drToggleAddDash(event)">+ Add ▾</button>
           <div id="drAddMenuDash" style="display:none;position:absolute;right:0;top:46px;background:#fff;border:1px solid #e8e8e8;border-radius:9px;box-shadow:0 8px 28px rgba(0,0,0,0.14);min-width:240px;z-index:60;overflow:hidden;text-align:left;">
             <div onclick="drCloseAddDash();openAddModal();" style="padding:11px 15px;cursor:pointer;border-bottom:1px solid #f5f5f5;"><b style="font-family:'Montserrat',sans-serif;color:#004369;font-size:13px;">Member</b><div style="font-size:11px;color:#666;">Add a person; set diagnostic and/or coaching in the form</div></div>
-            <div onclick="drCloseAddDash();showSection('decisionroom');setTimeout(drCreateTeam,60);" style="padding:11px 15px;cursor:pointer;border-bottom:1px solid #f5f5f5;"><b style="font-family:'Montserrat',sans-serif;color:#004369;font-size:13px;">Team</b><div style="font-size:11px;color:#666;">Create a leadership team for the Decision Room</div></div>
-            <div onclick="drCloseAddDash();showSection('decisionroom');setTimeout(function(){drOpenSponsor(null);},60);" style="padding:11px 15px;cursor:pointer;"><b style="font-family:'Montserrat',sans-serif;color:#004369;font-size:13px;">Sponsor</b><div style="font-size:11px;color:#666;">Provision an executive sponsor (Decision Room access)</div></div>
+            <div onclick="drCloseAddDash();drCreateTeam();" style="padding:11px 15px;cursor:pointer;border-bottom:1px solid #f5f5f5;"><b style="font-family:'Montserrat',sans-serif;color:#004369;font-size:13px;">Team</b><div style="font-size:11px;color:#666;">Create a leadership team for the Decision Room</div></div>
+            <div onclick="drCloseAddDash();drOpenSponsor(null);" style="padding:11px 15px;cursor:pointer;"><b style="font-family:'Montserrat',sans-serif;color:#004369;font-size:13px;">Sponsor</b><div style="font-size:11px;color:#666;">Provision an executive sponsor (Decision Room access)</div></div>
           </div>
         </div>
       </div>
@@ -822,8 +822,8 @@
           <button class="btn-add" onclick="drToggleAdd(event)">+ Add ▾</button>
           <div id="drAddMenu" style="display:none;position:absolute;right:0;top:46px;background:#fff;border:1px solid #e8e8e8;border-radius:9px;box-shadow:0 8px 28px rgba(0,0,0,0.14);min-width:240px;z-index:60;overflow:hidden;text-align:left;">
             <div onclick="openAddModal()" style="padding:11px 15px;cursor:pointer;border-bottom:1px solid #f5f5f5;"><b style="font-family:'Montserrat',sans-serif;color:#004369;font-size:13px;">Client / Member</b><div style="font-size:11px;color:#666;">Add a person; set diagnostic and/or coaching in the form</div></div>
-            <div onclick="showSection('decisionroom');setTimeout(drCreateTeam,60);" style="padding:11px 15px;cursor:pointer;border-bottom:1px solid #f5f5f5;"><b style="font-family:'Montserrat',sans-serif;color:#004369;font-size:13px;">Team</b><div style="font-size:11px;color:#666;">Create a leadership team for the Decision Room</div></div>
-            <div onclick="showSection('decisionroom');setTimeout(function(){drOpenSponsor(null);},60);" style="padding:11px 15px;cursor:pointer;"><b style="font-family:'Montserrat',sans-serif;color:#004369;font-size:13px;">Sponsor</b><div style="font-size:11px;color:#666;">Provision an executive sponsor (Decision Room access)</div></div>
+            <div onclick="drCreateTeam();" style="padding:11px 15px;cursor:pointer;border-bottom:1px solid #f5f5f5;"><b style="font-family:'Montserrat',sans-serif;color:#004369;font-size:13px;">Team</b><div style="font-size:11px;color:#666;">Create a leadership team for the Decision Room</div></div>
+            <div onclick="drOpenSponsor(null);" style="padding:11px 15px;cursor:pointer;"><b style="font-family:'Montserrat',sans-serif;color:#004369;font-size:13px;">Sponsor</b><div style="font-size:11px;color:#666;">Provision an executive sponsor (Decision Room access)</div></div>
           </div>
         </div>
       </div>
@@ -3222,12 +3222,16 @@ document.getElementById('addAdminModal').addEventListener('click', function(e) {
 // ─────────────────────────────────────────────
 let _currentSection = 'dashboard';
 
-function showSection(name) {
+function showSection(name, skipHooks) {
   _currentSection = name;
   ['dashboard', 'clients', 'emails', 'templates', 'admins', 'diagnostics', 'decisionroom'].forEach(s => {
     document.getElementById('section-' + s).style.display = s === name ? 'block' : 'none';
     document.getElementById('tab-' + s).classList.toggle('active', s === name);
   });
+  // skipHooks: caller will render its own content into the section (e.g. the
+  // Add-Sponsor / Add-Team forms). Without this guard, drRender() races the
+  // caller's render and the all-teams list overwrites the form.
+  if (skipHooks) return;
   if (name === 'decisionroom') drRender();
   if (name === 'emails')      loadEmailLog();
   if (name === 'admins')      loadAdminAccounts();
@@ -6500,7 +6504,8 @@ async function drRender(){
 }
 
 async function drCreateTeam(){
-  var name=prompt('Team name (e.g., Executive Team):'); if(!name) return;
+  showSection('decisionroom', true);
+  var name=prompt('Team name (e.g., Executive Team):'); if(!name){ drRender(); return; }
   var org=prompt('Client organization name:')||'';
   var type=prompt('Team type — Exec, Director/Manager, or Custom:','Exec')||'Custom';
   if(['Exec','Director/Manager','Custom'].indexOf(type)<0) type='Custom';
@@ -6711,6 +6716,7 @@ function drSponsorsPanel(t, links, sponsors, members, nameById){
     var s=byId[l.sponsor_id]||{}; var url='/decision-room?token='+(s.sponsor_token||'');
     return '<div style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:13px;"><b>'+drEsc(s.name||'')+'</b> <span style="font-size:11px;color:#666;">· '+drEsc(l.confidentiality_mode)+(s.email?' · '+drEsc(s.email):'')+'</span>'
       +'<div style="margin-top:4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><code style="font-size:11px;background:#f5f5f5;padding:3px 7px;border-radius:4px;">'+drEsc(url)+'</code>'
+      +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#01949A;" onclick="window.open(location.origin+\''+url+'\',\'_blank\')">Open ↗</button>'
       +'<button class="btn-add" style="padding:3px 9px;font-size:11px;" onclick="navigator.clipboard&&navigator.clipboard.writeText(location.origin+\''+url+'\');this.textContent=\'Copied\';">Copy link</button>'
       +(s.email?'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#004369;" onclick="drSendSponsor(\''+s.id+'\')">Email link</button>':'')+'</div></div>';
   }).join('') || '<div style="color:#666;font-size:13px;">No sponsors linked yet.</div>';
@@ -6719,7 +6725,7 @@ function drSponsorsPanel(t, links, sponsors, members, nameById){
 }
 
 async function drOpenSponsor(preTeamId){
-  showSection('decisionroom');
+  showSection('decisionroom', true);
   var el=document.getElementById('drAdmin'); el.innerHTML='<div class="spinner"></div>';
   var teams=[]; try{ teams=await cdSelect('teams',{ order:{col:'created_at',asc:true} }); }catch(e){}
   var topts=teams.map(function(t){ return '<option value="'+t.id+'"'+(t.id===preTeamId?' selected':'')+'>'+drEsc((t.client_org_name||t.name)+' — '+t.name)+'</option>'; }).join('');
