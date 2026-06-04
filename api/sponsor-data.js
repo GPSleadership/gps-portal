@@ -126,12 +126,54 @@ async function buildMemberReport(m, confidential) {
   report.scoreboard = await buildScoreboard(m.client_id);
   report.engagement = await buildEngagement(m.client_id);
 
+  // The leader's REAL 90-day focus: the goal + metric they actually chose in their
+  // own portal. Pulled live from the plan so the sponsor sees what the leader sees,
+  // and so it isn't overwritten by the AI content generation. Falls back to the
+  // generated recommended focus (report_json.focus) when there's no active plan.
+  const planFocus = await buildPlanFocus(m.client_id, report.scoreboard);
+  if (planFocus) report.focus = planFocus;
+
   if (!confidential) {
     // Confidential 360 detail — ONLY assembled for non-private engagements.
     report.selfVsRaters = await buildSelfVsRaters(m.client_id);
   }
   // In private mode selfVsRaters is never set, so the browser never receives it.
   return report;
+}
+
+// The leader's real 90-day plan → focus card (goal, behaviors, their tracked
+// metric, and the stakeholder rating of the worked behavior from the scoreboard).
+async function buildPlanFocus(clientId, scoreboard) {
+  const rows = await sbGet(`/rest/v1/clients?id=eq.${enc(clientId)}&select=goal_description,goal_statement,goal_30_day,behavior_1,behavior_2,metric_1_name,metric_1_baseline,metric_1_target&limit=1`);
+  const c = rows && rows[0];
+  if (!c) return null;
+  const goal = c.goal_description || c.goal_statement || c.goal_30_day;
+  if (!goal) return null;
+
+  const behaviors = [c.behavior_1, c.behavior_2].filter(Boolean);
+
+  let selfMetric = null;
+  if (c.metric_1_name) {
+    const cks = await sbGet(`/rest/v1/checkins?client_id=eq.${enc(clientId)}&select=week_number,metric_value&order=week_number.desc&limit=1`);
+    const latest = cks && cks[0];
+    selfMetric = {
+      label:    c.metric_1_name,
+      baseline: c.metric_1_baseline,
+      target:   c.metric_1_target,
+      current:  (latest && latest.metric_value != null) ? latest.metric_value : c.metric_1_baseline,
+      unit:     '',
+    };
+  }
+
+  let stakeholderMetric = null;
+  if (scoreboard && scoreboard.length) {
+    const av = (a) => { const v = a.filter(x => x != null); return v.length ? Math.round(v.reduce((s, x) => s + x, 0) / v.length * 100) / 100 : null; };
+    const b = av(scoreboard.map(s => s.baseline));
+    const cur = av(scoreboard.map(s => s.d90 != null ? s.d90 : s.d30));
+    if (b != null && cur != null) stakeholderMetric = { label: 'Stakeholder rating of the worked behavior', baseline: b, target: 4.0, current: cur, unit: '' };
+  }
+
+  return { goal90: goal, behaviors, stakeholderMetric, selfMetric };
 }
 
 async function buildSelfVsRaters(clientId) {
