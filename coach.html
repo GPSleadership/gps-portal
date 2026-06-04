@@ -6466,7 +6466,7 @@ async function drManageTeam(teamId){
   try {
     var tr=await cdSelect('teams',{ eq:{id:teamId} }); team=tr[0];
     members=await cdSelect('team_members',{ eq:{team_id:teamId}, order:{col:'sort_order',asc:true} });
-    clients=await cdSelect('clients',{ select:'id,name', order:{col:'name',asc:true} });
+    clients=await cdSelect('clients',{ select:'id,name,title', order:{col:'name',asc:true} });
     recs=await cdSelect('recommendations',{ eq:{team_id:teamId}, order:{col:'updated_at',asc:false} });
     signals=await cdSelect('external_signals',{ eq:{team_id:teamId}, order:{col:'date_observed',asc:false} });
     links=await cdSelect('sponsor_teams',{ eq:{team_id:teamId} });
@@ -6486,6 +6486,7 @@ async function drManageTeam(teamId){
     +'<h2 style="font-family:\'Montserrat\',sans-serif;color:#004369;font-size:20px;">'+drEsc(team.client_org_name||team.name)+' — '+drEsc(team.name)+'</h2>'
     +'<div style="font-size:12px;color:#666;margin-bottom:16px;">'+drEsc(team.team_type)+' team</div>'
     +panelNarr+panelMembers+panelSponsors+panelRecs+panelSignals;
+  try{ drFillRole(); }catch(e){}
 }
 
 function drCard(title, inner){
@@ -6514,17 +6515,22 @@ function drMembersPanel(t, members, clients, nameById){
       +'<div><b>'+drEsc(nameById[m.client_id]||'(client)')+'</b> — '+drEsc(m.role||'')+(m.is_coaching_client?' <span style="font-size:10px;background:#E8F7F7;color:#01949A;padding:1px 7px;border-radius:8px;">Coaching</span>':'')+'</div>'
       +'<button class="btn-add" style="background:#fff;color:#DB1F48;border:1px solid #DB1F48;padding:4px 10px;font-size:11px;" onclick="drRemoveMember(\''+m.id+'\',\''+t.id+'\')">Remove</button></div>';
   }).join('') || '<div style="color:#666;font-size:13px;">No members yet.</div>';
-  var opts=clients.map(function(c){ return '<option value="'+c.id+'">'+drEsc(c.name)+'</option>'; }).join('');
+  var opts=clients.map(function(c){ return '<option value="'+c.id+'" data-title="'+drEsc(c.title||'')+'">'+drEsc(c.name)+'</option>'; }).join('');
   var add='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;border-top:1px solid #eee;padding-top:12px;">'
-    +'<select id="dr_mclient" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;min-width:200px;">'+opts+'</select>'
-    +'<input id="dr_mrole" placeholder="Role (e.g., COO)" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;" />'
+    +'<select id="dr_mclient" onchange="drFillRole()" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;min-width:200px;">'+opts+'</select>'
+    +'<input id="dr_mrole" placeholder="Role (auto-fills from profile)" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;" />'
     +'<label style="font-size:13px;"><input type="checkbox" id="dr_mcoach" /> Coaching client</label>'
     +'<button class="btn-add" onclick="drAddMember(\''+t.id+'\')">Add member</button></div>';
   return drCard('Leadership Team members', list+add);
 }
+function drFillRole(){
+  var sel=document.getElementById('dr_mclient'); var ro=document.getElementById('dr_mrole');
+  if(sel && ro){ var opt=sel.options[sel.selectedIndex]; ro.value = (opt && opt.getAttribute('data-title')) || ''; }
+}
 async function drAddMember(teamId){
-  var cid=drVal('dr_mclient'); if(!cid){ alert('Pick a client.'); return; }
-  try{ await cdInsert('team_members',{ team_id:teamId, client_id:cid, role:drVal('dr_mrole')||null, is_coaching_client:drChecked('dr_mcoach') }); drManageTeam(teamId); }
+  var sel=document.getElementById('dr_mclient'); var cid=drVal('dr_mclient'); if(!cid){ alert('Pick a client.'); return; }
+  var role=drVal('dr_mrole'); if(!role && sel){ var opt=sel.options[sel.selectedIndex]; role=(opt && opt.getAttribute('data-title'))||''; }
+  try{ await cdInsert('team_members',{ team_id:teamId, client_id:cid, role:role||null, is_coaching_client:drChecked('dr_mcoach') }); drManageTeam(teamId); }
   catch(e){ alert('Could not add: '+e.message); }
 }
 async function drRemoveMember(id, teamId){ try{ await cdDelete('team_members',{ eq:{id:id} }); drManageTeam(teamId); }catch(e){ alert(e.message); } }
