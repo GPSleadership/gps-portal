@@ -56,6 +56,8 @@ const READ_TABLES = new Set([
   'stakeholders', 'survey_responses', 'survey_tokens',
   'ask_alex_usage', 'ask_alex_log', 'email_log', 'email_templates',
   'testimonials', 'referrals',
+  // Decision Room (v27)
+  'teams', 'team_members', 'sponsors', 'sponsor_teams', 'recommendations', 'external_signals',
 ]);
 // Tables the dashboard may write through the generic proxy.
 const WRITE_TABLES = new Set([
@@ -63,6 +65,8 @@ const WRITE_TABLES = new Set([
   'diagnostics', 'diagnostic_raters', 'diagnostic_responses',
   'diagnostic_report_drafts', 'diagnostic_question_overrides', 'diagnostic_team_reports',
   'stakeholders', 'survey_responses', 'testimonials', 'referrals',
+  // Decision Room (v27) — coach CRUD for teams, membership, recs, signals, sponsors
+  'teams', 'team_members', 'sponsors', 'sponsor_teams', 'recommendations', 'external_signals',
 ]);
 // NOTE: admin_accounts and coach_settings are intentionally NOT in either set —
 // they are served only by the dedicated, hardened actions below.

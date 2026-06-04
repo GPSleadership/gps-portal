@@ -25,6 +25,10 @@
       "destination": "/diagnostic-survey.html"
     },
     {
+      "source": "/decision-room",
+      "destination": "/decision-room.html"
+    },
+    {
       "source": "/diagnostic-sandbox",
       "destination": "/diagnostic-sandbox.html"
     }
