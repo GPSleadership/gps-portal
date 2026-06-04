@@ -94,6 +94,41 @@ function verifyPassword(password, stored) {
   }
   return password === stored;
 }
+// ── Decision Room: email a sponsor their access link (coach-session gated) ──
+function buildSponsorInviteEmail(name, url) {
+  const first = name ? String(name).split(' ')[0] : 'there';
+  return '<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1a1a1a;">'
+    + '<h2 style="color:#004369;">Your Leadership Decision Room</h2>'
+    + '<p>Hi ' + first + ',</p>'
+    + '<p>Your GPS Leadership Decision Room is ready. It gives you a fast, current read on your leadership team — where they stand, what is already in motion, and the highest-leverage next moves.</p>'
+    + '<p style="margin:24px 0;"><a href="' + url + '" style="background:#01949A;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:700;">Open your Decision Room</a></p>'
+    + '<p style="font-size:12px;color:#666;">This private link is just for you. Please do not forward it.</p>'
+    + '<p style="font-size:12px;color:#666;">— Alex Tremble, GPS Leadership Solutions</p></div>';
+}
+async function sponsorInvite(body, res) {
+  const payload = verifySession(body.session);
+  if (!payload || payload.role !== 'coach') return res.status(401).json({ error: 'Coach session invalid or expired' });
+  if (!body.sponsor_id) return res.status(400).json({ error: 'sponsor_id required' });
+  const r = await sbSecret(`/rest/v1/sponsors?id=eq.${encodeURIComponent(body.sponsor_id)}&select=name,email,sponsor_token&limit=1`);
+  const rows = r.ok ? await r.json() : [];
+  const sp = rows[0];
+  if (!sp) return res.status(404).json({ error: 'Sponsor not found' });
+  if (!sp.email) return res.status(400).json({ error: 'Sponsor has no email on file' });
+  const url = `${PORTAL_BASE}/decision-room?token=${encodeURIComponent(sp.sponsor_token)}`;
+  if (RESEND_API_KEY) {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: `Alex Tremble – GPS Leadership <${RESEND_FROM}>`,
+        to: [sp.email],
+        subject: 'Your GPS Leadership Decision Room',
+        html: buildSponsorInviteEmail(sp.name, url),
+      }),
+    });
+  }
+  return res.status(200).json({ ok: true });
+}
 async function coachLogin(body, res) {
   if (!COACH_SESSION_SECRET) {
     return res.status(500).json({ error: 'Server misconfigured — COACH_SESSION_SECRET missing' });
@@ -210,6 +245,7 @@ export default async function handler(req, res) {
     if (body.action === 'coach-session')        return coachSession(body, res);
     if (body.action === 'coach-reset-request')  return coachResetRequest(res);
     if (body.action === 'coach-reset-complete') return coachResetComplete(body, res);
+    if (body.action === 'sponsor-invite')       return sponsorInvite(body, res);
 
     // Default POST: portal link recovery
     const { email } = body;

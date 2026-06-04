@@ -770,6 +770,7 @@
       <div class="section-tab"        id="tab-templates"  onclick="showSection('templates')">Email Templates</div>
       <div class="section-tab"        id="tab-admins"     onclick="showSection('admins')">Admin Accounts</div>
       <div class="section-tab"        id="tab-diagnostics" onclick="showSection('diagnostics')">Diagnostics</div>
+      <div class="section-tab"        id="tab-decisionroom" onclick="showSection('decisionroom')">Decision Room</div>
     </div>
 
     <!-- ═══ DASHBOARD SECTION ═══ -->
@@ -807,7 +808,14 @@
             </div>
           </div>
         </div>
-        <button class="btn-add" onclick="openAddModal()">+ Add Client</button>
+        <div style="position:relative;display:inline-block;">
+          <button class="btn-add" onclick="drToggleAdd(event)">+ Add ▾</button>
+          <div id="drAddMenu" style="display:none;position:absolute;right:0;top:46px;background:#fff;border:1px solid #e8e8e8;border-radius:9px;box-shadow:0 8px 28px rgba(0,0,0,0.14);min-width:240px;z-index:60;overflow:hidden;text-align:left;">
+            <div onclick="openAddModal()" style="padding:11px 15px;cursor:pointer;border-bottom:1px solid #f5f5f5;"><b style="font-family:'Montserrat',sans-serif;color:#004369;font-size:13px;">Client / Member</b><div style="font-size:11px;color:#666;">Add a person; set diagnostic and/or coaching in the form</div></div>
+            <div onclick="showSection('decisionroom');setTimeout(drCreateTeam,60);" style="padding:11px 15px;cursor:pointer;border-bottom:1px solid #f5f5f5;"><b style="font-family:'Montserrat',sans-serif;color:#004369;font-size:13px;">Team</b><div style="font-size:11px;color:#666;">Create a leadership team for the Decision Room</div></div>
+            <div onclick="showSection('decisionroom');setTimeout(function(){drOpenSponsor(null);},60);" style="padding:11px 15px;cursor:pointer;"><b style="font-family:'Montserrat',sans-serif;color:#004369;font-size:13px;">Sponsor</b><div style="font-size:11px;color:#666;">Provision an executive sponsor (Decision Room access)</div></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -924,6 +932,10 @@
     </div><!-- /section-templates -->
 
     <!-- ═══ DIAGNOSTICS SECTION ═══ -->
+    <div id="section-decisionroom" style="display:none;">
+      <div id="drAdmin"></div>
+    </div>
+
     <div id="section-diagnostics" style="display:none;">
     <div class="diag-scope">
 
@@ -3180,10 +3192,11 @@ let _currentSection = 'dashboard';
 
 function showSection(name) {
   _currentSection = name;
-  ['dashboard', 'clients', 'emails', 'templates', 'admins', 'diagnostics'].forEach(s => {
+  ['dashboard', 'clients', 'emails', 'templates', 'admins', 'diagnostics', 'decisionroom'].forEach(s => {
     document.getElementById('section-' + s).style.display = s === name ? 'block' : 'none';
     document.getElementById('tab-' + s).classList.toggle('active', s === name);
   });
+  if (name === 'decisionroom') drRender();
   if (name === 'emails')      loadEmailLog();
   if (name === 'admins')      loadAdminAccounts();
   if (name === 'templates')   loadEmailTemplates();
@@ -6405,6 +6418,230 @@ function diagCopyText(text) {
 // ═══════════════════════════════════════════════════════════════════════════════
 //  END DIAGNOSTICS MODULE
 // ═══════════════════════════════════════════════════════════════════════════════
+</script>
+<script>
+/* ====================================================================
+   DECISION ROOM — Coach Admin (v1). Isolated script block.
+   Uses the existing cdSelect/cdInsert/cdUpdate/cdDelete proxy helpers
+   (service-key, coach-session gated). New tables are allowlisted in
+   api/coach-data.js. Coach sees everything; confidentiality/gate apply
+   only to the sponsor endpoint, never here.
+   ==================================================================== */
+function drEsc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function drToggleAdd(e){ e.stopPropagation(); var m=document.getElementById('drAddMenu'); if(m) m.style.display = (m.style.display==='block')?'none':'block'; }
+document.addEventListener('click', function(){ var m=document.getElementById('drAddMenu'); if(m) m.style.display='none'; });
+function drVal(id){ var el=document.getElementById(id); return el? el.value : ''; }
+function drChecked(id){ var el=document.getElementById(id); return el? el.checked : false; }
+
+async function drRender(){
+  var el=document.getElementById('drAdmin'); el.innerHTML='<div class="spinner"></div>';
+  var teams=[];
+  try { teams=await cdSelect('teams',{ order:{col:'created_at',asc:true} }); }
+  catch(e){ el.innerHTML='<div style="color:#b00;padding:16px;">Could not load: '+drEsc(e.message)+'</div>'; return; }
+  var rows=teams.map(function(t){
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #eee;">'
+      +'<div><b style="font-family:\'Montserrat\',sans-serif;color:#004369;">'+drEsc(t.client_org_name||t.name)+'</b> — '+drEsc(t.name)
+      +'<div style="font-size:12px;color:#666;">'+drEsc(t.team_type)+(t.active===false?' · inactive':'')+'</div></div>'
+      +'<button class="btn-add" onclick="drManageTeam(\''+t.id+'\')">Manage →</button></div>';
+  }).join('');
+  el.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">'
+    +'<h2 style="font-family:\'Montserrat\',sans-serif;color:#004369;font-size:18px;">Decision Room — Teams</h2>'
+    +'<button class="btn-add" onclick="drCreateTeam()">+ New Team</button></div>'
+    +(rows||'<div style="color:#666;padding:8px 0;">No teams yet. Create one to start.</div>');
+}
+
+async function drCreateTeam(){
+  var name=prompt('Team name (e.g., Executive Team):'); if(!name) return;
+  var org=prompt('Client organization name:')||'';
+  var type=prompt('Team type — Exec, Director/Manager, or Custom:','Exec')||'Custom';
+  if(['Exec','Director/Manager','Custom'].indexOf(type)<0) type='Custom';
+  try{ var r=await cdInsert('teams',{ name:name, client_org_name:org, team_type:type }); var t=r[0]; drManageTeam(t? t.id : null); }
+  catch(e){ alert('Could not create team: '+e.message); }
+}
+
+async function drManageTeam(teamId){
+  if(!teamId){ drRender(); return; }
+  var el=document.getElementById('drAdmin'); el.innerHTML='<div class="spinner"></div>';
+  var team, members=[], clients=[], recs=[], signals=[], links=[], sponsors=[];
+  try {
+    var tr=await cdSelect('teams',{ eq:{id:teamId} }); team=tr[0];
+    members=await cdSelect('team_members',{ eq:{team_id:teamId}, order:{col:'sort_order',asc:true} });
+    clients=await cdSelect('clients',{ select:'id,name', order:{col:'name',asc:true} });
+    recs=await cdSelect('recommendations',{ eq:{team_id:teamId}, order:{col:'updated_at',asc:false} });
+    signals=await cdSelect('external_signals',{ eq:{team_id:teamId}, order:{col:'date_observed',asc:false} });
+    links=await cdSelect('sponsor_teams',{ eq:{team_id:teamId} });
+    if(links.length){ sponsors=await cdSelect('sponsors',{ in:{ id: links.map(function(l){return l.sponsor_id;}) } }); }
+  } catch(e){ el.innerHTML='<div style="color:#b00;padding:16px;">Load failed: '+drEsc(e.message)+'</div>'; return; }
+  if(!team){ drRender(); return; }
+  var nameById={}; clients.forEach(function(c){ nameById[c.id]=c.name; });
+
+  // panels
+  var panelMembers=drMembersPanel(team, members, clients, nameById);
+  var panelRecs=drRecsPanel(team, recs);
+  var panelSignals=drSignalsPanel(team, signals);
+  var panelSponsors=drSponsorsPanel(team, links, sponsors, members, nameById);
+  var panelNarr=drNarrativePanel(team);
+
+  el.innerHTML='<div style="margin-bottom:14px;"><button class="btn-add" style="background:#fff;color:#004369;border:1.5px solid #d0d0d0;" onclick="drRender()">← All teams</button></div>'
+    +'<h2 style="font-family:\'Montserrat\',sans-serif;color:#004369;font-size:20px;">'+drEsc(team.client_org_name||team.name)+' — '+drEsc(team.name)+'</h2>'
+    +'<div style="font-size:12px;color:#666;margin-bottom:16px;">'+drEsc(team.team_type)+' team</div>'
+    +panelNarr+panelMembers+panelSponsors+panelRecs+panelSignals;
+}
+
+function drCard(title, inner){
+  return '<div style="background:#fff;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,.07);padding:18px 20px;margin-bottom:16px;">'
+    +'<div style="font-family:\'Montserrat\',sans-serif;font-weight:800;color:#004369;font-size:14px;margin-bottom:12px;">'+title+'</div>'+inner+'</div>';
+}
+
+function drNarrativePanel(t){
+  var inner='<div style="display:grid;gap:10px;">'
+    +'<div><label style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;">Quick read (the "Net:" line)</label>'
+    +'<input id="dr_quick" value="'+drEsc(t.quick_read||'')+'" style="width:100%;padding:9px 12px;border:1.5px solid #d0d0d0;border-radius:6px;" /></div>'
+    +'<div><label style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;">Summary</label>'
+    +'<textarea id="dr_summary" style="width:100%;min-height:64px;padding:9px 12px;border:1.5px solid #d0d0d0;border-radius:6px;">'+drEsc(t.summary||'')+'</textarea></div>'
+    +'<div style="text-align:right;"><button class="btn-save" onclick="drSaveNarr(\''+t.id+'\')">Save narrative</button></div></div>'
+    +'<div style="font-size:11px;color:#888;margin-top:6px;font-style:italic;">Themes, Start/Stop/Continue, Intent-vs-Impact, the team snapshot, and each leader\'s focus/succession are populated by the report pipeline (JSON columns). Editing those inline is a fast-follow.</div>';
+  return drCard('Narrative (sponsor read-only)', inner);
+}
+async function drSaveNarr(teamId){
+  try{ await cdUpdate('teams',{ quick_read:drVal('dr_quick'), summary:drVal('dr_summary'), updated_at:new Date().toISOString() },{ eq:{id:teamId} }); alert('Saved.'); }
+  catch(e){ alert('Save failed: '+e.message); }
+}
+
+function drMembersPanel(t, members, clients, nameById){
+  var list=members.map(function(m){
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f0f0f0;">'
+      +'<div><b>'+drEsc(nameById[m.client_id]||'(client)')+'</b> — '+drEsc(m.role||'')+(m.is_coaching_client?' <span style="font-size:10px;background:#E8F7F7;color:#01949A;padding:1px 7px;border-radius:8px;">Coaching</span>':'')+'</div>'
+      +'<button class="btn-add" style="background:#fff;color:#DB1F48;border:1px solid #DB1F48;padding:4px 10px;font-size:11px;" onclick="drRemoveMember(\''+m.id+'\',\''+t.id+'\')">Remove</button></div>';
+  }).join('') || '<div style="color:#666;font-size:13px;">No members yet.</div>';
+  var opts=clients.map(function(c){ return '<option value="'+c.id+'">'+drEsc(c.name)+'</option>'; }).join('');
+  var add='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;border-top:1px solid #eee;padding-top:12px;">'
+    +'<select id="dr_mclient" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;min-width:200px;">'+opts+'</select>'
+    +'<input id="dr_mrole" placeholder="Role (e.g., COO)" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;" />'
+    +'<label style="font-size:13px;"><input type="checkbox" id="dr_mcoach" /> Coaching client</label>'
+    +'<button class="btn-add" onclick="drAddMember(\''+t.id+'\')">Add member</button></div>';
+  return drCard('Leadership Team members', list+add);
+}
+async function drAddMember(teamId){
+  var cid=drVal('dr_mclient'); if(!cid){ alert('Pick a client.'); return; }
+  try{ await cdInsert('team_members',{ team_id:teamId, client_id:cid, role:drVal('dr_mrole')||null, is_coaching_client:drChecked('dr_mcoach') }); drManageTeam(teamId); }
+  catch(e){ alert('Could not add: '+e.message); }
+}
+async function drRemoveMember(id, teamId){ try{ await cdDelete('team_members',{ eq:{id:id} }); drManageTeam(teamId); }catch(e){ alert(e.message); } }
+
+function drRecsPanel(t, recs){
+  var list=recs.map(function(r){
+    var cat=r.category==='included_in_current_scope'?'In Scope':'Accelerator';
+    var vis=r.visible_to_client?'<span style="color:#2e7d32;font-weight:700;">Visible</span>':'<span style="color:#DB1F48;font-weight:700;">Hidden</span>';
+    return '<div style="padding:10px 0;border-bottom:1px solid #f0f0f0;"><b>'+drEsc(r.short_title)+'</b> <span style="font-size:11px;color:#666;">· '+cat+' · '+drEsc(r.status)+' · '+vis+'</span>'
+      +'<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">'
+      +(r.status!=='approved'?'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#fff;color:#2e7d32;border:1px solid #2e7d32;" onclick="drRecApprove(\''+r.id+'\',\''+t.id+'\')">Approve</button>':'')
+      +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#fff;color:#01949A;border:1px solid #01949A;" onclick="drRecVis(\''+r.id+'\','+(!r.visible_to_client)+',\''+t.id+'\')">'+(r.visible_to_client?'Hide':'Show')+'</button>'
+      +'</div></div>';
+  }).join('') || '<div style="color:#666;font-size:13px;">No recommendations yet.</div>';
+  var add='<div style="display:grid;gap:8px;margin-top:12px;border-top:1px solid #eee;padding-top:12px;">'
+    +'<input id="dr_rtitle" placeholder="Short title" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;" />'
+    +'<textarea id="dr_rdesc" placeholder="Description (what we will do + what changes)" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;min-height:48px;"></textarea>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'
+    +'<select id="dr_rcat" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;"><option value="included_in_current_scope">In current scope</option><option value="optional_accelerator">Optional accelerator</option></select>'
+    +'<input id="dr_rowner" placeholder="Owner (e.g., CEO + Exec Team)" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;" />'
+    +'<input id="dr_rtime" placeholder="Timeframe" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;width:120px;" />'
+    +'<button class="btn-add" onclick="drAddRec(\''+t.id+'\')">Add (Draft)</button></div></div>';
+  return drCard('Recommendations', list+add);
+}
+async function drAddRec(teamId){
+  if(!drVal('dr_rtitle')){ alert('Title required.'); return; }
+  try{ await cdInsert('recommendations',{ team_id:teamId, short_title:drVal('dr_rtitle'), description:drVal('dr_rdesc'), category:drVal('dr_rcat'), owner:drVal('dr_rowner')||null, timeframe:drVal('dr_rtime')||null, status:'draft', visible_to_client:false }); drManageTeam(teamId); }
+  catch(e){ alert('Could not add: '+e.message); }
+}
+async function drRecApprove(id, teamId){ try{ await cdUpdate('recommendations',{ status:'approved', visible_to_client:true, updated_at:new Date().toISOString() },{ eq:{id:id} }); drManageTeam(teamId); }catch(e){ alert(e.message); } }
+async function drRecVis(id, vis, teamId){ try{ await cdUpdate('recommendations',{ visible_to_client:vis, updated_at:new Date().toISOString() },{ eq:{id:id} }); drManageTeam(teamId); }catch(e){ alert(e.message); } }
+
+function drSignalsPanel(t, signals){
+  var list=signals.map(function(s){
+    var vis=s.visible_to_client?'<span style="color:#2e7d32;font-weight:700;">Visible</span>':'<span style="color:#DB1F48;font-weight:700;">Internal</span>';
+    return '<div style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:13px;">'+drEsc(s.date_observed||'')+' · '+drEsc(s.by_role||'')+' · level '+drEsc(s.level)+' · '+vis
+      +'<div style="margin-top:3px;color:#333;">'+drEsc(s.summary)+'</div>'
+      +'<div style="margin-top:6px;"><button class="btn-add" style="padding:3px 9px;font-size:11px;background:#fff;color:#01949A;border:1px solid #01949A;" onclick="drSigVis(\''+s.id+'\','+(!s.visible_to_client)+',\''+t.id+'\')">'+(s.visible_to_client?'Make internal':'Make visible')+'</button></div></div>';
+  }).join('') || '<div style="color:#666;font-size:13px;">No signals yet.</div>';
+  var add='<div style="display:grid;gap:8px;margin-top:12px;border-top:1px solid #eee;padding-top:12px;">'
+    +'<input id="dr_srole" placeholder="By role (e.g., CEO)" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;" />'
+    +'<textarea id="dr_ssum" placeholder="What was observed" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;min-height:48px;"></textarea>'
+    +'<div style="display:flex;gap:8px;align-items:center;"><select id="dr_slevel" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;"><option value="green">Green — on track</option><option value="yellow" selected>Yellow — watch</option><option value="red">Red — off track</option></select>'
+    +'<input id="dr_sdate" type="date" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;" />'
+    +'<button class="btn-add" onclick="drAddSignal(\''+t.id+'\')">Add (internal)</button></div></div>';
+  return drCard('External signals', list+add);
+}
+async function drAddSignal(teamId){
+  if(!drVal('dr_ssum')){ alert('Summary required.'); return; }
+  try{ await cdInsert('external_signals',{ team_id:teamId, by_role:drVal('dr_srole')||null, channel:'Coach', summary:drVal('dr_ssum'), level:drVal('dr_slevel'), date_observed:drVal('dr_sdate')||null, visible_to_client:false }); drManageTeam(teamId); }
+  catch(e){ alert('Could not add: '+e.message); }
+}
+async function drSigVis(id, vis, teamId){ try{ await cdUpdate('external_signals',{ visible_to_client:vis },{ eq:{id:id} }); drManageTeam(teamId); }catch(e){ alert(e.message); } }
+
+function drSponsorsPanel(t, links, sponsors, members, nameById){
+  var byId={}; sponsors.forEach(function(s){ byId[s.id]=s; });
+  var list=links.map(function(l){
+    var s=byId[l.sponsor_id]||{}; var url='/decision-room?token='+(s.sponsor_token||'');
+    return '<div style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:13px;"><b>'+drEsc(s.name||'')+'</b> <span style="font-size:11px;color:#666;">· '+drEsc(l.confidentiality_mode)+(s.email?' · '+drEsc(s.email):'')+'</span>'
+      +'<div style="margin-top:4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><code style="font-size:11px;background:#f5f5f5;padding:3px 7px;border-radius:4px;">'+drEsc(url)+'</code>'
+      +'<button class="btn-add" style="padding:3px 9px;font-size:11px;" onclick="navigator.clipboard&&navigator.clipboard.writeText(location.origin+\''+url+'\');this.textContent=\'Copied\';">Copy link</button>'
+      +(s.email?'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#004369;" onclick="drSendSponsor(\''+s.id+'\')">Email link</button>':'')+'</div></div>';
+  }).join('') || '<div style="color:#666;font-size:13px;">No sponsors linked yet.</div>';
+  return drCard('Sponsors (Decision Room access)', list
+    +'<div style="margin-top:12px;border-top:1px solid #eee;padding-top:12px;"><button class="btn-add" onclick="drOpenSponsor(\''+t.id+'\')">+ Add sponsor to this team</button></div>');
+}
+
+async function drOpenSponsor(preTeamId){
+  showSection('decisionroom');
+  var el=document.getElementById('drAdmin'); el.innerHTML='<div class="spinner"></div>';
+  var teams=[]; try{ teams=await cdSelect('teams',{ order:{col:'created_at',asc:true} }); }catch(e){}
+  var topts=teams.map(function(t){ return '<option value="'+t.id+'"'+(t.id===preTeamId?' selected':'')+'>'+drEsc((t.client_org_name||t.name)+' — '+t.name)+'</option>'; }).join('');
+  var memBlock='<div id="dr_spmembers" style="font-size:12px;color:#666;">Select a team to choose who they supervise.</div>';
+  el.innerHTML='<div style="margin-bottom:14px;"><button class="btn-add" style="background:#fff;color:#004369;border:1.5px solid #d0d0d0;" onclick="drRender()">← Back</button></div>'
+    +drCard('Add Sponsor',
+      '<div style="display:grid;gap:10px;max-width:620px;">'
+      +'<div style="font-size:12.5px;color:#666;">A sponsor views a team\'s Decision Room. No goals, plan, or check-ins — token access only.</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"><input id="dr_spname" placeholder="Full name" style="padding:9px 12px;border:1.5px solid #d0d0d0;border-radius:6px;" /><input id="dr_spemail" placeholder="Email" style="padding:9px 12px;border:1.5px solid #d0d0d0;border-radius:6px;" /></div>'
+      +'<div><label style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;">Team they sponsor</label><select id="dr_spteam" onchange="drSponsorMembers()" style="width:100%;padding:9px 12px;border:1.5px solid #d0d0d0;border-radius:6px;">'+topts+'</select></div>'
+      +'<div><label style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;">Confidentiality</label><select id="dr_spconf" style="width:100%;padding:9px 12px;border:1.5px solid #d0d0d0;border-radius:6px;"><option value="standard">Standard — sponsor can open individual reports</option><option value="private">Private — individual diagnostic scores hidden; team patterns + decision status only</option></select></div>'
+      +'<div><label style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;">Who do they supervise on this team?</label>'+memBlock+'</div>'
+      +'<div style="text-align:right;"><button class="btn-save" onclick="drSaveSponsor()">Create sponsor</button></div></div>');
+  drSponsorMembers();
+}
+async function drSponsorMembers(){
+  var teamId=drVal('dr_spteam'); var box=document.getElementById('dr_spmembers'); if(!box) return;
+  if(!teamId){ box.innerHTML='Select a team first.'; return; }
+  var members=[], clients=[];
+  try{ members=await cdSelect('team_members',{ eq:{team_id:teamId} }); clients=await cdSelect('clients',{ select:'id,name' }); }catch(e){}
+  var nameById={}; clients.forEach(function(c){ nameById[c.id]=c.name; });
+  box.innerHTML = members.length ? members.map(function(m){ return '<label style="display:block;font-size:13px;padding:3px 0;"><input type="checkbox" class="dr_sup" value="'+m.client_id+'" /> '+drEsc(nameById[m.client_id]||m.role||'member')+' <span style="color:#888;font-size:11px;">('+drEsc(m.role||'')+')</span></label>'; }).join('')
+    : '<div style="font-size:12px;color:#666;">No members on this team yet. You can add them later; supervision drives the feedback gate.</div>';
+}
+async function drSaveSponsor(){
+  var name=drVal('dr_spname'); var teamId=drVal('dr_spteam');
+  if(!name){ alert('Name required.'); return; }
+  if(!teamId){ alert('Pick a team.'); return; }
+  var sup=[]; document.querySelectorAll('.dr_sup').forEach(function(c){ if(c.checked) sup.push(c.value); });
+  try{
+    var r=await cdInsert('sponsors',{ name:name, email:drVal('dr_spemail')||null, confidentiality_default:drVal('dr_spconf') });
+    var sp=r[0];
+    await cdInsert('sponsor_teams',{ sponsor_id:sp.id, team_id:teamId, confidentiality_mode:drVal('dr_spconf'), supervises_client_ids:sup });
+    var link=location.origin+'/decision-room?token='+sp.sponsor_token;
+    if(drVal('dr_spemail')){ try{ await drSendSponsor(sp.id); }catch(e){} }
+    alert('Sponsor created.\n\nDecision Room link:\n'+link+(drVal('dr_spemail')?'\n\n(Invite email sent.)':''));
+    drManageTeam(teamId);
+  } catch(e){ alert('Could not create sponsor: '+e.message); }
+}
+async function drSendSponsor(sponsorId){
+  // Reuses the coach-data proxy is read/write only; email send goes through the
+  // dedicated sponsor-invite action on get-client.js (added alongside this).
+  var session = (typeof getCoachSessionToken==='function') ? getCoachSessionToken() : '';
+  var res = await fetch('/api/get-client',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ action:'sponsor-invite', session:session, sponsor_id:sponsorId }) });
+  var j = await res.json().catch(function(){return{};});
+  if(!res.ok) throw new Error(j.error||'Email failed');
+  return j;
+}
 </script>
 </body>
 </html>
