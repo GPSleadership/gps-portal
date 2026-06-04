@@ -1450,12 +1450,28 @@ async function cdUpsert(table, values, onConflict){ const r = await coachData({ 
 async function cdUpdate(table, values, filters)  { return coachData(Object.assign({ op: 'update', table, values }, filters || {})); }
 async function cdDelete(table, filters)          { return coachData(Object.assign({ op: 'delete', table }, filters || {})); }
 function hasValidSession() {
+  // Post-lockdown a server-issued token is REQUIRED — the old timestamp-only
+  // "session" can't authenticate any data call, so treating it as valid just
+  // auto-unlocks the dashboard into a hang. Require the token, and respect the
+  // local expiry mirror when present.
+  if (!getCoachSessionToken()) return false;
   const exp = parseInt(localStorage.getItem(SESSION_EXP_KEY) || '0', 10);
-  if (exp && Date.now() < exp && getCoachSessionToken()) return true;
-  // Legacy fallback: old timestamp-based session from before the hardening
-  const ts = localStorage.getItem(SESSION_KEY);
-  if (!ts) return false;
-  return (Date.now() - parseInt(ts)) < SESSION_EXPIRY;
+  if (exp && Date.now() >= exp) return false;
+  return true;
+}
+// Called when the server rejects our session mid-flight (expired / secret rotated):
+// clear it and return cleanly to the login screen instead of spinning forever.
+function showLoginScreen(message) {
+  clearSession();
+  const ds = document.getElementById('dashboardScreen');
+  const ls = document.getElementById('loginScreen');
+  if (ds) ds.style.display = 'none';
+  if (ls) ls.style.display = 'block';
+  const err = document.getElementById('loginError');
+  if (err && message) err.textContent = message;
+}
+function isSessionError(e) {
+  return /session (invalid|expired)|invalid or expired|unauthorized|\(401\)/i.test((e && e.message) || '');
 }
 function unlockDashboard() {
   document.getElementById('loginScreen').style.display = 'none';
@@ -1599,10 +1615,16 @@ async function verifyAndChangePassword() {
 // LOAD DATA
 // ─────────────────────────────────────────────
 async function loadDashboard() {
-  const [clientsRows, checkinsRows] = await Promise.all([
-    cdSelect('clients',  { order: { col: 'created_at',   asc: false } }),
-    cdSelect('checkins', { order: { col: 'submitted_at', asc: false } })
-  ]);
+  let clientsRows, checkinsRows;
+  try {
+    [clientsRows, checkinsRows] = await Promise.all([
+      cdSelect('clients',  { order: { col: 'created_at',   asc: false } }),
+      cdSelect('checkins', { order: { col: 'submitted_at', asc: false } })
+    ]);
+  } catch (e) {
+    if (isSessionError(e)) { showLoginScreen('Your session expired. Please log in again.'); return; }
+    throw e;
+  }
 
   allClients  = clientsRows  || [];
   allCheckins = checkinsRows || [];
