@@ -6558,9 +6558,19 @@ function drNarrativePanel(t){
     +'<input id="dr_quick" value="'+drEsc(t.quick_read||'')+'" style="width:100%;padding:9px 12px;border:1.5px solid #d0d0d0;border-radius:6px;" /></div>'
     +'<div><label style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;">Summary</label>'
     +'<textarea id="dr_summary" style="width:100%;min-height:64px;padding:9px 12px;border:1.5px solid #d0d0d0;border-radius:6px;">'+drEsc(t.summary||'')+'</textarea></div>'
-    +'<div style="text-align:right;"><button class="btn-save" onclick="drSaveNarr(\''+t.id+'\')">Save narrative</button></div></div>'
-    +'<div style="font-size:11px;color:#888;margin-top:6px;font-style:italic;">Themes, Start/Stop/Continue, Intent-vs-Impact, the team snapshot, and each leader\'s focus/succession are populated by the report pipeline (JSON columns). Editing those inline is a fast-follow.</div>';
+    +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;"><button class="btn-add" id="dr_gencontent_btn" onclick="drGenContent(\''+t.id+'\')">⚙ Generate from diagnostics</button><button class="btn-save" onclick="drSaveNarr(\''+t.id+'\')">Save narrative</button></div></div>'
+    +'<div style="font-size:11px;color:#888;margin-top:8px;font-style:italic;">"Generate from diagnostics" fills the quick-read, summary, team themes, Start/Stop/Continue, Intent-vs-Impact, the snapshot, and each leader\'s cards from this team\'s in-system diagnostics. You can edit the quick-read and summary above after generating. It only uses leaders with completed in-system diagnostics; legacy/PDF-only leaders are added separately.</div>';
   return drCard('Narrative (sponsor read-only)', inner);
+}
+async function drGenContent(teamId){
+  if(!confirm('Generate the Decision Room content (team narrative + each leader\'s cards) from this team\'s in-system diagnostics?\n\nTakes ~30–60 seconds. Re-running overwrites the previously generated content. The sponsor only sees it once you share their link.')) return;
+  var btn=document.getElementById('dr_gencontent_btn'); if(btn){ btn.disabled=true; btn.textContent='Generating… (30–60s)'; }
+  try{
+    var r=await fetch('/api/diagnostic?action=generate-dr-content',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ team_id:teamId, session:getCoachSessionToken() }) });
+    var j=await r.json().catch(function(){return{};});
+    if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+    drManageTeam(teamId);
+  }catch(e){ alert('Could not generate content: '+e.message); if(btn){ btn.disabled=false; btn.textContent='⚙ Generate from diagnostics'; } }
 }
 async function drSaveNarr(teamId){
   try{ await cdUpdate('teams',{ quick_read:drVal('dr_quick'), summary:drVal('dr_summary'), updated_at:new Date().toISOString() },{ eq:{id:teamId} }); alert('Saved.'); }

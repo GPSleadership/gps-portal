@@ -166,9 +166,10 @@ export default async function handler(req, res) {
     case 'generate-team-report': return handleGenerateTeamReport(req, res);
     case 'finalize-report':      return handleFinalizeReport(req, res);
     case 'sign-report-upload':   return handleSignReportUpload(req, res);
+    case 'generate-dr-content':  return handleGenerateDRContent(req, res);
     case 'reminders':            return handleReminders(req, res);
     default:
-      return res.status(400).json({ error: `Unknown action: "${action}". Valid: send-invites, send-leader-link, generate-question, generate-g2-question, generate-report, generate-team-report, finalize-report, sign-report-upload, reminders` });
+      return res.status(400).json({ error: `Unknown action: "${action}". Valid: send-invites, send-leader-link, generate-question, generate-g2-question, generate-report, generate-team-report, finalize-report, sign-report-upload, generate-dr-content, reminders` });
   }
 }
 
@@ -1634,6 +1635,176 @@ async function handleSignReportUpload(req, res) {
     return res.status(500).json({ error: e.message });
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ACTION: generate-dr-content
+// POST /api/diagnostic?action=generate-dr-content   Body: { team_id, session }
+//
+// Fills the Decision Room content layer for a team from its members' IN-SYSTEM
+// diagnostic data: the team narrative (quick_read, summary, themes, start/stop/
+// continue, intent-vs-impact) and each scored member's report_json (summaryLine,
+// recommended 90-day focus, succession/bench, readiness level). The team snapshot
+// TP3 is computed from data (not AI). This is what fills the previously-blank
+// cards. The coach reviews/edits (quick_read + summary are editable) before
+// sharing a sponsor link. Legacy/PDF-only leaders are handled separately.
+// ═══════════════════════════════════════════════════════════════════════════════
+const DR_CONTENT_SYSTEM = `You are an executive leadership assessment specialist for GPS Leadership Solutions, writing the internal "Decision Room" content a CEO/sponsor reads about a leadership team. You write for a skeptical, time-poor CEO: plain, direct, specific, no fluff or motivational language.
+
+You will receive each scored leader's TP3 diagnostic results (Trust, Proactivity, Productivity on a 1-5 scale, raters vs self) and anonymized verbatim themes. Produce ONLY a single JSON object, no prose, no code fences, exactly this shape:
+
+{
+  "team": {
+    "quick_read": "one tight sentence: the net of where this team stands",
+    "summary": "2-4 sentences a CEO can read in 20 seconds",
+    "themes": { "strengths": ["..."], "riskPatterns": ["..."] },
+    "start_stop_continue": { "start": ["..."], "stop": ["..."], "continue": ["..."] },
+    "intent_impact": [ { "intent": "what the team means to do", "impact": "how it actually lands" } ]
+  },
+  "members": [
+    {
+      "client_id": "<echo the id you were given>",
+      "summaryLine": "one sentence on this leader's current standing",
+      "focus": { "goal90": "a recommended 90-day development goal", "behaviors": ["specific behavior to practice", "..."] },
+      "succession": { "successorIdentified": false, "readiness": "honest read on readiness for more scope", "benchNote": "one line on bench depth", "bench": [] },
+      "readinessLevel": "ready | developing | not_ready"
+    }
+  ]
+}
+
+Rules: Base everything ONLY on the scores and verbatim themes provided. Do NOT invent specific people, names, numbers, or metrics. Leave "bench" an empty array unless the data clearly supports entries. Keep lists to 2-4 items. readinessLevel must be exactly "ready", "developing", or "not_ready". Use the GPS scale lens: 4.0+ is strong, 3.0-3.99 needs a plan, below 3.0 is a role-fit concern. Echo each client_id exactly as given.`;
+
+function buildDRContentPrompt(team, scored) {
+  const lines = [
+    `TEAM: ${team.client_org_name || ''} — ${team.name || ''} (${team.team_type || 'team'})`,
+    `Scored leaders: ${scored.length}`,
+    '',
+  ];
+  for (const s of scored) {
+    const o = s.scores || {};
+    lines.push(`--- LEADER (client_id: ${s.client_id}) ---`);
+    lines.push(`Name/role: ${s.name}${s.role ? ', ' + s.role : ''}`);
+    lines.push(`TP3 (raters, 1-5): Trust ${fmtN(o.trustScore)} | Proactivity ${fmtN(o.proactivityScore)} | Productivity ${fmtN(o.productivityScore)} | TP3 index ${fmtN(o.tp3Index)}`);
+    lines.push(`Self-rating (1-5):  Trust ${fmtN(s.self && s.self.trust)} | Proactivity ${fmtN(s.self && s.self.proactivity)} | Productivity ${fmtN(s.self && s.self.productivity)}`);
+    if (o.benchScore != null) lines.push(`Bench/succession signal (F1-F2, 1-5): ${fmtN(o.benchScore)}`);
+    const vb = s.verbatims || {};
+    const vbKeys = Object.keys(vb);
+    if (vbKeys.length) {
+      lines.push('Verbatim themes (anonymized):');
+      for (const k of vbKeys.slice(0, 8)) {
+        const texts = (vb[k] || []).slice(0, 3).map(t => `"${String(t).slice(0, 160)}"`).join(' ');
+        if (texts) lines.push(`  ${k}: ${texts}`);
+      }
+    }
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+function fmtN(n) { return (n != null && !isNaN(n)) ? Number(n).toFixed(2) : 'n/a'; }
+
+function parseJsonLoose(raw) {
+  if (!raw) return null;
+  let s = String(raw).trim();
+  s = s.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+  const a = s.indexOf('{'), b = s.lastIndexOf('}');
+  if (a === -1 || b === -1 || b <= a) return null;
+  try { return JSON.parse(s.slice(a, b + 1)); } catch (_) { return null; }
+}
+
+async function handleGenerateDRContent(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
+
+  const { team_id, session } = req.body || {};
+  if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
+  if (!team_id) return res.status(400).json({ error: 'team_id required' });
+
+  try {
+    const teamRows = await (await sb(`/rest/v1/teams?id=eq.${team_id}&select=*`)).json();
+    const team = Array.isArray(teamRows) && teamRows[0];
+    if (!team) return res.status(404).json({ error: 'Team not found' });
+
+    const members = await (await sb(`/rest/v1/team_members?team_id=eq.${team_id}&select=id,client_id,role`)).json();
+    if (!Array.isArray(members) || !members.length) return res.status(400).json({ error: 'No members on this team' });
+
+    const cids = members.map(m => m.client_id).filter(Boolean);
+    const clients = cids.length ? await (await sb(`/rest/v1/clients?id=in.(${cids.map(c => `"${c}"`).join(',')})&select=id,name,title`)).json() : [];
+    const nameById = {}, titleById = {};
+    (clients || []).forEach(c => { nameById[c.id] = c.name; titleById[c.id] = c.title; });
+
+    const scored = [];
+    const tA = [], tB = [], tC = [];
+    let latestClose = null;
+
+    for (const m of members) {
+      const diags = await (await sb(`/rest/v1/diagnostics?client_id=eq.${enc4(m.client_id)}&status=in.("survey_closed","report_draft","report_final")&select=id,survey_closed_at&order=created_at.desc&limit=1`)).json();
+      const diag = Array.isArray(diags) && diags[0];
+      if (!diag) continue;
+      if (diag.survey_closed_at && (!latestClose || diag.survey_closed_at > latestClose)) latestClose = diag.survey_closed_at;
+
+      const raters = await (await sb(`/rest/v1/diagnostic_raters?diagnostic_id=eq.${diag.id}&select=id,is_self`)).json();
+      const selfIds = new Set((raters || []).filter(r => r.is_self).map(r => r.id));
+      const resp = await (await sb(`/rest/v1/diagnostic_responses?diagnostic_id=eq.${diag.id}&select=rater_id,question_code,score,text_response`)).json();
+      const others = (resp || []).filter(r => !selfIds.has(r.rater_id));
+      const selfR = (resp || []).filter(r => selfIds.has(r.rater_id));
+
+      const scores = buildScoreSummary(others);
+      const selfMap = {};
+      selfR.forEach(r => { if (r.score != null) selfMap[r.question_code] = Number(r.score); });
+      const self = {
+        trust:        avg(['A1','A2','A3','A4','A5','A6','A7'].map(c => selfMap[c]).filter(s => s != null && !isNaN(s))),
+        proactivity:  avg(['B1','B2','B3','B4','B5','B6'].map(c => selfMap[c]).filter(s => s != null && !isNaN(s))),
+        productivity: avg(['C1','C2','C3','C4','C5','C6'].map(c => selfMap[c]).filter(s => s != null && !isNaN(s))),
+      };
+      if (scores.trustScore        != null) tA.push(scores.trustScore);
+      if (scores.proactivityScore  != null) tB.push(scores.proactivityScore);
+      if (scores.productivityScore != null) tC.push(scores.productivityScore);
+
+      scored.push({ id: m.id, client_id: m.client_id, name: nameById[m.client_id] || 'Leader', role: m.role || titleById[m.client_id] || '', scores, self, verbatims: collectVerbatims(others) });
+    }
+
+    if (!scored.length) {
+      return res.status(400).json({ error: 'No team member has a completed in-system diagnostic yet. Content generation runs from in-system diagnostic data; legacy or PDF-only leaders are added separately.' });
+    }
+
+    const raw = await callClaude(DR_CONTENT_SYSTEM, buildDRContentPrompt(team, scored), 4096, { model: CLAUDE_REPORT_MODEL, timeoutMs: 110000 });
+    const parsed = parseJsonLoose(raw);
+    if (!parsed || !parsed.team) return res.status(502).json({ error: 'The model returned content that could not be parsed as JSON. Please try again.' });
+
+    const now = new Date().toISOString();
+    const snapshot = { surveyClosed: true, asOf: latestClose || null, tp3: { trust: { score: avg(tA) }, proactivity: { score: avg(tB) }, productivity: { score: avg(tC) } } };
+
+    await sb(`/rest/v1/teams?id=eq.${team_id}`, 'PATCH', {
+      quick_read:          parsed.team.quick_read || null,
+      summary:             parsed.team.summary || null,
+      themes:              parsed.team.themes || null,
+      start_stop_continue: parsed.team.start_stop_continue || null,
+      intent_impact:       parsed.team.intent_impact || null,
+      snapshot:            snapshot,
+      last_updated:        now,
+      updated_at:          now,
+    }, { Prefer: 'return=minimal' });
+
+    const byClient = {};
+    (parsed.members || []).forEach(mm => { if (mm.client_id) byClient[mm.client_id] = mm; });
+    for (const s of scored) {
+      const mm = byClient[s.client_id] || {};
+      const report_json = {
+        name:           s.name,
+        summaryLine:    mm.summaryLine || null,
+        focus:          mm.focus || null,
+        succession:     mm.succession || null,
+        readinessLevel: mm.readinessLevel || 'developing',
+      };
+      await sb(`/rest/v1/team_members?id=eq.${s.id}`, 'PATCH', { report_json }, { Prefer: 'return=minimal' });
+    }
+
+    return res.status(200).json({ ok: true, scored: scored.length, team: parsed.team });
+  } catch (err) {
+    console.error('[diagnostic/generate-dr-content] error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+}
+function enc4(v) { return encodeURIComponent(String(v)); }
 
 async function handleReminders(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
