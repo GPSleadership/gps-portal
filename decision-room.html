@@ -211,10 +211,20 @@ function scoreboardCheckpoint(sb){
   var has=function(k){ for(var i=0;i<sb.length;i++) if(sb[i][k]!=null) return true; return false; };
   if(has('d90')) return 'd90'; if(has('d30')) return 'd30'; return 'baseline';
 }
+function supervisorRating(m){
+  if(!m.scoreboard || !m.scoreboard.length) return null;
+  var cp=scoreboardCheckpoint(m.scoreboard);
+  var sup=m.scoreboard.filter(function(s){return s.supervisor;})[0];
+  return sup ? sup[cp] : null;
+}
 function computeStatus(m){
   if(m.surveyOpen) return { key:'pending', label:'Survey open', cls:'b-draft' };
   var v=memberStanding(m);
   var lowEng = m.engagement && m.engagement.checkinRate!=null && m.engagement.checkinRate<0.6;
+  // Supervisor override: the supervisor's read carries decision weight. A supervisor
+  // rating in the 3s or below (under 4) is a high-risk signal even when peers rate higher.
+  var sup=supervisorRating(m);
+  if(sup!=null && sup<4.0) return { key:'risk', label:'At risk', cls:'b-flag-red' };
   if(v!=null && v<3.0) return { key:'risk', label:'At risk', cls:'b-flag-red' };
   if(lowEng && (v==null||v<4.0)) return { key:'risk', label:'At risk', cls:'b-flag-red' };
   if(v!=null && v<4.0) return { key:'dev', label:'Developing', cls:'b-flag-amber' };
@@ -340,7 +350,7 @@ function renderRoster(members){
     return '<div class="doc-row"><div class="doc-icon">'+esc(initials(name))+'</div>'
       +'<div class="doc-info"><div class="doc-title">'+esc(name)+'</div><div class="doc-meta">'+esc(m.role||'')+'</div></div>'
       +'<div class="roster-chips"><span class="badge status-chip '+st.cls+'">'+st.label+'</span>'+pills
-      +'<button class="btn-sm" onclick="viewMember('+i+')">View report</button></div></div>';
+      +'<button class="btn-sm" onclick="viewMember('+members.indexOf(m)+')">View report</button></div></div>';
   }).join('');
   return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Leadership Team</div><span class="section-note">Sorted by status · open a leader for their report</span></div>'+(rows||'<div class="empty">No team members.</div>')+'</div>';
 }
@@ -440,7 +450,7 @@ function flagItems(m){
   if(m.scoreboard && m.scoreboard.length){
     var cp=scoreboardCheckpoint(m.scoreboard);
     var sup=m.scoreboard.filter(function(s){return s.supervisor;})[0];
-    if(sup){ var sv=sup[cp], ss=sev(sv); if(ss) out.push({sev:ss,text:'Their supervisor currently rates them '+Number(sv).toFixed(1)+'.'}); }
+    if(sup){ var sv=sup[cp]; if(sv!=null && sv<4){ out.push({sev:'red',text:'Their supervisor rates them '+Number(sv).toFixed(1)+'. A supervisor rating in the 3s or below is a high-risk signal even when others rate higher.'}); } }
     var ca=avgOf(m.scoreboard.map(function(s){return s[cp];})), cs=sev(ca); if(cs) out.push({sev:cs,text:'Stakeholders currently rate them '+ca.toFixed(1)+' on average.'});
   } else if(m.selfVsRaters && m.selfVsRaters.tp3){
     var tp=m.selfVsRaters.tp3; [['Trust','trust'],['Proactivity','proactivity'],['Productivity','productivity']].forEach(function(p){ var v=tp[p[1]]&&tp[p[1]].raters, s=sev(v); if(s) out.push({sev:s,text:p[0]+' is rated '+Number(v).toFixed(1)+' by the diagnostic raters.'}); });
