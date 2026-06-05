@@ -6544,16 +6544,23 @@ async function drManageTeam(teamId){
   var el=document.getElementById('drAdmin'); el.innerHTML='<div class="spinner"></div>';
   var team, members=[], clients=[], recs=[], signals=[], links=[], sponsors=[], reports=[], diags=[];
   try {
-    var tr=await cdSelect('teams',{ eq:{id:teamId} }); team=tr[0];
-    members=await cdSelect('team_members',{ eq:{team_id:teamId}, order:{col:'sort_order',asc:true} });
-    clients=await cdSelect('clients',{ select:'id,name,title', order:{col:'name',asc:true} });
-    recs=await cdSelect('recommendations',{ eq:{team_id:teamId}, order:{col:'updated_at',asc:false} });
-    signals=await cdSelect('external_signals',{ eq:{team_id:teamId}, order:{col:'date_observed',asc:false} });
-    links=await cdSelect('sponsor_teams',{ eq:{team_id:teamId} });
-    if(links.length){ sponsors=await cdSelect('sponsors',{ in:{ id: links.map(function(l){return l.sponsor_id;}) } }); }
-    reports=await cdSelect('diagnostic_team_reports',{ eq:{team_id:teamId}, order:{col:'generated_at',asc:false} });
+    // Fire the independent reads in parallel (was 9 sequential round-trips → now 2 batches).
+    var b1 = await Promise.all([
+      cdSelect('teams',{ eq:{id:teamId} }),
+      cdSelect('team_members',{ eq:{team_id:teamId}, order:{col:'sort_order',asc:true} }),
+      cdSelect('clients',{ select:'id,name,title', order:{col:'name',asc:true} }),
+      cdSelect('recommendations',{ eq:{team_id:teamId}, order:{col:'updated_at',asc:false} }),
+      cdSelect('external_signals',{ eq:{team_id:teamId}, order:{col:'date_observed',asc:false} }),
+      cdSelect('sponsor_teams',{ eq:{team_id:teamId} }),
+      cdSelect('diagnostic_team_reports',{ eq:{team_id:teamId}, order:{col:'generated_at',asc:false} })
+    ]);
+    team=b1[0][0]; members=b1[1]; clients=b1[2]; recs=b1[3]; signals=b1[4]; links=b1[5]; reports=b1[6];
     var memberCids=members.map(function(m){return m.client_id;}).filter(Boolean);
-    if(memberCids.length){ diags=await cdSelect('diagnostics',{ in:{ client_id:memberCids }, select:'id,client_id,status,created_at', order:{col:'created_at',asc:false} }); }
+    var b2 = await Promise.all([
+      links.length ? cdSelect('sponsors',{ in:{ id: links.map(function(l){return l.sponsor_id;}) } }) : Promise.resolve([]),
+      memberCids.length ? cdSelect('diagnostics',{ in:{ client_id:memberCids }, select:'id,client_id,status,created_at', order:{col:'created_at',asc:false} }) : Promise.resolve([])
+    ]);
+    sponsors=b2[0]; diags=b2[1];
   } catch(e){ el.innerHTML='<div style="color:#b00;padding:16px;">Load failed: '+drEsc(e.message)+'</div>'; return; }
   if(!team){ drRender(); return; }
   var nameById={}; clients.forEach(function(c){ nameById[c.id]=c.name; });

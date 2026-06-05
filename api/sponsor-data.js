@@ -124,6 +124,9 @@ async function buildMemberReport(m, confidential) {
   // Keep the AI content NESTED under report_json — the sponsor page reads
   // m.report_json.{succession, focus, summaryLine, name, readinessLevel}.
   report.report_json = Object.assign({}, m.report_json || {});
+  // Surface the leader's name at the top level too, so the roster, nine-box grid,
+  // and succession table label people by NAME (initials), not by job title.
+  report.name = report.report_json.name || null;
 
   // 90-day stakeholder scoreboard + engagement (post-diagnostic — always shown)
   report.scoreboard = await buildScoreboard(m.client_id);
