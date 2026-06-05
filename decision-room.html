@@ -366,7 +366,7 @@ function renderTeamSuccession(members){
     var risk=(!s.successorIdentified && st.key==='risk')?' <span class="badge b-flag-red">Key-person risk</span>':'';
     return '<tr><td>'+esc(name)+'<div class="succ-sub">'+esc(m.role||'')+'</div></td><td>'+succ+risk+'</td><td>'+esc(s.readiness||'')+'</td></tr>';
   }).join('');
-  return '<div class="card">'+head+'<div class="succ-summary"><b>'+noSucc.length+' of '+withS.length+'</b> leaders have no identified successor'+(noSucc.length?'. Each is a key-person risk: if they leave, the seat has no ready backup.':'.')+'</div>'
+  return '<div class="card">'+head+'<div style="font-size:12px;color:var(--gray-600);line-height:1.55;background:var(--light-sand);border-radius:7px;padding:9px 12px;margin-bottom:10px;">These placements come from structured perception data in the 14-Day Executive Leadership Diagnostic — how close stakeholders currently experience each leader\'s behavior. Treat it as decision input, not a promotion list: combine it with recent performance and results, role requirements, and HR/risk considerations before any succession call.</div>'+'<div class="succ-summary"><b>'+noSucc.length+' of '+withS.length+'</b> leaders have no identified successor'+(noSucc.length?'. Each is a key-person risk: if they leave, the seat has no ready backup.':'.')+'</div>'
     +'<table class="sh-table"><thead><tr><th>Leader</th><th>Successor in place</th><th>Readiness for more</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 
@@ -384,7 +384,7 @@ function renderTalentGrid(members){
   for(var r=2;r>=0;r--){ grid+='<div class="grid9-axisY">'+rowLabel[r]+'</div>'; for(var c=0;c<3;c++){ var chips=cells[r][c].map(function(m){ return '<span class="grid-chip" title="'+esc(m.name||m.role)+'">'+esc(initials(m.name||m.role))+'</span>'; }).join(''); grid+='<div class="grid9-cell '+tone(r,c)+'">'+chips+'</div>'; } }
   grid+='<div></div><div class="grid9-axisX">Low</div><div class="grid9-axisX">Developing</div><div class="grid9-axisX">Strong</div></div>';
   var legend=ms.map(function(m){ return '<span class="grid-legend-item"><b>'+esc(initials(m.name||m.role))+'</b> '+esc(m.name||m.role)+'</span>'; }).join('');
-  return '<div class="card">'+head+grid+'<div class="grid-legend">'+legend+'</div></div>';
+  return '<div class="card">'+head+'<div style="font-size:11.5px;color:var(--gray-600);background:var(--light-sand);border-radius:6px;padding:7px 11px;margin-bottom:10px;">Note: readiness here is based on perception data; combine it with performance and HR input before making promotion decisions.</div>'+grid+'<div class="grid-legend">'+legend+'</div></div>';
 }
 
 function recCat(r){ return (r.category==='included_in_current_scope') ? 'scope' : 'accel'; }
@@ -540,6 +540,7 @@ function successionCard(m){
   var benchRows=(s.bench||[]).map(function(b){ return '<tr><td>'+esc(b.role)+'</td><td>'+esc(b.readiness)+'</td><td>'+esc(b.timeline)+'</td><td>'+esc(b.gap)+'</td></tr>'; }).join('');
   var benchTable=benchRows?'<table class="sh-table" style="margin-top:10px;"><thead><tr><th>On their bench</th><th>Readiness</th><th>Timeline</th><th>Primary gap</th></tr></thead><tbody>'+benchRows+'</tbody></table>':'';
   return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Succession &amp; Bench</div>'+badge+'</div>'
+    +'<div style="font-size:11px;color:var(--gray-600);margin-bottom:8px;">Note: based on perception data — combine with performance and HR input before promotion decisions.</div>'
     +(s.readiness?'<div class="succ-line"><b>Readiness for more:</b> '+esc(s.readiness)+'</div>':'')+(s.benchNote?'<div class="succ-line">'+esc(s.benchNote)+'</div>':'')+benchTable+'</div>';
 }
 

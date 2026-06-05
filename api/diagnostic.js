@@ -1075,6 +1075,8 @@ Three short bullet groups (2–3 bullets each, not paragraphs):
 
 Ground every bullet in a specific score or verbatim. No generic leadership theory.
 
+After the Succession & Scalability bullets, add this exact note in its own line: <p class="report-note" style="font-size:13px;color:#555;font-style:italic;">The readiness and bench signals above come from perception data in the diagnostic. They are real input and worth acting on, but they are not a complete picture. Combine them with recent performance results, the actual requirements of the next role, and HR or risk guidance before making any promotion or succession decision. The chart informs the call; the leaders accountable for the business make it.</p>
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SECTION 9: START. STOP. CONTINUE.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1931,6 +1933,7 @@ RULES:
   - When you reference "development resources/budget," tie it to specific middle/top names from the data.
   - Be behaviorally concrete: a clear deliverable and, where natural, a success measure. Owner is a ROLE, not a person's name. Keep the role-fit tone respectful.
   - Do NOT promise referrals or name external vendors.
+  - SUCCESSION / READINESS GUARDRAIL: if a recommendation touches succession, promotion, bench depth, or readiness for a bigger role, append this exact sentence to its description: "This recommendation is based on perception data from the diagnostic and should be combined with recent performance results, role requirements, and HR guidance before final succession or promotion decisions are made."
 
 For EACH recommendation output these fields:
   - short_title: short, action-oriented imperative.
@@ -2403,6 +2406,9 @@ TONE & PRIVACY RULES
 - Never shame or negatively name a specific leader. Use "some leaders," "a subset of the team," or "the team" for sensitive patterns
 - Treat this as developmental, not punitive
 - Write in flowing prose with clear section breaks. Use markdown headers (## and ###) and bullet points (-) where appropriate.
+
+SUCCESSION / READINESS GUARDRAIL
+Anywhere this report discusses succession, bench depth, promotion readiness, or readiness for a larger role (including in the heat analysis, the playbook, and the appendix), include 2–3 sentences making clear that: this signal comes from perception data in the diagnostic and is real, useful input; it is not a complete picture on its own; and it should be combined with recent performance results, the requirements of the next role, and HR or risk guidance before any promotion or succession decision. Frame it as "the chart informs the decision; the leaders accountable for the business make it." Do not soften this into a throwaway line — state it plainly.
 
 REQUIRED SECTION ORDER:
 
