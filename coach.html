@@ -6758,6 +6758,10 @@ async function drGenerateTeamReport(teamId){
 }
 
 function drRecAttr(t){ return drEsc(t).replace(/"/g,'&quot;'); }
+function drGpsFitNote(type){
+  if(type==='core_service'||type==='co_led') return 'Can be led or co-led by GPS (e.g., a diagnostic debrief + 90-day plan).';
+  return 'Client-owned. GPS can provide framing and examples; external HR/comp expertise may be needed.';
+}
 function drRecsPanel(t, recs){
   window.__drRecs = {};
   var list=recs.map(function(r){
@@ -6778,6 +6782,9 @@ function drRecsPanel(t, recs){
     return '<div id="dr_recrow_'+r.id+'" style="padding:10px 0;border-bottom:1px solid #f0f0f0;"><b>'+drEsc(r.short_title)+'</b> <span style="font-size:11px;color:#666;">· '+cat+' · '+statusChip+'</span>'
       +(r.description?'<div style="margin-top:5px;font-size:12.5px;color:#333;line-height:1.5;">'+drEsc(r.description)+'</div>':'')
       +((r.owner||r.timeframe)?'<div style="margin-top:4px;font-size:11px;color:#888;">'+(r.owner?'Owner: '+drEsc(r.owner):'')+(r.owner&&r.timeframe?' · ':'')+(r.timeframe?'Timeframe: '+drEsc(r.timeframe):'')+'</div>':'')
+      +(r.target_band?'<div style="margin-top:5px;">'+String(r.target_band).split(',').map(function(b){ b=b.trim(); var c={top:'#1b6e3c',middle:'#0b5cad',bottom:'#b00020',system:'#6b21a8'}[b]||'#555'; return '<span style="display:inline-block;font-size:10px;font-weight:700;color:'+c+';background:#f1f1f4;border-radius:8px;padding:1px 8px;margin-right:4px;text-transform:uppercase;letter-spacing:.03em;">'+drEsc(b)+'</span>'; }).join('')+'</div>':'')
+      +((r.quick_start_today||r.quick_start_week)?'<div style="margin-top:6px;font-size:11.5px;color:#333;background:#f8f9fb;border:1px solid #eee;border-radius:6px;padding:7px 10px;">'+(r.quick_start_today?'<div><b>By end of today:</b> '+drEsc(r.quick_start_today)+'</div>':'')+(r.quick_start_week?'<div style="margin-top:3px;"><b>By end of this week:</b> '+drEsc(r.quick_start_week)+'</div>':'')+'</div>':'')
+      +(r.gps_support_type?'<div style="margin-top:6px;font-size:11px;color:#01949A;font-style:italic;">GPS fit: '+drGpsFitNote(r.gps_support_type)+' <span style="color:#aaa;font-style:normal;">(internal — not shown to the sponsor)</span></div>':'')
       +'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">'+btns+'</div></div>';
   }).join('') || '<div style="color:#666;font-size:13px;">No recommendations yet.</div>';
   var add='<div style="display:grid;gap:8px;margin-top:12px;border-top:1px solid #eee;padding-top:12px;">'
@@ -6816,11 +6823,16 @@ function drRecEdit(id, teamId){
     +'<select id="dr_re_cat_'+id+'" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;"><option value="included_in_current_scope"'+(r.category!=='optional_accelerator'?' selected':'')+'>In current scope</option><option value="optional_accelerator"'+(r.category==='optional_accelerator'?' selected':'')+'>Optional accelerator</option></select>'
     +'<input id="dr_re_owner_'+id+'" value="'+drRecAttr(r.owner||'')+'" placeholder="Owner" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;" />'
     +'<input id="dr_re_time_'+id+'" value="'+drRecAttr(r.timeframe||'')+'" placeholder="Timeframe" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;width:120px;" /></div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'
+    +'<input id="dr_re_band_'+id+'" value="'+drRecAttr(r.target_band||'')+'" placeholder="Target band (top, middle, bottom, system)" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;min-width:230px;" />'
+    +'<select id="dr_re_fit_'+id+'" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;">'+['','core_service','co_led','client_owned','outside_scope'].map(function(v){ var lbl={'':'GPS fit…','core_service':'core_service (GPS delivers)','co_led':'co_led (GPS facilitates)','client_owned':'client_owned','outside_scope':'outside_scope'}[v]; return '<option value="'+v+'"'+(r.gps_support_type===v?' selected':'')+'>'+lbl+'</option>'; }).join('')+'</select></div>'
+    +'<input id="dr_re_today_'+id+'" value="'+drRecAttr(r.quick_start_today||'')+'" placeholder="By end of today: one tiny action" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;" />'
+    +'<input id="dr_re_week_'+id+'" value="'+drRecAttr(r.quick_start_week||'')+'" placeholder="By end of this week: one concrete step" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;" />'
     +'<div style="display:flex;gap:6px;"><button class="btn-add" onclick="drRecSaveEdit(\''+id+'\',\''+teamId+'\')">Save</button><button class="btn-add" style="background:#fff;color:#666;border:1px solid #ccc;" onclick="drManageTeam(\''+teamId+'\')">Cancel</button></div></div>';
 }
 async function drRecSaveEdit(id, teamId){
   var title=drVal('dr_re_title_'+id); if(!title){ alert('Title required.'); return; }
-  try{ await cdUpdate('recommendations',{ short_title:title, description:drVal('dr_re_desc_'+id), category:drVal('dr_re_cat_'+id), owner:drVal('dr_re_owner_'+id)||null, timeframe:drVal('dr_re_time_'+id)||null, updated_at:new Date().toISOString() },{ eq:{id:id} }); drManageTeam(teamId); }
+  try{ await cdUpdate('recommendations',{ short_title:title, description:drVal('dr_re_desc_'+id), category:drVal('dr_re_cat_'+id), owner:drVal('dr_re_owner_'+id)||null, timeframe:drVal('dr_re_time_'+id)||null, target_band:drVal('dr_re_band_'+id)||null, gps_support_type:drVal('dr_re_fit_'+id)||null, quick_start_today:drVal('dr_re_today_'+id)||null, quick_start_week:drVal('dr_re_week_'+id)||null, updated_at:new Date().toISOString() },{ eq:{id:id} }); drManageTeam(teamId); }
   catch(e){ alert('Could not save: '+e.message); }
 }
 async function drRecReject(id, teamId){ if(!confirm('Reject this recommendation? This deletes it.')) return; try{ await cdDelete('recommendations',{ eq:{id:id} }); drManageTeam(teamId); }catch(e){ alert('Could not reject: '+e.message); } }

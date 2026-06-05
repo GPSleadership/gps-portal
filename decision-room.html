@@ -391,9 +391,15 @@ function recCat(r){ return (r.category==='included_in_current_scope') ? 'scope' 
 function renderRecs(recs){
   var scope=recs.filter(function(r){ return r.category==='included_in_current_scope'; });
   var accel=recs.filter(function(r){ return r.category!=='included_in_current_scope'; });
-  function card(r){ return '<div class="rec '+recCat(r)+'"><div class="rec-title">'+esc(r.short_title)+'</div>'
+  function card(r){
+    var bands = r.target_band ? String(r.target_band).split(',').map(function(b){ b=b.trim(); var lbl={top:'Top performers',middle:'Mid-band',bottom:'At-risk',system:'Team system'}[b]; return lbl?'<span style="display:inline-block;font-size:10px;font-weight:700;color:#1A3D6E;background:#eef3fb;border-radius:8px;padding:1px 8px;margin:0 4px 6px 0;text-transform:uppercase;letter-spacing:.03em;">'+lbl+'</span>':''; }).join('') : '';
+    var qs = (r.quick_start_today||r.quick_start_week)
+      ? '<div style="margin-top:8px;font-size:12.5px;line-height:1.5;color:var(--navy-dark);background:var(--light-sand);border-radius:7px;padding:8px 11px;">'+(r.quick_start_today?'<div><b>By end of today:</b> '+esc(r.quick_start_today)+'</div>':'')+(r.quick_start_week?'<div style="margin-top:3px;"><b>By end of this week:</b> '+esc(r.quick_start_week)+'</div>':'')+'</div>'
+      : '';
+    return '<div class="rec '+recCat(r)+'"><div class="rec-title">'+esc(r.short_title)+'</div>'
     + ((r.owner||r.timeframe)?'<div class="rec-meta">'+(r.owner?'Owner: '+esc(r.owner):'')+(r.owner&&r.timeframe?' &middot; ':'')+(r.timeframe?'Timeframe: '+esc(r.timeframe):'')+'</div>':'')
-    + '<div class="rec-desc">'+esc(r.description)+'</div>'+(r.updated_at?'<div class="rec-foot">Updated '+fmtDate(r.updated_at)+'</div>':'')+'</div>'; }
+    + (bands?'<div style="margin-top:4px;">'+bands+'</div>':'')
+    + '<div class="rec-desc">'+esc(r.description)+'</div>'+ qs +(r.updated_at?'<div class="rec-foot">Updated '+fmtDate(r.updated_at)+'</div>':'')+'</div>'; }
   var s=scope.length?scope.map(card).join(''):'<div class="empty">Nothing in motion to show yet.</div>';
   var a=accel.length?accel.map(card).join(''):'<div class="empty">No optional accelerators at this time.</div>';
   return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Recommendations</div></div>'

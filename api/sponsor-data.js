@@ -301,7 +301,8 @@ export default async function handler(req, res) {
       const memberReports = [];
       for (const m of members) memberReports.push(await buildMemberReport(m, isPrivate));
 
-      const recsRaw = await sbGet(`/rest/v1/recommendations?team_id=eq.${enc(teamId)}&status=eq.approved&visible_to_client=eq.true&select=*&order=updated_at.desc`);
+      // Omit the coach-only internal tags (gps_support_type, source_section) from the sponsor payload.
+      const recsRaw = await sbGet(`/rest/v1/recommendations?team_id=eq.${enc(teamId)}&status=eq.approved&visible_to_client=eq.true&select=short_title,description,owner,timeframe,category,target_band,quick_start_today,quick_start_week,updated_at&order=updated_at.desc`);
       const signalsRaw = await sbGet(`/rest/v1/external_signals?team_id=eq.${enc(teamId)}&visible_to_client=eq.true&select=*&order=date_observed.desc`);
 
       // Written team report — the sponsor sees the coach-uploaded branded PDF,

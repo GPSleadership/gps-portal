@@ -1909,18 +1909,36 @@ async function handleNudgeCheckin(req, res) {
 // Drafts 3-5 recommendations from the team's generated Decision Room content, as
 // editable DRAFTS (not visible to the sponsor) the coach then adjusts/approves.
 // ═══════════════════════════════════════════════════════════════════════════════
-const REC_SYSTEM = `You are an executive leadership advisor for GPS Leadership Solutions, writing recommendations for a CEO/sponsor from a leadership-team Decision Room.
+const REC_SYSTEM = `You are an executive leadership advisor for GPS Leadership Solutions, distilling a team's Decision Room content into the "action dashboard": 4-6 high-leverage recommendations for a CEO/sponsor.
 
-What GPS delivers: executive coaching, team coaching, leadership workshops and trainings, the 14-Day Executive Leadership Diagnostic and other assessments, succession-planning support, and leadership/advisory consulting. For needs outside that (e.g., compensation design, legal, deep functional/technical training), GPS does not deliver it directly but can often refer a trusted specialist in its network.
+WHAT GPS DELIVERS: executive coaching, team coaching, leadership workshops and retreats, the diagnostic and other assessments and 360 debriefs, calibrated feedback sessions, succession-mapping facilitation, and leadership/advisory consulting. GPS does NOT run formal HR/performance processes, compensation redesign, or legal actions.
 
-From the team's summary, themes, Start/Stop/Continue, Intent-vs-Impact, and per-leader reads, propose the 4-6 BEST recommendations — the highest-leverage moves for this specific team, grounded ONLY in the provided material (never invent names or specifics). Lead with the strongest moves. They must align with what the diagnostic data is actually showing.
+GROUND TRUTH: Every recommendation must be a synthesis of the provided material (team summary, themes, Start/Stop/Continue, intent-vs-impact, per-leader reads). Never introduce a brand-new direction, never contradict the data, never invent names that are not in the material.
 
-For EACH recommendation the description MUST cover two things in 2-4 plain sentences: (1) what to do and what changes as a result, and (2) HOW it gets delivered — name the specific GPS service when it fits (e.g., "Delivered by GPS as a focused executive-coaching engagement for the three sub-3.0 leaders" or "A GPS leadership workshop on decision ownership"), OR, when it falls outside GPS's services, say so plainly and offer a referral (e.g., "This is outside GPS's direct services; GPS can likely refer a specialist in its network").
+REQUIRED COVERAGE — produce 4-6 recommendations that MUST include at least one of EACH band:
+  - bottom: a risk / role-fit move for sub-3.0 leaders. Frame as a MUTUAL role-fit decision (clarity for the org AND the leader), not "more coaching."
+  - top: an ACCELERATOR that leverages the top 10-20% (TP3 + bench) as multipliers — e.g., have them co-lead the operating-rhythm meetings, each mentor 1-2 mid-tier leaders, and codify 3-5 of their habits into the leadership standard/onboarding. ALWAYS include at least one of these; include two if there are several strong performers.
+  - middle: a DEVELOPMENT move for the 3.0-3.99 band (where coaching ROI is highest). Name the specific mid-band leaders and pair them with the named top performers as mentors.
+  - system: an operating-model move — meeting/decision standards, the bench/succession system, communication habits, or calibrated feedback.
 
-category: use "included_in_current_scope" for moves the team owns and runs internally; use "optional_accelerator" for additional GPS services or network referrals.
+RULES:
+  - Do NOT default coaching to the bottom tier. Coaching dollars prioritize the middle and top; the bottom only if explicitly salvageable, never for chronic role-fit.
+  - When you reference "development resources/budget," tie it to specific middle/top names from the data.
+  - Be behaviorally concrete: a clear deliverable and, where natural, a success measure. Owner is a ROLE, not a person's name. Keep the role-fit tone respectful.
+  - Do NOT promise referrals or name external vendors.
+
+For EACH recommendation output these fields:
+  - short_title: short, action-oriented imperative.
+  - description: 2-4 plain sentences — what to do, the change it drives, and the concrete deliverable; behavior-focused and tied to the data.
+  - category: "included_in_current_scope" or "optional_accelerator".
+  - target_band: one or more of top|middle|bottom|system, comma-separated if more than one (e.g. "top,middle").
+  - gps_support_type: one of core_service (GPS directly delivers) | co_led (GPS designs/facilitates, client executes ongoing) | client_owned (client runs it; GPS provides framing/templates only) | outside_scope (important but outside GPS's services).
+  - quick_start_today: ONE tiny action the leader can take by end of today (schedule a meeting, send an email, choose owners, jot names).
+  - quick_start_week: ONE small, concrete step by end of this week (draft a 1-pager, run a 30-minute huddle, build a candidate list).
+  - source_section: comma-separated tags of what this derives from, drawn ONLY from this set: team_summary, themes, start_stop_continue, intent_impact, member_reads.
 
 Output ONLY a JSON object, no prose, no markdown, no code fences:
-{ "recommendations": [ { "short_title": "imperative phrase", "description": "2-4 sentences: what to do + the change + how it's delivered (named GPS service or a referral)", "category": "included_in_current_scope" | "optional_accelerator", "owner": "e.g., CEO + Exec Team", "timeframe": "e.g., Next 90 days" } ] }`;
+{ "recommendations": [ { "short_title": "", "description": "", "category": "included_in_current_scope", "target_band": "", "gps_support_type": "", "quick_start_today": "", "quick_start_week": "", "owner": "", "timeframe": "", "source_section": "" } ] }`;
 
 async function handleGenerateRecommendations(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -1959,6 +1977,10 @@ async function handleGenerateRecommendations(req, res) {
     let inserted = 0;
     for (const r of recs.slice(0, 6)) {
       if (!r || !r.short_title) continue;
+      const allowedBands = ['top','middle','bottom','system'];
+      const bands = String(r.target_band || '').split(',').map(s => s.trim().toLowerCase()).filter(b => allowedBands.includes(b));
+      const allowedFit = ['core_service','co_led','client_owned','outside_scope'];
+      const fit = allowedFit.includes(r.gps_support_type) ? r.gps_support_type : null;
       await sb('/rest/v1/recommendations', 'POST', {
         team_id,
         short_title:  String(r.short_title).slice(0, 200),
@@ -1966,6 +1988,11 @@ async function handleGenerateRecommendations(req, res) {
         category:     (r.category === 'optional_accelerator' ? 'optional_accelerator' : 'included_in_current_scope'),
         owner:        r.owner ? String(r.owner).slice(0, 120) : null,
         timeframe:    r.timeframe ? String(r.timeframe).slice(0, 80) : null,
+        target_band:       bands.length ? bands.join(',') : null,
+        gps_support_type:  fit,
+        quick_start_today: r.quick_start_today ? String(r.quick_start_today).slice(0, 400) : null,
+        quick_start_week:  r.quick_start_week ? String(r.quick_start_week).slice(0, 400) : null,
+        source_section:    r.source_section ? String(r.source_section).slice(0, 200) : null,
         status:       'draft',
         visible_to_client: false,
         created_at:   now,
