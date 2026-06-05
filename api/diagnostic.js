@@ -1860,8 +1860,18 @@ function enc4(v) { return encodeURIComponent(String(v)); }
 // Drafts 3-5 recommendations from the team's generated Decision Room content, as
 // editable DRAFTS (not visible to the sponsor) the coach then adjusts/approves.
 // ═══════════════════════════════════════════════════════════════════════════════
-const REC_SYSTEM = `You are an executive leadership advisor for GPS Leadership Solutions. From the team's Decision Room summary, themes, and per-leader reads, propose 3-5 concrete recommendations a CEO/sponsor could act on. Each must be a clear, practical lever with a defined owner and timeframe, grounded ONLY in the provided material — do not invent specifics or names. Speak plainly, no fluff. Output ONLY a JSON object, no prose, no markdown, no code fences:
-{ "recommendations": [ { "short_title": "imperative phrase", "description": "what we will do and what changes as a result", "category": "included_in_current_scope" | "optional_accelerator", "owner": "e.g., CEO + Exec Team", "timeframe": "e.g., Next 90 days" } ] }`;
+const REC_SYSTEM = `You are an executive leadership advisor for GPS Leadership Solutions, writing recommendations for a CEO/sponsor from a leadership-team Decision Room.
+
+What GPS delivers: executive coaching, team coaching, leadership workshops and trainings, the 14-Day Executive Leadership Diagnostic and other assessments, succession-planning support, and leadership/advisory consulting. For needs outside that (e.g., compensation design, legal, deep functional/technical training), GPS does not deliver it directly but can often refer a trusted specialist in its network.
+
+From the team's summary, themes, Start/Stop/Continue, Intent-vs-Impact, and per-leader reads, propose the 4-6 BEST recommendations — the highest-leverage moves for this specific team, grounded ONLY in the provided material (never invent names or specifics). Lead with the strongest moves. They must align with what the diagnostic data is actually showing.
+
+For EACH recommendation the description MUST cover two things in 2-4 plain sentences: (1) what to do and what changes as a result, and (2) HOW it gets delivered — name the specific GPS service when it fits (e.g., "Delivered by GPS as a focused executive-coaching engagement for the three sub-3.0 leaders" or "A GPS leadership workshop on decision ownership"), OR, when it falls outside GPS's services, say so plainly and offer a referral (e.g., "This is outside GPS's direct services; GPS can likely refer a specialist in its network").
+
+category: use "included_in_current_scope" for moves the team owns and runs internally; use "optional_accelerator" for additional GPS services or network referrals.
+
+Output ONLY a JSON object, no prose, no markdown, no code fences:
+{ "recommendations": [ { "short_title": "imperative phrase", "description": "2-4 sentences: what to do + the change + how it's delivered (named GPS service or a referral)", "category": "included_in_current_scope" | "optional_accelerator", "owner": "e.g., CEO + Exec Team", "timeframe": "e.g., Next 90 days" } ] }`;
 
 async function handleGenerateRecommendations(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -1891,7 +1901,7 @@ async function handleGenerateRecommendations(req, res) {
       'Leaders:', ...memberLines,
     ].join('\n');
 
-    const raw = await callClaude(REC_SYSTEM, input, 2048, { model: CLAUDE_REPORT_MODEL, timeoutMs: 90000, temperature: 0 });
+    const raw = await callClaude(REC_SYSTEM, input, 3072, { model: CLAUDE_REPORT_MODEL, timeoutMs: 100000, temperature: 0 });
     const parsed = parseJsonLoose(raw);
     const recs = parsed && Array.isArray(parsed.recommendations) ? parsed.recommendations : null;
     if (!recs) return res.status(502).json({ error: 'Could not parse recommendations. Please try again.' });

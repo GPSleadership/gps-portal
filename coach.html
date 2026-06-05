@@ -6721,15 +6721,28 @@ async function drGenerateTeamReport(teamId){
   }catch(e){ alert('Could not generate report: '+e.message); if(btn){ btn.disabled=false; btn.textContent='⚙ Generate draft report'; } }
 }
 
+function drRecAttr(t){ return drEsc(t).replace(/"/g,'&quot;'); }
 function drRecsPanel(t, recs){
+  window.__drRecs = {};
   var list=recs.map(function(r){
+    window.__drRecs[r.id]=r;
     var cat=r.category==='included_in_current_scope'?'In Scope':'Accelerator';
-    var vis=r.visible_to_client?'<span style="color:#2e7d32;font-weight:700;">Visible</span>':'<span style="color:#DB1F48;font-weight:700;">Hidden</span>';
-    return '<div style="padding:10px 0;border-bottom:1px solid #f0f0f0;"><b>'+drEsc(r.short_title)+'</b> <span style="font-size:11px;color:#666;">· '+cat+' · '+drEsc(r.status)+' · '+vis+'</span>'
-      +'<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">'
-      +(r.status!=='approved'?'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#fff;color:#2e7d32;border:1px solid #2e7d32;" onclick="drRecApprove(\''+r.id+'\',\''+t.id+'\')">Approve</button>':'')
-      +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#fff;color:#01949A;border:1px solid #01949A;" onclick="drRecVis(\''+r.id+'\','+(!r.visible_to_client)+',\''+t.id+'\')">'+(r.visible_to_client?'Hide':'Show')+'</button>'
-      +'</div></div>';
+    var approved=(r.status==='approved');
+    var statusChip = approved
+      ? (r.visible_to_client?'<span style="color:#2e7d32;font-weight:700;">Approved · Visible to sponsor</span>':'<span style="color:#c77700;font-weight:700;">Approved · Hidden</span>')
+      : '<span style="color:#DB1F48;font-weight:700;">Draft</span>';
+    var editBtn='<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#fff;color:#004369;border:1px solid #004369;" onclick="drRecEdit(\''+r.id+'\',\''+t.id+'\')">Edit</button>';
+    var btns = approved
+      ? editBtn
+        +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#fff;color:#01949A;border:1px solid #01949A;" onclick="drRecVis(\''+r.id+'\','+(!r.visible_to_client)+',\''+t.id+'\')">'+(r.visible_to_client?'Hide':'Show')+'</button>'
+        +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#fff;color:#888;border:1px solid #aaa;" onclick="drRecUnapprove(\''+r.id+'\',\''+t.id+'\')">Unapprove</button>'
+      : editBtn
+        +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#fff;color:#DB1F48;border:1px solid #DB1F48;" onclick="drRecReject(\''+r.id+'\',\''+t.id+'\')">Reject</button>'
+        +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#fff;color:#2e7d32;border:1px solid #2e7d32;" onclick="drRecApprove(\''+r.id+'\',\''+t.id+'\')">Approve</button>';
+    return '<div id="dr_recrow_'+r.id+'" style="padding:10px 0;border-bottom:1px solid #f0f0f0;"><b>'+drEsc(r.short_title)+'</b> <span style="font-size:11px;color:#666;">· '+cat+' · '+statusChip+'</span>'
+      +(r.description?'<div style="margin-top:5px;font-size:12.5px;color:#333;line-height:1.5;">'+drEsc(r.description)+'</div>':'')
+      +((r.owner||r.timeframe)?'<div style="margin-top:4px;font-size:11px;color:#888;">'+(r.owner?'Owner: '+drEsc(r.owner):'')+(r.owner&&r.timeframe?' · ':'')+(r.timeframe?'Timeframe: '+drEsc(r.timeframe):'')+'</div>':'')
+      +'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">'+btns+'</div></div>';
   }).join('') || '<div style="color:#666;font-size:13px;">No recommendations yet.</div>';
   var add='<div style="display:grid;gap:8px;margin-top:12px;border-top:1px solid #eee;padding-top:12px;">'
     +'<input id="dr_rtitle" placeholder="Short title" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;" />'
@@ -6757,7 +6770,26 @@ async function drAddRec(teamId){
   try{ await cdInsert('recommendations',{ team_id:teamId, short_title:drVal('dr_rtitle'), description:drVal('dr_rdesc'), category:drVal('dr_rcat'), owner:drVal('dr_rowner')||null, timeframe:drVal('dr_rtime')||null, status:'draft', visible_to_client:false }); drManageTeam(teamId); }
   catch(e){ alert('Could not add: '+e.message); }
 }
-async function drRecApprove(id, teamId){ try{ await cdUpdate('recommendations',{ status:'approved', visible_to_client:true, updated_at:new Date().toISOString() },{ eq:{id:id} }); drManageTeam(teamId); }catch(e){ alert(e.message); } }
+function drRecEdit(id, teamId){
+  var r=(window.__drRecs||{})[id]||{};
+  var el=document.getElementById('dr_recrow_'+id); if(!el) return;
+  el.innerHTML='<div style="display:grid;gap:8px;padding:6px 0;">'
+    +'<input id="dr_re_title_'+id+'" value="'+drRecAttr(r.short_title||'')+'" placeholder="Short title" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;" />'
+    +'<textarea id="dr_re_desc_'+id+'" placeholder="Description (what we will do + what changes + how it is delivered)" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;min-height:80px;">'+drEsc(r.description||'')+'</textarea>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'
+    +'<select id="dr_re_cat_'+id+'" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;"><option value="included_in_current_scope"'+(r.category!=='optional_accelerator'?' selected':'')+'>In current scope</option><option value="optional_accelerator"'+(r.category==='optional_accelerator'?' selected':'')+'>Optional accelerator</option></select>'
+    +'<input id="dr_re_owner_'+id+'" value="'+drRecAttr(r.owner||'')+'" placeholder="Owner" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;" />'
+    +'<input id="dr_re_time_'+id+'" value="'+drRecAttr(r.timeframe||'')+'" placeholder="Timeframe" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;width:120px;" /></div>'
+    +'<div style="display:flex;gap:6px;"><button class="btn-add" onclick="drRecSaveEdit(\''+id+'\',\''+teamId+'\')">Save</button><button class="btn-add" style="background:#fff;color:#666;border:1px solid #ccc;" onclick="drManageTeam(\''+teamId+'\')">Cancel</button></div></div>';
+}
+async function drRecSaveEdit(id, teamId){
+  var title=drVal('dr_re_title_'+id); if(!title){ alert('Title required.'); return; }
+  try{ await cdUpdate('recommendations',{ short_title:title, description:drVal('dr_re_desc_'+id), category:drVal('dr_re_cat_'+id), owner:drVal('dr_re_owner_'+id)||null, timeframe:drVal('dr_re_time_'+id)||null, updated_at:new Date().toISOString() },{ eq:{id:id} }); drManageTeam(teamId); }
+  catch(e){ alert('Could not save: '+e.message); }
+}
+async function drRecReject(id, teamId){ if(!confirm('Reject this recommendation? This deletes it.')) return; try{ await cdDelete('recommendations',{ eq:{id:id} }); drManageTeam(teamId); }catch(e){ alert('Could not reject: '+e.message); } }
+async function drRecApprove(id, teamId){ try{ await cdUpdate('recommendations',{ status:'approved', updated_at:new Date().toISOString() },{ eq:{id:id} }); drManageTeam(teamId); }catch(e){ alert(e.message); } }
+async function drRecUnapprove(id, teamId){ try{ await cdUpdate('recommendations',{ status:'draft', visible_to_client:false, updated_at:new Date().toISOString() },{ eq:{id:id} }); drManageTeam(teamId); }catch(e){ alert(e.message); } }
 async function drRecVis(id, vis, teamId){ try{ await cdUpdate('recommendations',{ visible_to_client:vis, updated_at:new Date().toISOString() },{ eq:{id:id} }); drManageTeam(teamId); }catch(e){ alert(e.message); } }
 
 function drSignalsPanel(t, signals){
