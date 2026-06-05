@@ -62,7 +62,7 @@ function sb(path, method = 'GET', body = null, extra = {}) {
 }
 
 // ── Call Claude API (with retry) ─────────────────────────────────────────────
-async function callClaude(systemPrompt, userPrompt, maxTokens = 512, { retries = 2, retryDelayMs = 3000, model = CLAUDE_MODEL, timeoutMs = null } = {}) {
+async function callClaude(systemPrompt, userPrompt, maxTokens = 512, { retries = 2, retryDelayMs = 3000, model = CLAUDE_MODEL, timeoutMs = null, temperature = null } = {}) {
   let lastErr;
   for (let attempt = 0; attempt <= retries; attempt++) {
     if (attempt > 0) {
@@ -82,6 +82,7 @@ async function callClaude(systemPrompt, userPrompt, maxTokens = 512, { retries =
           max_tokens: maxTokens,
           system:     systemPrompt,
           messages: [{ role: 'user', content: userPrompt }],
+          ...(temperature != null ? { temperature } : {}),
         }),
       };
       if (timeoutMs) fetchOpts.signal = AbortSignal.timeout(timeoutMs);
@@ -1803,9 +1804,18 @@ async function handleGenerateDRContent(req, res) {
       return res.status(400).json({ error: 'No team member has a completed in-system diagnostic yet. Content generation runs from in-system diagnostic data; legacy or PDF-only leaders are added separately.' });
     }
 
-    const raw = await callClaude(DR_CONTENT_SYSTEM, buildDRContentPrompt(team, scored), 4096, { model: CLAUDE_REPORT_MODEL, timeoutMs: 110000 });
-    const parsed = parseJsonLoose(raw);
-    if (!parsed || !parsed.team) return res.status(502).json({ error: 'The model returned content that could not be parsed as JSON. Please try again.' });
+    // Deterministic (temperature 0) for reliable JSON, generous token budget for
+    // larger teams, and one automatic retry with a stricter instruction if the
+    // first reply doesn't parse.
+    const userPrompt = buildDRContentPrompt(team, scored);
+    let parsed = null;
+    for (let attempt = 0; attempt < 2 && !parsed; attempt++) {
+      const sys = DR_CONTENT_SYSTEM + (attempt > 0 ? '\n\nIMPORTANT: Your previous reply could not be parsed. Return ONLY the raw JSON object — no prose, no markdown, no code fences.' : '');
+      const raw = await callClaude(sys, userPrompt, 8192, { model: CLAUDE_REPORT_MODEL, timeoutMs: 110000, temperature: 0 });
+      const p = parseJsonLoose(raw);
+      if (p && p.team) parsed = p;
+    }
+    if (!parsed) return res.status(502).json({ error: 'The model returned content that could not be parsed as JSON. Please try again.' });
 
     const now = new Date().toISOString();
     const snapshot = { surveyClosed: true, asOf: latestClose || null, tp3: { trust: { score: avg(tA) }, proactivity: { score: avg(tB) }, productivity: { score: avg(tC) } } };
