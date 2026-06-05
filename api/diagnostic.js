@@ -170,6 +170,7 @@ export default async function handler(req, res) {
     case 'sign-team-report-upload': return handleSignTeamReportUpload(req, res);
     case 'generate-dr-content':  return handleGenerateDRContent(req, res);
     case 'generate-recommendations': return handleGenerateRecommendations(req, res);
+    case 'nudge-checkin':        return handleNudgeCheckin(req, res);
     case 'request-external-feedback': return handleRequestExternalFeedback(req, res);
     case 'feedback-context':     return handleFeedbackContext(req, res);
     case 'submit-external-feedback': return handleSubmitExternalFeedback(req, res);
@@ -1853,6 +1854,54 @@ async function handleGenerateDRContent(req, res) {
   }
 }
 function enc4(v) { return encodeURIComponent(String(v)); }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ACTION: nudge-checkin
+// POST /api/diagnostic?action=nudge-checkin   Body: { client_id, session, message? }
+// Emails a coaching client a friendly check-in reminder with their portal link.
+// (SMS is a separate path that needs an SMS provider — see handleNudgeCheckin note.)
+// ═══════════════════════════════════════════════════════════════════════════════
+function buildNudgeEmail({ first, link, message }) {
+  const body = message
+    ? message.split('\n').map(p => `<p style="color:#1B2A4A;font-size:15px;line-height:1.7;margin:0 0 12px;">${p}</p>`).join('')
+    : `<p style="color:#1B2A4A;font-size:15px;line-height:1.7;margin:0 0 12px;">Hi ${first},</p>
+       <p style="color:#1B2A4A;font-size:15px;line-height:1.7;margin:0 0 12px;">Quick nudge — your weekly check-in is still open. It only takes a couple of minutes and it keeps your 90-day plan moving.</p>`;
+  return `
+  <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
+    <div style="background:#1A3D6E;padding:18px 26px;border-radius:8px 8px 0 0;">
+      <div style="color:#C09A2A;font-size:11px;text-transform:uppercase;letter-spacing:1px;">GPS Leadership Solutions</div>
+      <div style="color:#fff;font-size:19px;font-weight:700;margin-top:3px;">Your weekly check-in</div>
+    </div>
+    <div style="background:#fff;padding:24px 26px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;">
+      ${body}
+      <div style="margin:22px 0;text-align:center;">
+        <a href="${link}" style="background:#1A3D6E;color:#fff;text-decoration:none;padding:13px 30px;border-radius:8px;font-size:15px;font-weight:700;display:inline-block;">Open your portal &rarr;</a>
+      </div>
+      <p style="font-size:12px;color:#888;text-align:center;margin:0;">You can do it right from your phone. – Alex, GPS Leadership Solutions</p>
+    </div>
+  </div>`;
+}
+
+async function handleNudgeCheckin(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const { client_id, session, message } = req.body || {};
+  if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
+  if (!client_id) return res.status(400).json({ error: 'client_id required' });
+  try {
+    const rows = await (await sb(`/rest/v1/clients?id=eq.${client_id}&select=name,email,token,preferred_name`)).json();
+    const c = Array.isArray(rows) && rows[0];
+    if (!c) return res.status(404).json({ error: 'Client not found' });
+    if (!c.email) return res.status(400).json({ error: 'No email on file for this client.' });
+    const link = `${PORTAL_BASE}/client?token=${c.token}`;
+    const first = String(c.preferred_name || c.name || 'there').split(' ')[0];
+    await sendEmail({ to: c.email, subject: 'Quick reminder: your weekly check-in', html: buildNudgeEmail({ first, link, message }), emailType: 'checkin_nudge', recipientName: c.name });
+    // SMS path (future): with an SMS provider configured (e.g. Twilio creds in env)
+    // and the client's mobile + opt-in, also send a text with the same link here.
+    return res.status(200).json({ ok: true, email_sent: true, to: c.email });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ACTION: generate-recommendations

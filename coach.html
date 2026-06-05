@@ -849,11 +849,13 @@
         <option value="red">Red ≤69%</option>
         <option value="none">No check-ins</option>
       </select>
-      <select id="clientCoachingFilter" onchange="renderClients()" style="padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;color:var(--text);">
-        <option value="all">All clients</option>
-        <option value="yes">Coaching program</option>
-        <option value="no">No coaching</option>
-      </select>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;border:2px solid var(--gray-300);border-radius:6px;padding:5px 10px;font-size:12.5px;font-family:'Open Sans',sans-serif;color:var(--text);">
+        <span style="color:var(--gray-600);font-weight:600;">Show:</span>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" id="bucket-coaching" onchange="renderClients()"> Coaching</label>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" id="bucket-diagnostic" onchange="renderClients()"> Diagnostic</label>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" id="bucket-member" onchange="renderClients()"> Team member</label>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" id="bucket-sponsor" onchange="renderClients()"> Sponsor</label>
+      </div>
       <select id="clientIndustryFilter" onchange="renderClients()" style="padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;color:var(--text);">
         <option value="all">All industries</option>
         <option value="Trucking / Transportation">Trucking / Transportation</option>
@@ -1642,6 +1644,7 @@ async function loadDashboard() {
   renderStats();
   renderClients();
   diagBoot(); // loads diagnostic data and renders merged dashboard
+  loadClientBuckets(); // member/sponsor sets for the client filters
 }
 
 function renderStats() {
@@ -1677,21 +1680,36 @@ function clearClientFilters() {
   const s = document.getElementById('clientSearch');
   const so = document.getElementById('clientSort');
   const cp = document.getElementById('clientCompFilter');
-  const co = document.getElementById('clientCoachingFilter');
   if (s)  s.value  = '';
   if (so) so.value = 'newest';
   if (cp) cp.value = 'all';
-  if (co) co.value = 'all';
+  ['bucket-coaching','bucket-diagnostic','bucket-member','bucket-sponsor'].forEach(function(id){ var el=document.getElementById(id); if(el) el.checked=false; });
   const ind = document.getElementById('clientIndustryFilter');
   if (ind) ind.value = 'all';
   renderClients();
+}
+
+// Sets backing the "Team member" and "Sponsor" client filters.
+let MEMBER_CLIENT_IDS = new Set();
+let SPONSOR_EMAILS = new Set();
+async function loadClientBuckets() {
+  try {
+    const tm = await cdSelect('team_members', { select: 'client_id' });
+    MEMBER_CLIENT_IDS = new Set((tm || []).map(m => m.client_id).filter(Boolean));
+    const sp = await cdSelect('sponsors', { select: 'email' });
+    SPONSOR_EMAILS = new Set((sp || []).map(s => (s.email || '').toLowerCase()).filter(Boolean));
+    if (_currentSection === 'clients') renderClients();
+  } catch (e) { /* non-fatal: Team-member/Sponsor filters just match nothing until loaded */ }
 }
 
 function renderClients() {
   const search    = (document.getElementById('clientSearch')?.value           || '').toLowerCase();
   const sort      =  document.getElementById('clientSort')?.value             || 'newest';
   const compF     =  document.getElementById('clientCompFilter')?.value       || 'all';
-  const coachF    =  document.getElementById('clientCoachingFilter')?.value   || 'all';
+  const wantCoach   = !!document.getElementById('bucket-coaching')?.checked;
+  const wantDiag    = !!document.getElementById('bucket-diagnostic')?.checked;
+  const wantMember  = !!document.getElementById('bucket-member')?.checked;
+  const wantSponsor = !!document.getElementById('bucket-sponsor')?.checked;
   const industryF =  document.getElementById('clientIndustryFilter')?.value   || 'all';
 
   let filtered = allClients.filter(c => {
@@ -1724,9 +1742,14 @@ function renderClients() {
     });
   }
 
-  // Coaching program filter
-  if (coachF === 'yes') filtered = filtered.filter(c =>  c.coaching_sessions_enabled);
-  if (coachF === 'no')  filtered = filtered.filter(c => !c.coaching_sessions_enabled);
+  // Bucket filters — combinable; a client must match ALL checked buckets.
+  if (wantCoach)   filtered = filtered.filter(c => c.coaching_sessions_enabled || c.in_coaching_program || c.is_active_coaching);
+  if (wantDiag) {
+    const diagIds = new Set((typeof ALL_DIAGS !== 'undefined' ? ALL_DIAGS : []).map(d => d.client_id).filter(Boolean));
+    filtered = filtered.filter(c => diagIds.has(c.id));
+  }
+  if (wantMember)  filtered = filtered.filter(c => MEMBER_CLIENT_IDS.has(c.id));
+  if (wantSponsor) filtered = filtered.filter(c => SPONSOR_EMAILS.has((c.email || '').toLowerCase()));
 
   // Industry filter
   if (industryF !== 'all') filtered = filtered.filter(c => (c.industry || '') === industryF);
@@ -4495,7 +4518,10 @@ function renderDiagHome() {
         <div style="font-size:13px;font-weight:700;color:var(--d-dark);">${c.name} hasn't submitted this week's check-in</div>
         <div style="font-size:12px;color:var(--d-mid);margin-top:3px;">${c.lastCIDate ? `Last submitted ${c.lastCIDate}.` : 'No check-ins yet.'} Check in or send a nudge.</div>
       </div>
-      <span class="dbadge dbadge-standard" style="flex-shrink:0;align-self:flex-start;">Coaching</span>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;align-self:flex-start;">
+        <button class="dbtn dbtn-outline dbtn-sm" onclick="drNudgeClient('${c.id}','${(c.name||'').replace(/'/g,"\\'")}')">Send reminder</button>
+        <span class="dbadge dbadge-standard">Coaching</span>
+      </div>
     </div>`;
   });
 
@@ -6681,6 +6707,16 @@ async function drDeleteReport(reportId, teamId){
   if(!confirm('Delete this team report draft? This cannot be undone.')) return;
   try{ await cdDelete('diagnostic_team_reports',{ eq:{id:reportId} }); drManageTeam(teamId); }
   catch(e){ alert('Could not delete: '+e.message); }
+}
+async function drNudgeClient(clientId, name){
+  var msg=prompt('Email '+(name||'this client')+' a check-in reminder with their portal link.\n\nOptionally customize the message (leave blank to send the default), then OK to send:', '');
+  if(msg===null) return; // cancelled
+  try{
+    var r=await fetch('/api/diagnostic?action=nudge-checkin',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ client_id:clientId, session:getCoachSessionToken(), message: (msg.trim()||null) }) });
+    var j=await r.json().catch(function(){return{};});
+    if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+    alert('Reminder emailed to '+(j.to||name||'the client')+'.');
+  }catch(e){ alert('Could not send reminder: '+e.message); }
 }
 async function drUploadTeamReportPdf(reportId, teamId, input){
   var file=input&&input.files&&input.files[0]; if(!file) return;
