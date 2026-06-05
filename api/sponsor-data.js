@@ -115,12 +115,15 @@ async function feedbackOwed(supervisesClientIds, members) {
 // Assemble one member's report. `confidential` => omit the self-vs-raters card
 // and any diagnostic-derived flag entirely (never fetched/sent).
 async function buildMemberReport(m, confidential) {
-  const report = Object.assign({}, m.report_json || {});   // coach-authored content (focus, succession, readiness)
+  const report = {};
   report.id = m.id;
   report.client_id = m.client_id;
   report.role = m.role;
   report.is_coaching_client = m.is_coaching_client;
   report.coach_summary = m.coach_summary || null;
+  // Keep the AI content NESTED under report_json — the sponsor page reads
+  // m.report_json.{succession, focus, summaryLine, name, readinessLevel}.
+  report.report_json = Object.assign({}, m.report_json || {});
 
   // 90-day stakeholder scoreboard + engagement (post-diagnostic — always shown)
   report.scoreboard = await buildScoreboard(m.client_id);
@@ -131,7 +134,7 @@ async function buildMemberReport(m, confidential) {
   // and so it isn't overwritten by the AI content generation. Falls back to the
   // generated recommended focus (report_json.focus) when there's no active plan.
   const planFocus = await buildPlanFocus(m.client_id, report.scoreboard);
-  if (planFocus) report.focus = planFocus;
+  if (planFocus) report.report_json.focus = planFocus;
 
   if (!confidential) {
     // Confidential 360 detail — ONLY assembled for non-private engagements.

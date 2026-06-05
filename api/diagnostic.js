@@ -169,6 +169,7 @@ export default async function handler(req, res) {
     case 'sign-report-upload':   return handleSignReportUpload(req, res);
     case 'sign-team-report-upload': return handleSignTeamReportUpload(req, res);
     case 'generate-dr-content':  return handleGenerateDRContent(req, res);
+    case 'generate-recommendations': return handleGenerateRecommendations(req, res);
     case 'request-external-feedback': return handleRequestExternalFeedback(req, res);
     case 'feedback-context':     return handleFeedbackContext(req, res);
     case 'submit-external-feedback': return handleSubmitExternalFeedback(req, res);
@@ -1852,6 +1853,72 @@ async function handleGenerateDRContent(req, res) {
   }
 }
 function enc4(v) { return encodeURIComponent(String(v)); }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ACTION: generate-recommendations
+// POST /api/diagnostic?action=generate-recommendations   Body: { team_id, session }
+// Drafts 3-5 recommendations from the team's generated Decision Room content, as
+// editable DRAFTS (not visible to the sponsor) the coach then adjusts/approves.
+// ═══════════════════════════════════════════════════════════════════════════════
+const REC_SYSTEM = `You are an executive leadership advisor for GPS Leadership Solutions. From the team's Decision Room summary, themes, and per-leader reads, propose 3-5 concrete recommendations a CEO/sponsor could act on. Each must be a clear, practical lever with a defined owner and timeframe, grounded ONLY in the provided material — do not invent specifics or names. Speak plainly, no fluff. Output ONLY a JSON object, no prose, no markdown, no code fences:
+{ "recommendations": [ { "short_title": "imperative phrase", "description": "what we will do and what changes as a result", "category": "included_in_current_scope" | "optional_accelerator", "owner": "e.g., CEO + Exec Team", "timeframe": "e.g., Next 90 days" } ] }`;
+
+async function handleGenerateRecommendations(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
+  const { team_id, session } = req.body || {};
+  if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
+  if (!team_id) return res.status(400).json({ error: 'team_id required' });
+  try {
+    const teamRows = await (await sb(`/rest/v1/teams?id=eq.${team_id}&select=*`)).json();
+    const team = Array.isArray(teamRows) && teamRows[0];
+    if (!team) return res.status(404).json({ error: 'Team not found' });
+    if (!team.summary && !team.themes) {
+      return res.status(400).json({ error: 'Generate the Decision Room content first (Narrative panel → Generate from diagnostics), then draft recommendations from it.' });
+    }
+    const members = await (await sb(`/rest/v1/team_members?team_id=eq.${team_id}&select=report_json`)).json();
+    const memberLines = (Array.isArray(members) ? members : []).map(m => {
+      const rj = m.report_json || {};
+      return rj.summaryLine ? `- ${rj.name || 'Leader'}: ${rj.summaryLine}` : '';
+    }).filter(Boolean);
+    const input = [
+      `TEAM: ${team.client_org_name || ''} — ${team.name || ''}`,
+      `Quick read: ${team.quick_read || ''}`,
+      `Summary: ${team.summary || ''}`,
+      `Themes: ${JSON.stringify(team.themes || {})}`,
+      `Start/Stop/Continue: ${JSON.stringify(team.start_stop_continue || {})}`,
+      `Intent vs Impact: ${JSON.stringify(team.intent_impact || [])}`,
+      'Leaders:', ...memberLines,
+    ].join('\n');
+
+    const raw = await callClaude(REC_SYSTEM, input, 2048, { model: CLAUDE_REPORT_MODEL, timeoutMs: 90000, temperature: 0 });
+    const parsed = parseJsonLoose(raw);
+    const recs = parsed && Array.isArray(parsed.recommendations) ? parsed.recommendations : null;
+    if (!recs) return res.status(502).json({ error: 'Could not parse recommendations. Please try again.' });
+
+    const now = new Date().toISOString();
+    let inserted = 0;
+    for (const r of recs.slice(0, 6)) {
+      if (!r || !r.short_title) continue;
+      await sb('/rest/v1/recommendations', 'POST', {
+        team_id,
+        short_title:  String(r.short_title).slice(0, 200),
+        description:  String(r.description || '').slice(0, 2000),
+        category:     (r.category === 'optional_accelerator' ? 'optional_accelerator' : 'included_in_current_scope'),
+        owner:        r.owner ? String(r.owner).slice(0, 120) : null,
+        timeframe:    r.timeframe ? String(r.timeframe).slice(0, 80) : null,
+        status:       'draft',
+        visible_to_client: false,
+        created_at:   now,
+        updated_at:   now,
+      }, { Prefer: 'return=minimal' });
+      inserted++;
+    }
+    return res.status(200).json({ ok: true, inserted });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ACTIONS: ad-hoc external feedback (coach requests → emailed link → observation

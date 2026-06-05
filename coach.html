@@ -6643,9 +6643,12 @@ function drTeamReportPanel(t, reports, members, nameById, diags){
       +pdfLine
       +'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">'
       +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#fff;color:#004369;border:1px solid #004369;" onclick="drToggleReportBody(\''+r.id+'\')">View draft (coach only)</button>'
+      +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#fff;color:#004369;border:1px solid #004369;" onclick="drCopyReport(\''+r.id+'\',this)">Copy text</button>'
+      +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#fff;color:#004369;border:1px solid #004369;" onclick="drDownloadReport(\''+r.id+'\')">Download (.doc)</button>'
       +'<input type="file" accept="application/pdf" id="dr_trpdf_'+r.id+'" style="display:none;" onchange="drUploadTeamReportPdf(\''+r.id+'\',\''+t.id+'\',this)">'
       +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#004369;" onclick="document.getElementById(\'dr_trpdf_'+r.id+'\').click()">'+(hasPdf?'Replace branded PDF':'Upload branded PDF')+'</button>'
       +(hasPdf?'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#fff;color:#01949A;border:1px solid #01949A;" onclick="drReportVis(\''+r.id+'\','+(!pub)+',\''+t.id+'\')">'+(pub?'Unpublish':'Publish to sponsor')+'</button>':'')
+      +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#fff;color:#DB1F48;border:1px solid #DB1F48;" onclick="drDeleteReport(\''+r.id+'\',\''+t.id+'\')">Delete</button>'
       +'</div>'
       +'<div id="dr_rbody_'+r.id+'" style="display:none;margin-top:8px;white-space:pre-wrap;font-size:12.5px;line-height:1.55;color:#222;background:#f8f9fb;border:1px solid #eee;border-radius:6px;padding:12px;max-height:440px;overflow:auto;">'+drEsc(r.content_text||'')+'</div>'
       +'</div>';
@@ -6661,6 +6664,23 @@ function drToggleReportBody(id){ var el=document.getElementById('dr_rbody_'+id);
 async function drReportVis(reportId, vis, teamId){
   try{ await cdUpdate('diagnostic_team_reports',{ sponsor_visible:vis, approved_at: vis? new Date().toISOString():null, updated_at:new Date().toISOString() },{ eq:{id:reportId} }); drManageTeam(teamId); }
   catch(e){ alert('Could not update visibility: '+e.message); }
+}
+function drReportText(reportId){ var el=document.getElementById('dr_rbody_'+reportId); return el ? el.textContent : ''; }
+function drCopyReport(reportId, btn){
+  var txt=drReportText(reportId); if(!txt){ alert('No draft text to copy.'); return; }
+  if(navigator.clipboard){ navigator.clipboard.writeText(txt).then(function(){ if(btn){ var o=btn.textContent; btn.textContent='Copied'; setTimeout(function(){btn.textContent=o;},1500); } }); }
+}
+function drDownloadReport(reportId){
+  var txt=drReportText(reportId); if(!txt){ alert('No draft text to download.'); return; }
+  // Minimal Word-openable .doc (HTML wrapper) so you can drop it into your writing tool.
+  var html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"></head><body><pre style="font-family:Calibri,Arial,sans-serif;white-space:pre-wrap;">'+drEsc(txt)+'</pre></body></html>';
+  var blob=new Blob(['﻿'+html],{type:'application/msword'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='Team_Report_Draft.doc'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(a.href);
+}
+async function drDeleteReport(reportId, teamId){
+  if(!confirm('Delete this team report draft? This cannot be undone.')) return;
+  try{ await cdDelete('diagnostic_team_reports',{ eq:{id:reportId} }); drManageTeam(teamId); }
+  catch(e){ alert('Could not delete: '+e.message); }
 }
 async function drUploadTeamReportPdf(reportId, teamId, input){
   var file=input&&input.files&&input.files[0]; if(!file) return;
@@ -6719,7 +6739,18 @@ function drRecsPanel(t, recs){
     +'<input id="dr_rowner" placeholder="Owner (e.g., CEO + Exec Team)" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;" />'
     +'<input id="dr_rtime" placeholder="Timeframe" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;width:120px;" />'
     +'<button class="btn-add" onclick="drAddRec(\''+t.id+'\')">Add (Draft)</button></div></div>';
-  return drCard('Recommendations', list+add);
+  var genRec='<div style="border-bottom:1px solid #eee;padding-bottom:12px;margin-bottom:12px;"><button class="btn-add" id="dr_genrecs_btn" onclick="drGenRecs(\''+t.id+'\')">⚙ Draft recommendations from the report (AI)</button><div style="font-size:11px;color:#888;margin-top:5px;">Drafts 3–5 from this team\'s generated Decision Room content. They land as editable drafts; you adjust and approve.</div></div>';
+  return drCard('Recommendations', genRec+list+add);
+}
+async function drGenRecs(teamId){
+  if(!confirm('Draft recommendations from this team\'s Decision Room content?\n\nThey land as editable drafts you can adjust and approve. Generate the narrative first (Narrative panel) if you haven\'t.')) return;
+  var btn=document.getElementById('dr_genrecs_btn'); if(btn){ btn.disabled=true; btn.textContent='Drafting… (20–40s)'; }
+  try{
+    var r=await fetch('/api/diagnostic?action=generate-recommendations',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ team_id:teamId, session:getCoachSessionToken() }) });
+    var j=await r.json().catch(function(){return{};});
+    if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+    drManageTeam(teamId);
+  }catch(e){ alert('Could not draft recommendations: '+e.message); if(btn){ btn.disabled=false; btn.textContent='⚙ Draft recommendations from the report (AI)'; } }
 }
 async function drAddRec(teamId){
   if(!drVal('dr_rtitle')){ alert('Title required.'); return; }
