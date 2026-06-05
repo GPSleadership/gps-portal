@@ -762,15 +762,44 @@
 <div id="dashboardScreen" style="display:none;">
   <div class="container">
 
-    <!-- SECTION NAV -->
-    <div class="section-nav">
-      <div class="section-tab active" id="tab-dashboard"  onclick="showSection('dashboard')">Dashboard</div>
-      <div class="section-tab"        id="tab-clients"    onclick="showSection('clients')">Clients</div>
-      <div class="section-tab"        id="tab-emails"     onclick="showSection('emails')">Emails</div>
-      <div class="section-tab"        id="tab-templates"  onclick="showSection('templates')">Email Templates</div>
-      <div class="section-tab"        id="tab-admins"     onclick="showSection('admins')">Admin Accounts</div>
-      <div class="section-tab"        id="tab-diagnostics" onclick="showSection('diagnostics')">Diagnostics</div>
-      <div class="section-tab"        id="tab-decisionroom" onclick="showSection('decisionroom')">Decision Room</div>
+    <!-- SECTION NAV (refactored: 5 groups + global search) -->
+    <style>
+      .section-subnav{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px;padding:6px;background:#f4f6f8;border-radius:9px;}
+      .section-subtab{padding:7px 14px;border-radius:7px;font-size:13px;font-weight:600;color:#566;cursor:pointer;font-family:'Montserrat',sans-serif;}
+      .section-subtab:hover{background:#e9edf1;}
+      .section-subtab.active{background:#004369;color:#fff;}
+      #globalSearchResults .gs-row{padding:9px 13px;cursor:pointer;border-bottom:1px solid #f3f3f3;font-size:13px;}
+      #globalSearchResults .gs-row:hover{background:#f4f7fa;}
+      #globalSearchResults .gs-kind{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#01949A;margin-right:7px;}
+    </style>
+    <div class="section-nav" style="position:relative;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <div class="section-tab active" id="grp-today"     onclick="showGroup('today')">Today</div>
+      <div class="section-tab"        id="grp-clients"   onclick="showGroup('clients')">Clients</div>
+      <div class="section-tab"        id="grp-diagteams" onclick="showGroup('diagteams')">Diagnostics &amp; Teams</div>
+      <div class="section-tab"        id="grp-comms"     onclick="showGroup('comms')">Communication</div>
+      <div class="section-tab"        id="grp-workshops" onclick="showGroup('workshops')">Workshops</div>
+      <div class="section-tab"        id="grp-settings"  onclick="showGroup('settings')">Settings</div>
+      <div style="flex:1;min-width:12px;"></div>
+      <div style="position:relative;">
+        <input id="globalSearch" type="text" placeholder="Search clients, diagnostics, teams…" autocomplete="off"
+          oninput="globalSearch(this.value)" onfocus="globalSearch(this.value)"
+          onblur="setTimeout(function(){var r=document.getElementById('globalSearchResults');if(r)r.style.display='none';},180)"
+          style="padding:8px 12px;border:1.5px solid #d0d0d0;border-radius:8px;min-width:250px;font-size:13px;font-family:'Open Sans',sans-serif;" />
+        <div id="globalSearchResults" style="display:none;position:absolute;right:0;top:42px;background:#fff;border:1px solid #e6e6e6;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.14);min-width:330px;max-height:420px;overflow:auto;z-index:80;"></div>
+      </div>
+    </div>
+
+    <!-- SUB-TAB BARS (one shows at a time, matching the active group) -->
+    <div id="subnav-diagteams" class="section-subnav" style="display:none;">
+      <div class="section-subtab active" id="sub-diagnostics"   onclick="showSection('diagnostics')">Leader Diagnostics</div>
+      <div class="section-subtab"        id="sub-decisionroom"  onclick="showSection('decisionroom')">Teams (Decision Room)</div>
+    </div>
+    <div id="subnav-comms" class="section-subnav" style="display:none;">
+      <div class="section-subtab active" id="sub-emails"    onclick="showSection('emails')">Email Log</div>
+      <div class="section-subtab"        id="sub-templates" onclick="showSection('templates')">Templates &amp; Automation</div>
+    </div>
+    <div id="subnav-settings" class="section-subnav" style="display:none;">
+      <div class="section-subtab active" id="sub-admins" onclick="showSection('admins')">Admin Accounts</div>
     </div>
 
     <!-- ═══ DASHBOARD SECTION ═══ -->
@@ -946,6 +975,10 @@
     <!-- ═══ DIAGNOSTICS SECTION ═══ -->
     <div id="section-decisionroom" style="display:none;">
       <div id="drAdmin"></div>
+    </div>
+
+    <div id="section-workshops" style="display:none;">
+      <div id="wsAdmin"></div>
     </div>
 
     <div id="section-diagnostics" style="display:none;">
@@ -3245,23 +3278,89 @@ document.getElementById('addAdminModal').addEventListener('click', function(e) {
 // ─────────────────────────────────────────────
 let _currentSection = 'dashboard';
 
+// Refactored IA: 5 top-level groups, each mapping to one or more underlying sections.
+var GROUP_OF = { dashboard:'today', clients:'clients', diagnostics:'diagteams', decisionroom:'diagteams', emails:'comms', templates:'comms', admins:'settings', workshops:'workshops' };
+var GROUP_DEFAULT = { today:'dashboard', clients:'clients', diagteams:'diagnostics', comms:'emails', settings:'admins', workshops:'workshops' };
+function showGroup(group){ showSection(GROUP_DEFAULT[group] || 'dashboard'); }
+
 function showSection(name, skipHooks) {
   _currentSection = name;
-  ['dashboard', 'clients', 'emails', 'templates', 'admins', 'diagnostics', 'decisionroom'].forEach(s => {
-    document.getElementById('section-' + s).style.display = s === name ? 'block' : 'none';
-    document.getElementById('tab-' + s).classList.toggle('active', s === name);
+  // Toggle the underlying content sections.
+  ['dashboard', 'clients', 'emails', 'templates', 'admins', 'diagnostics', 'decisionroom', 'workshops'].forEach(s => {
+    var sec = document.getElementById('section-' + s);
+    if (sec) sec.style.display = s === name ? 'block' : 'none';
   });
+  // Light up the parent group tab.
+  var grp = GROUP_OF[name] || 'today';
+  ['today', 'clients', 'diagteams', 'comms', 'settings', 'workshops'].forEach(g => {
+    var t = document.getElementById('grp-' + g);
+    if (t) t.classList.toggle('active', g === grp);
+  });
+  // Show only the active group's sub-tab bar; mark the active sub-tab.
+  ['diagteams', 'comms', 'settings'].forEach(g => {
+    var sn = document.getElementById('subnav-' + g);
+    if (sn) sn.style.display = (g === grp) ? 'flex' : 'none';
+  });
+  var sub = document.getElementById('sub-' + name);
+  if (sub && sub.parentNode) {
+    Array.prototype.forEach.call(sub.parentNode.children, c => c.classList.toggle('active', c === sub));
+  }
   // skipHooks: caller will render its own content into the section (e.g. the
   // Add-Sponsor / Add-Team forms). Without this guard, drRender() races the
   // caller's render and the all-teams list overwrites the form.
   if (skipHooks) return;
   if (name === 'decisionroom') drRender();
+  if (name === 'workshops')   wsRender();
   if (name === 'emails')      loadEmailLog();
   if (name === 'admins')      loadAdminAccounts();
   if (name === 'templates')   loadEmailTemplates();
   if (name === 'dashboard')   renderDiagHome();
   if (name === 'diagnostics') { diagBoot(); renderDiagTable(); }
 }
+
+// ── Global search: jump to a client, diagnostic, or team by name/email ──────
+var _gsTimer = null, _gsCache = null;
+async function globalSearch(qraw){
+  var box = document.getElementById('globalSearchResults');
+  var q = (qraw || '').trim().toLowerCase();
+  if (!box) return;
+  if (q.length < 2) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  if (_gsTimer) clearTimeout(_gsTimer);
+  _gsTimer = setTimeout(async function(){
+    try {
+      if (!_gsCache) {
+        var r = await Promise.all([
+          cdSelect('clients', { select: 'id,name,email,organization', order: { col: 'name', asc: true } }),
+          cdSelect('diagnostics', { select: 'id,client_name,client_email,status', order: { col: 'created_at', asc: false } }),
+          cdSelect('teams', { select: 'id,name,client_org_name,archived_at' })
+        ]);
+        _gsCache = { clients: r[0] || [], diags: r[1] || [], teams: r[2] || [] };
+      }
+      var hits = [];
+      _gsCache.clients.forEach(function(c){
+        if (((c.name||'')+' '+(c.email||'')+' '+(c.organization||'')).toLowerCase().indexOf(q) > -1)
+          hits.push({ kind:'Client', label:c.name, sub:c.organization||c.email||'', act:"showSection('clients');openClientProfile('"+c.id+"')" });
+      });
+      _gsCache.diags.forEach(function(d){
+        if (((d.client_name||'')+' '+(d.client_email||'')).toLowerCase().indexOf(q) > -1)
+          hits.push({ kind:'Diagnostic', label:d.client_name||'Diagnostic', sub:d.status||'', act:"showSection('diagnostics');openDiag('"+d.id+"')" });
+      });
+      _gsCache.teams.forEach(function(t){
+        if (((t.name||'')+' '+(t.client_org_name||'')).toLowerCase().indexOf(q) > -1)
+          hits.push({ kind:'Team', label:(t.client_org_name||t.name), sub:t.name+(t.archived_at?' · archived':''), act:"showSection('decisionroom');drManageTeam('"+t.id+"')" });
+      });
+      hits = hits.slice(0, 12);
+      if (!hits.length) { box.innerHTML = '<div style="padding:11px 13px;color:#888;font-size:13px;">No matches.</div>'; }
+      else box.innerHTML = hits.map(function(h){
+        return '<div class="gs-row" onmousedown="'+h.act.replace(/"/g,'&quot;')+';document.getElementById(\'globalSearch\').value=\'\';this.parentNode.style.display=\'none\';">'
+          + '<span class="gs-kind">'+h.kind+'</span><b>'+escHtml(h.label||'')+'</b>'
+          + (h.sub ? '<span style="color:#888;"> — '+escHtml(h.sub)+'</span>' : '') + '</div>';
+      }).join('');
+      box.style.display = 'block';
+    } catch(e) { box.innerHTML = '<div style="padding:11px 13px;color:#b00;font-size:12px;">Search failed: '+escHtml(e.message)+'</div>'; box.style.display='block'; }
+  }, 180);
+}
+function gsInvalidate(){ _gsCache = null; }
 
 // ─────────────────────────────────────────────
 // EMAIL TEMPLATES
@@ -4463,7 +4562,8 @@ function renderDiagHome() {
     return s && s.total >= 4 && s.pct < 50 && d.close_date && diagDaysUntil(d.close_date) <= 6;
   });
   const missingCIs   = DIAG_COACHING_CLIENTS.filter(c => c.checkinStatus === 'overdue');
-  const attention    = closingUrgent.length + needReport.length + lowResponse.length + missingCIs.length;
+  const reportsReviewReady = ALL_DIAGS.filter(d => d.report_generated_at && d.status === 'report_draft');
+  const attention    = closingUrgent.length + needReport.length + lowResponse.length + missingCIs.length + reportsReviewReady.length;
 
   // ── Needs Attention flags ────────────────────────────────────────────────────
   let flagsHtml = '';
@@ -4525,6 +4625,17 @@ function renderDiagHome() {
     </div>`;
   });
 
+  reportsReviewReady.forEach(d => {
+    flagsHtml += `<div class="dflag dflag-gray">
+      <div style="font-size:22px;flex-shrink:0;margin-top:-2px;">📑</div>
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:700;color:var(--d-dark);">${d.client_name} — report drafted, ready for your review</div>
+        <div style="font-size:12px;color:var(--d-mid);margin-top:3px;">Open the diagnostic → Report tab to review, edit, and finalize.</div>
+        <div style="margin-top:10px;"><button class="dbtn dbtn-outline dbtn-sm" onclick="showSection('diagnostics');openDiag('${d.id}')">Review report →</button></div>
+      </div>
+    </div>`;
+  });
+
   const needsSection = flagsHtml
     ? `<div class="card" style="margin-bottom:20px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
@@ -4543,99 +4654,28 @@ function renderDiagHome() {
         </div>
       </div>`;
 
-  // ── Active Diagnostics quick panel ──────────────────────────────────────────
-  const openDiags  = ALL_DIAGS.filter(d => d.status === 'survey_open').slice(0, 4);
-  const setupDiags = ALL_DIAGS.filter(d =>
-    ['self_assessment_pending','self_assessment_complete','intake_complete'].includes(d.status)).slice(0, 2);
-
-  let diagsQuick = openDiags.length > 0
-    ? openDiags.map(d => {
-        const stats = DIAG_RATER_STATS[d.id] || { total:0, responded:0, pct:0 };
-        const days  = d.close_date ? diagDaysUntil(d.close_date) : null;
-        const pctColor = stats.pct >= 60 ? 'var(--d-green)' : stats.pct >= 40 ? 'var(--d-amber)' : 'var(--d-red2)';
-        const dayColor = days === null ? 'var(--d-mid)' : days <= 1 ? 'var(--d-red2)' : days <= 4 ? 'var(--d-amber)' : 'var(--d-mid)';
-        const dayLabel = days === null ? '—' : days <= 0 ? 'Closes today' : `${days} day${days!==1?'s':''} left`;
-        return `<div class="dquick-row" onclick="showSection('diagnostics');openDiag('${d.id}')">
-          <div>
-            <div style="font-size:13px;font-weight:700;">${d.client_name}</div>
-            <div style="font-size:11px;color:var(--d-mid);">${d.close_date?`Closes ${diagFormatDate(d.close_date)}`:'No close date'} · ${stats.total>0?`${stats.responded}/${stats.total} raters`:'No raters yet'}</div>
-          </div>
-          <div style="text-align:right;flex-shrink:0;">
-            ${stats.total>0?`<div style="font-size:13px;font-weight:700;color:${pctColor};">${stats.pct}%</div>`:''}
-            <div style="font-size:11px;color:${dayColor};">${dayLabel}</div>
-          </div>
-        </div>`;
-      }).join('')
-    : `<div style="font-size:13px;color:var(--d-mid);padding:8px 0;">No open diagnostics right now.</div>`;
-
-  if (setupDiags.length > 0) {
-    diagsQuick += setupDiags.map(d => `
-      <div class="dquick-row" onclick="showSection('diagnostics');openDiag('${d.id}')" style="margin-top:8px;">
-        <div>
-          <div style="font-size:13px;font-weight:700;">${d.client_name}</div>
-          <div style="font-size:11px;color:var(--d-mid);">Setup in progress</div>
-        </div>
-        ${diagStatusBadge(d.status)}
-      </div>`).join('');
-  }
-
-  // ── Coaching quick panel ─────────────────────────────────────────────────────
-  let coachQuick;
-  if (DIAG_COACHING_CLIENTS.length > 0) {
-    coachQuick = DIAG_COACHING_CLIENTS.slice(0, 5).map(c => {
-      const isWarn = c.checkinStatus === 'overdue';
-      return `<div class="dquick-row ${isWarn?'dquick-row-warn':''}">
-        <div>
-          <div style="font-size:13px;font-weight:700;">${c.name}</div>
-          <div style="font-size:11px;color:var(--d-mid);">${c.currentWeek?`Sprint ${c.current_sprint_number||1}, Wk ${c.currentWeek}`:'No active plan'}${c.org?' · '+c.org:''}</div>
-        </div>
-        <div style="text-align:right;flex-shrink:0;">
-          ${c.checkinStatus==='submitted'
-            ? `<div style="font-size:12px;color:var(--d-green);font-weight:600;">✓ Submitted</div>`
-            : c.checkinStatus==='overdue'
-              ? `<div style="font-size:12px;color:var(--d-amber);font-weight:600;">⚠ Not submitted</div>`
-              : `<div style="font-size:12px;color:var(--d-mid);">No plan yet</div>`}
-          ${c.lastCIDate?`<div style="font-size:11px;color:var(--d-mid);">Last: ${c.lastCIDate}</div>`:''}
-        </div>
-      </div>`;
-    }).join('');
-  } else {
-    coachQuick = `<div style="font-size:13px;color:var(--d-mid);padding:8px 0;">
-      ${_diagBooted?'No active coaching clients.':'<span class="spinner" style="display:inline-block;margin-right:6px;"></span>Loading…'}</div>`;
-  }
-
-  // ── Reports & Deliverables ───────────────────────────────────────────────────
-  const reportsReady   = ALL_DIAGS.filter(d => d.report_generated_at && d.status !== 'plan_active');
-  const reportsPending = ALL_DIAGS.filter(d => d.status === 'survey_closed' && !d.report_generated_at);
-  let reportsHtml = '';
-
-  reportsReady.slice(0, 4).forEach(d => {
-    reportsHtml += `<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid var(--d-border);border-radius:6px;background:var(--d-light);margin-bottom:8px;">
-      <div style="font-size:18px;">📄</div>
-      <div style="flex:1;">
-        <div style="font-size:13px;font-weight:700;">${d.client_name} — Report ready</div>
-        <div style="font-size:11px;color:var(--d-mid);">Generated ${diagFormatDate(d.report_generated_at)}</div>
-      </div>
-      <button class="dbtn dbtn-outline dbtn-sm" onclick="showSection('diagnostics');openDiag('${d.id}')">Review →</button>
-    </div>`;
+  // ── This Week: upcoming events in the next 7 days ───────────────────────────
+  const weekEvents = [];
+  ALL_DIAGS.forEach(d => {
+    if (d.close_date && d.status === 'survey_open') {
+      const dd = diagDaysUntil(d.close_date);
+      if (dd >= 0 && dd <= 7) weekEvents.push({ days:dd, date:d.close_date, type:'Diagnostic closes', who:d.client_name, act:"showSection('diagnostics');openDiag('"+d.id+"')" });
+    }
+    if (d.debrief_date) {
+      const dd = diagDaysUntil(d.debrief_date);
+      if (dd >= 0 && dd <= 7) weekEvents.push({ days:dd, date:d.debrief_date, type:'Debrief session', who:d.client_name, act:"showSection('diagnostics');openDiag('"+d.id+"')" });
+    }
   });
+  weekEvents.sort((a,b)=>a.days-b.days);
+  const weekHtml = weekEvents.length
+    ? weekEvents.map(e => `<div class="dquick-row" onclick="${e.act}">
+        <div><div style="font-size:13px;font-weight:700;">${e.who}</div>
+        <div style="font-size:11px;color:var(--d-mid);">${e.type}</div></div>
+        <div style="text-align:right;flex-shrink:0;font-size:12px;font-weight:600;color:${e.days<=1?'var(--d-red2)':'var(--d-mid)'};">${e.days===0?'Today':e.days===1?'Tomorrow':diagFormatDate(e.date)}</div>
+      </div>`).join('')
+    : `<div style="font-size:13px;color:var(--d-mid);padding:8px 0;">Nothing scheduled in the next 7 days.</div>`;
 
-  reportsPending.forEach(d => {
-    reportsHtml += `<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid var(--d-border);border-radius:6px;background:var(--d-light);margin-bottom:8px;opacity:.75;">
-      <div style="font-size:18px;">📄</div>
-      <div style="flex:1;">
-        <div style="font-size:13px;font-weight:700;color:var(--d-mid);">${d.client_name} — Ready to generate</div>
-        <div style="font-size:11px;color:var(--d-mid);">Survey closed · Open Diagnostic → Report tab</div>
-      </div>
-      <button class="dbtn dbtn-outline dbtn-sm" onclick="showSection('diagnostics');openDiag('${d.id}')">Generate →</button>
-    </div>`;
-  });
-
-  if (!reportsHtml) {
-    reportsHtml = `<div style="font-size:13px;color:var(--d-mid);">No reports ready yet. Reports appear here once a diagnostic closes and you generate the draft.</div>`;
-  }
-
-  // ── Assemble full dashboard ──────────────────────────────────────────────────
+  // ── Assemble the Today action inbox: header → needs → this week → quick stats ──
   el.innerHTML = `
   <div style="margin-bottom:22px;">
     <div style="font-size:12px;color:var(--d-mid);">${dateStr}</div>
@@ -4643,38 +4683,19 @@ function renderDiagHome() {
     <div style="font-size:13px;color:var(--d-mid);">${attention > 0 ? `${attention} thing${attention!==1?'s':''} need your attention today.` : 'Everything looks good today.'}</div>
   </div>
 
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px;">
+  ${needsSection}
+
+  <div class="card" style="margin-bottom:22px;">
+    <div class="card-title" style="margin-bottom:14px;">This Week</div>
+    <div style="display:flex;flex-direction:column;gap:8px;">${weekHtml}</div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:8px;">
     ${diagStatCard(activeCoaching,'Active Coaching','var(--d-blue)',null)}
     ${diagStatCard(activeDiags,'Active Diagnostics','var(--d-blue)',null)}
     ${diagStatCard(attention,'Need Attention',attention>0?'var(--d-amber)':'var(--d-blue)',attention>0?'dstat-top-amber':null)}
     ${diagStatCard(closingWeek,'Closing This Week',closingWeek>0?'var(--d-red2)':'var(--d-blue)',closingWeek>0?'dstat-top-red':null)}
-  </div>
-
-  ${needsSection}
-
-  <div class="dtwo-col" style="margin-bottom:20px;">
-    <div class="card" style="margin-bottom:0;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-        <div class="card-title" style="margin-bottom:0;">Active Diagnostics</div>
-        <button class="dbtn dbtn-outline dbtn-sm" onclick="showSection('diagnostics')">View All →</button>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:8px;">${diagsQuick}</div>
-    </div>
-    <div class="card" style="margin-bottom:0;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-        <div class="card-title" style="margin-bottom:0;">Coaching Clients</div>
-        <button class="dbtn dbtn-outline dbtn-sm" onclick="showSection('clients')">View All →</button>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:8px;">${coachQuick}</div>
-    </div>
-  </div>
-
-  <div class="card" style="margin-bottom:20px;">
-    <div class="card-title" style="margin-bottom:14px;">Reports &amp; Deliverables</div>
-    ${reportsHtml}
-  </div>
-
-  ${renderTeamReportsCard()}`;
+  </div>`;
 }
 
 
@@ -6195,7 +6216,7 @@ async function createDiagnostic() {
   ALL_DIAGS.unshift(data);
 
   // Navigate to the new diagnostic in the Diagnostics tab
-  showSection('section-diagnostics');
+  showSection('diagnostics');
   await diagBoot();
   openDiag(data.id);
 }
