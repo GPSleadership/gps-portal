@@ -934,7 +934,7 @@ VOICE AND TONE RULES — follow these exactly:
 3. Word choice: use "gap" and "signal" 90% of the time. Reserve "blind spot" for at most 2 uses in the entire report — only for the largest discrepancies. Never write "operating below her/his level" or performance-review language. Tier labels are descriptive, not verdicts (e.g., "Developing: a solid foundation with clear room to grow in delegation and psychological safety").
 4. Interpretations must be labeled: "A likely interpretation is…" Limit to 1–2 sentences.
 5. Max paragraph length: 4 sentences. Use bullets whenever listing 2 or more items.
-6. If you reference interim checks (e.g., 45-day follow-up), connect them to the 90-day target in the same sentence.
+6. If you reference interim checks (e.g., 30-day follow-up), connect them to the 90-day target in the same sentence.
 7. In narrative, lead with the behavior description, put the question code in parentheses after: "Following through on commitments (A3) scored 2.00 from supervisors…" — not "A3 ('Manages commitments…') scored 2.00."
 8. Quote verbatims with <blockquote class="rater-quote">text — [Rater Group]</blockquote>. Group attribution only, never individual.
 9. No coach-facing notes, no "Note to coach," no internal commentary anywhere in the output.
@@ -1091,7 +1091,7 @@ B. <h3 class="report-subsection">Success Metric</h3>
 Exactly this format:
 <ul class="report-list">
 <li><strong>What we're measuring:</strong> [name the metric]</li>
-<li><strong>How it's measured:</strong> [method — e.g., 45-day rater check-in (connected to 90-day target), direct team observation, structured pulse]</li>
+<li><strong>How it's measured:</strong> [method — e.g., 30-day rater check-in (connected to 90-day target), direct team observation, structured pulse]</li>
 <li><strong>Baseline:</strong> [ ] (to be captured in debrief session)</li>
 <li><strong>90-Day Target:</strong> [ ] (to be set in debrief session)</li>
 </ul>

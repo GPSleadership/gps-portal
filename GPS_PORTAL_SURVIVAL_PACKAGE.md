@@ -209,8 +209,8 @@ VALUES ('Alex Tremble', 'alex@gpsleadership.org', 'YOUR_PASSWORD_HERE', 'admin')
 **Single-file HTML pages (no React/Vue/framework)**
 No build step, no npm, no dependency vulnerabilities. Files open locally in any browser with no setup. Alex or any future developer can read the entire codebase without a development environment. The tradeoff is large files (coach.html is ~6,200 lines) but this is manageable. If files grow past ~10,000 lines, consider splitting into modular JS includes.
 
-**Supabase directly from browser (no backend middleware)**
-The anon key + Row Level Security means clients can only see their own data (UUIDs are unguessable without a brute-force attack). Cutting the middleware layer eliminates an entire class of server management. The service role key is used only in Vercel serverless functions — never exposed to the browser.
+**Supabase directly from browser (no backend middleware)** — ⚠️ **SUPERSEDED June 3, 2026. This is no longer true. See Section 13.**
+*(Historical:* the browser used the anon key + RLS to read its own data.*)* **Current model:** the browser does **not** query Supabase directly. All data flows through token/session-validated serverless endpoints (`api/portal-data.js`, `api/coach-data.js`, `api/diag-portal.js`, `api/get-client.js`) that use the service-role key and scope every query in code. All tables are RLS **deny-all to anon** (the service role bypasses RLS). **Access control lives in the endpoint, not in RLS.** Any new feature must follow this pattern — never reintroduce `db.from(...)` with the anon key in a page.
 
 **`?action=` routing in api/diagnostic.js**
 Vercel Hobby caps at 12 serverless functions. This project is at the cap. All 6 diagnostic operations (send invites, generate question, generate report, generate team report, finalize report, reminders) live in one file routed by query param. This is a hard architectural constraint. Moving to Vercel Pro removes this limit.
@@ -587,7 +587,7 @@ All API keys and secrets are stored exclusively as Vercel environment variables.
 
 A June 3, 2026 premortem (`GPS_Portal_Premortem_2026-06-03.md`) found, and verified against live production, that **every database table had permissive `anon USING(true)` RLS policies** — meaning the public anon key (embedded in the browser HTML) could read and write all client, diagnostic, and rater data, and the coach password was stored/verified in the browser in plaintext. RLS was *enabled* but the policies made it meaningless. This section documents the remediation.
 
-**All Phase 1 work lives on git branch `security-hardening-phase1`** (not yet merged/deployed at time of writing). It is a coupled database + application change that must ship together at cutover — see `PHASE1_PLAN.md` for the full sequence.
+**STATUS: LIVE.** Phase 1 was merged to `main` and the cutover completed in production on **June 3, 2026 (~7:50pm ET)**: `COACH_SESSION_SECRET` set in Vercel, `supabase-migration-v26-lockdown-rls.sql` applied, the two SECURITY DEFINER RPCs revoked from PUBLIC (migration `v26b`), and the coach password rotated via the reset flow. Live smoke test passed. The Supabase security advisor confirms **zero** `rls_policy_always_true` findings; all tables now show "RLS enabled, no policy" (the intended deny-all-to-anon state). The `security-hardening-phase1` branch is merged; keep the `v26` ROLLBACK block available until ~June 10, then it can be deleted.
 
 ### The model
 The browser no longer talks to Supabase with the anon key for sensitive data. Instead:
@@ -619,16 +619,21 @@ The coach password is now stored as a **scrypt hash** in `coach_settings.coach_p
 ### Already shipped (live, before cutover)
 - The `diagnostic-reports` storage bucket's broad **listing** policy was removed (migration `harden_diagnostic_reports_remove_listing`) so the confidential PDFs can no longer be enumerated. Full private-bucket + signed-URL hardening is Phase 1 Step 5 (pending).
 
-### Cutover checklist (do together, low-traffic window)
-1. Merge `security-hardening-phase1` to `main` (deploys the rewired app).
-2. Set `COACH_SESSION_SECRET` in Vercel.
-3. Apply `supabase-migration-v26-lockdown-rls.sql`.
-4. Set the new coach password via the reset flow (`/coach-emergency` → reset).
-5. Smoke-test, then re-run the Supabase security advisor — confirm the `rls_policy_always_true` warnings are gone.
+### Cutover checklist — ✅ COMPLETED June 3, 2026
+1. ✅ Merged `security-hardening-phase1` to `main` (rewired app deployed).
+2. ✅ Set `COACH_SESSION_SECRET` in Vercel (Production + Preview).
+3. ✅ Applied `supabase-migration-v26-lockdown-rls.sql` + `v26b` (RPC EXECUTE revoked from PUBLIC, re-granted to service_role).
+4. ✅ Rotated the coach password via `/coach-emergency` → reset.
+5. ✅ Live smoke test passed; advisor confirms no `rls_policy_always_true`.
+
+### Still open (non-blocking, deferred from the cutover)
+- **Step 5 — full report-bucket privatization** (private bucket + signed URLs). Bucket is already non-listable and the diagnostics table is now locked, so the URL-leak path is closed; full signing is defense-in-depth.
+- **Step 7 — `ghl_export_view` → SECURITY INVOKER** (still flagged ERROR by the advisor). Deferred until the view's consumer (likely a GHL/Make export) is confirmed, to avoid breaking an export.
+- Minor: four functions have a mutable `search_path` (advisor WARN) — set an explicit `search_path` when convenient.
 
 ### Monitoring
 A weekly automated **security sweep** runs Fridays 2pm (Claude scheduled task `gps-portal-weekly-security-sweep`): Supabase advisor + RLS drift + repo health + backup freshness; reports only regressions.
 
 ---
 
-*Last updated: June 3, 2026. Phase 1 security hardening in progress on branch `security-hardening-phase1` (not yet deployed). Remaining: coach.html data-call migration (46 sites), diagnostic-leader/diagnostic-survey pages, Step 5 (private report bucket), Step 7 (SECURITY DEFINER cleanup), then cutover. Update after any session that adds features, changes architecture, or introduces new failure modes.*
+*Last updated: June 3, 2026 (evening) — Phase 1 security hardening **deployed to production** (cutover complete). The portal now runs on token/session-validated service-key endpoints with RLS deny-all to anon; the anon key is no longer used for browser data access (see Section 13 and the corrected Section 6). New endpoints live: `portal-data.js`, `coach-data.js`, `diag-portal.js`, plus coach auth + break-glass reset in `get-client.js` and the `coach-emergency.html` page. Deferred: Step 5 (report-bucket signing), Step 7 (`ghl_export_view`). Next major build: the Decision Room (see `Decision_Room_Integration_Guide.md`). Update after any session that adds features, changes architecture, or introduces new failure modes.*

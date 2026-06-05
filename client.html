@@ -907,6 +907,9 @@
     }
     #diagPanel.active { display: block; }
     .ptab-diag.active { border-bottom-color: #2EA887; }
+    #drSponsorPanel { display: none; }
+    #drSponsorPanel.active { display: block; }
+    .ptab-dr.active { border-bottom-color: #C9A84C; }
     .diag-inner {
       max-width: 760px;
       margin: 0 auto;
@@ -2113,6 +2116,7 @@
   <button class="ptab active" id="tabPlan" onclick="showPortalTab('plan')">My Plan</button>
   <button class="ptab ptab-results" id="tabResults" onclick="showPortalTab('results')">My Results</button>
   <button class="ptab ptab-diag" id="tabDiag" onclick="showPortalTab('diagnostic')" style="display:none;">My Diagnostic</button>
+  <button class="ptab ptab-dr" id="tabDR" onclick="showPortalTab('decisionroom')" style="display:none;">Decision Room</button>
   <button class="ptab ptab-ask" id="tabAsk" onclick="showPortalTab('ask')" style="display:none;">Ask Alex</button>
 </div>
 
@@ -2247,7 +2251,7 @@
 <div id="selfCheckOverlay">
   <div class="sc-modal">
     <div class="sc-modal-header">
-      <div class="sc-modal-kicker" id="scModalKicker">Day 45 Check-In</div>
+      <div class="sc-modal-kicker" id="scModalKicker">Day 30 Check-In</div>
       <div class="sc-modal-title" id="scModalTitle">Quick self-assessment before you see your results</div>
       <div class="sc-modal-sub">Takes about 2 minutes. Your coach can see your responses.</div>
     </div>
@@ -2294,6 +2298,11 @@
       <h3>Loading diagnostic…</h3>
     </div>
   </div>
+</div>
+
+<!-- ── DECISION ROOM PANEL (shown only if this client is also an executive sponsor) ── -->
+<div id="drSponsorPanel">
+  <iframe id="drSponsorFrame" title="Decision Room" style="width:100%;height:calc(100vh - 150px);min-height:560px;border:none;display:block;background:#f4f6f9;"></iframe>
 </div>
 
 <div class="bottom-bar"></div>
@@ -2518,34 +2527,14 @@ function _routeToAskAlex(question) {
 async function loadClientDiagnostic() {
   if (!currentClient || !currentClient.id) return;
   try {
-    // Fetch diagnostics for this client (most recent first)
-    const r = await db
-      .from('diagnostics')
-      .select('*')
-      .eq('client_id', currentClient.id)
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-    if (r.error || !r.data || r.data.length === 0) return;
-    CLIENT_DIAG = r.data[0];
-
-    // Fetch raters
-    const rr = await db
-      .from('diagnostic_raters')
-      .select('*')
-      .eq('diagnostic_id', CLIENT_DIAG.id)
-      .order('created_at', { ascending: true });
-    CLIENT_DIAG_RATERS = rr.data || [];
-
-    // Fetch report draft if finalized
+    // Phase 1: read through the token-scoped server endpoint (service key). The
+    // old anon db.from reads are dead post-v26 lockdown.
+    const resp = await portalData('diag-get', {});
+    if (!resp || !resp.ok || !resp.diagnostic) return;
+    CLIENT_DIAG = resp.diagnostic;
+    CLIENT_DIAG_RATERS = resp.raters || [];
     if (CLIENT_DIAG.report_finalized_at) {
-      const dr = await db
-        .from('diagnostic_report_drafts')
-        .select('*')
-        .eq('diagnostic_id', CLIENT_DIAG.id)
-        .order('generated_at', { ascending: false })
-        .limit(1);
-      CLIENT_DIAG_REPORT = (dr.data && dr.data.length > 0) ? dr.data[0] : null;
+      CLIENT_DIAG_REPORT = resp.report || null;
     }
 
     // Show the Diagnostic tab
@@ -2562,6 +2551,26 @@ async function loadClientDiagnostic() {
 
   } catch (err) {
     console.error('[loadClientDiagnostic]', err);
+  }
+}
+
+// If this client is also an executive sponsor (matched by email server-side),
+// reveal a Decision Room tab that embeds their sponsor view — no separate link.
+let MY_SPONSOR_TOKEN = null;
+async function loadMySponsor() {
+  try {
+    const resp = await portalData('get-my-sponsor', {});
+    if (resp && resp.ok && resp.sponsor && resp.sponsor.token) {
+      MY_SPONSOR_TOKEN = resp.sponsor.token;
+      const tabDR = document.getElementById('tabDR');
+      if (tabDR) tabDR.style.display = '';
+    }
+  } catch (e) { /* non-fatal */ }
+}
+function loadSponsorFrame() {
+  const f = document.getElementById('drSponsorFrame');
+  if (f && MY_SPONSOR_TOKEN && !f.getAttribute('src')) {
+    f.setAttribute('src', '/decision-room?token=' + encodeURIComponent(MY_SPONSOR_TOKEN));
   }
 }
 
@@ -3000,6 +3009,7 @@ async function loadClient() {
       renderResultsTab(surveyData || [], checkins || [], client, surveyTokenData || [], selfCheckData || []);
       renderClientStakeholderCard(client.id, stakeholderData || []);
       loadClientDiagnostic();
+      loadMySponsor();
     }
   } catch (e) {
     showError('Something went wrong.', 'Please refresh the page. If the problem continues, contact alex@gpsleadership.org.');
@@ -4623,8 +4633,8 @@ function renderResultsTab(surveyResponses, checkins, client, surveyTokens, selfC
   let selfCheckNeeded = null;
   if (checkpointsWithResponses.has('day90') && !completedSelfChecks.has('day90')) {
     selfCheckNeeded = 'day90';
-  } else if (checkpointsWithResponses.has('day45') && !completedSelfChecks.has('day45')) {
-    selfCheckNeeded = 'day45';
+  } else if (checkpointsWithResponses.has('day30') && !completedSelfChecks.has('day30')) {
+    selfCheckNeeded = 'day30';
   }
 
   if (selfCheckNeeded) {
@@ -4632,8 +4642,8 @@ function renderResultsTab(surveyResponses, checkins, client, surveyTokens, selfC
     return; // don't render results yet
   }
 
-  const checkpoints = ['baseline', 'day45', 'day90'];
-  const cpLabel = { baseline: 'Baseline', day45: '45 Days', day90: '90 Days' };
+  const checkpoints = ['baseline', 'day30', 'day90'];
+  const cpLabel = { baseline: 'Baseline', day30: '30 Days', day90: '90 Days' };
 
   // ── Non-response notice ───────────────────────────────────────────────────
   const nonResponseCount = (surveyTokens || []).filter(t => t.non_response_flagged).length;
@@ -4653,7 +4663,8 @@ function renderResultsTab(surveyResponses, checkins, client, surveyTokens, selfC
     checkpoints.forEach(cp => {
       const rows = surveyResponses.filter(r => r.checkpoint === cp);
       if (!rows.length) { cpData[cp] = null; return; }
-      const scores = rows.map(r => r.score).filter(s => s != null);
+      // Normalize each rating to the 1-5 scale (survey moved to 1-5; older rows are tagged scale 10).
+      const scores = rows.map(r => r.score != null ? (Number(r.score) / (Number(r.scale) || 5) * 5) : null).filter(s => s != null);
       const avg    = scores.length ? (scores.reduce((a,b)=>a+b,0) / scores.length) : null;
       cpData[cp] = { avg, count: scores.length, rows };
     });
@@ -4668,7 +4679,7 @@ function renderResultsTab(surveyResponses, checkins, client, surveyTokens, selfC
         </div>`;
 
       const avg   = d.avg;
-      const color = avg >= 8 ? 'score-hi' : avg >= 6 ? 'score-md' : 'score-lo';
+      const color = avg >= 4 ? 'score-hi' : avg >= 3 ? 'score-md' : 'score-lo';
       const prev  = i > 0 ? cpData[checkpoints[i-1]] : null;
       let deltaHTML = '';
       if (prev && prev.avg != null && avg != null) {
@@ -4682,7 +4693,7 @@ function renderResultsTab(surveyResponses, checkins, client, surveyTokens, selfC
         <div class="scorecard-cp">
           <div class="scorecard-cp-label">${cpLabel[cp]}</div>
           <div class="scorecard-cp-score ${color}">${avg.toFixed(1)}</div>
-          <div class="scorecard-cp-sub">${d.count} response${d.count !== 1 ? 's' : ''} · out of 10</div>
+          <div class="scorecard-cp-sub">${d.count} response${d.count !== 1 ? 's' : ''} · out of 5</div>
           ${deltaHTML}
         </div>`;
     }).join('');
@@ -4815,7 +4826,7 @@ function showSelfCheckModal(checkpoint, client, surveyResponses, checkins, surve
   _scQ2 = null;
 
   const isDay90  = checkpoint === 'day90';
-  const kicker   = isDay90 ? 'Day 90 Self-Check' : 'Day 45 Self-Check';
+  const kicker   = isDay90 ? 'Day 90 Self-Check' : 'Day 30 Self-Check';
   const behavior = (client.behavior_1 || client.start_behavior || '').trim();
 
   document.getElementById('scModalKicker').textContent  = kicker;
@@ -5108,16 +5119,20 @@ function showPortalTab(tab) {
   const tabAsk        = document.getElementById('tabAsk');
   const tabResults    = document.getElementById('tabResults');
   const tabDiag       = document.getElementById('tabDiag');
+  const drPanel       = document.getElementById('drSponsorPanel');
+  const tabDR         = document.getElementById('tabDR');
 
   // Reset all panels
   mainContent.style.display = 'none';
   qaPanel.classList.remove('active');
   if (resultsPanel) resultsPanel.classList.remove('active');
   if (diagPanel)    diagPanel.classList.remove('active');
+  if (drPanel)      drPanel.classList.remove('active');
   if (tabPlan)    tabPlan.classList.remove('active');
   if (tabAsk)     tabAsk.classList.remove('active');
   if (tabResults) tabResults.classList.remove('active');
   if (tabDiag)    tabDiag.classList.remove('active');
+  if (tabDR)      tabDR.classList.remove('active');
 
   if (tab === 'plan') {
     mainContent.style.display = 'block';
@@ -5129,6 +5144,10 @@ function showPortalTab(tab) {
     if (diagPanel) diagPanel.classList.add('active');
     if (tabDiag)   tabDiag.classList.add('active');
     renderDiagnosticTab();
+  } else if (tab === 'decisionroom') {
+    if (drPanel) drPanel.classList.add('active');
+    if (tabDR)   tabDR.classList.add('active');
+    loadSponsorFrame();
   } else {
     // Check terms consent before showing Q&A
     const needsTerms = !currentClient ||

@@ -193,7 +193,40 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true });
       }
 
+      // ── Sponsor link: is this client also an executive sponsor? ─────────────
+      // Matches the client's email to a sponsor record so their portal can show a
+      // Decision Room tab instead of a separate link. Returns the sponsor token
+      // (their own access) only to the authenticated, email-matched client.
+      case 'get-my-sponsor': {
+        const email = (client.email || '').trim();
+        if (!email) return res.status(200).json({ ok: true, sponsor: null });
+        const sp = await sb(`/rest/v1/sponsors?email=ilike.${encodeURIComponent(email)}&select=id,sponsor_token,name&limit=1`);
+        const sprows = sp.ok ? await sp.json() : [];
+        const sponsor = sprows[0];
+        if (!sponsor || !sponsor.sponsor_token) return res.status(200).json({ ok: true, sponsor: null });
+        const lt = await sb(`/rest/v1/sponsor_teams?sponsor_id=eq.${encodeURIComponent(sponsor.id)}&select=team_id`);
+        const links = lt.ok ? await lt.json() : [];
+        return res.status(200).json({ ok: true, sponsor: { token: sponsor.sponsor_token, name: sponsor.name, team_count: links.length } });
+      }
+
       // ── Diagnostic (leader self-service rater list) ─────────────────────────
+      case 'diag-get': {
+        // The leader's latest diagnostic + raters + finalized report draft, scoped
+        // to this client. Replaces the old anon db.from reads (dead post-v26).
+        const r = await sb(`/rest/v1/diagnostics?client_id=eq.${clientId}&select=*&order=created_at.desc&limit=1`);
+        const rows = r.ok ? await r.json() : [];
+        const diag = rows[0] || null;
+        if (!diag) return res.status(200).json({ ok: true, diagnostic: null });
+        const rr = await sb(`/rest/v1/diagnostic_raters?diagnostic_id=eq.${encodeURIComponent(diag.id)}&select=*&order=created_at.asc`);
+        const raters = rr.ok ? await rr.json() : [];
+        let report = null;
+        if (diag.report_finalized_at) {
+          const dr = await sb(`/rest/v1/diagnostic_report_drafts?diagnostic_id=eq.${encodeURIComponent(diag.id)}&select=*&order=generated_at.desc&limit=1`);
+          const drows = dr.ok ? await dr.json() : [];
+          report = drows[0] || null;
+        }
+        return res.status(200).json({ ok: true, diagnostic: diag, raters, report });
+      }
       case 'diag-get-raters': {
         if (!(await diagnosticOwnedBy(body.diagnostic_id, clientId))) return res.status(403).json({ error: 'Not your diagnostic' });
         const r = await sb(`/rest/v1/diagnostic_raters?diagnostic_id=eq.${encodeURIComponent(body.diagnostic_id)}&select=*&order=created_at.asc`);

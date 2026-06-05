@@ -3668,8 +3668,8 @@ async function loadStakeholderData(clientId) {
 function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpoint, tokens, rawResponses) {
   const activeStakeholders = stakeholders.filter(s => s.is_active);
   const canAddMore         = activeStakeholders.length < 3;
-  const checkpoints        = ['baseline', 'day45', 'day90'];
-  const cpLabels           = { baseline: 'Baseline', day45: 'Day 45', day90: 'Day 90' };
+  const checkpoints        = ['baseline', 'day30', 'day90'];
+  const cpLabels           = { baseline: 'Baseline', day30: 'Day 30', day90: 'Day 90' };
   const baselineTokens     = tokens.filter(t => t.checkpoint === 'baseline');
   const baselineResponses  = (responsesByCheckpoint['baseline'] || []).length;
 
@@ -3681,7 +3681,7 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
     : s.is_board_member ? 'Board Member'
     : 'Other';
 
-  // Build per-stakeholder score map: { stakeholder_id: { baseline: num, day45: num, day90: num } }
+  // Build per-stakeholder score map: { stakeholder_id: { baseline: num, day30: num, day90: num } }
   const scoreMap = {};
   (rawResponses || []).forEach(r => {
     if (!scoreMap[r.stakeholder_id]) scoreMap[r.stakeholder_id] = {};
@@ -3695,7 +3695,7 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
   });
 
   // Most-advanced checkpoint status per stakeholder
-  const cpOrder = { day90: 3, day45: 2, baseline: 1 };
+  const cpOrder = { day90: 3, day30: 2, baseline: 1 };
   const stakeholderTokenStatus = {}; // { stakeholder_id: { checkpoint, is_used } }
   tokens.forEach(t => {
     const prev = stakeholderTokenStatus[t.stakeholder_id];
@@ -3798,7 +3798,7 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
     const individualRows = orderedStakeholders.map(s => {
       const scores = scoreMap[s.id] || {};
       const base   = scores['baseline'];
-      const d45    = scores['day45'];
+      const d45    = scores['day30'];
       const d90    = scores['day90'];
       const latest = d90 ?? d45 ?? null;
       const isSB   = isSupervisorOrBoard(s);
@@ -3822,9 +3822,9 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
       <tr style="border-top:2px solid var(--gray-300);background:var(--light-sand);">
         <td style="font-weight:700;color:var(--navy);font-size:11px;text-transform:uppercase;letter-spacing:0.4px;">Peer Avg</td>
         <td>${scoreBadge(peerAvg['baseline'])}</td>
-        <td>${scoreBadge(peerAvg['day45'])}</td>
+        <td>${scoreBadge(peerAvg['day30'])}</td>
         <td>${scoreBadge(peerAvg['day90'])}</td>
-        <td>${changeBadge(peerAvg['baseline'], peerAvg['day90'] ?? peerAvg['day45'])}</td>
+        <td>${changeBadge(peerAvg['baseline'], peerAvg['day90'] ?? peerAvg['day30'])}</td>
       </tr>` : '';
 
     // Supervisor/Board alert
@@ -3876,7 +3876,7 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
               <tr>
                 <th>Stakeholder</th>
                 <th>Baseline</th>
-                <th>Day 45</th>
+                <th>Day 30</th>
                 <th>Day 90</th>
                 <th>Change</th>
               </tr>

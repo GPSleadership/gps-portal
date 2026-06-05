@@ -270,7 +270,7 @@
       <div class="rating-row" id="ratingRow" style="margin-top:18px;"></div>
     </div>
 
-    <!-- Open-ended card (baseline + day90 only — hidden at day45) -->
+    <!-- Open-ended card (baseline + day90 only — hidden at day30) -->
     <div class="card" id="openEndedCard">
       <div class="section-label" id="openEndedLabel">In one sentence, what's the most noticeable way this behavior affects you or the team?</div>
       <div class="section-hint">Please share a recent example.</div>
@@ -321,7 +321,7 @@ let commentsVisible = true;  // default: share with coach + client
 
 const checkpointLabels = {
   baseline: 'Baseline Survey',
-  day45:    'Day 45 Check-In',
+  day30:    'Day 30 Check-In',
   day90:    '90-Day Survey'
 };
 
@@ -387,9 +387,9 @@ function buildSurvey() {
     ratingRow.appendChild(btn);
   }
 
-  // Open-ended section — shown at baseline and day90, hidden at day45
+  // Open-ended section — shown at baseline and day90, hidden at day30
   const openCard = document.getElementById('openEndedCard');
-  if (checkpoint === 'day45') {
+  if (checkpoint === 'day30') {
     openCard.style.display = 'none';
   } else {
     const labelEl = document.getElementById('openEndedLabel');
@@ -438,7 +438,7 @@ async function submitSurvey() {
   errEl.style.display = 'none';
 
   const checkpoint    = tokenData.checkpoint || 'baseline';
-  const openResponse  = checkpoint !== 'day45'
+  const openResponse  = checkpoint !== 'day30'
     ? (document.getElementById('openResponseField').value.trim() || null)
     : null;
   const comments      = document.getElementById('commentsField').value.trim() || null;

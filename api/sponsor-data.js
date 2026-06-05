@@ -77,7 +77,7 @@ function norm5(score, scale) {
 function cpKey(checkpoint) {
   const c = String(checkpoint || '').toLowerCase();
   if (c.includes('90')) return 'd90';
-  if (c.includes('30')) return 'd30';
+  if (c.includes('45') || c.includes('30')) return 'd30';
   return 'baseline';
 }
 
@@ -220,12 +220,23 @@ async function buildEngagement(clientId) {
   const weeksElapsed = Math.max(weeks, ...cks.map(c => c.week_number || 0));
   const practiced = cks.filter(c => c.completion_status === 'Yes').length;
   const attended = cks.filter(c => c.attended_coaching === true).length;
+
+  // Coaching attendance denominator = sessions EXPECTED at this cadence, not weeks,
+  // so an every-other-week client isn't penalized for off-weeks.
+  const crows = await sbGet(`/rest/v1/clients?id=eq.${enc(clientId)}&select=coaching_cadence&limit=1`);
+  const cadence = (crows && crows[0] && crows[0].coaching_cadence) || 'weekly';
+  const everyN = cadence === 'monthly' ? 4 : (cadence === 'biweekly' ? 2 : 1);
+  const expectedSessions = Math.max(1, Math.round(weeksElapsed / everyN));
+  const coachingTotal = expectedSessions;
+  const coachingAttended = Math.min(attended, coachingTotal);
+
   return {
     weeksElapsed,
     checkinRate: weeksElapsed ? Math.round((weeks / weeksElapsed) * 100) / 100 : 0,
     behaviorRate: weeks ? Math.round((practiced / weeks) * 100) / 100 : 0,
-    coachingAttended: attended,
-    coachingTotal: weeks,
+    coachingAttended,
+    coachingTotal,
+    cadence,
   };
 }
 

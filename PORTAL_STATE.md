@@ -135,6 +135,9 @@ Seeded with: `coach_password`, `pending_code`, `pending_code_expires`
 | invites_sent_at / survey_closed_at | timestamp | Survey lifecycle |
 | report_generated_at / report_finalized_at | timestamp | Report lifecycle |
 | **report_pdf_url** | text | **Added v23** — Supabase Storage public URL for uploaded PDF report |
+| **debrief_date** | date | **Added v24** — scheduled date of debrief session |
+| **report_release_at** | timestamptz | **Added v24** — 22:00 UTC day before debrief (COB Eastern); report auto-releases to leader |
+| **coaching_portal_url** | text | **Added v25** — coaching client's portal URL, saved when debrief marked complete; used by leader portal to show "Go to Your Coaching Portal" button |
 | coaching_notes | text | Alex's ongoing session notes |
 | debrief_completed_at | timestamp | |
 | plan_status / plan_draft_content / plan_locked_at | text/ts | 90-day plan (managed in client portal, not coach Report tab) |
@@ -551,7 +554,10 @@ The Report tab (`renderReportTab()` in coach.html) contains two cards:
 14. ✅ PDF upload added to Report tab — `diagnostic-reports` Supabase Storage bucket live
 15. ✅ Migration v23 applied — `report_pdf_url` column on diagnostics, storage bucket + policies
 16. ✅ Pre-commit hook installed — blocks escaped backtick (`\``) commits
-17. Add `debrief_date` field to diagnostics + auto-release report to leader 1 day before (pending design decision)
+17. ✅ Debrief date field on diagnostics (v24) + auto-release report to leader COB Eastern day before
+18. ✅ Portal welcome email (`portal_welcome` type in api/notify.js) — sent to coaching client when debrief marked complete
+19. ✅ Coaching portal button on diagnostic-leader.html — shows after debrief_complete and plan_active when coaching_portal_url is set
+20. ✅ Migration v25 — `coaching_portal_url` on diagnostics; set by coach portal, read by leader portal
 
 ---
 

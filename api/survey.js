@@ -71,7 +71,7 @@ function generateToken() {
 function buildSendSubjectLine(clientName, checkpoint) {
   const first = clientName.split(' ')[0];
   if (checkpoint === 'baseline') return `${first} would value your candid feedback`;
-  if (checkpoint === 'day45')   return `Quick mid-point check-in for ${first}`;
+  if (checkpoint === 'day30')   return `Quick mid-point check-in for ${first}`;
   return `Final 90-day feedback for ${first}`;
 }
 
@@ -120,10 +120,10 @@ function buildSendEmailHtml(stakeholderName, clientName, checkpoint, priorityBeh
       ${p(`This process is for development, not evaluation. Your numeric rating will be visible to both ${clientFirst} and their coach. For written comments, you can choose whether to share them with both of them or with the coach only.`)}
       ${p(`You'll notice ${clientFirst} and their coach are copied here so everyone knows this request was sent.`)}
       ${p(`Thank you in advance for your honest input — it's a key part of helping ${clientFirst} change in ways that matter.`)}`;
-  } else if (checkpoint === 'day45') {
+  } else if (checkpoint === 'day30') {
     body = `
       ${p(`Hi ${stakeholderName},`)}
-      ${p(`About 45 days ago, ${clientFirst} began a 90-day leadership sprint focused on:`)}
+      ${p(`About 30 days ago, ${clientFirst} began a 90-day leadership sprint focused on:`)}
       ${behaviorBlock}
       ${p(`You previously shared baseline feedback as one of their key stakeholders.`)}
       ${p(`We're now at the midpoint and would value a quick update from you. Please complete this very short check-in (1 question):`)}
@@ -216,9 +216,9 @@ async function handleSend(req, res) {
     const { client_id, checkpoint = 'baseline', password } = req.body;
     if (!client_id) return res.status(400).json({ error: 'client_id is required' });
 
-    const validCheckpoints = ['baseline', 'day45', 'day90'];
+    const validCheckpoints = ['baseline', 'day30', 'day90'];
     if (!validCheckpoints.includes(checkpoint)) {
-      return res.status(400).json({ error: 'checkpoint must be baseline, day45, or day90' });
+      return res.status(400).json({ error: 'checkpoint must be baseline, day30, or day90' });
     }
 
     const authOk = !!verifyCoachSession(req.body.session) || await verifyPassword(password);
@@ -403,7 +403,7 @@ async function sendResponseNotifications({ client_id, stakeholder_id, checkpoint
 
   const clientFirst     = (client.name || '').split(' ')[0];
   const stakeholderName = stakeholder.name || 'A stakeholder';
-  const checkpointLabel = checkpoint === 'baseline' ? 'Baseline' : checkpoint === 'day45' ? 'Day 45' : 'Day 90';
+  const checkpointLabel = checkpoint === 'baseline' ? 'Baseline' : checkpoint === 'day30' ? 'Day 30' : 'Day 90';
 
   if (client.email) {
     const clientSubject = `${stakeholderName} just completed your ${checkpointLabel} survey`;
