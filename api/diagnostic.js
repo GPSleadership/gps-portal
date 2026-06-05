@@ -62,7 +62,12 @@ function sb(path, method = 'GET', body = null, extra = {}) {
 }
 
 // ── Call Claude API (with retry) ─────────────────────────────────────────────
-async function callClaude(systemPrompt, userPrompt, maxTokens = 512, { retries = 2, retryDelayMs = 3000, model = CLAUDE_MODEL, timeoutMs = null, temperature = null } = {}) {
+async function callClaude(systemPrompt, userPrompt, maxTokens = 512, { retries = 2, retryDelayMs = 3000, model = CLAUDE_MODEL, timeoutMs = null, temperature = null, documentBase64 = null, documentMediaType = 'application/pdf' } = {}) {
+  // When a PDF is supplied, send it as a document block alongside the text so the
+  // model reads the actual uploaded report (no server-side PDF parsing needed).
+  const userContent = documentBase64
+    ? [ { type: 'document', source: { type: 'base64', media_type: documentMediaType, data: documentBase64 } }, { type: 'text', text: userPrompt } ]
+    : userPrompt;
   let lastErr;
   for (let attempt = 0; attempt <= retries; attempt++) {
     if (attempt > 0) {
@@ -81,7 +86,7 @@ async function callClaude(systemPrompt, userPrompt, maxTokens = 512, { retries =
           model:      model,
           max_tokens: maxTokens,
           system:     systemPrompt,
-          messages: [{ role: 'user', content: userPrompt }],
+          messages: [{ role: 'user', content: userContent }],
           ...(temperature != null ? { temperature } : {}),
         }),
       };
@@ -1913,7 +1918,7 @@ const REC_SYSTEM = `You are an executive leadership advisor for GPS Leadership S
 
 WHAT GPS DELIVERS: executive coaching, team coaching, leadership workshops and retreats, the diagnostic and other assessments and 360 debriefs, calibrated feedback sessions, succession-mapping facilitation, and leadership/advisory consulting. GPS does NOT run formal HR/performance processes, compensation redesign, or legal actions.
 
-GROUND TRUTH: Every recommendation must be a synthesis of the provided material (team summary, themes, Start/Stop/Continue, intent-vs-impact, per-leader reads). Never introduce a brand-new direction, never contradict the data, never invent names that are not in the material.
+GROUND TRUTH: If a GPS team report is provided (an attached PDF and/or report text below), treat IT as the AUTHORITATIVE interpretation — it reflects how GPS reads the data and operates — and ground your recommendations primarily in it; the Decision Room fields (summary, themes, Start/Stop/Continue, intent-vs-impact, per-leader reads) are supporting context. If no report is provided, synthesize from the Decision Room fields. Either way: never introduce a brand-new direction, never contradict the report or the data, never invent names that are not in the material.
 
 REQUIRED COVERAGE — produce 4-6 recommendations that MUST include at least one of EACH band:
   - bottom: a risk / role-fit move for sub-3.0 leaders. Frame as a MUTUAL role-fit decision (clarity for the org AND the leader), not "more coaching."
@@ -1950,15 +1955,34 @@ async function handleGenerateRecommendations(req, res) {
     const teamRows = await (await sb(`/rest/v1/teams?id=eq.${team_id}&select=*`)).json();
     const team = Array.isArray(teamRows) && teamRows[0];
     if (!team) return res.status(404).json({ error: 'Team not found' });
-    if (!team.summary && !team.themes) {
-      return res.status(400).json({ error: 'Generate the Decision Room content first (Narrative panel → Generate from diagnostics), then draft recommendations from it.' });
-    }
     const members = await (await sb(`/rest/v1/team_members?team_id=eq.${team_id}&select=report_json`)).json();
     const memberLines = (Array.isArray(members) ? members : []).map(m => {
       const rj = m.report_json || {};
       return rj.summaryLine ? `- ${rj.name || 'Leader'}: ${rj.summaryLine}` : '';
     }).filter(Boolean);
-    const input = [
+
+    // The coach-uploaded branded report PDF is the authoritative interpretation;
+    // its generated draft text is the fallback. Recommendations ground in the report.
+    const repRows = await (await sb(`/rest/v1/diagnostic_team_reports?team_id=eq.${team_id}&select=report_pdf_url,content_text,generated_at&order=generated_at.desc&limit=1`)).json();
+    const rep = Array.isArray(repRows) && repRows[0];
+    const hasDR = !!(team.summary || team.themes);
+    const hasReport = !!(rep && (rep.report_pdf_url || rep.content_text));
+    if (!hasDR && !hasReport) {
+      return res.status(400).json({ error: 'Generate the Decision Room content (Narrative panel) or upload a team report first, then draft recommendations.' });
+    }
+
+    let pdfBase64 = null;
+    if (rep && rep.report_pdf_url) {
+      try {
+        const pres = await fetch(rep.report_pdf_url);
+        if (pres.ok) {
+          const ab = await pres.arrayBuffer();
+          if (ab && ab.byteLength > 0 && ab.byteLength < 28 * 1024 * 1024) pdfBase64 = Buffer.from(ab).toString('base64');
+        }
+      } catch (_) { pdfBase64 = null; }
+    }
+
+    const drBlock = [
       `TEAM: ${team.client_org_name || ''} — ${team.name || ''}`,
       `Quick read: ${team.quick_read || ''}`,
       `Summary: ${team.summary || ''}`,
@@ -1967,9 +1991,18 @@ async function handleGenerateRecommendations(req, res) {
       `Intent vs Impact: ${JSON.stringify(team.intent_impact || [])}`,
       'Leaders:', ...memberLines,
     ].join('\n');
+    const reportTextBlock = (!pdfBase64 && rep && rep.content_text)
+      ? `\n\n=== GPS TEAM REPORT (authoritative interpretation) ===\n${rep.content_text}`
+      : '';
+    const attachNote = pdfBase64 ? 'The attached PDF is the authoritative GPS team report. Ground your recommendations in it; the Decision Room content below is supporting context.\n\n' : '';
+    const input = attachNote + '=== DECISION ROOM CONTENT (supporting context) ===\n' + drBlock + reportTextBlock;
 
-    const raw = await callClaude(REC_SYSTEM, input, 3072, { model: CLAUDE_REPORT_MODEL, timeoutMs: 100000, temperature: 0 });
-    const parsed = parseJsonLoose(raw);
+    // Try with the PDF attached; if it errors or doesn't parse, retry text-only.
+    let parsed = null;
+    try { parsed = parseJsonLoose(await callClaude(REC_SYSTEM, input, 3072, { model: CLAUDE_REPORT_MODEL, timeoutMs: 110000, temperature: 0, documentBase64: pdfBase64 })); } catch (_) { parsed = null; }
+    if ((!parsed || !Array.isArray(parsed.recommendations)) && pdfBase64) {
+      try { parsed = parseJsonLoose(await callClaude(REC_SYSTEM, input, 3072, { model: CLAUDE_REPORT_MODEL, timeoutMs: 100000, temperature: 0 })); } catch (_) { parsed = null; }
+    }
     const recs = parsed && Array.isArray(parsed.recommendations) ? parsed.recommendations : null;
     if (!recs) return res.status(502).json({ error: 'Could not parse recommendations. Please try again.' });
 
