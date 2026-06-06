@@ -2907,8 +2907,16 @@ async function loadClient() {
       return;
     }
 
-    // Derive coaching client flag from DB field
-    client.is_coaching_client = !!client.coaching_sessions_enabled;
+    // Derive coaching client flag. Broadened so anyone in the coaching program is
+    // recognized (not just those with the weekly-session toggle), which hides the
+    // "Explore 1:1 Executive Coaching" upsell on their own portal.
+    client.is_coaching_client = !!(
+      client.coaching_sessions_enabled ||
+      client.in_coaching_program ||
+      client.is_active_coaching ||
+      client.engagement_type === 'diagnostic_plus_coaching' ||
+      (client.coaching_program_start_date && !client.coaching_program_end_date)
+    );
 
     // 90-day access window for non-coaching clients
     const accessStatus = await initPortalAccessCheck(client);
