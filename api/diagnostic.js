@@ -2092,12 +2092,12 @@ async function handleFeedbackContext(req, res) {
   const token = req.body?.token || req.query?.token;
   if (!token) return res.status(400).json({ error: 'token required' });
   try {
-    const rows = await (await sb(`/rest/v1/external_feedback_invites?token=eq.${enc4(token)}&select=name,submitted_at,team_id`)).json();
+    const rows = await (await sb(`/rest/v1/external_feedback_invites?token=eq.${enc4(token)}&select=name,by_role,submitted_at,team_id`)).json();
     const inv = Array.isArray(rows) && rows[0];
     if (!inv) return res.status(404).json({ error: 'This link is invalid or has expired.' });
     const teamRows = await (await sb(`/rest/v1/teams?id=eq.${inv.team_id}&select=name,client_org_name`)).json();
     const team = (Array.isArray(teamRows) && teamRows[0]) || {};
-    return res.status(200).json({ ok: true, name: inv.name, team_name: team.client_org_name || team.name || 'the leadership team', submitted: !!inv.submitted_at });
+    return res.status(200).json({ ok: true, name: inv.name, by_role: inv.by_role || '', team_name: team.client_org_name || team.name || 'the leadership team', submitted: !!inv.submitted_at });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
@@ -2105,8 +2105,10 @@ async function handleFeedbackContext(req, res) {
 
 async function handleSubmitExternalFeedback(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  const { token, summary, level } = req.body || {};
+  const { token, summary, level, name, by_role } = req.body || {};
   if (!token || !summary || !String(summary).trim()) return res.status(400).json({ error: 'token and a written observation are required' });
+  if (!name || !String(name).trim()) return res.status(400).json({ error: 'Your name is required.' });
+  if (!by_role || !String(by_role).trim()) return res.status(400).json({ error: 'Your role is required.' });
   const lv = ['green', 'yellow', 'red'].includes(level) ? level : 'yellow';
   try {
     const rows = await (await sb(`/rest/v1/external_feedback_invites?token=eq.${enc4(token)}&select=id,team_id,name,by_role,submitted_at`)).json();
@@ -2114,7 +2116,8 @@ async function handleSubmitExternalFeedback(req, res) {
     if (!inv) return res.status(404).json({ error: 'This link is invalid or has expired.' });
     if (inv.submitted_at) return res.status(409).json({ error: 'This feedback has already been submitted. Thank you.' });
     await sb('/rest/v1/external_signals', 'POST', {
-      team_id: inv.team_id, by_name: inv.name || null, by_role: inv.by_role || null,
+      // The respondent self-identifies on the form; prefer those over invite values.
+      team_id: inv.team_id, by_name: String(name).trim().slice(0, 120), by_role: String(by_role).trim().slice(0, 120),
       channel: 'External feedback', level: lv, summary: String(summary).slice(0, 2000),
       date_observed: new Date().toISOString().slice(0, 10), visible_to_client: false,
     }, { Prefer: 'return=minimal' });
