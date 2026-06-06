@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GPS Leadership — Workshop Survey</title>
+<style>
+  :root{
+    --navy:#1a2332; --teal:#0d9488; --teal-d:#0f766e; --light:#f1f5f9;
+    --border:#e2e8f0; --mid:#64748b; --green:#16a34a; --amber:#d97706; --red:#dc2626; --white:#fff;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  body{margin:0;font-family:'Open Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
+    background:var(--light);color:var(--navy);line-height:1.55;font-size:16px;}
+  .wrap{max-width:640px;margin:0 auto;padding:0 16px 80px;}
+  .topbar{background:var(--navy);color:#fff;padding:14px 16px;text-align:center;font-weight:700;font-size:15px;letter-spacing:.3px;}
+  .card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:22px;margin-top:18px;box-shadow:0 1px 4px rgba(0,0,0,.05);}
+  h1{font-size:21px;margin:0 0 6px;}
+  .sub{color:var(--mid);font-size:14px;margin:0;}
+  .est{display:inline-block;background:var(--light);border:1px solid var(--border);border-radius:20px;padding:4px 12px;font-size:13px;color:var(--mid);margin-top:12px;}
+  .progress{height:8px;background:var(--border);border-radius:8px;overflow:hidden;margin:18px 0 4px;}
+  .progress > div{height:100%;background:var(--teal);width:0;transition:width .3s;}
+  .pcount{font-size:12px;color:var(--mid);text-align:right;}
+  .qtheme{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--teal-d);font-weight:700;margin:22px 0 2px;}
+  .q{margin:16px 0 4px;font-weight:600;font-size:16px;}
+  .scale{display:flex;gap:8px;margin:10px 0 4px;flex-wrap:wrap;}
+  .scale button{flex:1;min-width:54px;min-height:48px;border:1.5px solid var(--border);background:#fff;border-radius:9px;font-size:16px;font-weight:700;color:var(--navy);cursor:pointer;}
+  .scale button.sel{background:var(--teal);border-color:var(--teal);color:#fff;}
+  .scale.nps button{min-width:40px;font-size:15px;}
+  .scalelabels{display:flex;justify-content:space-between;font-size:11px;color:var(--mid);margin-top:2px;}
+  textarea{width:100%;border:1.5px solid var(--border);border-radius:9px;padding:12px;font-size:15px;font-family:inherit;resize:vertical;min-height:90px;}
+  .nav{display:flex;gap:10px;margin-top:24px;}
+  .btn{flex:1;min-height:50px;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;}
+  .btn-primary{background:var(--teal);color:#fff;}
+  .btn-primary:active{background:var(--teal-d);}
+  .btn-ghost{background:#fff;border:1.5px solid var(--border);color:var(--navy);}
+  .save{display:block;text-align:center;margin-top:14px;font-size:13px;color:var(--teal-d);cursor:pointer;text-decoration:underline;}
+  .center{text-align:center;}
+  .big{font-size:46px;line-height:1;margin:10px 0;}
+  .muted{color:var(--mid);font-size:14px;}
+  .toggle{display:flex;align-items:flex-start;gap:10px;background:var(--light);border:1px solid var(--border);border-radius:10px;padding:12px;margin-top:14px;font-size:14px;cursor:pointer;}
+  .toggle input{margin-top:3px;width:18px;height:18px;}
+  .field{margin-top:12px;}
+  .field label{display:block;font-size:13px;font-weight:700;color:var(--mid);margin-bottom:5px;}
+  .field input{width:100%;border:1.5px solid var(--border);border-radius:9px;padding:11px;font-size:15px;font-family:inherit;}
+  .bonus{background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:16px;margin-top:16px;}
+  .err{color:var(--red);font-size:14px;margin-top:10px;}
+  .hidden{display:none;}
+</style>
+</head>
+<body>
+  <div class="topbar">GPS Leadership Solutions</div>
+  <div class="wrap">
+    <div id="root" class="card center"><p class="muted">Loading…</p></div>
+  </div>
+
+<script>
+(function(){
+  var qs = new URLSearchParams(location.search);
+  var TOKEN = qs.get('token') || '';
+  var PHASE = (qs.get('phase') === 'post') ? 'post' : 'pre';
+  var MODE  = qs.get('mode') === 'feedback' ? 'feedback' : 'participant';
+  var ROOM  = !!qs.get('room');
+  if(ROOM){ TOKEN = qs.get('room') || ''; }
+  var respondent = { name:'', email:'' };
+  var root = document.getElementById('root');
+
+  function esc(s){ return String(s==null?'':s).replace(/[<>&"]/g,function(c){return{'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c];}); }
+  function api(action, extra){
+    return fetch('/api/workshop-survey',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(Object.assign({action:action,token:TOKEN,phase:PHASE},extra||{}))})
+      .then(function(r){return r.json();});
+  }
+  function showError(msg){ root.className='card center'; root.innerHTML='<h1>Something went wrong</h1><p class="muted">'+esc(msg||'Please check your link and try again.')+'</p>'; }
+
+  if(!TOKEN){ showError('This link is missing its access token.'); return; }
+  if(ROOM){ startRoom(); } else if(MODE==='feedback'){ startFeedback(); } else { startParticipant(); }
+
+  // ───────────────────────── IN-ROOM (QR) SURVEY ─────────────────────────
+  function startRoom(){
+    api('room-get', {}).then(function(d){
+      if(!d || !d.ok){ return showError(d && d.error); }
+      if(!d.open){ return root_closed(d); }
+      STATE.questions = d.questions || []; STATE.meta = d.workshop || {};
+      buildPages(); renderRoomIntro(d);
+    }).catch(function(e){ showError(e.message); });
+  }
+  function renderRoomIntro(d){
+    root.className='card';
+    root.innerHTML =
+      '<h1>'+esc(d.workshop.title)+'</h1>'+
+      '<p class="sub">'+(PHASE==='pre'?'Pre-workshop pulse':'Post-workshop pulse')+(d.workshop.org?' · '+esc(d.workshop.org):'')+'</p>'+
+      '<span class="est">Takes about '+(PHASE==='pre'?'5':'3')+' minutes · '+STATE.questions.length+' questions</span>'+
+      '<p class="muted" style="margin-top:16px;">Your answers are confidential and shared only as a team-level summary.</p>'+
+      '<div class="field"><label>Your email (optional — lets us match your before &amp; after)</label><input id="rm_email" type="email" placeholder="you@company.com"></div>'+
+      '<div class="field"><label>Your name (optional)</label><input id="rm_name" placeholder="Name"></div>'+
+      '<div class="nav"><button class="btn btn-primary" id="begin">Begin</button></div>';
+    document.getElementById('begin').onclick=function(){
+      var e=document.getElementById('rm_email'), n=document.getElementById('rm_name');
+      respondent.email = e?e.value.trim():''; respondent.name = n?n.value.trim():'';
+      STATE.idx=0; renderPage();
+    };
+  }
+
+  // ───────────────────────── PARTICIPANT SURVEY ─────────────────────────
+  var STATE = { pages:[], idx:0, answers:{}, questions:[], meta:{} };
+
+  function startParticipant(){
+    api('get').then(function(d){
+      if(!d || !d.ok){ return showError(d && d.error); }
+      if(d.completed){ return thankYou('You have already completed this survey — thank you.'); }
+      if(!d.open){ return root_closed(d); }
+      STATE.questions = d.questions || [];
+      STATE.meta = d.workshop || {};
+      (d.saved||[]).forEach(function(s){ STATE.answers[s.question_id] = (s.response_value!=null? s.response_value : (s.response_text||'')); });
+      buildPages();
+      renderIntro(d);
+    }).catch(function(e){ showError(e.message); });
+  }
+  function root_closed(d){
+    root.className='card center';
+    root.innerHTML='<h1>This survey is closed</h1><p class="muted">The window for the '+esc(d.workshop&&d.workshop.title||'workshop')+' survey has passed. If you think this is a mistake, reply to the email that brought you here.</p>';
+  }
+  function buildPages(){
+    // Group consecutive questions by theme into short pages.
+    var pages=[], cur=null, curTheme=null;
+    STATE.questions.forEach(function(q){
+      if(q.question_theme!==curTheme || (cur && cur.length>=3)){ cur=[]; pages.push(cur); curTheme=q.question_theme; }
+      cur.push(q);
+    });
+    STATE.pages = pages.filter(function(p){return p.length;});
+  }
+  function renderIntro(d){
+    root.className='card';
+    var total = STATE.questions.length;
+    root.innerHTML =
+      '<h1>'+esc(d.workshop.title)+'</h1>'+
+      '<p class="sub">'+(PHASE==='pre'?'Pre-workshop pulse':'Post-workshop follow-up')+(d.workshop.org?' · '+esc(d.workshop.org):'')+'</p>'+
+      '<span class="est">This will take about '+(PHASE==='pre'?'5–7':'5')+' minutes · '+total+' questions</span>'+
+      '<p class="muted" style="margin-top:16px;">Your answers are confidential. '+esc(d.participant.name||'')+', I only ever share the team-level picture — never individual responses.</p>'+
+      '<div class="nav"><button class="btn btn-primary" id="begin">Begin</button></div>';
+    document.getElementById('begin').onclick=function(){ STATE.idx=0; renderPage(); };
+  }
+  function answeredCount(){ return STATE.questions.filter(function(q){ var v=STATE.answers[q.question_id]; return v!=null && v!==''; }).length; }
+  function renderPage(){
+    var page = STATE.pages[STATE.idx];
+    if(!page){ return; }
+    var total = STATE.questions.length, done=answeredCount();
+    var pct = Math.round(done/total*100);
+    var html = '<div class="progress"><div style="width:'+pct+'%"></div></div><div class="pcount">'+done+' of '+total+' answered</div>';
+    var theme = page[0].question_theme;
+    html += '<div class="qtheme">'+esc(themeLabel(theme))+'</div>';
+    page.forEach(function(q){ html += renderQuestion(q); });
+    html += '<div class="nav">'+
+      (STATE.idx>0?'<button class="btn btn-ghost" id="back">Back</button>':'')+
+      '<button class="btn btn-primary" id="next">'+(STATE.idx===STATE.pages.length-1?'Submit':'Next')+'</button></div>'+
+      (ROOM?'':'<span class="save" id="saveLink">Save and finish later</span>');
+    root.className='card'; root.innerHTML=html;
+    bindInputs(page);
+    var back=document.getElementById('back'); if(back) back.onclick=function(){ STATE.idx--; renderPage(); };
+    document.getElementById('next').onclick=function(){ onNext(page); };
+    var sl=document.getElementById('saveLink'); if(sl) sl.onclick=function(){ saveProgress(true); };
+  }
+  function renderQuestion(q){
+    var v = STATE.answers[q.question_id];
+    var h = '<div class="q">'+esc(q.question_text)+'</div>';
+    if(q.response_type==='text'){
+      h += '<textarea data-q="'+esc(q.question_id)+'" placeholder="Your answer">'+esc(v||'')+'</textarea>';
+    } else if(q.response_type==='numeric'){
+      var min=q.scale_min!=null?q.scale_min:0, max=q.scale_max!=null?q.scale_max:10;
+      h += '<div class="scale nps" data-q="'+esc(q.question_id)+'">';
+      for(var i=min;i<=max;i++){ h+='<button data-val="'+i+'"'+(String(v)===String(i)?' class="sel"':'')+'>'+i+'</button>'; }
+      h += '</div><div class="scalelabels"><span>Not likely</span><span>Very likely</span></div>';
+    } else {
+      var lo=q.scale_min!=null?q.scale_min:1, hi=q.scale_max!=null?q.scale_max:5;
+      h += '<div class="scale" data-q="'+esc(q.question_id)+'">';
+      for(var j=lo;j<=hi;j++){ h+='<button data-val="'+j+'"'+(String(v)===String(j)?' class="sel"':'')+'>'+j+'</button>'; }
+      h += '</div><div class="scalelabels"><span>Strongly disagree</span><span>Strongly agree</span></div>';
+    }
+    return h;
+  }
+  function bindInputs(page){
+    root.querySelectorAll('.scale').forEach(function(sc){
+      sc.querySelectorAll('button').forEach(function(b){
+        b.onclick=function(){
+          sc.querySelectorAll('button').forEach(function(x){x.classList.remove('sel');});
+          b.classList.add('sel');
+          STATE.answers[sc.getAttribute('data-q')] = b.getAttribute('data-val');
+          updateProgress();
+        };
+      });
+    });
+    root.querySelectorAll('textarea[data-q]').forEach(function(t){
+      t.oninput=function(){ STATE.answers[t.getAttribute('data-q')] = t.value; };
+    });
+  }
+  function updateProgress(){
+    var bar=root.querySelector('.progress > div'), cnt=root.querySelector('.pcount');
+    if(!bar) return; var total=STATE.questions.length, done=answeredCount();
+    bar.style.width=Math.round(done/total*100)+'%'; if(cnt) cnt.textContent=done+' of '+total+' answered';
+  }
+  function collect(){
+    return STATE.questions.map(function(q){
+      var v=STATE.answers[q.question_id];
+      if(v==null||v==='') return null;
+      return { question_id:q.question_id, value:(q.response_type==='text'?null:v), text:(q.response_type==='text'?v:null) };
+    }).filter(Boolean);
+  }
+  function saveProgress(notify){
+    return api('save-progress',{responses:collect()}).then(function(){
+      if(notify) thankYou('Saved. Come back to this same link anytime before the survey closes to finish.');
+    });
+  }
+  function onNext(page){
+    if(!ROOM) saveProgress(false);
+    if(STATE.idx < STATE.pages.length-1){ STATE.idx++; renderPage(); window.scrollTo(0,0); }
+    else { submit(); }
+  }
+  function submit(){
+    var nb=document.getElementById('next'); if(nb) nb.disabled=true;
+    var payload = { responses: collect() };
+    if(ROOM) payload.respondent = respondent;
+    api(ROOM?'room-submit':'submit', payload).then(function(d){
+      if(d && d.ok){ thankYou('Thank you — your responses are in.' + (ROOM ? '' : ' This makes the workshop sharper for your whole team.')); }
+      else if(d && d.closed){ thankYou('This survey just closed, but thanks for your time.'); }
+      else { showError(d && d.error); }
+    }).catch(function(e){ showError(e.message); });
+  }
+  function thankYou(msg){
+    root.className='card center';
+    root.innerHTML='<div class="big">✓</div><h1>All set</h1><p class="muted">'+esc(msg)+'</p>';
+  }
+  function themeLabel(t){
+    var m={trust:'Trust',proactivity:'Proactivity & ownership',productivity:'Productivity & focus',delegation:'Delegation',meetings:'Meetings',communication:'Communication',satisfaction:'Overall',open:'In your words'};
+    return m[t]||(t?t.charAt(0).toUpperCase()+t.slice(1):'Questions');
+  }
+
+  // ───────────────────────── SPONSOR FEEDBACK ─────────────────────────
+  var FB = { nps:null, answers:{}, consent:false, meta:{}, bonus:null, title:null };
+  function npsReferent(title){ return /chief executive|ceo|president|owner|founder|principal|managing partner/i.test(title||'') ? 'another CEO, president, or owner' : 'a peer or colleague'; }
+  function startFeedback(){
+    api('sponsor-feedback-get').then(function(d){
+      if(!d||!d.ok) return showError(d&&d.error);
+      FB.meta=d.workshop||{}; FB.bonus=d.bonus||null; FB.title=d.sponsor_title||null;
+      renderFeedback();
+    }).catch(function(e){ showError(e.message); });
+  }
+  function renderFeedback(){
+    root.className='card';
+    var h='<h1>How did it land?</h1><p class="sub">'+esc(FB.meta.title||'Workshop')+(FB.meta.org?' · '+esc(FB.meta.org):'')+'</p>';
+    h+='<div class="q">On a scale of 0 to 10, how likely are you to recommend this workshop to '+esc(npsReferent(FB.title))+'?</div>';
+    h+='<div class="scale nps" id="fbnps">';
+    for(var i=0;i<=10;i++){ h+='<button data-val="'+i+'"'+(String(FB.nps)===String(i)?' class="sel"':'')+'>'+i+'</button>'; }
+    h+='</div><div class="scalelabels"><span>Not likely</span><span>Very likely</span></div>';
+    h+='<div id="fbbranch"></div>';
+    h+='<div class="nav"><button class="btn btn-primary" id="fbsubmit">Submit</button></div><div class="err hidden" id="fberr"></div>';
+    root.innerHTML=h;
+    document.querySelectorAll('#fbnps button').forEach(function(b){
+      b.onclick=function(){ document.querySelectorAll('#fbnps button').forEach(function(x){x.classList.remove('sel');}); b.classList.add('sel'); FB.nps=Number(b.getAttribute('data-val')); renderBranch(); };
+    });
+    document.getElementById('fbsubmit').onclick=submitFeedback;
+    if(FB.nps!=null) renderBranch();
+  }
+  function ta(key,label){ return '<div class="q">'+esc(label)+'</div><textarea data-fb="'+esc(key)+'">'+esc(FB.answers[key]||'')+'</textarea>'; }
+  function renderBranch(){
+    var n=FB.nps, el=document.getElementById('fbbranch'); if(!el) return;
+    var h='';
+    h+=ta('most_valuable','What was the most valuable part of this workshop for you and your organization?');
+    h+=ta('improve','What is one thing we could improve next time to make this even more valuable?');
+    if(n>=9){
+      h+='<div class="qtheme">A few more, if you have a minute</div>';
+      h+=ta('before_challenge','Before this workshop, what was the biggest challenge or frustration your team was experiencing?');
+      h+=ta('surprised','What, if anything, surprised you most about the workshop?');
+      h+=ta('results','What specific results, shifts, or decisions have you seen already, or expect to see, because of this workshop?');
+      h+=ta('would_tell','If another CEO asked whether they should run this workshop with their team, what would you tell them?');
+      h+='<label class="toggle"><input type="checkbox" id="fbconsent"'+(FB.consent?' checked':'')+'><span>You may use my comments (with or without my name, as I select) in anonymized or attributed form for marketing or case studies.</span></label>';
+    } else if(n>=7){
+      h+=ta('one_liner','If you had to describe this workshop in one or two sentences to a colleague, what would you say? (optional)');
+    } else if(n===6){
+      h+='<div class="qtheme">Help us make this right</div>';
+      h+=ta('what_needed','What needed to be different for this to be a 9 or 10 for you?');
+      h+=ta('missed','Where did we miss the mark, if anywhere?');
+    } else {
+      h+='<div class="qtheme">Help us make this right</div>';
+      h+=ta('what_needed','What needed to be different for this to be a 9 or 10 for you?');
+      h+=ta('missed','Where did we miss the mark, if anywhere?');
+    }
+    el.innerHTML=h;
+    el.querySelectorAll('textarea[data-fb]').forEach(function(t){ t.oninput=function(){ FB.answers[t.getAttribute('data-fb')]=t.value; }; });
+    var c=document.getElementById('fbconsent'); if(c) c.onchange=function(){ FB.consent=c.checked; };
+  }
+  function submitFeedback(){
+    if(FB.nps==null){ var e=document.getElementById('fberr'); e.textContent='Please pick a number from 0 to 10.'; e.classList.remove('hidden'); return; }
+    document.getElementById('fbsubmit').disabled=true;
+    api('sponsor-feedback-submit',{nps:FB.nps,responses:FB.answers,consent_public:FB.consent}).then(function(d){
+      if(!d||!d.ok) return showError(d&&d.error);
+      if(d.tier==='promoter'){ promoterFlow(d.bonus); }
+      else if(d.tier==='satisfied'){ satisfiedFlow(); }
+      else { thankYou('Thank you for the honest feedback — it goes straight to Alex, who will follow up with you personally.'); }
+    }).catch(function(e){ showError(e.message); });
+  }
+  function promoterFlow(bonus){
+    root.className='card';
+    var h='<div class="big center">🎉</div><h1 class="center">Bonus unlocked</h1>';
+    if(bonus && bonus.url){ h+='<div class="bonus"><strong>'+esc(bonus.label||'Your bonus resource')+'</strong><div class="nav"><a class="btn btn-primary" href="'+esc(bonus.url)+'" target="_blank" rel="noopener" style="text-decoration:none;display:flex;align-items:center;justify-content:center;">Open your resource</a></div></div>'; }
+    else { h+='<p class="muted center">Alex will send your bonus resource shortly.</p>'; }
+    h+='<div class="qtheme">One last thing</div><p class="muted">Do you know one or two leaders who would get value from a session like this?</p>';
+    h+=referralForm();
+    root.innerHTML=h; bindReferral();
+  }
+  function satisfiedFlow(){
+    root.className='card';
+    var h='<div class="big center">✓</div><h1 class="center">Thank you</h1><p class="muted center">That helps us keep improving.</p>';
+    h+='<p class="muted" style="margin-top:18px;">If anyone comes to mind who’d benefit from a session like this, you’re welcome to introduce us (optional).</p>';
+    h+=referralForm();
+    root.innerHTML=h; bindReferral();
+  }
+  function referralForm(){
+    return '<div class="field"><label>Their name</label><input id="rfname" placeholder="Name"></div>'+
+      '<div class="field"><label>Their email</label><input id="rfemail" placeholder="name@company.com"></div>'+
+      '<div class="field"><label>Their company (optional)</label><input id="rforg" placeholder="Company"></div>'+
+      '<div class="field"><label>Anything we should know? (optional)</label><input id="rfnote" placeholder="Brief context"></div>'+
+      '<div class="nav"><button class="btn btn-ghost" id="rfskip">No thanks</button><button class="btn btn-primary" id="rfsend">Send introduction</button></div>'+
+      '<div class="err hidden" id="rferr"></div>';
+  }
+  function bindReferral(){
+    document.getElementById('rfskip').onclick=function(){ thankYou('Thank you — really appreciate your time.'); };
+    document.getElementById('rfsend').onclick=function(){
+      var name=val('rfname'), email=val('rfemail'), org=val('rforg'), note=val('rfnote');
+      if(!email){ var e=document.getElementById('rferr'); e.textContent='An email helps us reach them.'; e.classList.remove('hidden'); return; }
+      var subject='A leader I think you should meet';
+      var bodyTxt='Hi '+(name||'there')+', I just went through a GPS Leadership workshop and thought of you. '+(note?note+' ':'')+'I’d like to introduce you to Alex Tremble — worth a conversation.';
+      api('sponsor-feedback-submit',{nps:FB.nps,responses:FB.answers,consent_public:FB.consent,referral:{name:name,email:email,org:org,subject:subject,body:bodyTxt}}).then(function(){
+        thankYou('Thank you — we’ll reach out and keep you posted.');
+      }).catch(function(e){ showError(e.message); });
+    };
+  }
+  function val(id){ var el=document.getElementById(id); return el?el.value.trim():''; }
+})();
+</script>
+</body>
+</html>

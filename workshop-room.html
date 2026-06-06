@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GPS Leadership — Workshop Dashboard</title>
+<style>
+  :root{
+    --navy:#1a2332; --teal:#0d9488; --teal-d:#0f766e; --light:#f1f5f9;
+    --border:#e2e8f0; --mid:#64748b; --green:#16a34a; --amber:#d97706; --red:#dc2626; --white:#fff;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Open Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;background:var(--light);color:var(--navy);line-height:1.55;}
+  .topbar{background:var(--navy);color:#fff;padding:14px 20px;font-weight:700;letter-spacing:.3px;}
+  .wrap{max-width:920px;margin:0 auto;padding:0 18px 70px;}
+  .card{background:var(--white);border:1px solid var(--border);border-radius:14px;padding:24px;margin-top:20px;box-shadow:0 1px 4px rgba(0,0,0,.05);}
+  h1{font-size:24px;margin:18px 0 2px;}
+  h2{font-size:17px;margin:0 0 14px;}
+  .sub{color:var(--mid);font-size:14px;margin:0;}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin:18px 0;}
+  .kpi{background:var(--light);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center;}
+  .kpi .v{font-size:28px;font-weight:800;color:var(--navy);}
+  .kpi .l{font-size:12px;color:var(--mid);text-transform:uppercase;letter-spacing:.5px;margin-top:2px;}
+  .tp3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:8px;}
+  .tp3 .box{border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center;}
+  .tp3 .name{font-size:13px;color:var(--mid);font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
+  .tp3 .ba{font-size:22px;font-weight:800;margin-top:6px;}
+  .delta{font-size:12px;font-weight:700;margin-top:2px;}
+  .up{color:var(--green);} .down{color:var(--red);} .flat{color:var(--mid);}
+  .bullets{margin:6px 0 0;padding-left:18px;} .bullets li{margin:4px 0;}
+  .col2{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+  @media(max-width:640px){.col2{grid-template-columns:1fr;}.tp3{grid-template-columns:1fr;}}
+  .tl{position:relative;margin-top:6px;padding-left:6px;}
+  .ms{display:flex;gap:12px;align-items:flex-start;padding:10px 0;}
+  .dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--border);background:#fff;flex:none;margin-top:3px;}
+  .ms.done .dot{background:var(--teal);border-color:var(--teal);}
+  .ms.current .dot{background:#fff;border-color:var(--teal);box-shadow:0 0 0 4px rgba(13,148,136,.18);}
+  .ms .label{font-weight:600;}
+  .ms.upcoming .label{color:var(--mid);font-weight:500;}
+  .ms .meta{font-size:13px;color:var(--mid);}
+  .badge{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:2px 9px;border-radius:20px;background:rgba(13,148,136,.12);color:var(--teal-d);margin-left:8px;}
+  .rec{background:linear-gradient(135deg,#0f766e,#0d9488);color:#fff;border-radius:14px;padding:22px;margin-top:20px;}
+  .rec .hl{font-size:13px;text-transform:uppercase;letter-spacing:.6px;opacity:.85;}
+  .rec h2{color:#fff;margin:6px 0 8px;font-size:20px;}
+  .rec p{margin:0;opacity:.95;}
+  .muted{color:var(--mid);} .center{text-align:center;}
+</style>
+</head>
+<body>
+  <div class="topbar">GPS Leadership Solutions</div>
+  <div class="wrap"><div id="root"><div class="card center"><p class="muted">Loading your dashboard…</p></div></div></div>
+<script>
+(function(){
+  var TOKEN=new URLSearchParams(location.search).get('token')||'';
+  var root=document.getElementById('root');
+  function esc(s){return String(s==null?'':s).replace(/[<>&"]/g,function(c){return{'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c];});}
+  function band(v){if(v==null)return 'flat';return v>=4?'up':(v>=3?'flat':'down');}
+  function fmtDate(d){if(!d)return '';try{return new Date(d+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}catch(e){return d;}}
+  function countdown(d){if(!d)return '';var days=Math.ceil((new Date(d+'T00:00:00')-new Date())/86400000);if(isNaN(days))return '';return days>0?(days+' day'+(days===1?'':'s')+' out'):(days===0?'today':'');}
+
+  if(!TOKEN){ root.innerHTML='<div class="card center"><h1>Missing link</h1><p class="muted">This dashboard link is missing its access token.</p></div>'; return; }
+
+  fetch('/api/workshop-sponsor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:TOKEN})})
+    .then(function(r){return r.json();}).then(render).catch(function(e){
+      root.innerHTML='<div class="card center"><h1>Something went wrong</h1><p class="muted">'+esc(e.message)+'</p></div>';
+    });
+
+  function tp3box(name,t){
+    if(!t) t={};
+    var cur=(t.post!=null?t.post:t.pre);
+    var ba=(t.pre!=null&&t.post!=null)?(t.pre+' → '+t.post):(cur!=null?cur:'—');
+    var d=t.delta;
+    var dtxt=d==null?'':(d>0?('▲ +'+d):(d<0?('▼ '+d):'no change'));
+    var dcls=d==null?'flat':(d>0?'up':(d<0?'down':'flat'));
+    return '<div class="box"><div class="name">'+esc(name)+'</div><div class="ba '+band(cur)+'">'+esc(ba)+'</div>'+(dtxt?'<div class="delta '+dcls+'">'+esc(dtxt)+'</div>':'')+'</div>';
+  }
+  function list(arr,empty){ if(!arr||!arr.length)return '<p class="muted">'+esc(empty||'—')+'</p>'; return '<ul class="bullets">'+arr.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul>'; }
+
+  function render(d){
+    if(!d||!d.ok){ root.innerHTML='<div class="card center"><h1>Link not recognized</h1><p class="muted">'+esc(d&&d.error||'Please check your link.')+'</p></div>'; return; }
+    var w=d.workshop, s=d.exec_summary;
+    var html='';
+    html+='<h1>'+esc(w.title)+'</h1><p class="sub">'+esc(w.org||'')+(w.workshop_date?' · Workshop '+fmtDate(w.workshop_date):'')+'</p>';
+
+    // Executive summary
+    html+='<div class="card"><h2>Executive summary</h2>';
+    html+='<div class="kpis">'+
+      '<div class="kpi"><div class="v">'+s.participation.pre.rate+'%</div><div class="l">Pre response</div></div>'+
+      '<div class="kpi"><div class="v">'+s.participation.post.rate+'%</div><div class="l">Post response</div></div>'+
+      '<div class="kpi"><div class="v">'+(s.nps!=null?s.nps:'—')+'</div><div class="l">Workshop NPS</div></div>'+
+      '<div class="kpi"><div class="v">'+s.participation.total+'</div><div class="l">Participants</div></div></div>';
+    html+='<div class="tp3">'+tp3box('Trust',s.tp3.trust)+tp3box('Proactivity',s.tp3.proactivity)+tp3box('Productivity',s.tp3.productivity)+'</div>';
+    html+='<div class="col2" style="margin-top:18px;">'+
+      '<div><h2 style="font-size:15px;">Top strengths</h2>'+list(s.strengths,'Strengths appear once survey data is in.')+'</div>'+
+      '<div><h2 style="font-size:15px;">Top risks</h2>'+list(s.risks,'Risks appear once survey data is in.')+'</div></div>';
+    html+='<div style="margin-top:14px;"><h2 style="font-size:15px;">Recommended 90-day focus</h2>'+list(s.focus90,'Your 90-day focus will appear after the debrief.')+'</div>';
+    html+='</div>';
+
+    // Timeline
+    html+='<div class="card"><h2>Where things stand</h2><div class="tl">';
+    (d.timeline||[]).forEach(function(m){
+      var meta='';
+      if(m.detail) meta+=m.detail;
+      if(m.date) meta+=(meta?' · ':'')+fmtDate(m.date);
+      if(m.state==='current'&&m.countdown_to){ var c=countdown(m.countdown_to); if(c) meta+=(meta?' · ':'')+'workshop '+c; }
+      html+='<div class="ms '+m.state+'"><div class="dot"></div><div><div class="label">'+esc(m.label)+(m.state==='current'?'<span class="badge">Now</span>':'')+'</div>'+(meta?'<div class="meta">'+esc(meta)+'</div>':'')+'</div></div>';
+    });
+    html+='</div></div>';
+
+    // Recommendation
+    if(d.recommendation&&d.recommendation.primary){
+      var p=d.recommendation.primary;
+      html+='<div class="rec"><div class="hl">Recommended next step</div><h2>'+esc(p.headline||p.step)+'</h2><p>'+esc(p.rationale||'')+'</p></div>';
+    }
+
+    // Findings detail (theme table) — optional supporting detail
+    if(d.themeTable&&d.themeTable.length){
+      html+='<div class="card"><h2>By theme</h2><div class="tp3" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));">';
+      d.themeTable.forEach(function(t){ if(t.theme==='open'||t.theme==='feedback')return; html+=tp3box(themeLabel(t.theme),t); });
+      html+='</div></div>';
+    }
+
+    root.innerHTML=html;
+  }
+  function themeLabel(t){var m={trust:'Trust',proactivity:'Proactivity',productivity:'Productivity',delegation:'Delegation',meetings:'Meetings',communication:'Communication',satisfaction:'Satisfaction'};return m[t]||(t?t.charAt(0).toUpperCase()+t.slice(1):t);}
+})();
+</script>
+</body>
+</html>

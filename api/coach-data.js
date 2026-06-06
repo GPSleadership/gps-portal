@@ -58,6 +58,8 @@ const READ_TABLES = new Set([
   'testimonials', 'referrals',
   // Decision Room (v27)
   'teams', 'team_members', 'sponsors', 'sponsor_teams', 'recommendations', 'external_signals',
+  // Workshop Module (v35)
+  'workshops', 'workshop_participants', 'workshop_questions', 'workshop_responses',
 ]);
 // Tables the dashboard may write through the generic proxy.
 const WRITE_TABLES = new Set([
@@ -67,6 +69,8 @@ const WRITE_TABLES = new Set([
   'stakeholders', 'survey_responses', 'testimonials', 'referrals',
   // Decision Room (v27) — coach CRUD for teams, membership, recs, signals, sponsors
   'teams', 'team_members', 'sponsors', 'sponsor_teams', 'recommendations', 'external_signals',
+  // Workshop Module (v35) — coach CRUD for workshops, participants, questions, responses
+  'workshops', 'workshop_participants', 'workshop_questions', 'workshop_responses',
 ]);
 // NOTE: admin_accounts and coach_settings are intentionally NOT in either set —
 // they are served only by the dedicated, hardened actions below.
@@ -110,6 +114,16 @@ export default async function handler(req, res) {
   const session = verifyCoachSession(body.session);
   if (!session) return res.status(401).json({ error: 'Coach session invalid or expired' });
 
+  // ── RBAC: owner (Alex) vs assistant (EA). Default owner for legacy sessions
+  //    issued before lvl existed; new logins always carry lvl. ──────────────
+  const lvl = session.lvl || 'owner';
+  const isOwner = lvl === 'owner';
+  const ownerOnly = () => res.status(403).json({ error: 'Owner-only action. Ask Alex to make this change.' });
+  // Global IP / templates / automation: assistants may READ but never WRITE.
+  const OWNER_ONLY_WRITE = new Set(['email_templates', 'coach_settings', 'diagnostic_question_overrides', 'workshop_questions']);
+  // Permanent deletion of core records: owner only (assistants run ops, not nukes).
+  const OWNER_ONLY_DELETE = new Set(['clients', 'diagnostics', 'teams', 'workshops', 'diagnostic_team_reports', 'diagnostic_raters', 'diagnostic_responses']);
+
   try {
     const action = body.action;
 
@@ -122,6 +136,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, value: rows[0] ? rows[0].value : null });
     }
     if (action === 'set-setting') {
+      if (!isOwner) return ownerOnly();
       const key = String(body.key || '');
       if (/password/i.test(key)) return res.status(403).json({ error: 'Use password reset for credentials' });
       const r = await sb('/rest/v1/coach_settings?on_conflict=key', 'POST',
@@ -133,29 +148,35 @@ export default async function handler(req, res) {
 
     // ── Dedicated: admin_accounts (passwords always hashed) ─────────────────
     if (action === 'admin-list') {
-      const r = await sb('/rest/v1/admin_accounts?select=id,name,email,is_active,created_at&order=created_at.asc');
+      // Assistants may view the team list (read-only); only owners can modify it.
+      const r = await sb('/rest/v1/admin_accounts?select=id,name,email,role,is_active,created_at&order=created_at.asc');
       const rows = r.ok ? await r.json() : [];
-      return res.status(200).json({ ok: true, admins: rows });  // never returns password
+      return res.status(200).json({ ok: true, admins: rows, viewerLvl: lvl });  // never returns password
     }
     if (action === 'admin-add') {
+      if (!isOwner) return ownerOnly();
       if (!body.name || !body.password) return res.status(400).json({ error: 'name and password required' });
+      const role = (body.role === 'owner') ? 'owner' : 'assistant';
       const r = await sb('/rest/v1/admin_accounts', 'POST',
-        { name: body.name, email: body.email ? String(body.email).toLowerCase() : null, password: hashPassword(body.password), notes: body.notes || null, role: 'admin', is_active: true },
+        { name: body.name, email: body.email ? String(body.email).toLowerCase() : null, password: hashPassword(body.password), notes: body.notes || null, role, is_active: true },
         { Prefer: 'return=minimal' });
       if (!r.ok) { const d = await r.json().catch(() => ({})); return res.status(500).json({ error: 'Could not add admin', detail: d }); }
       return res.status(200).json({ ok: true });
     }
     if (action === 'admin-update') {
+      if (!isOwner) return ownerOnly();
       const patch = {};
       if (body.name  != null) patch.name = body.name;
       if (body.email != null) patch.email = String(body.email).toLowerCase();
       if (body.is_active != null) patch.is_active = !!body.is_active;
+      if (body.role != null) patch.role = (body.role === 'owner') ? 'owner' : 'assistant';
       if (body.password) patch.password = hashPassword(body.password);
       const r = await sb(`/rest/v1/admin_accounts?id=eq.${encodeURIComponent(body.id)}`, 'PATCH', patch, { Prefer: 'return=minimal' });
       if (!r.ok) return res.status(500).json({ error: 'Could not update admin' });
       return res.status(200).json({ ok: true });
     }
     if (action === 'admin-delete') {
+      if (!isOwner) return ownerOnly();
       await sb(`/rest/v1/admin_accounts?id=eq.${encodeURIComponent(body.id)}`, 'DELETE', null, { Prefer: 'return=minimal' });
       return res.status(200).json({ ok: true });
     }
@@ -176,6 +197,7 @@ export default async function handler(req, res) {
 
     if (op === 'insert' || op === 'upsert') {
       if (!WRITE_TABLES.has(table)) return res.status(403).json({ error: `Write not allowed: ${table}` });
+      if (!isOwner && OWNER_ONLY_WRITE.has(table)) return ownerOnly();
       const path = op === 'upsert' && body.onConflict
         ? `/rest/v1/${table}?on_conflict=${encodeURIComponent(body.onConflict)}`
         : `/rest/v1/${table}`;
@@ -188,6 +210,9 @@ export default async function handler(req, res) {
 
     if (op === 'update') {
       if (!WRITE_TABLES.has(table)) return res.status(403).json({ error: `Write not allowed: ${table}` });
+      if (!isOwner && OWNER_ONLY_WRITE.has(table)) return ownerOnly();
+      // Assistants cannot unlock/edit auto-locked 90-day plans.
+      if (!isOwner && (table === 'diagnostics' || table === 'clients') && body.values && /plan_status|plan_locked_at|plan_lock_source/.test(Object.keys(body.values).join(','))) return ownerOnly();
       const qs = buildQuery(body);
       if (!qs) return res.status(400).json({ error: 'Refusing unfiltered update' }); // never PATCH all rows
       const r = await sb(`/rest/v1/${table}?${qs}`, 'PATCH', body.values, { Prefer: 'return=minimal' });
@@ -197,6 +222,7 @@ export default async function handler(req, res) {
 
     if (op === 'delete') {
       if (!WRITE_TABLES.has(table)) return res.status(403).json({ error: `Write not allowed: ${table}` });
+      if (!isOwner && (OWNER_ONLY_DELETE.has(table) || OWNER_ONLY_WRITE.has(table))) return ownerOnly();
       const qs = buildQuery(body);
       if (!qs) return res.status(400).json({ error: 'Refusing unfiltered delete' }); // never DELETE all rows
       const r = await sb(`/rest/v1/${table}?${qs}`, 'DELETE', null, { Prefer: 'return=minimal' });

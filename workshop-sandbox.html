@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GPS Workshop Module — Coach Console (Sandbox)</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#004369; --navy-dark:#002D47; --teal:#01949A; --red:#DB1F48;
+    --sand:#E5DDC8; --light-teal:#E8F7F7; --light-sand:#F7F4EE; --white:#fff;
+    --text:#1a1a1a; --mid:#5a6b76; --border:#dbe3e6; --green:#1A7A3A; --amber:#BF6A00;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Open Sans',Arial,sans-serif;background:var(--light-sand);color:var(--text);line-height:1.5;}
+  h1,h2,h3,.mont{font-family:'Montserrat',sans-serif;}
+  .brandbar{background:var(--navy);color:#fff;padding:12px 22px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+  .brandbar .logo{font-family:'Montserrat',sans-serif;font-weight:800;letter-spacing:.4px;font-size:15px;}
+  .brandbar .logo span{color:var(--teal);}
+  .demoflag{background:var(--red);color:#fff;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;padding:3px 10px;border-radius:20px;}
+  /* App bar: coach nav left, context preview buttons right */
+  .appbar{background:var(--navy-dark);padding:8px 22px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+  .nav{display:flex;gap:6px;flex-wrap:wrap;}
+  .nav button{background:transparent;color:#cfe3e9;border:1px solid transparent;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Open Sans',sans-serif;}
+  .nav button.on{background:var(--teal);color:#fff;}
+  .ctx{display:flex;gap:6px;flex-wrap:wrap;}
+  .ctx button{background:rgba(255,255,255,.10);color:#eaf6f7;border:1px solid rgba(255,255,255,.18);padding:7px 12px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Open Sans',sans-serif;}
+  .ctx button:hover{background:rgba(255,255,255,.2);}
+  .ctx button[disabled]{opacity:.4;cursor:not-allowed;}
+  .shell{max-width:1180px;margin:0 auto;padding:18px;}
+  /* two-pane */
+  .two{display:grid;grid-template-columns:300px 1fr;gap:18px;align-items:start;}
+  @media(max-width:820px){.two{grid-template-columns:1fr;}}
+  .listcol{background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);}
+  .listcol .hd{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
+  .listcol .hd h2{font-size:15px;margin:0;color:var(--navy);}
+  .wrow{padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer;}
+  .wrow:hover{background:var(--light-sand);}
+  .wrow.sel{background:var(--light-teal);border-left:4px solid var(--teal);padding-left:10px;}
+  .wrow .nm{font-weight:700;color:var(--navy);font-size:14px;}
+  .wrow .meta{font-size:12px;color:var(--mid);margin:2px 0 6px;}
+  .card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.05);}
+  h1{font-size:22px;font-weight:800;color:var(--navy);margin:0 0 2px;}
+  h2{font-size:16px;font-weight:700;color:var(--navy);margin:0 0 12px;}
+  .sub{color:var(--mid);font-size:13px;margin:0;}
+  .chip{display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;}
+  .chip.teal{background:var(--light-teal);color:var(--navy);}
+  .chip.green{background:#e6f3ea;color:var(--green);}
+  .chip.amber{background:#fbf0df;color:var(--amber);}
+  .chip.gray{background:#eef1f3;color:var(--mid);}
+  .tag{display:inline-block;font-size:11px;font-weight:600;color:var(--navy);background:var(--light-sand);border:1px solid var(--border);padding:2px 9px;border-radius:6px;margin:0 4px 4px 0;}
+  .btn{background:var(--teal);color:#fff;border:none;padding:10px 16px;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;font-family:'Open Sans',sans-serif;margin:0 6px 6px 0;}
+  .btn:hover{background:#017a80;}
+  .btn.ghost{background:#fff;color:var(--navy);border:1.5px solid var(--border);}
+  .btn.sm{padding:7px 12px;font-size:12px;}
+  .helper{font-size:12px;color:var(--mid);margin:0 0 8px;}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin:6px 0 14px;}
+  .kpi{background:var(--light-teal);border-radius:10px;padding:14px;text-align:center;}
+  .kpi .v{font-size:26px;font-weight:800;color:var(--navy);font-family:'Montserrat',sans-serif;}
+  .kpi .l{font-size:11px;color:var(--mid);text-transform:uppercase;letter-spacing:.5px;margin-top:2px;}
+  ul.b{margin:6px 0 10px;padding-left:18px;} ul.b li{margin:3px 0;font-size:14px;}
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin:14px 0 16px;flex-wrap:wrap;}
+  .tabs .t{padding:9px 15px;cursor:pointer;font-size:13px;font-weight:700;border-bottom:3px solid transparent;color:var(--mid);}
+  .tabs .t.on{border-bottom-color:var(--teal);color:var(--navy);}
+  table.t{width:100%;border-collapse:collapse;font-size:13px;}
+  table.t th,table.t td{padding:8px 10px;text-align:left;border-top:1px solid var(--border);}
+  table.t thead th{background:var(--light-sand);color:var(--mid);font-size:11px;text-transform:uppercase;border-top:none;}
+  .mut{color:var(--mid);font-size:13px;}
+  .tp3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+  .tp3 .box{border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center;}
+  .tp3 .name{font-size:12px;color:var(--mid);font-weight:700;text-transform:uppercase;}
+  .tp3 .ba{font-size:20px;font-weight:800;margin-top:6px;font-family:'Montserrat',sans-serif;}
+  .up{color:var(--green);} .down{color:var(--red);}
+  .timeline{display:flex;gap:0;flex-wrap:wrap;margin-top:6px;}
+  .stp{flex:1;min-width:90px;text-align:center;position:relative;padding-top:22px;font-size:12px;color:var(--mid);}
+  .stp:before{content:'';position:absolute;top:6px;left:50%;width:14px;height:14px;border-radius:50%;border:2px solid var(--border);background:#fff;transform:translateX(-50%);}
+  .stp.done:before{background:var(--teal);border-color:var(--teal);}
+  .stp.cur:before{border-color:var(--teal);box-shadow:0 0 0 4px var(--light-teal);}
+  .stp.cur{color:var(--navy);font-weight:700;}
+  .stp.line:after{content:'';position:absolute;top:12px;left:-50%;width:100%;height:2px;background:var(--border);z-index:0;}
+  .kebab{position:relative;display:inline-block;}
+  .kebab .menu{display:none;position:absolute;right:0;top:30px;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:170px;z-index:20;}
+  .kebab .menu button{display:block;width:100%;text-align:left;background:#fff;border:none;padding:10px 14px;font-size:13px;cursor:pointer;color:var(--navy);}
+  .kebab .menu button:hover{background:var(--light-sand);}
+  .device{max-width:430px;margin:0 auto;background:var(--white);border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.08);}
+  .device .top{background:var(--navy);color:#fff;text-align:center;padding:12px;font-weight:700;font-size:14px;}
+  .device .body{padding:20px;}
+  .scale{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;}
+  .scale button{flex:1;min-width:48px;min-height:46px;border:1.5px solid var(--border);background:#fff;border-radius:9px;font-size:15px;font-weight:700;color:var(--navy);cursor:pointer;font-family:'Montserrat',sans-serif;}
+  .scale button.sel{background:var(--teal);border-color:var(--teal);color:#fff;}
+  .scalelabels{display:flex;justify-content:space-between;font-size:11px;color:var(--mid);}
+  textarea{width:100%;border:1.5px solid var(--border);border-radius:9px;padding:11px;font-size:14px;font-family:inherit;min-height:80px;}
+  input.fld{width:100%;border:1.5px solid var(--border);border-radius:9px;padding:10px;font-size:14px;font-family:inherit;margin-top:6px;}
+  .progress{height:9px;background:var(--border);border-radius:9px;overflow:hidden;margin:10px 0 4px;}
+  .progress>div{height:100%;background:var(--teal);width:0;}
+  .backbar{margin-bottom:14px;}
+  .big{font-size:46px;line-height:1;margin:6px 0;}
+  .center{text-align:center;}
+  .rec{background:linear-gradient(135deg,var(--navy),var(--teal));color:#fff;border-radius:12px;padding:20px;margin-top:6px;}
+  .rec .hl{font-size:12px;text-transform:uppercase;letter-spacing:.6px;opacity:.85;}
+  .rec h2{color:#fff;margin:6px 0 8px;}
+</style>
+</head>
+<body>
+  <div class="brandbar">
+    <div class="logo">GPS <span>Leadership Solutions</span> · Workshop Module</div>
+    <div class="demoflag">Sandbox · mock data</div>
+  </div>
+  <div class="appbar">
+    <div class="nav" id="nav"></div>
+    <div class="ctx" id="ctx"></div>
+  </div>
+  <div class="shell"><div id="stage"></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+(function(){
+  var STD_PRE=[['trust','I trust the people I work most closely with to follow through on what they commit to.'],['trust','On this team, people can raise hard issues without it being held against them.'],['proactivity','People here take ownership of problems without waiting to be told.'],['proactivity','When something is off, we raise it early rather than letting it slide.'],['productivity','Our meetings end with clear decisions and owners.'],['productivity','I have clarity on the top priorities that matter most right now.'],['delegation','Decisions get made at the right level instead of bottlenecking at the top.'],['meetings','The time we spend in meetings is a good use of the team’s time.'],['communication','Expectations between me and the people I work with are clear and shared.'],['open','What is the single biggest thing slowing this team down right now?']];
+  var WORKSHOPS=[
+    { id:'w1', title:'Acme Trucking — Exec Team', org:'Acme Trucking', sponsorTitle:'CEO', date:'Jun 2, 2026', debrief:'Jun 9, 2026', status:'post_survey_closed', industry:'Trucking', audience:'Executive', size:'$10–25M', touched:'Jun 3, 2026', summaryUpdated:'Jun 3, 2026', recapSent:false,
+      part:{total:4,preRate:100,postRate:75}, nps:50, npsAvg:8.5,
+      tp3:{trust:{pre:3,post:4,d:1},proactivity:{pre:2.5,post:4,d:1.5},productivity:{pre:2.5,post:3.5,d:1}},
+      themes:[['trust',3,4,1],['proactivity',2.5,4,1.5],['productivity',2.5,3.5,1],['delegation',2,3,1],['meetings',3,4,1],['communication',3,4,1]],
+      strengths:['Trust is a strength (4/5).','Meeting effectiveness is a strength (4/5).'],
+      risks:['Delegation is a risk — decisions still bottleneck at the top (3/5).'],
+      focus90:['Push two recurring decisions down a level for 30 days.','Tighten the weekly exec meeting to decisions and owners only.'],
+      focusActions:[{text:'Push two recurring decisions down a level for 30 days.',owner:'COO',start:'July 1'},{text:'Tighten the weekly exec meeting to decisions and owners only.',owner:'CEO',start:'next Monday'}],
+      rec:{header:'Turn this momentum into a repeatable system.',bullets:['Delegation is still bottlenecked at the top (3/5).','The 14-Day Executive Diagnostic maps where trust and ownership are leaking across your exec team.','You get a concrete, leader-by-leader plan to fix the bottlenecks we just surfaced.'],cta:'Schedule a 30-minute call to review the 14-Day Executive Diagnostic option.'},
+      participants:[{r:'COO',pre:'complete',post:'complete'},{r:'VP Operations',pre:'complete',post:'complete'},{r:'General Manager',pre:'complete',post:'complete'},{r:'Controller',pre:'complete',post:'in_progress'}] },
+    { id:'w2', title:'Northwind Logistics — Managers', org:'Northwind Logistics', sponsorTitle:'Operations Manager', date:'Jun 18, 2026', debrief:'Jun 25, 2026', status:'pre_survey_open', industry:'Logistics', audience:'Manager', size:'$25–50M', touched:'Jun 5, 2026', summaryUpdated:null, recapSent:false,
+      part:{total:9,preRate:44,postRate:0}, nps:null, npsAvg:null,
+      tp3:{trust:{pre:null,post:null},proactivity:{pre:null,post:null},productivity:{pre:null,post:null}},
+      themes:[], strengths:[], risks:[], focus90:[], rec:null,
+      participants:[{r:'Dispatch Mgr',pre:'complete',post:'not_started'},{r:'Warehouse Lead',pre:'in_progress',post:'not_started'},{r:'Safety Mgr',pre:'not_started',post:'not_started'}] }
+  ];
+  var ROOMTOKEN='a42f89c5-110a-4172-bf16-837eb54e70cf';
+  var SEL=WORKSHOPS[0], COACHVIEW='workshops', DTAB='overview', PREVIEW=null;
+
+  var nav=document.getElementById('nav'), ctx=document.getElementById('ctx'), stage=document.getElementById('stage');
+  function esc(s){return String(s==null?'':s).replace(/[<>&"]/g,function(c){return{'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c];});}
+  function band(v){return v>=4?'var(--green)':(v>=3?'var(--amber)':'var(--red)');}
+  function li(x){return '<li>'+esc(x)+'</li>';}
+  var STATUS={ setup:['Setup','gray'], discovery_complete:['Discovery done','gray'], questions_drafted:['Questions drafted','gray'], sponsor_review:['Sponsor review','amber'], pre_survey_open:['Pre-survey open','teal'], pre_survey_closed:['Pre-survey closed','teal'], workshop_delivered:['In room','teal'], post_survey_open:['Post-survey open','teal'], post_survey_closed:['Post-survey closed','amber'], debrief_scheduled:['Debrief scheduled','amber'], report_uploaded:['Report uploaded','green'], complete:['Complete','green'] };
+  function chip(s){ var m=STATUS[s]||[s,'gray']; return '<span class="chip '+m[1]+'">'+esc(m[0])+'</span>'; }
+  function pPill(s){ var col=s==='complete'?'var(--green)':(s==='in_progress'?'var(--amber)':'#94a3b8'); return '<span style="color:'+col+';font-weight:700;font-size:12px">'+esc(s||'not_started')+'</span>'; }
+
+  function renderNav(){
+    var items=[['workshops','Workshops'],['questionbank','Question bank'],['settings','Settings']];
+    nav.innerHTML=items.map(function(i){return '<button data-v="'+i[0]+'"'+((COACHVIEW===i[0]&&!PREVIEW)?' class="on"':'')+'>'+i[1]+'</button>';}).join('');
+    nav.querySelectorAll('button').forEach(function(b){b.onclick=function(){ PREVIEW=null; COACHVIEW=b.getAttribute('data-v'); paint(); };});
+    // context preview buttons (only meaningful on Workshops with a selection)
+    if(COACHVIEW==='workshops' && SEL && !PREVIEW){
+      ctx.innerHTML='<button data-p="survey">Preview participant survey</button><button data-p="sponsor">Open sponsor dashboard</button><button data-p="feedback">Preview sponsor feedback</button>';
+      ctx.querySelectorAll('button').forEach(function(b){b.onclick=function(){ PREVIEW=b.getAttribute('data-p'); paint(); };});
+    } else { ctx.innerHTML=''; }
+  }
+  function paint(){
+    renderNav();
+    if(PREVIEW==='survey') return preview(renderSurvey);
+    if(PREVIEW==='sponsor') return preview(renderSponsor);
+    if(PREVIEW==='feedback') return preview(renderFeedback);
+    if(COACHVIEW==='questionbank') return questionBank();
+    if(COACHVIEW==='settings') return settings();
+    return workshops();
+  }
+  function preview(fn){ stage.innerHTML='<div class="backbar"><button class="btn ghost sm" id="back2">← Back to coach console</button> <span class="mut" style="margin-left:8px">Previewing what the recipient sees · '+esc(SEL.title)+'</span></div><div id="pv"></div>'; document.getElementById('back2').onclick=function(){ PREVIEW=null; paint(); }; fn(document.getElementById('pv')); }
+
+  // ───────────────────────── WORKSHOPS (two-pane) ─────────────────────────
+  function workshops(){
+    var rows=WORKSHOPS.map(function(w){ return '<div class="wrow'+(SEL&&SEL.id===w.id?' sel':'')+'" data-id="'+w.id+'"><div class="nm">'+esc(w.title)+'</div><div class="meta">'+esc(w.org)+' · '+esc(w.date)+'</div>'+chip(w.status)+'</div>'; }).join('');
+    stage.innerHTML='<div class="two"><div class="listcol"><div class="hd"><h2>Workshops</h2><button class="btn sm" id="wNew">+ New</button></div>'+rows+'</div><div id="detail"></div></div>';
+    stage.querySelectorAll('.wrow').forEach(function(r){r.onclick=function(){ SEL=WORKSHOPS.filter(function(w){return w.id===r.getAttribute('data-id');})[0]; DTAB='overview'; paint(); };});
+    document.getElementById('wNew').onclick=function(){ alert('Demo: opens the New workshop form.'); };
+    detail();
+  }
+  function detail(){
+    var w=SEL, host=document.getElementById('detail'); if(!host) return;
+    var tags='<span class="tag">'+esc(w.industry)+'</span><span class="tag">'+esc(w.audience)+'</span><span class="tag">'+esc(w.size)+'</span>';
+    var head='<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap"><div><h1>'+esc(w.title)+'</h1><div class="sub">'+esc(w.org)+' · workshop '+esc(w.date)+' · debrief '+esc(w.debrief)+'</div><div style="margin:8px 0 6px">'+chip(w.status)+'</div><div>'+tags+'</div><div class="mut" style="margin-top:6px">Last touched by Alex · '+esc(w.touched)+'</div></div>'+
+      '<div class="kebab"><button class="btn ghost sm" id="kebabBtn">⋮</button><div class="menu" id="kebabMenu"><button id="kebDup">Duplicate workshop</button><button id="kebArch">Archive</button></div></div></div></div>';
+    var tabs=['overview','roster','questions','data','recap'];
+    var tabBar='<div class="tabs">'+tabs.map(function(t){return '<div class="t'+(DTAB===t?' on':'')+'" data-t="'+t+'">'+t.charAt(0).toUpperCase()+t.slice(1)+'</div>';}).join('')+'</div>';
+    host.innerHTML=head+tabBar+'<div id="pane"></div>';
+    var kb=document.getElementById('kebabBtn'), km=document.getElementById('kebabMenu');
+    kb.onclick=function(e){ e.stopPropagation(); km.style.display=km.style.display==='block'?'none':'block'; };
+    document.addEventListener('click',function(){ if(km) km.style.display='none'; });
+    document.getElementById('kebDup').onclick=function(){ alert('Demo: duplicates “'+w.title+'” for a recurring client (new dates, same questions).'); };
+    document.getElementById('kebArch').onclick=function(){ alert('Demo: archives this workshop.'); };
+    host.querySelectorAll('.tabs .t').forEach(function(t){t.onclick=function(){ DTAB=t.getAttribute('data-t'); detail(); };});
+    pane();
+  }
+  function pane(){ var p=document.getElementById('pane'); if(!p) return;
+    if(DTAB==='overview') return ovr(p);
+    if(DTAB==='roster') return roster(p);
+    if(DTAB==='questions') return questions(p);
+    if(DTAB==='data') return dataPane(p);
+    if(DTAB==='recap') return recap(p); }
+
+  // ---- Overview: exec summary → actions → status & links ----
+  function ovr(p){
+    var w=SEL;
+    var hasSummary=!!w.summaryUpdated;
+    var summaryCard;
+    if(hasSummary){
+      var t=w.tp3;
+      function box(name,o){return '<div class="tp3-x"></div>';}
+      summaryCard='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px"><h2 style="margin:0">Executive summary</h2><span class="mut">Last updated '+esc(w.summaryUpdated)+'</span></div>'+
+        '<div class="kpis"><div class="kpi"><div class="v">'+w.part.preRate+'%</div><div class="l">Pre response</div></div><div class="kpi"><div class="v">'+w.part.postRate+'%</div><div class="l">Post response</div></div><div class="kpi"><div class="v">'+(w.nps!=null?w.nps:'—')+'</div><div class="l">NPS</div></div><div class="kpi"><div class="v">'+w.part.total+'</div><div class="l">Participants</div></div></div>'+
+        '<div class="tp3">'+tp3box('Trust',t.trust)+tp3box('Proactivity',t.proactivity)+tp3box('Productivity',t.productivity)+'</div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:16px"><div><h3 style="font-size:14px;color:var(--navy);margin:0 0 4px">Top strengths</h3><ul class="b">'+w.strengths.map(li).join('')+'</ul></div><div><h3 style="font-size:14px;color:var(--navy);margin:0 0 4px">Top risks</h3><ul class="b">'+w.risks.map(li).join('')+'</ul></div></div>'+
+        '<h3 style="font-size:14px;color:var(--navy);margin:6px 0 4px">Recommended 90-day focus</h3><ul class="b">'+w.focus90.map(li).join('')+'</ul></div>';
+    } else {
+      summaryCard='<div class="card"><h2>Executive summary</h2><p class="mut">Not generated yet — run <strong>Update sponsor summary</strong> once survey data is in. (Pre-survey is still open for this workshop.)</p></div>';
+    }
+    var actions='<div class="card"><h2>Actions</h2>'+
+      '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:6px"><div><button class="btn" id="aSum">Update sponsor summary</button><div class="helper">Uses latest survey + feedback data.</div></div><div><button class="btn" id="aRec">Update 90-day recommendations</button><div class="helper">Uses latest survey + feedback data.</div></div></div>'+
+      '<div>'+'<button class="btn ghost sm" id="aCopySp">Copy sponsor link</button><button class="btn ghost sm" id="aCopyPt">Copy participant link</button></div>'+
+      '<div id="aOut" class="mut" style="margin-top:10px"></div></div>';
+    var spLink='https://portal.gpsleadership.org/workshop-room?token=SPONSORTOKEN';
+    var ptLink='https://portal.gpsleadership.org/workshop-survey?room='+ROOMTOKEN+'&phase=post';
+    var statusCard='<div class="card"><h2>Status &amp; links</h2><div class="mut" style="margin-bottom:6px">Sponsor dashboard</div><div style="font-size:12px;background:var(--light-sand);padding:9px;border-radius:7px;word-break:break-all;color:var(--navy)">'+esc(spLink)+'</div>'+
+      '<div class="timeline">'+timeline(w)+'</div></div>';
+    p.innerHTML=summaryCard+actions+statusCard;
+    document.getElementById('aSum').onclick=function(){ document.getElementById('aOut').textContent='Demo: regenerates the sponsor summary from the latest data and stamps “Last updated” now.'; };
+    document.getElementById('aRec').onclick=function(){ document.getElementById('aOut').textContent='Demo: refreshes the 90-day recommendations from the rules engine.'; };
+    document.getElementById('aCopySp').onclick=function(){ copy(spLink); };
+    document.getElementById('aCopyPt').onclick=function(){ copy(ptLink); };
+  }
+  function tp3box(name,o){ if(!o||o.post==null&&o.pre==null) return '<div class="box"><div class="name">'+name+'</div><div class="ba" style="color:var(--mid)">—</div></div>'; var cur=(o.post!=null?o.post:o.pre); var ba=(o.pre!=null&&o.post!=null)?(o.pre+' → '+o.post):cur; return '<div class="box"><div class="name">'+name+'</div><div class="ba" style="color:'+band(cur)+'">'+ba+'</div>'+(o.d?'<div class="up" style="font-size:12px;font-weight:700">▲ +'+o.d+'</div>':'')+'</div>'; }
+  function timeline(w){
+    var stages=['Pre-survey','Workshop','Post-survey','Debrief','Recap'];
+    var idxMap={setup:0,discovery_complete:0,questions_drafted:0,sponsor_review:0,pre_survey_open:0,pre_survey_closed:1,workshop_delivered:1,post_survey_open:2,post_survey_closed:2,debrief_scheduled:3,report_uploaded:4,complete:4};
+    var cur=idxMap[w.status]; if(w.recapSent) cur=4;
+    return stages.map(function(s,i){ var cls=i<cur?'done':(i===cur?'cur':''); return '<div class="stp '+cls+(i>0?' line':'')+'">'+esc(s)+'</div>'; }).join('');
+  }
+  function copy(t){ if(navigator.clipboard) navigator.clipboard.writeText(t).then(function(){ alert('Copied:\n'+t); },function(){ alert(t); }); else alert(t); }
+
+  // ---- Roster (with in-room QR) ----
+  function roster(p){
+    var rows=SEL.participants.map(function(x){ return '<tr><td style="padding:8px 10px">'+esc(x.r)+'</td><td style="padding:8px 10px">'+pPill(x.pre)+'</td><td style="padding:8px 10px">'+pPill(x.post)+'</td></tr>'; }).join('');
+    p.innerHTML='<div class="card"><h2>In-room post-survey (QR)</h2><p class="helper">Run the post-survey live, ~20–30 min before the workshop ends. Put this QR on your closing slide — the whole room scans the same code. (You can still email per-person links below.)</p><div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start"><div><div id="qrbox" style="width:200px;height:200px;background:#fff;border:1px solid var(--border);border-radius:10px;display:flex;align-items:center;justify-content:center;padding:8px"></div><div style="margin-top:10px"><button class="btn ghost sm" id="qrdl">Download PNG</button></div></div><div style="flex:1;min-width:220px"><label class="mut" style="font-weight:700">Phase</label> <select id="qrphase" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:7px"><option value="post" selected>Post-workshop</option><option value="pre">Pre-workshop</option></select> <button class="btn ghost sm" id="qrgen">Update QR</button><div id="qrlink" style="font-size:12px;background:var(--light-sand);padding:10px;border-radius:7px;margin-top:10px;word-break:break-all;color:var(--navy)"></div></div></div></div>'+
+      '<div class="card"><h2>Upload roster</h2><p class="helper">CSV header: <code>name,email,role,location,department</code>. Each person becomes one profile (reused if they already exist).</p><textarea placeholder="name,email,role,location,department"></textarea><div style="margin-top:10px"><button class="btn" onclick="alert(\'Demo: roster uploaded.\')">Upload roster</button></div></div>'+
+      '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px"><h2 style="margin:0">Participants ('+SEL.participants.length+')</h2><div><button class="btn" onclick="alert(\'Demo: sent pre-survey invites.\')">Send pre-survey</button><button class="btn ghost" onclick="alert(\'Demo: sent post-survey invites.\')">Send post-survey (email)</button></div></div><table class="t"><thead><tr><th>Role</th><th>Pre</th><th>Post</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+    qr(); document.getElementById('qrgen').onclick=qr; document.getElementById('qrdl').onclick=qrdl;
+  }
+  function qr(){ var box=document.getElementById('qrbox'); if(!box) return; var ph=(document.getElementById('qrphase')||{}).value||'post'; var url='https://portal.gpsleadership.org/workshop-survey?room='+ROOMTOKEN+'&phase='+ph; var lk=document.getElementById('qrlink'); if(lk) lk.textContent=url; box.innerHTML=''; if(typeof QRCode==='undefined'){ box.textContent='QR library loading…'; return; } new QRCode(box,{text:url,width:184,height:184,colorDark:'#004369',colorLight:'#ffffff'}); }
+  function qrdl(){ var box=document.getElementById('qrbox'); if(!box) return; var cv=box.querySelector('canvas'),img=box.querySelector('img'); var d=cv?cv.toDataURL('image/png'):(img?img.src:null); if(!d){ alert('Generate the QR first.'); return; } var a=document.createElement('a'); a.href=d; a.download='workshop-post-survey-qr.png'; document.body.appendChild(a); a.click(); a.remove(); }
+
+  // ---- Questions ----
+  function questions(p){
+    function tbl(phase){ var rows=STD_PRE.map(function(q){ return '<tr><td style="padding:8px 10px">'+esc(q[1])+'<div class="mut" style="font-size:11px">'+q[0]+' · standard</div></td><td style="padding:8px 10px;color:var(--green);font-weight:700">approved</td></tr>'; }).join(''); return '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px"><h2 style="margin:0;text-transform:capitalize">'+phase+'-workshop questions</h2><button class="btn ghost sm" id="ai_'+phase+'">'+(phase==='pre'?'AI suggest from discovery':'AI from pre-data')+'</button></div><table class="t" id="qt_'+phase+'"><tbody>'+rows+'</tbody></table><p class="helper" style="margin-top:10px">AI suggestions arrive as drafts and need your approval before participants see them.</p></div>'; }
+    p.innerHTML=tbl('pre')+tbl('post');
+    ['pre','post'].forEach(function(ph){ var b=document.getElementById('ai_'+ph); if(b) b.onclick=function(){ var t=document.getElementById('qt_'+ph); t.querySelector('tbody').insertAdjacentHTML('beforeend','<tr><td style="padding:8px 10px">'+(ph==='pre'?'Since the reorg, dispatch decisions get made without second-guessing.':'Since the workshop, decisions get made at the right level.')+'<div class="mut" style="font-size:11px">delegation · ai_suggested</div></td><td style="padding:8px 10px"><button class="btn ghost sm" onclick="this.closest(\'tr\').children[1].innerHTML=\'<span style=&quot;color:var(--green);font-weight:700&quot;>approved</span>\'">Approve</button></td></tr>'); }; });
+  }
+
+  // ---- Data ----
+  function dataPane(p){
+    p.innerHTML='<div class="card"><h2>Indices &amp; exports</h2><button class="btn" id="agg">Compute indices</button><button class="btn ghost" onclick="alert(\'Demo: downloads participant_responses.csv\')">Participant CSV</button><button class="btn ghost" onclick="alert(\'Demo: downloads sponsor_summary.csv\')">Sponsor CSV</button><button class="btn ghost" onclick="alert(\'Demo: downloads ghl.csv\')">GHL fields</button><div id="aggout" class="mut" style="margin-top:14px">Click compute indices.</div></div>';
+    document.getElementById('agg').onclick=function(){ var w=SEL; if(!w.themes.length){ document.getElementById('aggout').textContent='No post-survey data yet for this workshop.'; return; } var t=w.tp3; var rows=w.themes.map(function(r){return '<tr><td style="padding:6px 10px;text-transform:capitalize">'+r[0]+'</td><td style="padding:6px 10px">'+r[1]+'</td><td style="padding:6px 10px">'+r[2]+'</td><td style="padding:6px 10px;color:var(--green);font-weight:700">+'+r[3]+'</td></tr>';}).join(''); document.getElementById('aggout').innerHTML='<div><strong>Participation:</strong> '+w.part.preRate+'% pre, '+w.part.postRate+'% post · <strong>NPS:</strong> '+w.nps+' · <strong>Avg:</strong> '+w.npsAvg+'</div><table class="t" style="margin-top:10px"><thead><tr><th>Theme</th><th>Pre</th><th>Post</th><th>Δ</th></tr></thead><tbody>'+rows+'</tbody></table>'; };
+  }
+
+  // ---- Recap ----
+  function recap(p){ p.innerHTML='<div class="card"><h2>Post-debrief recap email</h2><p class="helper">Emails the sponsor key metrics, strengths, risks, the agreed 90-day focus, a dashboard link, and a 14-Day Diagnostic CTA when the rules fire. Generate the summary &amp; recommendations first.</p><button class="btn" onclick="alert(\'Demo: recap email sent to the sponsor.\')">Send recap to sponsor</button></div>'; }
+
+  // ───────────────────────── QUESTION BANK (coach) ─────────────────────────
+  function questionBank(){
+    function tbl(phase){ var rows=STD_PRE.concat(phase==='post'?[['satisfaction','How likely are you to recommend a workshop like this to a peer? (0-10)']]:[]).map(function(q){ return '<tr><td style="padding:8px 10px">'+esc(q[1])+'</td><td style="padding:8px 10px">'+q[0]+'</td></tr>'; }).join(''); return '<div class="card"><h2 style="text-transform:capitalize">'+phase+' standard template</h2><p class="helper">These seed every new workshop. Edit here to change the default for future workshops.</p><table class="t"><thead><tr><th>Question</th><th>Theme</th></tr></thead><tbody>'+rows+'</tbody></table><div style="margin-top:10px"><button class="btn ghost sm" onclick="alert(\'Demo: add a standard template question.\')">+ Add standard question</button></div></div>'; }
+    stage.innerHTML='<h1 style="margin-bottom:10px">Question bank</h1>'+tbl('pre')+tbl('post');
+  }
+
+  // ───────────────────────── SETTINGS (coach) ─────────────────────────
+  function settings(){
+    stage.innerHTML='<h1 style="margin-bottom:10px">Settings</h1>'+
+      '<div class="card"><h2>Promoter bonus resource</h2><p class="helper">Unlocked when a sponsor rates 9–10 on the feedback survey.</p><input class="fld" value="The Delegation Operating System" style="margin-bottom:8px"><input class="fld" placeholder="Resource URL (Drive link)"><div style="margin-top:10px"><button class="btn" onclick="alert(\'Demo: bonus resource saved.\')">Save</button></div></div>'+
+      '<div class="card"><h2>Defaults</h2><label class="mut" style="font-weight:700">Reminder cadence</label><div class="mut">Day survey opens · 3 days before close · 1 day before · morning of close</div><label class="mut" style="font-weight:700;display:block;margin-top:10px">Recommendation rules</label><div class="mut">Trust &lt; 3.5 → 14-Day Diagnostic · low delegation/proactivity → 90-Day CEO Reset · 3+ weak themes → Executive Retreat</div></div>';
+  }
+
+  // ───────────────────────── PREVIEWS (recipient views) ─────────────────────────
+  var sIdx=0,sAns={};
+  function renderSurvey(host){
+    var pages=[];for(var i=0;i<STD_PRE.length;i+=2)pages.push(STD_PRE.slice(i,i+2));
+    var inner;
+    if(sIdx>=pages.length){ inner='<div class="center"><div class="big" style="color:var(--green)">✓</div><h1>All set</h1><p class="mut">Your responses are in.</p><button class="btn" id="sr">Restart</button></div>'; }
+    else{ var done=Object.keys(sAns).length,total=STD_PRE.length,pg=pages[sIdx];
+      inner='<div class="mut">'+esc(SEL.org)+' — pre-workshop pulse · ~5 min</div><div class="progress"><div style="width:'+Math.round(done/total*100)+'%"></div></div><div class="mut" style="text-align:right">'+done+' of '+total+' answered</div>';
+      pg.forEach(function(q,k){var idx=sIdx*2+k; inner+='<div style="margin-top:14px;font-weight:600">'+esc(q[1])+'</div>'; if(q[0]==='open') inner+='<textarea data-q="'+idx+'">'+(sAns[idx]||'')+'</textarea>'; else { inner+='<div class="scale" data-q="'+idx+'">'; for(var n=1;n<=5;n++) inner+='<button data-n="'+n+'"'+(String(sAns[idx])===String(n)?' class="sel"':'')+'>'+n+'</button>'; inner+='</div><div class="scalelabels"><span>Strongly disagree</span><span>Strongly agree</span></div>'; }});
+      inner+='<div style="display:flex;gap:10px;margin-top:20px">'+(sIdx>0?'<button class="btn ghost" id="sb" style="flex:1">Back</button>':'')+'<button class="btn" id="sn" style="flex:2">'+(sIdx===pages.length-1?'Submit':'Next')+'</button></div>'; }
+    host.innerHTML='<div class="device"><div class="top">GPS Leadership Solutions</div><div class="body">'+inner+'</div></div>';
+    host.querySelectorAll('.scale').forEach(function(sc){sc.querySelectorAll('button').forEach(function(b){b.onclick=function(){ sc.querySelectorAll('button').forEach(function(x){x.classList.remove('sel');}); b.classList.add('sel'); sAns[sc.getAttribute('data-q')]=b.getAttribute('data-n'); renderSurvey(host); };});});
+    host.querySelectorAll('textarea[data-q]').forEach(function(t){t.oninput=function(){ sAns[t.getAttribute('data-q')]=t.value; };});
+    var sn=document.getElementById('sn'); if(sn) sn.onclick=function(){ sIdx++; renderSurvey(host); };
+    var sb=document.getElementById('sb'); if(sb) sb.onclick=function(){ sIdx--; renderSurvey(host); };
+    var sr=document.getElementById('sr'); if(sr) sr.onclick=function(){ sIdx=0; sAns={}; renderSurvey(host); };
+  }
+  function renderSponsor(host){
+    var w=SEL, t=w.tp3;
+    if(!w.summaryUpdated){ host.innerHTML='<div class="card center"><h1>'+esc(w.title)+'</h1><p class="mut">The sponsor dashboard fills in once survey data is collected. This workshop’s pre-survey is still open.</p></div>'; return; }
+    function tip(txt){ return '<span title="'+esc(txt)+'" style="cursor:help;color:var(--mid);font-size:11px;border:1px solid var(--border);border-radius:50%;width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;margin-left:4px;">i</span>'; }
+    function tp3line(o){ if(!o||o.post==null) return ''; return '<div class="mut" style="font-size:11px;margin-top:4px;">'+(o.pre!=null?o.pre+' → '+o.post:o.post)+' (1–5 scale; 4 is healthy)</div>'; }
+    function tp3boxL(name,o){ if(!o||(o.post==null&&o.pre==null)) return '<div class="box"><div class="name">'+name+'</div><div class="ba" style="color:var(--mid)">—</div></div>'; var cur=(o.post!=null?o.post:o.pre); var ba=(o.pre!=null&&o.post!=null)?(o.pre+' → '+o.post):cur; return '<div class="box"><div class="name">'+name+'</div><div class="ba" style="color:'+band(cur)+'">'+ba+'</div>'+(o.d?'<div class="up" style="font-size:12px;font-weight:700">▲ +'+o.d+'</div>':'')+tp3line(o)+'</div>'; }
+
+    // 1) WHAT HAPPENED — executive summary (with export actions + helper tooltips)
+    var summary='<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px"><h2 style="margin:0">Executive summary</h2><div><button class="btn ghost sm" id="spPdf">Download 1-page summary (PDF)</button><button class="btn ghost sm" id="spCopy">Copy summary for email</button></div></div>'+
+      '<div class="kpis"><div class="kpi"><div class="v">'+w.part.preRate+'%</div><div class="l">Pre response'+tip('% of invited participants who responded.')+'</div></div><div class="kpi"><div class="v">'+w.part.postRate+'%</div><div class="l">Post response'+tip('% of invited participants who responded.')+'</div></div><div class="kpi"><div class="v">'+w.nps+'</div><div class="l">NPS'+tip('Promoters minus detractors; 50+ is strong.')+'</div></div><div class="kpi"><div class="v">'+w.part.total+'</div><div class="l">Participants</div></div></div>'+
+      '<div class="tp3">'+tp3boxL('Trust',t.trust)+tp3boxL('Proactivity',t.proactivity)+tp3boxL('Productivity',t.productivity)+'</div></div>';
+
+    // 2) SO WHAT — interpretation (strengths, risks, numbered 90-day actions)
+    var fa=(w.focusActions||[]).map(function(a,i){ return '<li style="margin:6px 0"><strong>'+(i+1)+'. '+esc(a.text)+'</strong><div class="mut">Owner: '+esc(a.owner)+' · Start: '+esc(a.start)+'</div></li>'; }).join('');
+    var interp='<div class="card"><div style="display:grid;grid-template-columns:1fr 1fr;gap:18px"><div><h3 style="font-size:14px;color:var(--navy);margin:0 0 4px">Top strengths</h3><ul class="b">'+w.strengths.map(li).join('')+'</ul></div><div><h3 style="font-size:14px;color:var(--navy);margin:0 0 4px">Top risks</h3><ul class="b">'+w.risks.map(li).join('')+'</ul></div></div>'+
+      '<h3 style="font-size:14px;color:var(--navy);margin:8px 0 4px">Recommended 90-day focus</h3><ol style="margin:6px 0 0;padding-left:18px;list-style:none">'+fa+'</ol></div>';
+
+    // 3) NOW WHAT — recommended next step (moved up, risk-tied, real CTA)
+    var rec='';
+    if(w.rec){ rec='<div class="rec"><div class="hl">Now what — recommended next step</div><h2>'+esc(w.rec.header)+'</h2><ul style="margin:6px 0 14px;padding-left:18px">'+w.rec.bullets.map(function(b){return '<li style="margin:4px 0;opacity:.96">'+esc(b)+'</li>';}).join('')+'</ul><button class="btn" id="spCta" style="background:#fff;color:var(--navy)">'+esc(w.rec.cta)+'</button></div>'; }
+
+    // Timeline that does a job (status line under the current step)
+    var tl='<div class="card"><h2>Where things stand</h2><div class="timeline">'+timeline(w)+'</div><div class="mut" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">'+sponsorTimelineNote(w)+'</div></div>';
+
+    host.innerHTML='<h1>'+esc(w.title)+'</h1><p class="sub" style="margin-bottom:12px">'+esc(w.org)+' · workshop '+esc(w.date)+'</p>'+summary+interp+rec+tl;
+    var pdf=document.getElementById('spPdf'); if(pdf) pdf.onclick=function(){ alert('Demo: generates a 1-page PDF = the executive summary + 90-day focus + recommended next step, ready to forward up the chain.'); };
+    var cp=document.getElementById('spCopy'); if(cp) cp.onclick=function(){ copy(emailSummary(w)); };
+    var cta=document.getElementById('spCta'); if(cta) cta.onclick=function(){ alert('Demo: opens your GHL scheduling link to book the 30-minute diagnostic review.'); };
+  }
+  function sponsorTimelineNote(w){
+    if(w.recapSent) return 'Recap sent. Engagement complete.';
+    switch(w.status){
+      case 'pre_survey_open': return 'Pre-survey is open. Next: the workshop on '+esc(w.date)+'.';
+      case 'pre_survey_closed': case 'workshop_delivered': return 'Workshop delivered. Next: post-survey, then the debrief.';
+      case 'post_survey_open': return 'Post-survey is collecting responses. Debrief scheduled: '+esc(w.debrief)+'.';
+      case 'post_survey_closed': return 'Post-survey complete. Debrief scheduled: '+esc(w.debrief)+'.';
+      case 'debrief_scheduled': return 'Debrief scheduled for '+esc(w.debrief)+'. Agreed focus will appear here afterward.';
+      case 'report_uploaded': case 'complete': return 'Debrief held. Agreed focus: push decisions down a level; tighten the weekly exec meeting.';
+      default: return 'Next milestone coming up.';
+    }
+  }
+  function emailSummary(w){
+    var lines=[w.title+' — workshop summary','', 'WHAT HAPPENED', 'Participation: '+w.part.preRate+'% pre, '+w.part.postRate+'% post · NPS '+w.nps, 'Trust '+w.tp3.trust.pre+'→'+w.tp3.trust.post+', Proactivity '+w.tp3.proactivity.pre+'→'+w.tp3.proactivity.post+', Productivity '+w.tp3.productivity.pre+'→'+w.tp3.productivity.post+' (1–5 scale)','', 'SO WHAT', 'Strengths: '+w.strengths.join(' '), 'Risks: '+w.risks.join(' '), '90-day focus:'];
+    (w.focusActions||[]).forEach(function(a,i){ lines.push('  '+(i+1)+'. '+a.text+' (Owner: '+a.owner+', Start: '+a.start+')'); });
+    if(w.rec){ lines.push('', 'NOW WHAT', w.rec.header); w.rec.bullets.forEach(function(b){ lines.push('  - '+b); }); lines.push('CTA: '+w.rec.cta); }
+    return lines.join('\n');
+  }
+  var fNps=null,fAns={};
+  function renderFeedback(host){
+    var referent=/chief executive|ceo|president|owner|founder|principal|managing partner/i.test(SEL.sponsorTitle||'')?'another CEO, president, or owner':'a peer or colleague';
+    var inner='<h1>How did it land?</h1><p class="sub">'+esc(SEL.title)+'</p><div style="margin-top:12px;font-weight:600">On a scale of 0 to 10, how likely are you to recommend this workshop to '+referent+'?</div><div class="scale" id="fn" style="flex-wrap:wrap">';
+    for(var n=0;n<=10;n++) inner+='<button data-n="'+n+'" style="min-width:38px"'+(String(fNps)===String(n)?' class="sel"':'')+'>'+n+'</button>';
+    inner+='</div><div class="scalelabels"><span>Not likely</span><span>Very likely</span></div><div id="fb"></div>';
+    host.innerHTML='<div class="device"><div class="top">GPS Leadership Solutions</div><div class="body">'+inner+'</div></div>';
+    document.querySelectorAll('#fn button').forEach(function(b){b.onclick=function(){ document.querySelectorAll('#fn button').forEach(function(x){x.classList.remove('sel');}); b.classList.add('sel'); fNps=+b.getAttribute('data-n'); fbranch(host); };});
+    if(fNps!=null) fbranch(host);
+  }
+  function fq(k,label){return '<div style="margin-top:12px;font-weight:600">'+esc(label)+'</div><textarea data-f="'+k+'">'+(fAns[k]||'')+'</textarea>';}
+  function fbranch(host){ var el=document.getElementById('fb'),n=fNps,h=''; h+=fq('most','What was the most valuable part for you and your organization?')+fq('improve','What is one thing we could improve next time?');
+    if(n>=9){ h+='<div class="mut" style="margin-top:12px;text-transform:uppercase;font-size:12px;font-weight:700;color:var(--teal)">A few more, if you have a minute</div>'+fq('results','What results or shifts have you seen, or expect to see?')+'<label style="display:flex;gap:10px;margin-top:12px;font-size:13px;align-items:flex-start"><input type="checkbox" style="width:18px;height:18px;margin-top:3px"><span>You may use my comments in marketing or case studies.</span></label>'; }
+    else if(n>=7){ h+=fq('one','Describe this workshop in a sentence to a colleague (optional).'); }
+    else{ h+='<div class="mut" style="margin-top:12px;text-transform:uppercase;font-size:12px;font-weight:700;color:var(--red)">Help us make this right</div>'+fq('need','What needed to be different for this to be a 9 or 10?')+fq('miss','Where did we miss the mark?'); }
+    h+='<div style="margin-top:14px"><button class="btn" id="fs">Submit</button></div>'; el.innerHTML=h;
+    document.getElementById('fs').onclick=function(){ var msg=n>=9?'🎉 Bonus unlocked + referral flow appears here.':(n>=7?'✓ Thank you — soft referral option appears here.':'Service-recovery only; flagged “needs review” for Alex. No upsell shown.'); host.querySelector('.body').innerHTML='<div class="center"><div class="big">'+(n>=9?'🎉':(n>=7?'✓':'!'))+'</div><h1>Thank you</h1><p class="mut">'+msg+'</p><button class="btn" id="fr">Restart</button></div>'; document.getElementById('fr').onclick=function(){ fNps=null; fAns={}; renderFeedback(host); }; };
+  }
+
+  paint();
+})();
+</script>
+</body>
+</html>

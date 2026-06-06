@@ -35,6 +35,14 @@
     {
       "source": "/diagnostic-sandbox",
       "destination": "/diagnostic-sandbox.html"
+    },
+    {
+      "source": "/workshop-room",
+      "destination": "/workshop-room.html"
+    },
+    {
+      "source": "/workshop-survey",
+      "destination": "/workshop-survey.html"
     }
   ],
   "crons": [
@@ -49,6 +57,10 @@
     {
       "path": "/api/diagnostic?action=reminders",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/workshop-data?action=reminders",
+      "schedule": "0 13 * * *"
     }
   ],
   "headers": [
@@ -156,6 +168,15 @@
       "maxDuration": 15
     },
     "api/email-templates.js": {
+      "maxDuration": 15
+    },
+    "api/workshop-data.js": {
+      "maxDuration": 120
+    },
+    "api/workshop-survey.js": {
+      "maxDuration": 15
+    },
+    "api/workshop-sponsor.js": {
       "maxDuration": 15
     }
   }
