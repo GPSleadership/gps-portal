@@ -779,6 +779,32 @@
       .role-pill{display:inline-block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;border-radius:10px;padding:2px 9px;}
       .role-pill.owner{background:#e7f0ee;color:#01655c;}
       .role-pill.assistant{background:#eef1f4;color:#566;}
+
+      /* ── MOBILE PASS — eliminate horizontal overflow on the coach dashboard ── */
+      @media (max-width: 768px) {
+        *, *::before, *::after { box-sizing: border-box; }
+        html, body { max-width: 100%; overflow-x: hidden !important; }
+        img, svg, video, canvas, iframe { max-width: 100% !important; height: auto; }
+        [style*="min-width"] { min-width: 0 !important; }
+        .container, .card, .toolbar, .panel, .modal, .dflag, .dquick-row,
+        [style*="width:"][style*="px"] { max-width: 100% !important; }
+        /* nav tabs, toolbars, and any inline flex row wrap instead of overflowing */
+        .section-nav, .section-subnav, .toolbar, .toolbar-right, .filter-tabs,
+        [style*="display:flex"], [style*="display: flex"] { flex-wrap: wrap !important; }
+        /* all dashboard tables scroll within their own box */
+        table, .admin-table, .email-log-table { display: block; width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; font-size: 13px; }
+        /* stat-card grids and any inline grid collapse to one column */
+        [style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
+        /* tame oversized headings / big numbers */
+        h1 { font-size: 22px !important; }
+        h2 { font-size: 19px !important; }
+        [style*="font-size:48"],[style*="font-size:44"],[style*="font-size:40"],
+        [style*="font-size:36"],[style*="font-size:34"],[style*="font-size:32"],
+        [style*="font-size:30"],[style*="font-size:28"],[style*="font-size:24"] { font-size: 22px !important; line-height: 1.2; }
+        button, .btn-add, .btn-export { min-height: 42px; }
+        .container { padding-left: 14px !important; padding-right: 14px !important; }
+        #globalSearch { min-width: 0 !important; width: 100% !important; }
+      }
     </style>
     <div class="section-nav" style="position:relative;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
       <div class="section-tab active" id="grp-today"     onclick="showGroup('today')">Today</div>
