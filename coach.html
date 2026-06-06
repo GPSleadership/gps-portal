@@ -7401,7 +7401,7 @@ async function drSendSponsor(sponsorId){
     if(!card||!act) return; act.innerHTML='';
     if (iOS()) {
       msg.textContent='Add it to your home screen for one-tap access:';
-      act.innerHTML='<div style="font-size:13px;color:#333;line-height:1.6;">Tap the <b>Share</b> button at the bottom of Safari, then choose &ldquo;Add to Home Screen.&rdquo;</div>';
+      act.innerHTML='<div style="font-size:13px;color:#333;line-height:1.6;">Tap the <b>Share</b> button (bottom of Safari, top right of Chrome), then choose &ldquo;Add to Home Screen.&rdquo;</div>';
     } else if (deferredPrompt) {
       msg.textContent='Install it as an app for one-tap access:';
       var b=document.createElement('button'); b.textContent='Add to my home screen';
@@ -7423,7 +7423,7 @@ async function drSendSponsor(sponsorId){
     var box = document.getElementById('installHelpBox'); if (!box) return;
     box.innerHTML =
       '<div style="font-size:13px;color:#333;line-height:1.8;">'
-      + '<div><b style="color:#004369;">On your iPhone:</b> open <b>portal.gpsleadership.org/coach</b> in Safari, log in, tap the <b>Share</b> button (the square with the up arrow at the bottom), then choose <b>&ldquo;Add to Home Screen.&rdquo;</b> You&rsquo;ll get the GPS icon like any app.</div>'
+      + '<div><b style="color:#004369;">On your iPhone:</b> open <b>portal.gpsleadership.org/coach</b> in Safari or Chrome, log in, tap the <b>Share</b> button (the square with the up arrow &mdash; bottom of Safari, top right of Chrome), then choose <b>&ldquo;Add to Home Screen.&rdquo;</b> You&rsquo;ll get the GPS icon like any app.</div>'
       + '<div style="margin-top:8px;"><b style="color:#004369;">On Android:</b> open it in Chrome, tap the <b>&#8942;</b> menu, then <b>&ldquo;Add to Home screen.&rdquo;</b></div>'
       + '</div>';
     if (deferredPrompt) {

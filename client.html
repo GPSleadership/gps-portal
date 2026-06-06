@@ -6875,7 +6875,7 @@ By clicking "I Agree and Continue," you confirm that you have read and understoo
     if(!card||!act) return; act.innerHTML='';
     if (iOS()) {
       msg.textContent='Add it to your home screen for one-tap access:';
-      act.innerHTML='<div style="font-size:13px;color:#333;line-height:1.6;">Tap the <b>Share</b> button at the bottom of Safari, then choose <b>“Add to Home Screen.”</b></div>';
+      act.innerHTML='<div style="font-size:13px;color:#333;line-height:1.6;">Tap the <b>Share</b> button (bottom of Safari, top right of Chrome), then choose <b>“Add to Home Screen.”</b></div>';
     } else if (deferredPrompt) {
       msg.textContent='Install it as an app for one-tap access:';
       var b=document.createElement('button'); b.textContent='Add to my home screen';

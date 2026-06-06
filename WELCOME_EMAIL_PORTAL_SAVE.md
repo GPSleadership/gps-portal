@@ -25,8 +25,9 @@ automatically.
 **Save it so it is one tap away.** Most of my clients run their week from their
 phone, so I would set this up once and forget it:
 
-- On your iPhone: open the link in Safari, tap the Share button at the bottom,
-  then choose "Add to Home Screen." You will get a GPS icon you tap like any app.
+- On your iPhone: open the link in Safari or Chrome, tap the Share button (the
+  square with the up arrow), then choose "Add to Home Screen." You will get a
+  GPS icon you tap like any app.
 - On Android: open the link in Chrome and tap "Add to Home screen" when it
   offers, or use the menu in the top right.
 - On your computer: bookmark the page (Cmd+D on Mac, Ctrl+D on Windows). In
