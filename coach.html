@@ -1031,6 +1031,14 @@
         <div style="font-size:13px;color:var(--gray-600);line-height:1.6;margin-bottom:14px;">This is the main password for your dashboard. Changing it does not affect your admin/EA accounts.</div>
         <button class="btn-add" onclick="openChangePwModal()">Change Password</button>
       </div>
+
+      <div style="background:var(--white);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06);padding:20px 22px;max-width:560px;margin-top:16px;">
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px;">
+          <img src="/icons/icon-192.png" alt="GPS" style="width:34px;height:34px;border-radius:8px;" />
+          <div style="font-family:'Montserrat',sans-serif;font-size:14px;font-weight:700;color:var(--navy);">Get the dashboard on your phone</div>
+        </div>
+        <div id="installHelpBox" style="font-size:13px;color:var(--gray-600);">Loading…</div>
+      </div>
     </div><!-- /section-security -->
 
     <!-- ═══ EMAIL TEMPLATES SECTION ═══ -->
@@ -7410,13 +7418,33 @@ async function drSendSponsor(sponsorId){
     }
     card.style.display='block';
   }
+  // ── Permanent help card in Settings → Account & Security ──────────────────
+  function fillHelp(){
+    var box = document.getElementById('installHelpBox'); if (!box) return;
+    box.innerHTML =
+      '<div style="font-size:13px;color:#333;line-height:1.8;">'
+      + '<div><b style="color:#004369;">On your iPhone:</b> open <b>portal.gpsleadership.org/coach</b> in Safari, log in, tap the <b>Share</b> button (the square with the up arrow at the bottom), then choose <b>&ldquo;Add to Home Screen.&rdquo;</b> You&rsquo;ll get the GPS icon like any app.</div>'
+      + '<div style="margin-top:8px;"><b style="color:#004369;">On Android:</b> open it in Chrome, tap the <b>&#8942;</b> menu, then <b>&ldquo;Add to Home screen.&rdquo;</b></div>'
+      + '</div>';
+    if (deferredPrompt) {
+      var b = document.createElement('button');
+      b.textContent = 'Install on this device now';
+      b.className = 'btn-add';
+      b.style.cssText = 'margin-top:12px;';
+      b.onclick = function(){ deferredPrompt.prompt(); deferredPrompt.userChoice.finally(function(){ deferredPrompt = null; b.remove(); }); };
+      box.appendChild(b);
+    }
+    if (!iOS() && !android()) qr(box); // on a computer: QR to hop straight to your phone
+  }
+  window.addEventListener('beforeinstallprompt', function(){ setTimeout(fillHelp, 50); });
+
   function maybeShow(){
     // Wait until the dashboard is actually unlocked (after login), then prompt once.
     var tries = 0;
     var iv = setInterval(function(){
       tries++;
       var ds = document.getElementById('dashboardScreen');
-      if (ds && ds.style.display !== 'none') { clearInterval(iv); setTimeout(render, 1500); }
+      if (ds && ds.style.display !== 'none') { clearInterval(iv); fillHelp(); setTimeout(render, 1500); }
       else if (tries > 30) { clearInterval(iv); }
     }, 2000);
   }
