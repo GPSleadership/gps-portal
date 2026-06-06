@@ -158,8 +158,8 @@
 
     // 3) NOW WHAT — recommended next step
     if(rec){
-      var subj=encodeURIComponent('Reviewing our next step: '+(rec.step||'GPS engagement'));
-      html+='<div class="rec"><div class="rec-kicker">Now what — recommended next step</div><h2>'+esc(rec.headline||rec.step)+'</h2><p>'+esc(rec.rationale||'')+'</p><a class="cta-btn" href="mailto:alex@gpsleadership.org?subject='+subj+'">Schedule a 30-minute call to review this →</a></div>';
+      var ctaUrl = d.cta_url || 'https://api.leadconnectorhq.com/widget/bookings/30-minute-coaching-discovery-call';
+      html+='<div class="rec"><div class="rec-kicker">Now what — recommended next step</div><h2>'+esc(rec.headline||rec.step)+'</h2><p>'+esc(rec.rationale||'')+'</p><a class="cta-btn" href="'+esc(ctaUrl)+'" target="_blank" rel="noopener">Schedule a 30-minute call to review this →</a></div>';
     }
 
     // Timeline

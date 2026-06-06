@@ -129,6 +129,10 @@ export default async function handler(req, res) {
     const summary = w.exec_summary_json || null;
     const rec = w.recommendation_json || null;
 
+    // Coach-configurable scheduling link for the recommendation CTA.
+    const cs = await sbOne(`/rest/v1/coach_settings?key=eq.workshop_cta_url&select=value&limit=1`);
+    const ctaUrl = (cs && cs.value) || 'https://api.leadconnectorhq.com/widget/bookings/30-minute-coaching-discovery-call';
+
     // Approved, public-permission testimonials for this workshop (optional surface).
     const testimonials = w.sponsor_client_id
       ? await sbGet(`/rest/v1/testimonials?workshop_id=eq.${enc(w.id)}&permission_public_use=eq.true&select=responses,rating_nps,created_at&order=created_at.desc`)
@@ -150,6 +154,7 @@ export default async function handler(req, res) {
       timeline: buildTimeline(w, agg),
       recommendation: rec,
       findings: f,
+      cta_url: ctaUrl,
       testimonials,
     });
   } catch (err) {
