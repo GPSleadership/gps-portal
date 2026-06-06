@@ -127,6 +127,26 @@
     return 'A mixed result'+(npsTxt?' ('+npsTxt+')':'')+'. Clear strengths to build on and a few risks that are costing time day to day.';
   }
   function focusItem(f){ if(f&&typeof f==='object'){ return '<li><span class="ftext">'+esc(f.text||'')+'</span>'+((f.owner||f.start)?'<div class="fmeta">'+(f.owner?'Owner: '+esc(f.owner):'')+(f.owner&&f.start?' · ':'')+(f.start?'Start: '+esc(f.start):'')+'</div>':'')+'</li>'; } return '<li><span class="ftext">'+esc(f)+'</span></li>'; }
+  function themeLabel(t){ var m={trust:'Trust',proactivity:'Proactivity',productivity:'Productivity',delegation:'Delegation',meetings:'Meetings',communication:'Communication',satisfaction:'Satisfaction'}; return m[t]||(t?t.charAt(0).toUpperCase()+t.slice(1):t); }
+  function bandColor(v){ return v==null?'#d0d0d0':(v>=4?'#2e7d32':(v>=3?'#e65100':'#DB1F48')); }
+  function themeCompareCard(tbl){
+    var rows=(tbl||[]).filter(function(r){ return r.theme!=='open'&&r.theme!=='feedback'; });
+    if(!rows.length) return '';
+    var hasPost=rows.some(function(r){ return r.post!=null; });
+    var intro=hasPost?'Where the team moved from before the workshop to after. Green = gains, red = still needs focus.':'Pre-workshop read — the lower scores are where this workshop should focus.';
+    var body=rows.map(function(r){
+      var pre=r.pre, post=r.post, d=r.delta, cur=(post!=null?post:pre), chip='';
+      if(pre!=null&&post!=null){ var cls=d>0?'trend-up':(d<0?'trend-down':'trend-flat'); var ar=d>0?'▲ +':(d<0?'▼ ':'• '); chip='<span class="'+cls+'">'+ar+(d!=null?Math.abs(d):0)+'</span>'; }
+      var barw=cur!=null?Math.round(cur/5*100):0;
+      return '<tr><td style="padding:8px 10px;font-weight:600;color:var(--navy-dark)">'+esc(themeLabel(r.theme))+'</td>'+
+        '<td style="padding:8px 10px;text-align:center;color:var(--gray-600)">'+(pre!=null?pre:'—')+'</td>'+
+        '<td style="padding:8px 10px;text-align:center;font-weight:700;color:var(--navy)">'+(post!=null?post:'—')+'</td>'+
+        '<td style="padding:8px 10px;min-width:110px"><div class="bar-track" style="margin:0"><div class="bar-fill" style="width:'+barw+'%;background:'+bandColor(cur)+'"></div></div></td>'+
+        '<td style="padding:8px 10px;text-align:center;font-size:12px">'+chip+'</td></tr>';
+    }).join('');
+    return '<div class="card"><div class="card-title" style="margin-bottom:8px"><span class="dot"></span>Pre → Post by theme</div><div style="font-size:13px;color:var(--gray-600);margin-bottom:10px">'+intro+'</div>'+
+      '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:var(--navy);color:#fff"><th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.4px">Theme</th><th style="padding:8px 10px;font-size:10px;text-transform:uppercase">Pre</th><th style="padding:8px 10px;font-size:10px;text-transform:uppercase">Post</th><th style="padding:8px 10px;font-size:10px;text-transform:uppercase">Post level</th><th style="padding:8px 10px;font-size:10px;text-transform:uppercase">Change</th></tr></thead><tbody>'+body+'</tbody></table></div>';
+  }
 
   function render(d){
     if(!d||!d.ok){ view.innerHTML='<div class="card"><div class="empty">'+esc(d&&d.error||'Link not recognized.')+'</div></div>'; return; }
@@ -147,19 +167,26 @@
     var t=s.tp3||{};
     html+='<div class="tp3-grid">'+tpCell('trust','Trust',t.trust)+tpCell('proactivity','Proactivity',t.proactivity)+tpCell('productivity','Productivity',t.productivity)+'</div></div>';
 
-    // 2) SO WHAT — interpretation
-    var str=(s.strengths&&s.strengths.length?s.strengths:(d.findings&&d.findings.strengths)||[]);
-    var rsk=(s.risks&&s.risks.length?s.risks:(d.findings&&d.findings.risks)||[]);
-    html+='<div class="card"><div class="card-title" style="margin-bottom:14px"><span class="dot"></span>What the data says</div>';
-    html+='<div class="theme-grid"><div class="theme-col"><div class="theme-head theme-good">Top strengths</div><ul class="theme-list">'+(str.length?str.map(function(x){return '<li>'+esc(x)+'</li>';}).join(''):'<li class="empty">Strengths appear once survey data is in.</li>')+'</ul></div>'+
-      '<div class="theme-col"><div class="theme-head theme-risk">Top risks</div><ul class="theme-list">'+(rsk.length?rsk.map(function(x){return '<li>'+esc(x)+'</li>';}).join(''):'<li class="empty">No notable risks surfaced.</li>')+'</ul></div></div>';
-    var focus=s.focus90||[];
-    html+='<span class="focus-label">Recommended 90-day focus</span><div class="focus-box">'+(focus.length?'<ol class="focus-list" style="padding-left:18px;list-style:decimal">'+focus.map(focusItem).join('')+'</ol>':'<div class="empty">Your 90-day focus will appear after the debrief.</div>')+'</div></div>';
+    // 1b) Pre -> Post by theme (factual; always shown)
+    html+=themeCompareCard(d.themeTable);
 
-    // 3) NOW WHAT — recommended next step
-    if(rec){
-      var ctaUrl = d.cta_url || 'https://api.leadconnectorhq.com/widget/bookings/30-minute-coaching-discovery-call';
-      html+='<div class="rec"><div class="rec-kicker">Now what — recommended next step</div><h2>'+esc(rec.headline||rec.step)+'</h2><p>'+esc(rec.rationale||'')+'</p><a class="cta-btn" href="'+esc(ctaUrl)+'" target="_blank" rel="noopener">Schedule a 30-minute call to review this →</a></div>';
+    // 2) SO WHAT — interpretation (gated behind coach review/approval)
+    if(d.finalizing){
+      html+='<div class="card"><div class="card-title" style="margin-bottom:10px"><span class="dot"></span>What the data says</div><div class="quick-read">Your coach is finalizing the written summary, focus areas, and recommended next step. The numbers above are live now — the narrative and recommendation will appear here once they\'ve been reviewed.</div></div>';
+    } else {
+      var str=(s.strengths&&s.strengths.length?s.strengths:(d.findings&&d.findings.strengths)||[]);
+      var rsk=(s.risks&&s.risks.length?s.risks:(d.findings&&d.findings.risks)||[]);
+      html+='<div class="card"><div class="card-title" style="margin-bottom:14px"><span class="dot"></span>What the data says</div>';
+      html+='<div class="theme-grid"><div class="theme-col"><div class="theme-head theme-good">Top strengths</div><ul class="theme-list">'+(str.length?str.map(function(x){return '<li>'+esc(x)+'</li>';}).join(''):'<li class="empty">Strengths appear once survey data is in.</li>')+'</ul></div>'+
+        '<div class="theme-col"><div class="theme-head theme-risk">Top risks</div><ul class="theme-list">'+(rsk.length?rsk.map(function(x){return '<li>'+esc(x)+'</li>';}).join(''):'<li class="empty">No notable risks surfaced.</li>')+'</ul></div></div>';
+      var focus=s.focus90||[];
+      html+='<span class="focus-label">Recommended 90-day focus</span><div class="focus-box">'+(focus.length?'<ol class="focus-list" style="padding-left:18px;list-style:decimal">'+focus.map(focusItem).join('')+'</ol>':'<div class="empty">Your 90-day focus will appear after the debrief.</div>')+'</div></div>';
+
+      // 3) NOW WHAT — recommended next step
+      if(rec){
+        var ctaUrl = d.cta_url || 'https://api.leadconnectorhq.com/widget/bookings/30-minute-coaching-discovery-call';
+        html+='<div class="rec"><div class="rec-kicker">Now what — recommended next step</div><h2>'+esc(rec.headline||rec.step)+'</h2><p>'+esc(rec.rationale||'')+'</p><a class="cta-btn" href="'+esc(ctaUrl)+'" target="_blank" rel="noopener">Schedule a 30-minute call to review this →</a></div>';
+      }
     }
 
     // Timeline

@@ -138,22 +138,30 @@ export default async function handler(req, res) {
       ? await sbGet(`/rest/v1/testimonials?workshop_id=eq.${enc(w.id)}&permission_public_use=eq.true&select=responses,rating_nps,created_at&order=created_at.desc`)
       : [];
 
+    // Coach must review/approve the AI-authored narrative before the sponsor sees
+    // it (safe-build rule: no un-reviewed AI output goes external). Numbers
+    // (participation, NPS, TP3, the pre/post theme table, timeline) are factual
+    // and always shown; the written strengths/risks/90-day focus + recommendation
+    // are withheld until summary_approved.
+    const approved = !!w.summary_approved;
+
     return res.status(200).json({
       ok: true,
+      finalizing: !approved,
       workshop: {
         title: w.title, org: w.client_org_name, workshop_date: w.workshop_date, debrief_date: w.debrief_date,
         industry: w.industry, audience_level: w.audience_level, status: w.status,
       },
       exec_summary: {
         participation: agg.participation, nps: agg.nps, npsAvg: agg.npsAvg, tp3: agg.tp3,
-        strengths: (summary && summary.strengths) || f.strengths,
-        risks: (summary && summary.risks) || f.risks,
-        focus90: (summary && summary.focus90) || [],
+        strengths: approved ? ((summary && summary.strengths) || f.strengths) : [],
+        risks:     approved ? ((summary && summary.risks) || f.risks) : [],
+        focus90:   approved ? ((summary && summary.focus90) || []) : [],
       },
       themeTable: agg.themeTable,
       timeline: buildTimeline(w, agg),
-      recommendation: rec,
-      findings: f,
+      recommendation: approved ? rec : null,
+      findings: approved ? f : { strengths: [], risks: [] },
       cta_url: ctaUrl,
       testimonials,
     });

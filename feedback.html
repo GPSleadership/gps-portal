@@ -15,6 +15,7 @@
   .card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:24px;margin-top:22px;box-shadow:0 2px 14px rgba(0,0,0,.05);}
   label{display:block;font-size:13px;font-weight:700;color:var(--navy);margin:16px 0 6px;}
   textarea{width:100%;min-height:130px;padding:11px 13px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;}
+  input[type=text]{width:100%;padding:11px 13px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;}
   .levels{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;}
   .lv{flex:1;min-width:120px;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;cursor:pointer;font-size:13px;text-align:center;}
   .lv.sel{border-color:var(--navy);background:#eef3fb;font-weight:700;}
@@ -50,7 +51,11 @@ function pickLevel(el, lv){ LEVEL=lv; document.querySelectorAll('.lv').forEach(f
 
 function renderForm(ctx){
   document.getElementById('view').innerHTML =
-    '<div class="muted">Hi '+esc((ctx.name||'').split(' ')[0]||'there')+', thank you for taking a moment. Your candid observation about the <b>'+esc(ctx.team_name)+'</b> leadership team helps inform our work. It is not attributed to you individually in any scorecard.</div>'
+    '<div class="muted">Hi '+esc((ctx.name||'').split(' ')[0]||'there')+', thank you for taking a moment. Your candid observation about the <b>'+esc(ctx.team_name)+'</b> leadership team helps inform our work.</div>'
+    + '<label>Your name</label>'
+    + '<input type="text" id="fbName" value="'+esc(ctx.name||'')+'" placeholder="First and last name" />'
+    + '<label>Your role / relationship to the team</label>'
+    + '<input type="text" id="fbRole" value="'+esc(ctx.by_role||'')+'" placeholder="e.g., Board member, Direct report, Peer, Customer" />'
     + '<label>How are things landing overall?</label>'
     + '<div class="levels">'
     + '<div class="lv" onclick="pickLevel(this,\'green\')"><span class="em">🟢</span>On track</div>'
@@ -64,10 +69,14 @@ function renderForm(ctx){
 }
 async function submit(){
   var obs = (document.getElementById('obs').value||'').trim();
+  var nm  = (document.getElementById('fbName').value||'').trim();
+  var role= (document.getElementById('fbRole').value||'').trim();
   var m = document.getElementById('m'); var btn=document.getElementById('sub');
+  if(!nm){ m.style.color='#b00'; m.textContent='Please add your name.'; return; }
+  if(!role){ m.style.color='#b00'; m.textContent='Please add your role or relationship to the team.'; return; }
   if(!obs){ m.style.color='#b00'; m.textContent='Please add a short observation before submitting.'; return; }
   btn.disabled=true; btn.textContent='Submitting…';
-  try{ await api('submit-external-feedback', { token:TOKEN, summary:obs, level:LEVEL }); thanks(); }
+  try{ await api('submit-external-feedback', { token:TOKEN, summary:obs, level:LEVEL, name:nm, by_role:role }); thanks(); }
   catch(e){ m.style.color='#b00'; m.textContent=e.message; btn.disabled=false; btn.textContent='Submit my input'; }
 }
 (async function(){

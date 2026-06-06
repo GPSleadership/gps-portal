@@ -788,6 +788,7 @@
         [style*="min-width"] { min-width: 0 !important; }
         .container, .card, .toolbar, .panel, .modal, .dflag, .dquick-row,
         [style*="width:"][style*="px"] { max-width: 100% !important; }
+<<<<<<< HEAD
         /* nav tabs, toolbars, and any inline flex row wrap instead of overflowing */
         .section-nav, .section-subnav, .toolbar, .toolbar-right, .filter-tabs,
         [style*="display:flex"], [style*="display: flex"] { flex-wrap: wrap !important; }
@@ -796,6 +797,12 @@
         /* stat-card grids and any inline grid collapse to one column */
         [style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
         /* tame oversized headings / big numbers */
+=======
+        .section-nav, .section-subnav, .toolbar, .toolbar-right, .filter-tabs,
+        [style*="display:flex"], [style*="display: flex"] { flex-wrap: wrap !important; }
+        table, .admin-table, .email-log-table { display: block; width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; font-size: 13px; }
+        [style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
+>>>>>>> coach-nav-refactor
         h1 { font-size: 22px !important; }
         h2 { font-size: 19px !important; }
         [style*="font-size:48"],[style*="font-size:44"],[style*="font-size:40"],
@@ -804,6 +811,15 @@
         button, .btn-add, .btn-export { min-height: 42px; }
         .container { padding-left: 14px !important; padding-right: 14px !important; }
         #globalSearch { min-width: 0 !important; width: 100% !important; }
+<<<<<<< HEAD
+=======
+        /* Header: clean stack on phones. Hide the redundant stat pills (the Today
+           tab shows the same Quick Stats); keep branding + the action buttons. */
+        .header { flex-wrap: wrap !important; gap: 10px !important; padding: 12px 16px !important; height: auto !important; }
+        .header-stats, #headerStats { display: none !important; }
+        .header-logo-text { font-size: 18px; }
+        #headerChangePwBtn { margin-left: auto; }
+>>>>>>> coach-nav-refactor
       }
     </style>
     <div class="section-nav" style="position:relative;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -7255,12 +7271,41 @@ async function drSendSponsor(sponsorId){
   window.wsTab=function(t){ WS.tab=t; wsDetail(); };
   function wsPane(){ var p=document.getElementById('wsPane'); if(!p) return; if(WS.tab==='overview') return wsOverview(p); if(WS.tab==='roster') return wsRoster(p); if(WS.tab==='questions') return wsQuestions(p); if(WS.tab==='data') return wsDataPane(p); if(WS.tab==='recap') return wsRecap(p); }
 
-  function wsOverview(p){ var w=WS.cur, spLink=BASE+'/workshop-room?token='+encodeURIComponent(w.sponsor_token||''); var statuses=['setup','discovery_complete','questions_drafted','sponsor_review','pre_survey_open','pre_survey_closed','workshop_delivered','post_survey_open','post_survey_closed','debrief_scheduled','report_uploaded','complete']; var opts=statuses.map(function(s){ return '<option value="'+s+'"'+(w.status===s?' selected':'')+'>'+s+'</option>'; }).join('');
-    p.innerHTML=card('<div style="font-weight:800;margin-bottom:10px;color:#004369;">Status &amp; dates</div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;"><label style="font-size:12px;color:#5a6b76;font-weight:700;">Status</label><select id="wsStatus" style="padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;">'+opts+'</select>'+btn('wsStatusSave','Save status','ghost')+'</div><div style="font-size:13px;color:#5a6b76;">Workshop: '+fmtDate(w.workshop_date)+' · Debrief: '+fmtDate(w.debrief_date)+'</div>')+card('<div style="font-weight:800;margin-bottom:8px;color:#004369;">Sponsor dashboard link</div><div style="font-size:12px;background:#F7F4EE;padding:10px;border-radius:7px;word-break:break-all;color:#004369;">'+esc(spLink)+'</div><div style="margin-top:10px;">'+btn('wsCopyLink','Copy link','ghost')+'</div>')+card('<div style="font-weight:800;margin-bottom:10px;color:#004369;">AI exec summary &amp; recommendation</div>'+btn('wsGenSummary','Generate exec summary')+btn('wsGenRec','Generate recommendation')+'<div id="wsSumOut" style="margin-top:12px;font-size:13px;">'+(w.exec_summary_json?renderSummary(w.exec_summary_json):'<span style="color:#5a6b76;">Not generated yet.</span>')+'</div><div id="wsRecOut" style="margin-top:12px;font-size:13px;">'+(w.recommendation_json&&w.recommendation_json.primary?renderRec(w.recommendation_json):'')+'</div>');
+  function wsTa(id,val,h){ return '<textarea id="'+id+'" style="width:100%;min-height:'+(h||70)+'px;border:1.5px solid #dbe3e6;border-radius:7px;padding:9px;font-size:13px;font-family:inherit;">'+esc(val||'')+'</textarea>'; }
+  function wsLines(a){ return (a||[]).map(function(x){ return (x&&typeof x==='object')?(x.text||''):x; }).join('\n'); }
+  function wsParse(id){ var e=document.getElementById(id); return e? e.value.split('\n').map(function(s){return s.trim();}).filter(Boolean) : []; }
+  function wsNums(s){ if(!s) return '<span style="color:#5a6b76;">Not generated yet — click Generate exec summary.</span>'; var t=s.tp3||{}; function ba(x){ if(!x)return '—'; return (x.pre!=null&&x.post!=null)?(x.pre+' → '+x.post):(x.post!=null?x.post:(x.pre!=null?x.pre:'—')); } return '<strong>Participation:</strong> pre '+(s.participation&&s.participation.pre.rate)+'%, post '+(s.participation&&s.participation.post.rate)+'% · <strong>NPS:</strong> '+(s.nps!=null?s.nps:'—')+' · <strong>TP3:</strong> Trust '+ba(t.trust)+', Proactivity '+ba(t.proactivity)+', Productivity '+ba(t.productivity); }
+  function wsOverview(p){
+    var w=WS.cur, spLink=BASE+'/workshop-room?token='+encodeURIComponent(w.sponsor_token||'');
+    var statuses=['setup','discovery_complete','questions_drafted','sponsor_review','pre_survey_open','pre_survey_closed','workshop_delivered','post_survey_open','post_survey_closed','debrief_scheduled','report_uploaded','complete'];
+    var opts=statuses.map(function(s){ return '<option value="'+s+'"'+(w.status===s?' selected':'')+'>'+s+'</option>'; }).join('');
+    var sum=w.exec_summary_json||{}, rec=(w.recommendation_json&&w.recommendation_json.primary)||{}, approved=!!w.summary_approved;
+    var lbl='font-size:11px;font-weight:700;color:#5a6b76;text-transform:uppercase;letter-spacing:.4px;display:block;margin:10px 0 4px;';
+    p.innerHTML=
+      card('<div style="font-weight:800;margin-bottom:10px;color:#004369;">Status &amp; dates</div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;"><label style="font-size:12px;color:#5a6b76;font-weight:700;">Status</label><select id="wsStatus" style="padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;">'+opts+'</select>'+btn('wsStatusSave','Save status','ghost')+'</div><div style="font-size:13px;color:#5a6b76;">Workshop: '+fmtDate(w.workshop_date)+' · Debrief: '+fmtDate(w.debrief_date)+'</div>')+
+      card('<div style="font-weight:800;margin-bottom:8px;color:#004369;">Sponsor dashboard link</div><div style="font-size:12px;background:#F7F4EE;padding:10px;border-radius:7px;word-break:break-all;color:#004369;">'+esc(spLink)+'</div><div style="margin-top:10px;">'+btn('wsCopyLink','Copy link','ghost')+'</div>')+
+      card('<div style="font-weight:800;margin-bottom:6px;color:#004369;">Discovery call notes / transcript</div><div style="font-size:12px;color:#5a6b76;margin-bottom:8px;">Paste the discovery call transcript or your notes. The AI uses this to suggest 2–3 client-specific questions (Questions tab → "AI suggest from discovery").</div>'+wsTa('wsDisc', w.discovery_transcript||w.discovery_notes||'', 120)+'<div style="margin-top:8px;">'+btn('wsDiscSave','Save notes','ghost')+'<span id="wsDiscOut" style="font-size:12px;color:#5a6b76;margin-left:8px;"></span></div>')+
+      card('<div style="font-weight:800;margin-bottom:8px;color:#004369;">Sponsor report — review, edit &amp; publish</div>'+
+        btn('wsGenSummary','Generate exec summary')+btn('wsGenRec','Generate recommendation')+
+        '<div id="wsNums" style="font-size:13px;margin:10px 0;">'+wsNums(w.exec_summary_json)+'</div>'+
+        '<label style="'+lbl+'">Strengths (one per line)</label>'+wsTa('wsStr', wsLines(sum.strengths))+
+        '<label style="'+lbl+'">Risks (one per line)</label>'+wsTa('wsRsk', wsLines(sum.risks))+
+        '<label style="'+lbl+'">90-day focus (one per line)</label>'+wsTa('wsFoc', wsLines(sum.focus90))+
+        '<div style="margin:8px 0;">'+btn('wsSaveSum','Save summary edits','ghost')+'</div>'+
+        '<div style="border-top:1px dashed #dbe3e6;margin:12px 0;padding-top:12px;"><div style="font-weight:700;color:#004369;margin-bottom:6px;">Recommended next step</div>'+
+        '<label style="'+lbl+'">Step (e.g. 14-Day Executive Leadership Diagnostic)</label><input id="wsRecStep" value="'+esc(rec.step||'')+'" style="width:100%;padding:9px 11px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;">'+
+        '<label style="'+lbl+'">Headline</label><input id="wsRecHead" value="'+esc(rec.headline||'')+'" style="width:100%;padding:9px 11px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;">'+
+        '<label style="'+lbl+'">Rationale</label>'+wsTa('wsRecRat', rec.rationale||'')+
+        '<div style="margin-top:8px;">'+btn('wsSaveRec','Save recommendation','ghost')+'</div></div>'+
+        '<div style="border-top:1px dashed #dbe3e6;margin:12px 0;padding-top:12px;"><label style="display:flex;gap:8px;align-items:flex-start;font-weight:700;color:#004369;cursor:pointer;"><input type="checkbox" id="wsApprove" '+(approved?'checked':'')+' style="width:18px;height:18px;margin-top:1px;"><span>Published to sponsor — when checked, the sponsor dashboard shows the strengths, risks, 90-day focus, and recommendation. When unchecked, the sponsor sees only the numbers and a "being finalized" note.</span></label><div id="wsApprOut" style="font-size:12px;color:#5a6b76;margin-top:6px;">'+(approved?'Currently visible to the sponsor.':'Currently hidden from the sponsor.')+'</div></div>');
     document.getElementById('wsStatusSave').onclick=async function(){ try{ await cdUpdate('workshops',{ status:document.getElementById('wsStatus').value, updated_at:new Date().toISOString() },{ eq:{ id:w.id } }); w.status=document.getElementById('wsStatus').value; toast('Status saved.'); wsDetail(); }catch(e){ toast(e.message); } };
     document.getElementById('wsCopyLink').onclick=function(){ navigator.clipboard.writeText(spLink).then(function(){ toast('Link copied.'); },function(){ toast(spLink); }); };
-    document.getElementById('wsGenSummary').onclick=async function(){ this.disabled=true; document.getElementById('wsSumOut').textContent='Generating…'; try{ var r=await wsData('generate-summary',{ workshop_id:w.id }); w.exec_summary_json=r.exec_summary; document.getElementById('wsSumOut').innerHTML=renderSummary(r.exec_summary); }catch(e){ document.getElementById('wsSumOut').textContent=e.message; } };
-    document.getElementById('wsGenRec').onclick=async function(){ this.disabled=true; document.getElementById('wsRecOut').textContent='Generating…'; try{ var r=await wsData('recommend',{ workshop_id:w.id }); w.recommendation_json=r.recommendation; document.getElementById('wsRecOut').innerHTML=renderRec(r.recommendation); }catch(e){ document.getElementById('wsRecOut').textContent=e.message; } };
+    document.getElementById('wsDiscSave').onclick=async function(){ var o=document.getElementById('wsDiscOut'); o.textContent='Saving…'; try{ await cdUpdate('workshops',{ discovery_transcript:document.getElementById('wsDisc').value, updated_at:new Date().toISOString() },{ eq:{ id:w.id } }); w.discovery_transcript=document.getElementById('wsDisc').value; o.textContent='Saved. Now use Questions → AI suggest from discovery.'; }catch(e){ o.textContent=e.message; } };
+    document.getElementById('wsGenSummary').onclick=async function(){ this.disabled=true; document.getElementById('wsNums').textContent='Generating…'; try{ var r=await wsData('generate-summary',{ workshop_id:w.id }); w.exec_summary_json=r.exec_summary; await cdUpdate('workshops',{ summary_approved:false },{ eq:{ id:w.id } }); w.summary_approved=false; wsOverview(p); toast('Summary generated. Review/edit, then check "Published to sponsor".'); }catch(e){ document.getElementById('wsNums').textContent=e.message; } };
+    document.getElementById('wsGenRec').onclick=async function(){ this.disabled=true; try{ var r=await wsData('recommend',{ workshop_id:w.id }); w.recommendation_json=r.recommendation; await cdUpdate('workshops',{ summary_approved:false },{ eq:{ id:w.id } }); w.summary_approved=false; wsOverview(p); toast('Recommendation generated. Review/edit, then publish.'); }catch(e){ toast(e.message); } };
+    document.getElementById('wsSaveSum').onclick=async function(){ try{ var es=Object.assign({}, w.exec_summary_json||{}, { strengths:wsParse('wsStr'), risks:wsParse('wsRsk'), focus90:wsParse('wsFoc') }); await cdUpdate('workshops',{ exec_summary_json:es, updated_at:new Date().toISOString() },{ eq:{ id:w.id } }); w.exec_summary_json=es; toast('Summary edits saved.'); }catch(e){ toast(e.message); } };
+    document.getElementById('wsSaveRec').onclick=async function(){ try{ var rj={ primary:{ step:document.getElementById('wsRecStep').value, headline:document.getElementById('wsRecHead').value, rationale:document.getElementById('wsRecRat').value }, rules_fired:(w.recommendation_json&&w.recommendation_json.rules_fired)||[] }; await cdUpdate('workshops',{ recommendation_json:rj, updated_at:new Date().toISOString() },{ eq:{ id:w.id } }); w.recommendation_json=rj; toast('Recommendation saved.'); }catch(e){ toast(e.message); } };
+    document.getElementById('wsApprove').onclick=async function(){ var on=this.checked; try{ await cdUpdate('workshops',{ summary_approved:on, updated_at:new Date().toISOString() },{ eq:{ id:w.id } }); w.summary_approved=on; document.getElementById('wsApprOut').textContent=on?'Currently visible to the sponsor.':'Currently hidden from the sponsor.'; }catch(e){ this.checked=!on; toast(e.message); } };
   }
   function renderSummary(s){ function liS(a){ return (a&&a.length)?('<ul style="margin:4px 0 8px;padding-left:18px;">'+a.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul>'):'<span style="color:#5a6b76;">—</span>'; } var t=s.tp3||{}; function ba(x){ if(!x)return '—'; return (x.pre!=null&&x.post!=null)?(x.pre+' → '+x.post):(x.post!=null?x.post:(x.pre!=null?x.pre:'—')); } return '<div><strong>Participation:</strong> pre '+(s.participation&&s.participation.pre.rate)+'%, post '+(s.participation&&s.participation.post.rate)+'% · <strong>NPS:</strong> '+(s.nps!=null?s.nps:'—')+'</div><div style="margin-top:4px;"><strong>TP3:</strong> Trust '+ba(t.trust)+' · Proactivity '+ba(t.proactivity)+' · Productivity '+ba(t.productivity)+'</div><div style="margin-top:8px;font-weight:700;">Strengths</div>'+liS(s.strengths)+'<div style="font-weight:700;">Risks</div>'+liS(s.risks)+'<div style="font-weight:700;">90-day focus</div>'+liS(s.focus90); }
   function renderRec(r){ var p=r.primary; return '<div style="background:#E8F7F7;border:1px solid #01949A;border-radius:8px;padding:12px;"><div style="font-weight:800;color:#004369;">'+esc(p.step)+'</div><div style="font-weight:700;margin:2px 0;">'+esc(p.headline||'')+'</div><div>'+esc(p.rationale||'')+'</div></div>'; }
