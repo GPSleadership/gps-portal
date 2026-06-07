@@ -127,6 +127,26 @@ export default async function handler(req, res) {
       }
 
       // ── Stakeholders ────────────────────────────────────────────────────────
+      // ── Results tab data (post-lockdown read path; anon reads are dead) ─────
+      case 'results-data': {
+        const [ck, sr, st, sc, sh] = await Promise.all([
+          sb(`/rest/v1/checkins?client_id=eq.${clientId}&select=*&order=week_number.asc`),
+          sb(`/rest/v1/survey_responses?client_id=eq.${clientId}&select=checkpoint,score,scale,open_response,comments,comments_visible_to_client,created_at&order=created_at.asc`),
+          sb(`/rest/v1/survey_tokens?client_id=eq.${clientId}&select=checkpoint,non_response_flagged,is_used`),
+          sb(`/rest/v1/self_checks?client_id=eq.${clientId}&select=checkpoint,q1_score,q2_score,q3_response,submitted_at`),
+          sb(`/rest/v1/stakeholders?client_id=eq.${clientId}&is_active=eq.true&select=id,name,email,relationship,is_supervisor,is_board_member,confirmed_at,created_at&order=created_at.asc`),
+        ]);
+        const j = async (r) => (r.ok ? await r.json() : []);
+        return res.status(200).json({
+          ok: true,
+          checkins: await j(ck),
+          survey_responses: await j(sr),
+          survey_tokens: await j(st),
+          self_checks: await j(sc),
+          stakeholders: await j(sh),
+        });
+      }
+
       case 'get-stakeholders': {
         const r = await sb(`/rest/v1/stakeholders?client_id=eq.${clientId}&is_active=eq.true&select=*`);
         const rows = r.ok ? await r.json() : [];

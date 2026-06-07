@@ -2999,34 +2999,15 @@ async function loadClient() {
     if (!client.plan_submitted_at || client.allow_plan_edit) {
       initWizard(client);
     } else {
-      const { data: checkins } = await db
-        .from('checkins')
-        .select('*')
-        .eq('client_id', client.id)
-        .order('week_number', { ascending: true });
-
-      const { data: surveyData } = await db
-        .from('survey_responses')
-        .select('checkpoint, score, open_response, comments, comments_visible_to_client, created_at')
-        .eq('client_id', client.id)
-        .order('created_at', { ascending: true });
-
-      const { data: surveyTokenData } = await db
-        .from('survey_tokens')
-        .select('checkpoint, non_response_flagged, is_used')
-        .eq('client_id', client.id);
-
-      const { data: selfCheckData } = await db
-        .from('self_checks')
-        .select('checkpoint, q1_score, q2_score, q3_response, submitted_at')
-        .eq('client_id', client.id);
-
-      const { data: stakeholderData } = await db
-        .from('stakeholders')
-        .select('id, name, email, relationship, is_supervisor, is_board_member, confirmed_at, created_at')
-        .eq('client_id', client.id)
-        .eq('is_active', true)
-        .order('created_at', { ascending: true });
+      // Post-lockdown: all reads go through the token-gated endpoint.
+      // (The old anon-key db.from() reads silently returned nothing after v26,
+      // which made My Results show "No results yet" for everyone.)
+      const rd = await portalData('results-data', {}).catch(function(){ return {}; });
+      const checkins        = rd.checkins         || [];
+      const surveyData      = rd.survey_responses || [];
+      const surveyTokenData = rd.survey_tokens    || [];
+      const selfCheckData   = rd.self_checks      || [];
+      const stakeholderData = rd.stakeholders     || [];
 
       // Wire portal context for Q&A tool
       portalContext.full_name            = client.name || '';
