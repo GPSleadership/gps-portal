@@ -4665,6 +4665,93 @@ function renderHistory(checkins, client) {
 
 
 // ─────────────────────────────────────────────
+// RESULTS TAB — CHART HELPERS
+// ─────────────────────────────────────────────
+function buildScoreTrendSVG(cpData) {
+  var checkpoints = ['baseline', 'day30', 'day90'];
+  var labels      = ['Baseline', '30 Days', '90 Days'];
+  var W = 520, H = 200, padL = 44, padR = 24, padT = 24, padB = 44;
+  var cW = W - padL - padR, cH = H - padT - padB;
+  var points = checkpoints.map(function(cp, i) {
+    var d = cpData[cp];
+    if (!d || d.avg == null) return null;
+    return { x: padL + (i / 2) * cW, y: padT + cH - (d.avg / 5) * cH, val: d.avg };
+  });
+  var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;max-width:520px;display:block;margin:0 auto;" aria-label="Score trend chart">';
+  // Horizontal grid
+  [1,2,3,4,5].forEach(function(v) {
+    var y = padT + cH - (v / 5) * cH;
+    svg += '<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="#e5e7eb" stroke-width="' + (v === 4 ? '1.2' : '0.5') + '" stroke-dasharray="' + (v === 4 ? '4,3' : '') + '"/>';
+    svg += '<text x="' + (padL - 7) + '" y="' + (y + 4) + '" text-anchor="end" fill="#9ca3af" font-size="10" font-family="Helvetica,sans-serif">' + v + '</text>';
+  });
+  // "4 = bar" label
+  var barY = padT + cH - (4 / 5) * cH;
+  svg += '<text x="' + (W - padR + 4) + '" y="' + (barY + 4) + '" fill="#01949A" font-size="9" font-family="Helvetica,sans-serif">bar</text>';
+  // X axis labels
+  labels.forEach(function(label, i) {
+    var x = padL + (i / 2) * cW;
+    svg += '<line x1="' + x + '" y1="' + (padT + cH) + '" x2="' + x + '" y2="' + (padT + cH + 5) + '" stroke="#d1d5db" stroke-width="1"/>';
+    svg += '<text x="' + x + '" y="' + (H - 10) + '" text-anchor="middle" fill="#374151" font-size="11" font-weight="700" font-family="Helvetica,sans-serif">' + label + '</text>';
+  });
+  // Connecting lines
+  var prev = null;
+  points.forEach(function(p) {
+    if (p && prev) {
+      svg += '<line x1="' + prev.x + '" y1="' + prev.y + '" x2="' + p.x + '" y2="' + p.y + '" stroke="#01949A" stroke-width="2.5" stroke-linecap="round"/>';
+    }
+    if (p) prev = p;
+  });
+  // Data points + labels
+  points.forEach(function(p) {
+    if (!p) return;
+    var clr = p.val >= 4 ? '#2e7d32' : p.val >= 3 ? '#C47A30' : '#DB1F48';
+    svg += '<circle cx="' + p.x + '" cy="' + p.y + '" r="7" fill="' + clr + '" stroke="#fff" stroke-width="2"/>';
+    svg += '<text x="' + p.x + '" y="' + (p.y - 13) + '" text-anchor="middle" fill="#111827" font-size="13" font-weight="800" font-family="Helvetica,sans-serif">' + p.val.toFixed(1) + '</text>';
+  });
+  svg += '</svg>';
+  return svg;
+}
+
+function buildMetricSparklineSVG(checkins, valueKey, targetVal, baselineVal) {
+  var data = checkins.map(function(c) {
+    var v = c[valueKey];
+    return v != null && v !== '' ? parseFloat(v) : null;
+  }).filter(function(v) { return v != null && !isNaN(v); });
+  if (data.length < 2) return '';
+  var W = 400, H = 80, padL = 8, padR = 8, padT = 14, padB = 14;
+  var cW = W - padL - padR, cH = H - padT - padB;
+  var minV = Math.min.apply(null, data), maxV = Math.max.apply(null, data);
+  if (targetVal) { minV = Math.min(minV, targetVal); maxV = Math.max(maxV, targetVal); }
+  if (baselineVal) { minV = Math.min(minV, baselineVal); maxV = Math.max(maxV, baselineVal); }
+  var range = maxV - minV || 1;
+  var toX = function(i) { return padL + (i / (data.length - 1)) * cW; };
+  var toY = function(v) { return padT + cH - ((v - minV) / range) * cH; };
+  var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;display:block;" aria-label="Metric sparkline">';
+  // Target line
+  if (targetVal != null) {
+    var ty = toY(targetVal);
+    svg += '<line x1="' + padL + '" y1="' + ty + '" x2="' + (W - padR) + '" y2="' + ty + '" stroke="#004369" stroke-width="1" stroke-dasharray="4,3" opacity="0.5"/>';
+    svg += '<text x="' + (W - padR - 2) + '" y="' + (ty - 3) + '" text-anchor="end" fill="#004369" font-size="8" font-family="Helvetica,sans-serif" opacity="0.7">target</text>';
+  }
+  // Area fill path
+  var pts = data.map(function(v, i) { return toX(i) + ',' + toY(v); }).join(' ');
+  var areaPath = 'M ' + toX(0) + ',' + toY(data[0]) + ' ' + data.map(function(v, i) { return 'L ' + toX(i) + ' ' + toY(v); }).join(' ') + ' L ' + toX(data.length - 1) + ',' + (padT + cH) + ' L ' + toX(0) + ',' + (padT + cH) + ' Z';
+  svg += '<path d="' + areaPath + '" fill="#01949A" opacity="0.08"/>';
+  // Line
+  var linePath = 'M ' + data.map(function(v, i) { return toX(i) + ' ' + toY(v); }).join(' L ');
+  svg += '<path d="' + linePath + '" fill="none" stroke="#01949A" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+  // Dots
+  data.forEach(function(v, i) {
+    svg += '<circle cx="' + toX(i) + '" cy="' + toY(v) + '" r="3" fill="#01949A" stroke="#fff" stroke-width="1.5"/>';
+  });
+  // First + last value labels
+  svg += '<text x="' + toX(0) + '" y="' + (toY(data[0]) - 4) + '" text-anchor="middle" fill="#374151" font-size="9" font-family="Helvetica,sans-serif">' + data[0] + '</text>';
+  svg += '<text x="' + toX(data.length-1) + '" y="' + (toY(data[data.length-1]) - 4) + '" text-anchor="middle" fill="#374151" font-size="9" font-weight="700" font-family="Helvetica,sans-serif">' + data[data.length-1] + '</text>';
+  svg += '</svg>';
+  return svg;
+}
+
+// ─────────────────────────────────────────────
 // RESULTS TAB
 // ─────────────────────────────────────────────
 function renderResultsTab(surveyResponses, checkins, client, surveyTokens, selfChecks) {
@@ -4747,11 +4834,13 @@ function renderResultsTab(surveyResponses, checkins, client, surveyTokens, selfC
         </div>`;
     }).join('');
 
+    var hasMultipleCps = checkpoints.filter(function(cp){ return cpData[cp] != null; }).length >= 2;
     scorecardHTML = `
       <div class="card" style="margin-bottom:20px;">
         <div class="card-title">Perception Scorecard</div>
-        <div class="card-subtitle">How your stakeholders rated your consistency on your priority behavior. Scores are out of 10.</div>
+        <div class="card-subtitle">How your stakeholders rated your consistency on your priority behavior. Scores are out of 5.</div>
         <div class="scorecard-grid">${cards}</div>
+        ${hasMultipleCps ? '<div style="margin-top:20px;padding-top:16px;border-top:1px solid #f3f4f6;"><div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-bottom:10px;">Score Trend</div>' + buildScoreTrendSVG(cpData) + '</div>' : ''}
       </div>`;
 
     // Visible comments + open responses
@@ -4856,10 +4945,38 @@ function renderResultsTab(surveyResponses, checkins, client, surveyTokens, selfC
       </tr>`;
     }).join('');
 
+    // Build sparkline section
+    var sparkSection = '';
+    var sparkDefs = [
+      { key: 'metric_1_value', altKey: 'metric_value', name: m1name, has: hasM1, target: parseFloat(client.metric_1_target) || null, baseline: parseFloat(client.metric_1_baseline) || null },
+      { key: 'metric_2_value', altKey: null, name: m2name, has: hasM2, target: parseFloat(client.metric_2_target) || null, baseline: parseFloat(client.metric_2_baseline) || null },
+      { key: 'metric_3_value', altKey: null, name: m3name, has: hasM3, target: parseFloat(client.metric_3_target) || null, baseline: parseFloat(client.metric_3_baseline) || null },
+    ];
+    var sparkItems = '';
+    sparkDefs.forEach(function(def) {
+      if (!def.has) return;
+      var ciForSpark = checkins.map(function(c) {
+        var v = c[def.key] != null ? c[def.key] : (def.altKey ? c[def.altKey] : null);
+        return { metric_1_value: v };
+      });
+      var svg = buildMetricSparklineSVG(ciForSpark, 'metric_1_value', def.target, def.baseline);
+      if (!svg) return;
+      sparkItems += '<div style="flex:1;min-width:200px;">'
+        + '<div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:6px;">' + escHtmlResults(def.name) + '</div>'
+        + svg + '</div>';
+    });
+    if (sparkItems) {
+      sparkSection = '<div style="margin-bottom:16px;padding:16px;background:#f9fafb;border-radius:8px;border:1px solid #f3f4f6;">'
+        + '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-bottom:14px;">Metric Trends</div>'
+        + '<div style="display:flex;gap:20px;flex-wrap:wrap;">' + sparkItems + '</div>'
+        + '</div>';
+    }
+
     metricHTML = `
       <div class="card">
         <div class="card-title">Metric History</div>
         <div class="card-subtitle">Your key metrics across every check-in, most recent first. A dash means that question was not part of that week's check-in.</div>
+        ${sparkSection}
         <div style="overflow-x:auto;margin-top:14px;">
           <table class="mh-table">
             <thead><tr>${headerCols}</tr></thead>
