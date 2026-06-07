@@ -99,7 +99,7 @@ export default async function handler(req, res) {
         const phase = body.phase === 'post' ? 'post' : 'pre';
         const p = await participantByToken(token);
         if (!p) return res.status(401).json({ error: 'Invalid or expired link' });
-        const w = await sbOne(`/rest/v1/workshops?id=eq.${enc(p.workshop_id)}&select=id,title,client_org_name,workshop_date,pre_survey_open_at,pre_survey_close_at,post_survey_open_at,post_survey_close_at&limit=1`);
+        const w = await sbOne(`/rest/v1/workshops?id=eq.${enc(p.workshop_id)}&select=id,title,client_org_name,workshop_date,engagement_kind,organization_id,pre_survey_open_at,pre_survey_close_at,post_survey_open_at,post_survey_close_at&limit=1`);
         if (!w) return res.status(404).json({ error: 'Workshop not found' });
         const open = phaseOpen(w, phase);
         const completed = phase === 'pre' ? !!p.pre_completed_at : !!p.post_completed_at;
@@ -111,9 +111,15 @@ export default async function handler(req, res) {
         if (open && !completed && p[statusCol] === 'not_started') {
           sb(`/rest/v1/workshop_participants?id=eq.${enc(p.id)}`, 'PATCH', { [statusCol]: 'in_progress' }, { Prefer: 'return=minimal' }).catch(() => {});
         }
+        // Look up org logo (v40) — non-fatal
+        let orgLogoUrl = null;
+        if (w.organization_id) {
+          const org = await sbOne(`/rest/v1/organizations?id=eq.${enc(w.organization_id)}&select=logo_url&limit=1`).catch(() => null);
+          if (org?.logo_url) orgLogoUrl = org.logo_url;
+        }
         return res.status(200).json({
           ok: true, open, completed, phase,
-          workshop: { title: w.title, org: w.client_org_name, workshop_date: w.workshop_date, kind: w.engagement_kind || 'workshop' },
+          workshop: { title: w.title, org: w.client_org_name, workshop_date: w.workshop_date, kind: w.engagement_kind || 'workshop', org_logo_url: orgLogoUrl },
           participant: { name: client?.name || '', role: client?.title || p.role || '' },
           questions, saved,
         });
@@ -154,9 +160,15 @@ export default async function handler(req, res) {
         if (!w) return res.status(401).json({ error: 'Invalid or expired link' });
         const open = phaseOpen(w, phase);
         const questions = await liveQuestions(w.id, phase);
+        // Look up org logo (v40) — non-fatal
+        let roomOrgLogoUrl = null;
+        if (w.organization_id) {
+          const org = await sbOne(`/rest/v1/organizations?id=eq.${enc(w.organization_id)}&select=logo_url&limit=1`).catch(() => null);
+          if (org?.logo_url) roomOrgLogoUrl = org.logo_url;
+        }
         return res.status(200).json({
           ok: true, open, phase, room: true,
-          workshop: { title: w.title, org: w.client_org_name, workshop_date: w.workshop_date, kind: w.engagement_kind || 'workshop' },
+          workshop: { title: w.title, org: w.client_org_name, workshop_date: w.workshop_date, kind: w.engagement_kind || 'workshop', org_logo_url: roomOrgLogoUrl },
           questions,
         });
       }

@@ -60,6 +60,8 @@ const READ_TABLES = new Set([
   'teams', 'team_members', 'sponsors', 'sponsor_teams', 'recommendations', 'external_signals',
   // Workshop Module (v35)
   'workshops', 'workshop_participants', 'workshop_questions', 'workshop_responses',
+  // Organizations (v40)
+  'organizations',
 ]);
 // Tables the dashboard may write through the generic proxy.
 const WRITE_TABLES = new Set([
@@ -71,6 +73,8 @@ const WRITE_TABLES = new Set([
   'teams', 'team_members', 'sponsors', 'sponsor_teams', 'recommendations', 'external_signals',
   // Workshop Module (v35) — coach CRUD for workshops, participants, questions, responses
   'workshops', 'workshop_participants', 'workshop_questions', 'workshop_responses',
+  // Organizations (v40)
+  'organizations',
 ]);
 // NOTE: admin_accounts and coach_settings are intentionally NOT in either set —
 // they are served only by the dedicated, hardened actions below.

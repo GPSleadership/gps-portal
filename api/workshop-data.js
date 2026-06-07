@@ -485,6 +485,491 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true, filename: `workshop_${body.workshop_id}_ghl.csv`, csv: csv([header, header.map(k => map[k])]), fields: map });
       }
 
+      // ── Organization management (v40) ─────────────────────────────────────
+
+      // List all organizations (optionally filtered by name search)
+      case 'org-list': {
+        const q = body.search ? `&name=ilike.${enc('%' + body.search + '%')}` : '';
+        const orgs = await sbGet(`/rest/v1/organizations?order=name.asc&limit=200${q}`);
+        return res.status(200).json({ ok: true, organizations: orgs });
+      }
+
+      // Create a new organization
+      case 'org-create': {
+        const name = (body.name || '').trim();
+        if (!name) return res.status(400).json({ error: 'name required' });
+        const r = await sb('/rest/v1/organizations', 'POST', {
+          name, industry: body.industry || null, size_band: body.size_band || null,
+          tags: Array.isArray(body.tags) ? body.tags : [],
+          logo_url: body.logo_url || null, notes: body.notes || null,
+          created_at: isoNow(), updated_at: isoNow(),
+        }, { Prefer: 'return=representation' });
+        const rows = await r.json().catch(() => []);
+        const org = Array.isArray(rows) ? rows[0] : rows;
+        return res.status(200).json({ ok: true, organization: org });
+      }
+
+      // Update an existing organization
+      case 'org-update': {
+        const id = body.org_id;
+        if (!id) return res.status(400).json({ error: 'org_id required' });
+        const patch = { updated_at: isoNow() };
+        if (body.name      != null) patch.name      = body.name;
+        if (body.industry  != null) patch.industry  = body.industry;
+        if (body.size_band != null) patch.size_band = body.size_band;
+        if (body.tags      != null) patch.tags      = body.tags;
+        if (body.logo_url  != null) patch.logo_url  = body.logo_url;
+        if (body.notes     != null) patch.notes     = body.notes;
+        await sb(`/rest/v1/organizations?id=eq.${enc(id)}`, 'PATCH', patch, { Prefer: 'return=minimal' });
+        return res.status(200).json({ ok: true });
+      }
+
+      // ── TP3 Assessment creation (v40) — creates workshop + seeds 21 Qs ───────
+
+      case 'create-assessment': {
+        const title = (body.title || '').trim();
+        if (!title) return res.status(400).json({ error: 'title required' });
+
+        // 1. Resolve or create organization
+        let orgId = body.org_id || null;
+        let orgLogoUrl = null;
+        if (!orgId && body.org_name) {
+          // Try to find by name (case-insensitive)
+          const existing = await sbOne(`/rest/v1/organizations?name=ilike.${enc(body.org_name)}&select=id,logo_url&limit=1`);
+          if (existing) {
+            orgId = existing.id;
+            orgLogoUrl = existing.logo_url;
+          } else {
+            // Create new org
+            const r = await sb('/rest/v1/organizations', 'POST', {
+              name: body.org_name, industry: body.industry || null,
+              size_band: body.size_band || null, tags: body.tags || [],
+              created_at: isoNow(), updated_at: isoNow(),
+            }, { Prefer: 'return=representation' });
+            const rows = await r.json().catch(() => []);
+            const org = Array.isArray(rows) ? rows[0] : rows;
+            orgId = org?.id || null;
+          }
+        }
+
+        // 2. Handle logo upload (base64 data URL → Supabase Storage)
+        if (body.logo_data_url && orgId) {
+          try {
+            const match = body.logo_data_url.match(/^data:([a-zA-Z/]+);base64,(.+)$/);
+            if (match) {
+              const mime = match[1];
+              const buf  = Buffer.from(match[2], 'base64');
+              const ext  = mime.includes('png') ? 'png' : 'jpg';
+              const path = `org-logos/${orgId}.${ext}`;
+              const up = await fetch(`${SUPABASE_URL}/storage/v1/object/org-assets/${path}`, {
+                method: 'POST',
+                headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}`, 'Content-Type': mime, 'x-upsert': 'true' },
+                body: buf,
+              });
+              if (up.ok) {
+                orgLogoUrl = `${SUPABASE_URL}/storage/v1/object/public/org-assets/${path}`;
+                await sb(`/rest/v1/organizations?id=eq.${enc(orgId)}`, 'PATCH', { logo_url: orgLogoUrl, updated_at: isoNow() }, { Prefer: 'return=minimal' });
+              }
+            }
+          } catch (_) { /* logo upload is non-fatal */ }
+        }
+
+        // 3. Resolve or create sponsor client
+        let sponsorId = null;
+        const spEmail = (body.sponsor_email || '').toLowerCase().trim();
+        const spName  = (body.sponsor_name  || '').trim();
+        if (spEmail) {
+          const ex = await sbOne(`/rest/v1/clients?email=eq.${enc(spEmail)}&select=id&limit=1`);
+          if (ex) {
+            sponsorId = ex.id;
+          } else {
+            const r = await sb('/rest/v1/clients', 'POST', {
+              name: spName || spEmail, email: spEmail, organization: body.org_name || null,
+              in_coaching_program: false, is_active: true,
+            }, { Prefer: 'return=representation' });
+            const rows = await r.json().catch(() => []);
+            const c = Array.isArray(rows) ? rows[0] : rows;
+            sponsorId = c?.id || null;
+          }
+        }
+
+        // 4. Create the workshop record
+        const wr = await sb('/rest/v1/workshops', 'POST', {
+          title,
+          engagement_kind: 'assessment',
+          client_org_name: body.org_name || null,
+          organization_id: orgId,
+          debrief_date: body.debrief_date || null,
+          sponsor_client_id: sponsorId,
+          industry: body.industry || null,
+          company_size_band: body.size_band || null,
+          audience_level: body.audience_level || null,
+          tags: body.tags || [],
+          status: 'setup',
+          is_demo: body.is_demo === true,
+          is_archived: false,
+        }, { Prefer: 'return=representation' });
+        const wrows = await wr.json().catch(() => []);
+        const w = Array.isArray(wrows) ? wrows[0] : wrows;
+        if (!w?.id) return res.status(500).json({ error: 'Failed to create workshop record' });
+
+        // 5. Seed per-assessment copies of the 21 TP3 base questions
+        const templates = await sbGet(`/rest/v1/workshop_questions?workshop_id=is.null&template_set=eq.tp3_assessment&is_demographic=eq.false&order=sort_order.asc`);
+        if (templates.length) {
+          const seeded = templates.map(t => ({
+            workshop_id:    w.id,
+            question_id:    t.question_id,
+            question_theme: t.question_theme,
+            question_text:  t.question_text,
+            response_type:  t.response_type,
+            scale_min:      t.scale_min,
+            scale_max:      t.scale_max,
+            choice_options: t.choice_options,
+            template_set:   'tp3_assessment',
+            source:         'standard',
+            status:         'approved',
+            sort_order:     t.sort_order,
+            phase:          t.phase || 'pre',
+          }));
+          await sb('/rest/v1/workshop_questions', 'POST', seeded, { Prefer: 'return=minimal' });
+        }
+
+        return res.status(200).json({ ok: true, workshop_id: w.id, org_id: orgId, org_logo_url: orgLogoUrl });
+      }
+
+      // ── Enhanced AI question suggest (v40) — requires discovery context ───────
+
+      case 'suggest-questions-v2': {
+        const w = await sbOne(`/rest/v1/workshops?id=eq.${enc(body.workshop_id)}&select=*&limit=1`);
+        if (!w) return res.status(404).json({ error: 'Workshop not found' });
+
+        // Pull org context if linked
+        let orgCtx = '';
+        if (w.organization_id) {
+          const org = await sbOne(`/rest/v1/organizations?id=eq.${enc(w.organization_id)}&select=name,industry,size_band,notes&limit=1`);
+          if (org) orgCtx = `Organization: ${org.name}\nIndustry: ${org.industry || ''}\nSize: ${org.size_band || ''}\nOrg notes: ${org.notes || ''}`;
+        }
+        const discovery = (w.discovery_transcript || w.discovery_notes || '(no discovery notes)').slice(0, 10000);
+        const ctx = `${orgCtx}\nWorkshop: ${w.title}\nAudience level: ${w.audience_level || ''}\nDiscovery notes:\n${discovery}`;
+        const sys = 'You are helping design a TP3 Organizational Assessment survey for an operations-heavy company. The base 21 questions cover trust/proactivity/productivity/NPS/qualitative/bottleneck — those are already included. Your job: propose 5-6 ADDITIONAL client-specific questions based on the discovery context. The mix MUST include: at least 2 additional scale questions (1-5, map to trust/proactivity/productivity), and at least 2 qualitative behavior-focused questions (start with "Describe a recent situation where..." or similar). Return ONLY JSON array: [{"question_id":"AI_V2_1","question_theme":"trust","question_text":"...","response_type":"scale"},{"question_id":"AI_V2_2","question_theme":"qualitative","question_text":"Describe a recent situation where...","response_type":"text"}]. No explanation outside the JSON.';
+        const text = await claude(CLAUDE_MODEL, sys, ctx, 1200);
+        const arr = parseJsonLoose(text);
+        if (!Array.isArray(arr)) return res.status(200).json({ ok: true, suggestions: [], raw: text });
+        const toInsert = arr.slice(0, 6).map((q, i) => ({
+          workshop_id:    body.workshop_id,
+          question_id:    q.question_id || `AI_V2_${Date.now()}_${i}`,
+          question_theme: q.question_theme || 'custom',
+          template_set:   'tp3_assessment',
+          phase:          'pre',
+          question_text:  q.question_text,
+          response_type:  q.response_type === 'text' ? 'text' : 'scale',
+          scale_min:      q.response_type === 'text' ? null : 1,
+          scale_max:      q.response_type === 'text' ? null : 5,
+          source:         'ai_suggested',
+          status:         'draft',
+          sort_order:     250 + i,
+        })).filter(q => q.question_text);
+        if (toInsert.length) await sb('/rest/v1/workshop_questions', 'POST', toInsert, { Prefer: 'return=minimal' });
+        return res.status(200).json({ ok: true, suggestions: toInsert });
+      }
+
+      // ── Draft recap email using AI ────────────────────────────────────────────
+
+      case 'draft-recap-email': {
+        const w = await sbOne(`/rest/v1/workshops?id=eq.${enc(body.workshop_id)}&select=*&limit=1`);
+        if (!w) return res.status(404).json({ error: 'Workshop not found' });
+        const agg = await aggregate(body.workshop_id);
+        const findings = findingsFrom(agg);
+        const sum = w.exec_summary_json || {};
+        const rec = w.recommendation_json || recommendFrom(agg, w);
+        const spLink = `${PORTAL_BASE_URL}/workshop-room?token=${enc(w.sponsor_token || '')}`;
+
+        const ctx = [
+          `Assessment: ${w.title}`,
+          `Organization: ${w.client_org_name || ''}`,
+          `Debrief date: ${w.debrief_date || ''}`,
+          `TP3 — Trust: ${agg.tp3?.trust?.pre ?? '—'}, Proactivity: ${agg.tp3?.proactivity?.pre ?? '—'}, Productivity: ${agg.tp3?.productivity?.pre ?? '—'}`,
+          `NPS: ${agg.nps ?? '—'} | Response rate: ${agg.participation?.pre?.rate ?? '—'}%`,
+          `Participants: ${agg.participation?.total ?? 0}`,
+          `Strengths: ${(sum.strengths || findings.strengths).join('; ')}`,
+          `Risks: ${(sum.risks || findings.risks).join('; ')}`,
+          `90-day focus: ${(sum.focus90 || []).join('; ')}`,
+          `Recommended next step: ${rec?.primary?.step || ''} — ${rec?.primary?.headline || ''}`,
+          `Discovery notes (excerpt): ${(w.discovery_transcript || w.discovery_notes || '').slice(0, 3000)}`,
+          `Sponsor dashboard: ${spLink}`,
+        ].join('\n');
+
+        const sys = `You are Alex Tremble, a leadership operator at GPS Leadership Solutions. Write a post-debrief recap email to the sponsor. Tone: direct, warm, no hype. Structure: (1) short thank-you and reference to the debrief conversation, (2) key metrics table (TP3 scores, NPS, response rate), (3) 2-3 top strengths as bullets, (4) 2-3 top risks as bullets, (5) agreed 90-day focus as bullets, (6) sponsor dashboard link, (7) CTA for the 14-Day Executive Leadership Diagnostic. Use plain HTML formatting. Return ONLY the email body HTML — no subject line, no outer envelope.`;
+        const html = await claude(CLAUDE_MODEL, sys, ctx, 2000);
+
+        // Store draft in the workshop record
+        await sb(`/rest/v1/workshops?id=eq.${enc(body.workshop_id)}`, 'PATCH',
+          { recap_email_draft: html, updated_at: isoNow() }, { Prefer: 'return=minimal' });
+
+        return res.status(200).json({ ok: true, draft_html: html });
+      }
+
+      // ── Send survey emails individually (assessment version) ─────────────────
+      // Sends to participants where invited_at IS NULL (not yet sent).
+
+      case 'send-survey-emails': {
+        const w = await sbOne(`/rest/v1/workshops?id=eq.${enc(body.workshop_id)}&select=*&limit=1`);
+        if (!w) return res.status(404).json({ error: 'Workshop not found' });
+        const allParts = await sbGet(`/rest/v1/workshop_participants?workshop_id=eq.${enc(body.workshop_id)}&select=id,participant_token,client_id,invited_at`);
+        // Filter to only not-yet-invited (allow force_all flag for resend-all)
+        const parts = body.force_all ? allParts : allParts.filter(p => !p.invited_at);
+        let sent = 0;
+        for (const p of parts) {
+          const c = await sbOne(`/rest/v1/clients?id=eq.${enc(p.client_id)}&select=name,email&limit=1`);
+          if (!c?.email) continue;
+          const url = `${PORTAL_BASE_URL}/workshop-survey?token=${enc(p.participant_token)}&phase=pre`;
+          const subj = `Your ${w.title} survey — 5–10 minutes, completely confidential`;
+          const html = inviteHtml(c.name, w, 'pre', url);
+          const r = await sendEmail(c.email, subj, html);
+          if (r.ok) {
+            sent++;
+            await sb(`/rest/v1/workshop_participants?id=eq.${enc(p.id)}`, 'PATCH',
+              { invited_at: isoNow() }, { Prefer: 'return=minimal' });
+          }
+        }
+        // Advance status if first send
+        if (sent > 0 && !w.pre_survey_open_at) {
+          await sb(`/rest/v1/workshops?id=eq.${enc(body.workshop_id)}`, 'PATCH',
+            { pre_survey_open_at: isoNow(), status: 'pre_survey_open', updated_at: isoNow() },
+            { Prefer: 'return=minimal' });
+        }
+        return res.status(200).json({ ok: true, sent, total: parts.length, skipped: parts.length - sent });
+      }
+
+      // ── Resend survey to one participant ──────────────────────────────────────
+
+      case 'resend-survey-email': {
+        const participantId = body.participant_id;
+        if (!participantId) return res.status(400).json({ error: 'participant_id required' });
+        const p = await sbOne(`/rest/v1/workshop_participants?id=eq.${enc(participantId)}&select=*&limit=1`);
+        if (!p) return res.status(404).json({ error: 'Participant not found' });
+        const w = await sbOne(`/rest/v1/workshops?id=eq.${enc(p.workshop_id)}&select=*&limit=1`);
+        const c = await sbOne(`/rest/v1/clients?id=eq.${enc(p.client_id)}&select=name,email&limit=1`);
+        if (!c?.email) return res.status(400).json({ error: 'No email on file for this participant' });
+        const url = `${PORTAL_BASE_URL}/workshop-survey?token=${enc(p.participant_token)}&phase=pre`;
+        const subj = `Reminder: ${w.title} survey — still need your input`;
+        const html = reminderHtml(c.name, w, 'pre', url, 'is still open');
+        const r = await sendEmail(c.email, subj, html);
+        if (r.ok) {
+          await sb(`/rest/v1/workshop_participants?id=eq.${enc(participantId)}`, 'PATCH',
+            { invited_at: p.invited_at || isoNow(), last_reminder_at: isoNow() },
+            { Prefer: 'return=minimal' });
+        }
+        return res.status(200).json({ ok: r.ok, error: r.error });
+      }
+
+      // ── Archive engagement ────────────────────────────────────────────────────
+
+      case 'archive-engagement': {
+        const id = body.workshop_id;
+        if (!id) return res.status(400).json({ error: 'workshop_id required' });
+        await sb(`/rest/v1/workshops?id=eq.${enc(id)}`, 'PATCH',
+          { is_archived: true, updated_at: isoNow() }, { Prefer: 'return=minimal' });
+        return res.status(200).json({ ok: true });
+      }
+
+      // ── Permanently delete engagement and all related data ────────────────────
+
+      case 'delete-engagement': {
+        const id = body.workshop_id;
+        if (!id) return res.status(400).json({ error: 'workshop_id required' });
+        // Cascade: responses → participants → questions → workshop
+        await sb(`/rest/v1/workshop_responses?workshop_id=eq.${enc(id)}`, 'DELETE', null, { Prefer: 'return=minimal' });
+        await sb(`/rest/v1/workshop_participants?workshop_id=eq.${enc(id)}`, 'DELETE', null, { Prefer: 'return=minimal' });
+        await sb(`/rest/v1/workshop_questions?workshop_id=eq.${enc(id)}`, 'DELETE', null, { Prefer: 'return=minimal' });
+        await sb(`/rest/v1/workshops?id=eq.${enc(id)}`, 'DELETE', null, { Prefer: 'return=minimal' });
+        return res.status(200).json({ ok: true });
+      }
+
+      // ── Generate demo data (is_demo assessments only) ─────────────────────────
+
+      case 'generate-demo-data': {
+        const w = await sbOne(`/rest/v1/workshops?id=eq.${enc(body.workshop_id)}&select=*&limit=1`);
+        if (!w) return res.status(404).json({ error: 'Workshop not found' });
+        if (!w.is_demo) return res.status(403).json({ error: 'generate-demo-data is only allowed on is_demo assessments' });
+
+        const parts = await sbGet(`/rest/v1/workshop_participants?workshop_id=eq.${enc(body.workshop_id)}&select=id,client_id`);
+        if (!parts.length) return res.status(400).json({ error: 'Upload a roster first — need participants to generate data for.' });
+        const qs = await sbGet(`/rest/v1/workshop_questions?workshop_id=eq.${enc(body.workshop_id)}&status=eq.approved&order=sort_order.asc`);
+        if (!qs.length) return res.status(400).json({ error: 'No approved questions found.' });
+
+        // Wipe existing responses for this workshop
+        await sb(`/rest/v1/workshop_responses?workshop_id=eq.${enc(body.workshop_id)}`, 'DELETE', null, { Prefer: 'return=minimal' });
+
+        const qualPool = [
+          'We need to get better at communicating decisions earlier.',
+          'The team is strong but gets bogged down in approval loops.',
+          'More ownership at the manager level would unlock a lot.',
+          'Meetings are too long and rarely end with clear next steps.',
+          'Cross-department trust is lower than it should be.',
+          'Leaders say the right things but follow-through is inconsistent.',
+          'The best thing we do is stay close to the customer.',
+          'Execution slows down every time priorities shift.',
+        ];
+        const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+        const scaleVal = (bias) => Math.min(5, Math.max(1, Math.round(bias + (Math.random() * 1.2 - 0.6))));
+        const choiceOpts = ['Trust (how much we can rely on each other and our leaders)', 'Proactivity (ownership, raising issues early, taking initiative)', 'Productivity (clarity, meetings, and how fast work actually moves)', "They're roughly equal"];
+
+        const rows = [];
+        for (const p of parts) {
+          // Bias per participant (simulate realistic spread)
+          const bias = 2.8 + Math.random() * 1.6;
+          for (const q of qs) {
+            if (q.is_demographic) continue;
+            let rv = null, rt = null;
+            if (q.response_type === 'scale') {
+              rv = scaleVal(bias);
+            } else if (q.response_type === 'numeric') {
+              // NPS
+              rv = Math.round(4 + Math.random() * 6);
+            } else if (q.response_type === 'choice') {
+              rt = pick(choiceOpts);
+            } else {
+              rt = pick(qualPool);
+            }
+            rows.push({
+              workshop_id: body.workshop_id, participant_id: p.id,
+              question_id: q.question_id, question_text: q.question_text, question_theme: q.question_theme,
+              phase: 'pre', response_value: rv, response_text: rt,
+            });
+          }
+          // Mark participant pre_status complete
+          await sb(`/rest/v1/workshop_participants?id=eq.${enc(p.id)}`, 'PATCH',
+            { pre_status: 'complete' }, { Prefer: 'return=minimal' });
+        }
+
+        // Insert in batches of 50
+        for (let i = 0; i < rows.length; i += 50) {
+          await sb('/rest/v1/workshop_responses', 'POST', rows.slice(i, i + 50), { Prefer: 'return=minimal' });
+        }
+        return res.status(200).json({ ok: true, responses_created: rows.length, participants: parts.length });
+      }
+
+      // ── Full Excel export (returns JSON payload; client-side SheetJS builds XLSX)
+
+      case 'export-full-excel': {
+        const w = await sbOne(`/rest/v1/workshops?id=eq.${enc(body.workshop_id)}&select=*&limit=1`);
+        if (!w) return res.status(404).json({ error: 'Workshop not found' });
+        const sponsor = w.sponsor_client_id ? await sbOne(`/rest/v1/clients?id=eq.${enc(w.sponsor_client_id)}&select=name,email&limit=1`) : null;
+        let org = null;
+        if (w.organization_id) org = await sbOne(`/rest/v1/organizations?id=eq.${enc(w.organization_id)}&select=name,industry,size_band&limit=1`);
+        const agg = await aggregate(body.workshop_id);
+
+        // All participants with client details
+        const parts = await sbGet(`/rest/v1/workshop_participants?workshop_id=eq.${enc(body.workshop_id)}&select=id,client_id,role,department,location,pre_status,invited_at,last_reminder_at`);
+        const clientMap = {};
+        for (const p of parts) {
+          const c = await sbOne(`/rest/v1/clients?id=eq.${enc(p.client_id)}&select=name,email&limit=1`);
+          if (c) clientMap[p.id] = c;
+        }
+
+        // All responses
+        const resp = await sbGet(`/rest/v1/workshop_responses?workshop_id=eq.${enc(body.workshop_id)}&select=participant_id,phase,question_id,question_text,question_theme,response_value,response_text,created_at&order=participant_id.asc,question_id.asc`);
+
+        // Sheet 1: Overview
+        const overview = [
+          ['Assessment Title', w.title],
+          ['Organization', org?.name || w.client_org_name || ''],
+          ['Industry', org?.industry || w.industry || ''],
+          ['Size Band', org?.size_band || w.company_size_band || ''],
+          ['Audience Level', w.audience_level || ''],
+          ['Internal Tags', (w.tags || []).join(', ')],
+          ['Debrief Date', w.debrief_date || ''],
+          ['Sponsor Name', sponsor?.name || ''],
+          ['Sponsor Email', sponsor?.email || ''],
+          [],
+          ['Participants', agg.participation.total],
+          ['Response Rate', agg.participation.pre.rate + '%'],
+          ['Trust Index', agg.tp3?.trust?.pre ?? ''],
+          ['Proactivity Index', agg.tp3?.proactivity?.pre ?? ''],
+          ['Productivity Index', agg.tp3?.productivity?.pre ?? ''],
+          ['NPS', agg.nps ?? ''],
+          [],
+          ['Discovery Notes (excerpt)', (w.discovery_transcript || w.discovery_notes || '').slice(0, 2000)],
+        ];
+
+        // Sheet 2: Responses (wide pivot: one row per participant, columns per question)
+        const qs = await sbGet(`/rest/v1/workshop_questions?workshop_id=eq.${enc(body.workshop_id)}&status=eq.approved&order=sort_order.asc`);
+        const qIds = qs.map(q => q.question_id);
+        const qTexts = qs.map(q => q.question_text.slice(0, 80));
+        const responseHeader = ['Participant ID', 'Name', 'Email', 'Role', 'Department', 'Location', 'Status', ...qTexts];
+        const responseRows = [responseHeader];
+
+        for (const p of parts) {
+          const c = clientMap[p.id] || {};
+          const pResp = resp.filter(r => r.participant_id === p.id);
+          const vals = qIds.map(qid => {
+            const r = pResp.find(x => x.question_id === qid);
+            if (!r) return '';
+            return r.response_value != null ? r.response_value : (r.response_text || '');
+          });
+          responseRows.push([p.id, c.name || '', c.email || '', p.role || '', p.department || '', p.location || '', p.pre_status || '', ...vals]);
+        }
+
+        // Sheet 3: Verbatims (qualitative only)
+        const qualHeader = ['Participant ID', 'Question ID', 'Question Theme', 'Question Text', 'Response'];
+        const qualRows = [qualHeader, ...resp.filter(r => r.response_text && !r.response_value).map(r => [r.participant_id, r.question_id, r.question_theme, r.question_text, r.response_text])];
+
+        return res.status(200).json({
+          ok: true,
+          filename: `${(w.title || 'assessment').replace(/[^a-zA-Z0-9]/g, '_')}_full_export.xlsx`,
+          sheets: [
+            { name: 'Overview', rows: overview },
+            { name: 'Responses', rows: responseRows },
+            { name: 'Verbatims', rows: qualRows },
+          ],
+        });
+      }
+
+      // ── Upload discovery attachment to Supabase Storage ───────────────────────
+
+      case 'upload-discovery-attachment': {
+        const id = body.workshop_id;
+        const dataUrl = body.data;
+        const filename = (body.filename || 'attachment').replace(/[^a-zA-Z0-9._-]/g, '_');
+        if (!id || !dataUrl) return res.status(400).json({ error: 'workshop_id and data required' });
+        const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+        if (!match) return res.status(400).json({ error: 'Invalid data URL' });
+        const mime = match[1];
+        const buf  = Buffer.from(match[2], 'base64');
+        if (buf.length > 10 * 1024 * 1024) return res.status(400).json({ error: 'File too large (10 MB max)' });
+        const path = `discovery/${id}/${Date.now()}_${filename}`;
+        const up = await fetch(`${SUPABASE_URL}/storage/v1/object/org-assets/${path}`, {
+          method: 'POST',
+          headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}`, 'Content-Type': mime },
+          body: buf,
+        });
+        if (!up.ok) {
+          const err = await up.json().catch(() => ({}));
+          return res.status(500).json({ error: err.message || 'Storage upload failed' });
+        }
+        const url = `${SUPABASE_URL}/storage/v1/object/public/org-assets/${path}`;
+        await sb(`/rest/v1/workshops?id=eq.${enc(id)}`, 'PATCH',
+          { discovery_attachment_url: url, updated_at: isoNow() }, { Prefer: 'return=minimal' });
+        return res.status(200).json({ ok: true, url });
+      }
+
+      // ── Get roster with full client details (name, email, status) ────────────
+
+      case 'get-roster': {
+        const parts = await sbGet(`/rest/v1/workshop_participants?workshop_id=eq.${enc(body.workshop_id)}&select=id,client_id,role,department,location,pre_status,post_status,invited_at,last_reminder_at&order=created_at.asc`);
+        const enriched = await Promise.all(parts.map(async p => {
+          const c = await sbOne(`/rest/v1/clients?id=eq.${enc(p.client_id)}&select=name,email&limit=1`);
+          // Derive display status
+          let status = 'not_sent';
+          if (p.pre_status === 'complete') status = 'completed';
+          else if (p.last_reminder_at) status = 'reminder_sent';
+          else if (p.invited_at) status = 'sent';
+          return { ...p, name: c?.name || '', email: c?.email || '', display_status: status };
+        }));
+        return res.status(200).json({ ok: true, participants: enriched });
+      }
+
       default:
         return res.status(400).json({ error: 'Unknown action: ' + action });
     }

@@ -15,7 +15,8 @@
   body{margin:0;font-family:'Open Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
     background:var(--light);color:var(--navy);line-height:1.55;font-size:16px;}
   .wrap{max-width:640px;margin:0 auto;padding:0 16px 80px;}
-  .topbar{background:var(--navy);color:#fff;padding:14px 16px;text-align:center;font-weight:700;font-size:15px;letter-spacing:.3px;}
+  .topbar{background:var(--navy);color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:center;gap:14px;font-weight:700;font-size:15px;letter-spacing:.3px;}
+  .topbar-org-logo{max-height:32px;max-width:100px;object-fit:contain;border-radius:3px;flex-shrink:0;}
   .card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:22px;margin-top:18px;box-shadow:0 1px 4px rgba(0,0,0,.05);}
   h1{font-size:21px;margin:0 0 6px;}
   .sub{color:var(--mid);font-size:14px;margin:0;}
@@ -51,7 +52,7 @@
 </style>
 </head>
 <body>
-  <div class="topbar">GPS Leadership Solutions</div>
+  <div class="topbar" id="topbar"><span>GPS Leadership Solutions</span></div>
   <div class="wrap">
     <div id="root" class="card center"><p class="muted">Loading…</p></div>
   </div>
@@ -87,7 +88,16 @@
       buildPages(); renderRoomIntro(d);
     }).catch(function(e){ showError(e.message); });
   }
+  function showOrgLogo(url){
+    var tb = document.getElementById('topbar');
+    if(!tb || !url) return;
+    var img = document.createElement('img');
+    img.src = url; img.alt = ''; img.className = 'topbar-org-logo';
+    img.onerror = function(){ img.style.display='none'; };
+    tb.insertBefore(img, tb.firstChild);
+  }
   function renderRoomIntro(d){
+    if(d.workshop && d.workshop.org_logo_url) showOrgLogo(d.workshop.org_logo_url);
     root.className='card';
     root.innerHTML =
       '<h1>'+esc(d.workshop.title)+'</h1>'+
@@ -133,6 +143,7 @@
     STATE.pages = pages.filter(function(p){return p.length;});
   }
   function renderIntro(d){
+    if(d.workshop && d.workshop.org_logo_url) showOrgLogo(d.workshop.org_logo_url);
     root.className='card';
     var total = STATE.questions.length;
     root.innerHTML =

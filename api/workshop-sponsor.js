@@ -135,6 +135,13 @@ export default async function handler(req, res) {
     if (!w) return res.status(401).json({ error: 'Invalid or expired link' });
     sb(`/rest/v1/workshops?id=eq.${w.id}`, 'PATCH', { token_last_used_at: new Date().toISOString() }, { Prefer: 'return=minimal' }).catch(() => {});
 
+    // Look up org logo (v40) — null-safe, non-fatal
+    let orgLogoUrl = null;
+    if (w.organization_id) {
+      const org = await sbOne(`/rest/v1/organizations?id=eq.${enc(w.organization_id)}&select=logo_url&limit=1`).catch(() => null);
+      if (org?.logo_url) orgLogoUrl = org.logo_url;
+    }
+
     const agg = await aggregate(w.id);
     const f = findings(agg);
     const summary = w.exec_summary_json || null;
@@ -160,7 +167,8 @@ export default async function handler(req, res) {
       ok: true,
       finalizing: !approved,
       workshop: {
-        title: w.title, org: w.client_org_name, workshop_date: w.workshop_date, debrief_date: w.debrief_date,
+        title: w.title, org: w.client_org_name, org_logo_url: orgLogoUrl,
+        workshop_date: w.workshop_date, debrief_date: w.debrief_date,
         industry: w.industry, audience_level: w.audience_level, status: w.status,
         kind: w.engagement_kind || 'workshop',
       },

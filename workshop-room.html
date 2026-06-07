@@ -94,6 +94,7 @@
   <div class="header-left">
     <div class="header-logo-text">GPS</div>
     <div><div class="header-title">Leadership Solutions</div><div class="header-sub" id="headerSub">Workshop Dashboard</div></div>
+    <div id="orgLogoWrap" style="display:none;padding-left:14px;border-left:1px solid rgba(255,255,255,0.2);margin-left:4px;"><img id="orgLogoImg" src="" alt="" style="max-height:36px;max-width:120px;object-fit:contain;vertical-align:middle;border-radius:3px;"></div>
   </div>
   <div class="header-who" id="headerWho"></div>
 </header>
@@ -174,6 +175,8 @@
     var w=d.workshop, s=d.exec_summary||{}, rec=d.recommendation&&d.recommendation.primary;
     var isA=(w.kind==='assessment');
     if(isA){ var hs=document.getElementById('headerSub'); if(hs) hs.textContent='TP3 Organizational Assessment'; document.title='GPS TP3 Organizational Assessment'; }
+    // Org logo (v40) — show next to GPS logo when available
+    if(w.org_logo_url){ var lw=document.getElementById('orgLogoWrap'), li=document.getElementById('orgLogoImg'); if(lw&&li){ li.src=w.org_logo_url; li.alt=(w.org||'')+ ' logo'; lw.style.display='block'; } }
     document.getElementById('headerWho').textContent = ''; // sponsor name not returned; keep clean
     var part=s.participation||{pre:{rate:0},post:{rate:0},total:0};
     var html='';
