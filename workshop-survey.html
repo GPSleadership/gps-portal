@@ -91,7 +91,7 @@
     root.className='card';
     root.innerHTML =
       '<h1>'+esc(d.workshop.title)+'</h1>'+
-      '<p class="sub">'+(PHASE==='pre'?'Pre-workshop pulse':'Post-workshop pulse')+(d.workshop.org?' · '+esc(d.workshop.org):'')+'</p>'+
+      '<p class="sub">'+(d.workshop.kind==='assessment'?'TP3 Organizational Assessment':(PHASE==='pre'?'Pre-workshop pulse':'Post-workshop pulse'))+(d.workshop.org?' · '+esc(d.workshop.org):'')+'</p>'+
       '<span class="est">Takes about '+(PHASE==='pre'?'5':'3')+' minutes · '+STATE.questions.length+' questions</span>'+
       '<p class="muted" style="margin-top:16px;">Your answers are confidential and shared only as a team-level summary.</p>'+
       '<div class="field"><label>Your email (optional — lets us match your before &amp; after)</label><input id="rm_email" type="email" placeholder="you@company.com"></div>'+
@@ -137,7 +137,7 @@
     var total = STATE.questions.length;
     root.innerHTML =
       '<h1>'+esc(d.workshop.title)+'</h1>'+
-      '<p class="sub">'+(PHASE==='pre'?'Pre-workshop pulse':'Post-workshop follow-up')+(d.workshop.org?' · '+esc(d.workshop.org):'')+'</p>'+
+      '<p class="sub">'+(d.workshop.kind==='assessment'?'TP3 Organizational Assessment':(PHASE==='pre'?'Pre-workshop pulse':'Post-workshop follow-up'))+(d.workshop.org?' · '+esc(d.workshop.org):'')+'</p>'+
       '<span class="est">This will take about '+(PHASE==='pre'?'5–7':'5')+' minutes · '+total+' questions</span>'+
       '<p class="muted" style="margin-top:16px;">Your answers are confidential. '+esc(d.participant.name||'')+', I only ever share the team-level picture — never individual responses.</p>'+
       '<div class="nav"><button class="btn btn-primary" id="begin">Begin</button></div>';
@@ -250,7 +250,8 @@
   function renderFeedback(){
     root.className='card';
     var h='<h1>How did it land?</h1><p class="sub">'+esc(FB.meta.title||'Workshop')+(FB.meta.org?' · '+esc(FB.meta.org):'')+'</p>';
-    h+='<div class="q">On a scale of 0 to 10, how likely are you to recommend this workshop to '+esc(npsReferent(FB.title))+'?</div>';
+    var fbKind=(FB.meta&&FB.meta.kind==='assessment')?'assessment':'workshop';
+    h+='<div class="q">On a scale of 0 to 10, how likely are you to recommend this '+fbKind+' to '+esc(npsReferent(FB.title))+'?</div>';
     h+='<div class="scale nps" id="fbnps">';
     for(var i=0;i<=10;i++){ h+='<button data-val="'+i+'"'+(String(FB.nps)===String(i)?' class="sel"':'')+'>'+i+'</button>'; }
     h+='</div><div class="scalelabels"><span>Not likely</span><span>Very likely</span></div>';

@@ -113,7 +113,7 @@ export default async function handler(req, res) {
         }
         return res.status(200).json({
           ok: true, open, completed, phase,
-          workshop: { title: w.title, org: w.client_org_name, workshop_date: w.workshop_date },
+          workshop: { title: w.title, org: w.client_org_name, workshop_date: w.workshop_date, kind: w.engagement_kind || 'workshop' },
           participant: { name: client?.name || '', role: client?.title || p.role || '' },
           questions, saved,
         });
@@ -156,7 +156,7 @@ export default async function handler(req, res) {
         const questions = await liveQuestions(w.id, phase);
         return res.status(200).json({
           ok: true, open, phase, room: true,
-          workshop: { title: w.title, org: w.client_org_name, workshop_date: w.workshop_date },
+          workshop: { title: w.title, org: w.client_org_name, workshop_date: w.workshop_date, kind: w.engagement_kind || 'workshop' },
           questions,
         });
       }
@@ -220,7 +220,7 @@ export default async function handler(req, res) {
         }
         return res.status(200).json({
           ok: true,
-          workshop: { title: w.title, org: w.client_org_name },
+          workshop: { title: w.title, org: w.client_org_name, kind: w.engagement_kind || 'workshop' },
           sponsor_title: sponsorTitle,
           bonus: w.bonus_resource_config || null,
           already: !!w.recap_sent_at && false, // feedback can be re-opened; recap is separate

@@ -95,14 +95,25 @@ function statusIndex(status) {
   const order = ['setup', 'discovery_complete', 'questions_drafted', 'sponsor_review', 'pre_survey_open', 'pre_survey_closed', 'workshop_delivered', 'post_survey_open', 'post_survey_closed', 'debrief_scheduled', 'report_uploaded', 'complete'];
   const i = order.indexOf(status); return i < 0 ? 0 : i;
 }
+const ASSESSMENT_LIFECYCLE = [
+  ['discovery_complete',  'Discovery call completed'],
+  ['questions_drafted',   'Survey questions developed'],
+  ['sponsor_review',      'Sponsor review of questions'],
+  ['pre_survey_open',     'Survey live'],
+  ['pre_survey_closed',   'Survey closed — data in review'],
+  ['debrief_scheduled',   'Debrief with sponsor'],
+  ['complete',            'Report & recommendations ready'],
+];
 function buildTimeline(w, agg) {
   const order = ['setup', 'discovery_complete', 'questions_drafted', 'sponsor_review', 'pre_survey_open', 'pre_survey_closed', 'workshop_delivered', 'post_survey_open', 'post_survey_closed', 'debrief_scheduled', 'report_uploaded', 'complete'];
+  const isAssessment = (w.engagement_kind || 'workshop') === 'assessment';
+  const stages = isAssessment ? ASSESSMENT_LIFECYCLE : LIFECYCLE;
   const cur = statusIndex(w.status);
-  return LIFECYCLE.map(([key, label]) => {
+  return stages.map(([key, label]) => {
     const idx = order.indexOf(key);
     const state = idx < cur ? 'done' : (idx === cur ? 'current' : 'upcoming');
     const m = { key, label, state };
-    if (key === 'pre_survey_open')  { m.detail = `${agg.participation.pre.done} of ${agg.participation.total} (${agg.participation.pre.rate}%)`; m.countdown_to = w.workshop_date; }
+    if (key === 'pre_survey_open')  { m.detail = `${agg.participation.pre.done} of ${agg.participation.total} (${agg.participation.pre.rate}%)`; if (!isAssessment) m.countdown_to = w.workshop_date; }
     if (key === 'post_survey_open') { m.detail = `${agg.participation.post.done} of ${agg.participation.total} (${agg.participation.post.rate}%)`; }
     if (key === 'workshop_delivered') m.date = w.workshop_date;
     if (key === 'debrief_scheduled')  m.date = w.debrief_date;
@@ -151,6 +162,7 @@ export default async function handler(req, res) {
       workshop: {
         title: w.title, org: w.client_org_name, workshop_date: w.workshop_date, debrief_date: w.debrief_date,
         industry: w.industry, audience_level: w.audience_level, status: w.status,
+        kind: w.engagement_kind || 'workshop',
       },
       exec_summary: {
         participation: agg.participation, nps: agg.nps, npsAvg: agg.npsAvg, tp3: agg.tp3,

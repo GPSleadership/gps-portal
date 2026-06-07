@@ -93,7 +93,7 @@
 <header class="header">
   <div class="header-left">
     <div class="header-logo-text">GPS</div>
-    <div><div class="header-title">Leadership Solutions</div><div class="header-sub">Workshop Dashboard</div></div>
+    <div><div class="header-title">Leadership Solutions</div><div class="header-sub" id="headerSub">Workshop Dashboard</div></div>
   </div>
   <div class="header-who" id="headerWho"></div>
 </header>
@@ -120,8 +120,17 @@
     else { prior='<div class="tp3-prior">'+cur+' / 5.0 · 1–5 scale; 4 is healthy</div>'; }
     return '<div class="tp3-cell tp3-'+cls+'"><div class="tp3-name">'+name+'</div><div class="tp3-score">'+cur+' <span>/ 5.0</span></div><div class="bar-track"><div class="bar-fill" style="width:'+pct(cur)+'%"></div></div>'+prior+'</div>';
   }
-  function quickRead(s){
-    var t=s.tp3||{}; var ds=[t.trust,t.proactivity,t.productivity].map(function(x){return x&&x.delta;}).filter(function(x){return x!=null;});
+  function quickRead(s, isA){
+    var t=s.tp3||{};
+    if(isA){
+      var vals=[t.trust,t.proactivity,t.productivity].map(function(x){return x&&(x.post!=null?x.post:x.pre);}).filter(function(x){return x!=null;});
+      var lo=vals.length?Math.min.apply(null,vals):null, hi=vals.length?Math.max.apply(null,vals):null;
+      if(lo==null) return 'Your organizational read will appear here as responses come in.';
+      if(lo>=4) return 'A healthy read across the organization — trust, proactivity, and productivity are all at or above the healthy line. The opportunity is to protect what works and build bench strength.';
+      if(lo<3) return 'A candid read — at least one core area is below 3.0, which is low enough to be quietly costing time and money day to day. The focus areas below show where to start.';
+      return 'A solid baseline with clear room to move — the lower-scoring themes below are where focused work will pay off fastest.';
+    }
+    var ds=[t.trust,t.proactivity,t.productivity].map(function(x){return x&&x.delta;}).filter(function(x){return x!=null;});
     var gained=ds.length&&ds.every(function(x){return x>=0;});
     var npsTxt=s.nps!=null?('NPS '+s.nps):'';
     if(s.nps!=null&&s.nps>=50&&gained) return 'A strong result — participation was high'+(npsTxt?' ('+npsTxt+')':'')+' and trust, proactivity, and productivity all moved up. The opportunity now is to lock the gains into a repeatable system.';
@@ -131,9 +140,19 @@
   function focusItem(f){ if(f&&typeof f==='object'){ return '<li><span class="ftext">'+esc(f.text||'')+'</span>'+((f.owner||f.start)?'<div class="fmeta">'+(f.owner?'Owner: '+esc(f.owner):'')+(f.owner&&f.start?' · ':'')+(f.start?'Start: '+esc(f.start):'')+'</div>':'')+'</li>'; } return '<li><span class="ftext">'+esc(f)+'</span></li>'; }
   function themeLabel(t){ var m={trust:'Trust',proactivity:'Proactivity',productivity:'Productivity',delegation:'Delegation',meetings:'Meetings',communication:'Communication',satisfaction:'Satisfaction'}; return m[t]||(t?t.charAt(0).toUpperCase()+t.slice(1):t); }
   function bandColor(v){ return v==null?'#d0d0d0':(v>=4?'#2e7d32':(v>=3?'#e65100':'#DB1F48')); }
-  function themeCompareCard(tbl){
+  function themeCompareCard(tbl, isA){
     var rows=(tbl||[]).filter(function(r){ return r.theme!=='open'&&r.theme!=='feedback'; });
     if(!rows.length) return '';
+    if(isA){
+      var bodyA=rows.map(function(r){
+        var cur=(r.post!=null?r.post:r.pre); var barw=cur!=null?Math.round(cur/5*100):0;
+        return '<tr><td style="padding:8px 10px;font-weight:600;color:var(--navy-dark)">'+esc(themeLabel(r.theme))+'</td>'+
+          '<td style="padding:8px 10px;text-align:center;font-weight:700;color:var(--navy)">'+(cur!=null?cur:'—')+'</td>'+
+          '<td style="padding:8px 10px;min-width:160px"><div class="bar-track" style="margin:0"><div class="bar-fill" style="width:'+barw+'%;background:'+bandColor(cur)+'"></div></div></td></tr>';
+      }).join('');
+      return '<div class="card"><div class="card-title" style="margin-bottom:8px"><span class="dot"></span>Results by theme</div><div style="font-size:13px;color:var(--gray-600);margin-bottom:10px">Organization-wide read on a 1–5 scale (4+ is healthy). The lower scores are where to focus.</div>'+
+        '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:var(--navy);color:#fff"><th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.4px">Theme</th><th style="padding:8px 10px;font-size:10px;text-transform:uppercase">Score</th><th style="padding:8px 10px;font-size:10px;text-transform:uppercase">Level</th></tr></thead><tbody>'+bodyA+'</tbody></table></div>';
+    }
     var hasPost=rows.some(function(r){ return r.post!=null; });
     var intro=hasPost?'Where the team moved from before the workshop to after. Green = gains, red = still needs focus.':'Pre-workshop read — the lower scores are where this workshop should focus.';
     var body=rows.map(function(r){
@@ -153,24 +172,33 @@
   function render(d){
     if(!d||!d.ok){ view.innerHTML='<div class="card"><div class="empty">'+esc(d&&d.error||'Link not recognized.')+'</div></div>'; return; }
     var w=d.workshop, s=d.exec_summary||{}, rec=d.recommendation&&d.recommendation.primary;
+    var isA=(w.kind==='assessment');
+    if(isA){ var hs=document.getElementById('headerSub'); if(hs) hs.textContent='TP3 Organizational Assessment'; document.title='GPS TP3 Organizational Assessment'; }
     document.getElementById('headerWho').textContent = ''; // sponsor name not returned; keep clean
     var part=s.participation||{pre:{rate:0},post:{rate:0},total:0};
     var html='';
-    html+='<div class="page-title">'+esc(w.title)+'</div><div class="page-sub">'+esc(w.org||'')+(w.workshop_date?' · Workshop '+fmtDate(w.workshop_date):'')+(w.debrief_date?' · Debrief '+fmtDate(w.debrief_date):'')+'</div>';
+    html+='<div class="page-title">'+esc(w.title)+'</div><div class="page-sub">'+esc(w.org||'')+(isA?'':(w.workshop_date?' · Workshop '+fmtDate(w.workshop_date):''))+(w.debrief_date?' · Debrief '+fmtDate(w.debrief_date):'')+'</div>';
 
     // 1) WHAT HAPPENED — Executive summary
     html+='<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Executive summary</div><div class="actions"><button class="btn-ghost" id="dlPdf">Download 1-page summary</button><button class="btn-ghost" id="cpEmail">Copy summary for email</button></div></div>';
-    html+='<div class="quick-read">'+esc(quickRead(s))+'</div>';
-    html+='<div class="stat-grid">'+
-      '<div class="stat"><div class="v">'+(part.pre?part.pre.rate:0)+'%</div><div class="l">Pre response <span class="tip" title="% of invited participants who responded.">i</span></div></div>'+
-      '<div class="stat"><div class="v">'+(part.post?part.post.rate:0)+'%</div><div class="l">Post response <span class="tip" title="% of invited participants who responded.">i</span></div></div>'+
-      '<div class="stat"><div class="v">'+(s.nps!=null?s.nps:'—')+'</div><div class="l">Workshop NPS <span class="tip" title="Promoters minus detractors; 50+ is strong.">i</span></div></div>'+
-      '<div class="stat"><div class="v">'+(part.total||0)+'</div><div class="l">Participants</div></div></div>';
+    html+='<div class="quick-read">'+esc(quickRead(s, isA))+'</div>';
+    if(isA){
+      html+='<div class="stat-grid" style="grid-template-columns:repeat(3,1fr)">'+
+        '<div class="stat"><div class="v">'+(part.pre?part.pre.rate:0)+'%</div><div class="l">Response rate <span class="tip" title="% of invited participants who responded.">i</span></div></div>'+
+        '<div class="stat"><div class="v">'+(s.nps!=null?s.nps:'—')+'</div><div class="l">NPS <span class="tip" title="Promoters minus detractors; 50+ is strong.">i</span></div></div>'+
+        '<div class="stat"><div class="v">'+(part.total||0)+'</div><div class="l">Participants</div></div></div>';
+    } else {
+      html+='<div class="stat-grid">'+
+        '<div class="stat"><div class="v">'+(part.pre?part.pre.rate:0)+'%</div><div class="l">Pre response <span class="tip" title="% of invited participants who responded.">i</span></div></div>'+
+        '<div class="stat"><div class="v">'+(part.post?part.post.rate:0)+'%</div><div class="l">Post response <span class="tip" title="% of invited participants who responded.">i</span></div></div>'+
+        '<div class="stat"><div class="v">'+(s.nps!=null?s.nps:'—')+'</div><div class="l">Workshop NPS <span class="tip" title="Promoters minus detractors; 50+ is strong.">i</span></div></div>'+
+        '<div class="stat"><div class="v">'+(part.total||0)+'</div><div class="l">Participants</div></div></div>';
+    }
     var t=s.tp3||{};
     html+='<div class="tp3-grid">'+tpCell('trust','Trust',t.trust)+tpCell('proactivity','Proactivity',t.proactivity)+tpCell('productivity','Productivity',t.productivity)+'</div></div>';
 
-    // 1b) Pre -> Post by theme (factual; always shown)
-    html+=themeCompareCard(d.themeTable);
+    // 1b) Results by theme (factual; always shown)
+    html+=themeCompareCard(d.themeTable, isA);
 
     // 2) SO WHAT — interpretation (gated behind coach review/approval)
     if(d.finalizing){
@@ -209,7 +237,7 @@
     var cp=document.getElementById('cpEmail'); if(cp) cp.onclick=function(){ copyEmail(w,s,rec); };
   }
   function copyEmail(w,s,rec){
-    var L=[w.title+' — workshop summary','','WHAT HAPPENED'];
+    var L=[w.title+' — '+(w.kind==='assessment'?'assessment':'workshop')+' summary','','WHAT HAPPENED'];
     var p=s.participation||{}; L.push('Participation: '+((p.pre&&p.pre.rate)||0)+'% pre, '+((p.post&&p.post.rate)||0)+'% post · NPS '+(s.nps!=null?s.nps:'n/a'));
     var t=s.tp3||{}; function ba(x){ return x?((x.pre!=null&&x.post!=null)?(x.pre+'→'+x.post):(x.post!=null?x.post:x.pre)):'n/a'; }
     L.push('Trust '+ba(t.trust)+', Proactivity '+ba(t.proactivity)+', Productivity '+ba(t.productivity)+' (1–5 scale)');
