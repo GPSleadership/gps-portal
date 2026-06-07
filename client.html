@@ -4790,6 +4790,43 @@ function renderResultsTab(surveyResponses, checkins, client, surveyTokens, selfC
       </div>`;
   }
 
+  // ── Consistency summary: showing up is the leading indicator ────────────
+  let consistencyHTML = '';
+  if (checkins && checkins.length > 0) {
+    let expectedWeeks = 0;
+    if (client.plan_start_date) {
+      const days = Math.floor((Date.now() - new Date(client.plan_start_date).getTime()) / 86400000);
+      expectedWeeks = Math.min(13, Math.max(1, Math.floor(days / 7) + 1));
+    }
+    const maxWk = Math.max.apply(null, checkins.map(c => c.week_number || 0));
+    if (!expectedWeeks || !isFinite(expectedWeeks)) expectedWeeks = maxWk;
+    expectedWeeks = Math.max(expectedWeeks, maxWk);
+    const submitted = checkins.length;
+    const ciPct = expectedWeeks ? Math.round((submitted / expectedWeeks) * 100) : null;
+    const coachAns = checkins.filter(c => c.attended_coaching === true || c.attended_coaching === false);
+    const coachYes = checkins.filter(c => c.attended_coaching === true).length;
+    const coachPct = coachAns.length ? Math.round((coachYes / coachAns.length) * 100) : null;
+    const ftAns = checkins.filter(c => c.completion_status);
+    const ftYes = checkins.filter(c => c.completion_status === 'Yes').length;
+    const ftPct = ftAns.length ? Math.round((ftYes / ftAns.length) * 100) : null;
+    const stat = (label, val, sub) => `
+      <div style="flex:1;min-width:140px;background:rgba(0,67,105,0.04);border-radius:8px;padding:14px 16px;text-align:center;">
+        <div style="font-size:24px;font-weight:800;color:var(--navy);">${val}</div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-600);margin-top:3px;">${label}</div>
+        ${sub ? `<div style="font-size:11px;color:var(--gray-600);margin-top:2px;">${sub}</div>` : ''}
+      </div>`;
+    consistencyHTML = `
+      <div class="card" style="margin-bottom:20px;">
+        <div class="card-title">Consistency</div>
+        <div class="card-subtitle">Showing up is the leading indicator. Your track record so far.</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:14px;">
+          ${stat('Check-ins submitted', `${submitted} of ${expectedWeeks}`, ciPct != null ? ciPct + '% of weeks' : '')}
+          ${coachPct != null ? stat('Coaching attended', coachPct + '%', `${coachYes} of ${coachAns.length} sessions`) : ''}
+          ${ftPct != null ? stat('Follow-through', ftPct + '%', `${ftYes} of ${ftAns.length} weeks &ldquo;Yes&rdquo;`) : ''}
+        </div>
+      </div>`;
+  }
+
   // ── Metric progress table ──────────────────────────────────────────────
   let metricHTML = '';
   if (checkins && checkins.length > 0) {
@@ -4797,11 +4834,13 @@ function renderResultsTab(surveyResponses, checkins, client, surveyTokens, selfC
     const hasM1 = !!(client.metric_1_name || client.metric_name);
     const hasM2 = !!(client.metric_2_name);
     const hasM3 = !!(client.metric_3_name);
-    const m1name = (client.metric_1_name || client.metric_name || 'Metric 1').substring(0, 20);
-    const m2name = (client.metric_2_name || 'Metric 2').substring(0, 20);
-    const m3name = (client.metric_3_name || 'Metric 3').substring(0, 20);
+    // Full metric names (no truncation), shown in normal case so the question reads clearly.
+    const mTh = (name) => `<th style="text-transform:none;letter-spacing:0;font-size:11px;max-width:220px;">${escHtmlResults(name)}</th>`;
+    const m1name = client.metric_1_name || client.metric_name || 'Metric 1';
+    const m2name = client.metric_2_name || 'Metric 2';
+    const m3name = client.metric_3_name || 'Metric 3';
 
-    const headerCols = `<th>Week</th><th>Date</th>${hasM1 ? `<th>${m1name}</th>` : ''}${hasM2 ? `<th>${m2name}</th>` : ''}${hasM3 ? `<th>${m3name}</th>` : ''}<th>Follow-Through</th>`;
+    const headerCols = `<th>Week</th><th>Date</th>${hasM1 ? mTh(m1name) : ''}${hasM2 ? mTh(m2name) : ''}${hasM3 ? mTh(m3name) : ''}<th>Follow-Through</th>`;
     const rows = [...checkins].reverse().map(c => {
       const date = c.submitted_at ? new Date(c.submitted_at).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—';
       const ftClass = c.completion_status === 'Yes' ? 'color:#2e7d32;font-weight:700;'
@@ -4820,7 +4859,7 @@ function renderResultsTab(surveyResponses, checkins, client, surveyTokens, selfC
     metricHTML = `
       <div class="card">
         <div class="card-title">Metric History</div>
-        <div class="card-subtitle">Your key metrics across every check-in, most recent first.</div>
+        <div class="card-subtitle">Your key metrics across every check-in, most recent first. A dash means that question was not part of that week's check-in.</div>
         <div style="overflow-x:auto;margin-top:14px;">
           <table class="mh-table">
             <thead><tr>${headerCols}</tr></thead>
@@ -4840,7 +4879,7 @@ function renderResultsTab(surveyResponses, checkins, client, surveyTokens, selfC
     return;
   }
 
-  el.innerHTML = nonResponseNotice + scorecardHTML + commentsHTML + metricHTML;
+  el.innerHTML = nonResponseNotice + consistencyHTML + scorecardHTML + commentsHTML + metricHTML;
 }
 
 // ─────────────────────────────────────────────

@@ -1,7 +1,7 @@
 # GPS Leadership Portal — Survival Package
 ### Everything needed to recreate this system from scratch
 
-**Last updated:** June 2, 2026 (evening — v23–v25 migrations, debrief date/auto-release, portal welcome email, coaching portal button)
+**Last updated:** June 7, 2026 (Workshop & Assessment Module v35–v39 LIVE — see Section 15; Decision Room migration catch-up v27–v34 — see Section 14)
 **GitHub repo:** https://github.com/GPSleadership/gps-portal
 **Live URL:** https://portal.gpsleadership.org
 **Coach dashboard:** https://portal.gpsleadership.org/coach
@@ -636,4 +636,62 @@ A weekly automated **security sweep** runs Fridays 2pm (Claude scheduled task `g
 
 ---
 
-*Last updated: June 3, 2026 (evening) — Phase 1 security hardening **deployed to production** (cutover complete). The portal now runs on token/session-validated service-key endpoints with RLS deny-all to anon; the anon key is no longer used for browser data access (see Section 13 and the corrected Section 6). New endpoints live: `portal-data.js`, `coach-data.js`, `diag-portal.js`, plus coach auth + break-glass reset in `get-client.js` and the `coach-emergency.html` page. Deferred: Step 5 (report-bucket signing), Step 7 (`ghl_export_view`). Next major build: the Decision Room (see `Decision_Room_Integration_Guide.md`). Update after any session that adds features, changes architecture, or introduces new failure modes.*
+## 14. Decision Room & Related — Migration Catch-Up (June 4–5, 2026, summary)
+
+The Decision Room shipped after Section 13. Headline state (see `Decision_Room_Integration_Guide.md` + `decision-room.html` + `api/sponsor-data.js` for detail):
+
+| Migration | What it adds |
+|-----------|-------------|
+| v27 | Decision Room object model: `teams`, `team_members` (joins existing `clients`), `sponsors` (+`sponsor_token`), `sponsor_teams` (per-engagement confidentiality + supervises list), `recommendations`, `external_signals`. RLS enabled, no anon policies. |
+| v28 | `survey_responses.scale` — responses carry their own scale (new 1–5 native; legacy backfilled as 10); endpoints normalize per-row, never blind-divide. |
+| v29 | Overall-impact question scale move (1–10 → 1–5 going forward; branch on cycle). |
+| v30 | `diagnostic_team_reports.team_id` link + sponsor visibility plumbing. |
+| v31 | `diagnostic_team_reports.report_pdf_url` — sponsor sees the coach-uploaded branded PDF, never draft text. |
+| v32 | `external_feedback_invites` — external feedback request flow. |
+| v33 | `clients.coaching_cadence` (weekly/biweekly/monthly) — fixes attendance denominators. |
+| v34 | `recommendations` extra fields (target_band, quick-start actions, coach-only GPS-fit tags — stripped from sponsor payload). |
+
+Key pages/endpoints since Section 13: `decision-room.html` (`/decision-room?token=…`), `api/sponsor-data.js` (THE sponsor security boundary — hard feedback gate + private-mode omission), coach.html Decision Room admin (`drAdmin`), `api/testimonial.js`. coach.html nav became grouped (Today / Clients / Diagnostics & Teams / Communication / Workshops & Assessments / Settings).
+
+---
+
+## 15. Workshop & Assessment Module (June 5–6, 2026 — LIVE)
+
+Two products on one engine: **Workshops** (pre + post survey around a delivered session) and **TP3 Organizational Assessments** (one survey wave across an org; no workshop event). Built to the post-v26 model: browser never touches Supabase; endpoints are the gate; RLS deny-all backstop.
+
+### Migrations (all applied to production)
+| Migration | What it adds |
+|-----------|-------------|
+| v35 | `workshops`, `workshop_participants`, `workshop_questions`, `workshop_responses`; **creates `testimonials` + `referrals`** (v22 had never actually been applied to prod — discovered and self-healed here) with nullable `workshop_id`; `clients.is_workshop_participant`; 21 standard TP3 template questions seeded (`workshop_id NULL` = global templates). |
+| v36 | `workshops.room_survey_token` — ONE shared in-room/QR survey link per engagement. |
+| v38 | `workshops.summary_approved` — the publish gate: sponsor endpoint omits AI narrative + recommendation until TRUE; regenerating sets it FALSE. |
+| v39 | `workshops.engagement_kind` ('workshop' \| 'assessment'). |
+
+### Files
+- **`api/workshop-data.js`** — coach-session-gated `?action=` hub (mirrors diagnostic.js): upload-roster (one-profile-per-person email matching → `clients`), suggest-questions (AI from `discovery_transcript`), generate-post-questions, aggregate (TP3 indices, per-theme pre/post deltas, NPS = %promoters−%detractors), generate-summary (Sonnet 90-day focus), recommend (rules: trust<3.5→14-Day Diagnostic; weak delegation/proactivity→90-Day CEO Reset; 3+ weak themes→Retreat), send-invites, send-recap, export-participant-csv / export-sponsor-csv / ghl-export, reminders (cron). Sends email via Resend directly. 120s maxDuration.
+- **`api/workshop-survey.js`** — token-gated: participant get/save-progress/submit (resume via same token); room-get/room-submit (shared QR; optional email match, else anonymous rows with `participant_id NULL`); sponsor-feedback get/submit (NPS branch: 9–10 → testimonial+consent+bonus+referral, 7–8 → soft, ≤6 → service recovery + `workshops.needs_review`). NPS referent is sponsor-title-aware (CEO/president/owner/founder → "another CEO, president, or owner"; else "a peer or colleague").
+- **`api/workshop-sponsor.js`** — sponsor read boundary (mirrors sponsor-data.js). Always returns numbers (participation, NPS, TP3, pre/post theme table, lifecycle timeline — assessment kind gets single-wave labels); withholds strengths/risks/focus90 + recommendation until `summary_approved`. Returns `cta_url` from `coach_settings.workshop_cta_url`.
+- **`coach.html`** — nav group **"Workshops & Assessments"** → list (kind/needs-review chips) → tabs Overview / Roster / Questions / Data / Recap. Overview: status, sponsor link, **discovery transcript box**, editable sponsor report (strengths/risks/focus/recommendation) + **"Published to sponsor"** checkbox. Two create buttons (**+ New workshop**, **+ New assessment**) — kind preset, no dropdown; assessment form hides workshop date. Roster: **QR card with Download PNG** (for PowerPoint; phase toggle on workshops, single link on assessments), CSV roster upload, send/per-phase invites. Also: editable "Sponsor 'Schedule a call' link" (writes `coach_settings.workshop_cta_url`). QR lib: qrcodejs from cdnjs.
+- **`workshop-room.html`** (`/workshop-room?token=…`) — sponsor dashboard in the **Decision Room design system** (gradient top bar, GPS header, colored TP3 bars with /5.0 + pre→post trend, teal quick-read, green/red strengths/risks columns, Pre→Post-by-theme table, gradient recommendation card with red CTA → booking link). Order: What happened → So what → Now what. Print-clean 1-pager + copy-summary-for-email. Auto-reframes for assessments (3 stat tiles, "Results by theme", assessment timeline).
+- **`workshop-survey.html`** (`/workshop-survey?token=…` | `?room=<room_token>&phase=pre|post` | `?token=<sponsor_token>&mode=feedback`) — mobile-first participant survey (progress bar, theme-grouped pages, save & resume), room mode (optional identify), sponsor feedback flow with NPS branching.
+- **`workshop-sandbox.html`** — clickable mock prototype (currently behind live).
+- `cleanup-workshop-test-data.sql` — removes all `TEST %`/`DEMO %` seed rows FK-safe (real accounts untouched).
+
+### Config / settings / cron
+- **No new env vars.** New `coach_settings` key: `workshop_cta_url` (sponsor CTA booking link; default = GHL 30-min discovery call widget). `vercel.json`: rewrites `/workshop-room`, `/workshop-survey`; cron `/api/workshop-data?action=reminders` daily 13:00 UTC (nudges incomplete participants 3 days / 1 day / morning-of survey close).
+- `api/coach-data.js` allowlists gained the four workshop tables (coach CRUD via the generic proxy).
+
+### Gotchas / invariants
+- One profile per person: participants & sponsors are `clients` rows; roster upload and room-submit match by email before creating; `is_workshop_participant` keeps them out of coaching lists.
+- The publish gate is the safe-build rule in code: **no un-reviewed AI narrative reaches a sponsor.**
+- Anonymous room responses count toward theme/NPS aggregates but NOT participation % (participation = roster completion).
+- Standard templates are `workshop_questions` rows with `workshop_id NULL` — per-workshop questions override; participants fall back to templates when a workshop has none.
+- Demo data live as of June 6: 3 `DEMO:` workshops (Ridgeline / Cascade / Summit; Ridgeline's sponsor is real client **Su Nu**) + 1 `TEST` workshop, all `summary_approved=TRUE`.
+- Deploys ONLY from `main`. (Incident June 5: commits accumulated on `coach-nav-refactor` while Vercel deployed `main` — nothing shipped until merged. Branch since merged; delete it, and review the old stash holding unexplained `api/get-client.js`/`api/sponsor-data.js` edits.)
+
+### Next major build (specced, not started)
+**TP3 Assessment V2** — Organization accounts + logos/branding, expanded 21-question bank with bottleneck/consequence spine, demographics, AI question review flow, XLSX import/export, demo-data generator, AI-drafted recap email, archive/delete. Full spec: `TP3_ASSESSMENT_V2_SPEC.md` (start it with `/gps-portal-safe-build`; Organizations begin at migration **v40**). Note: an untracked `supabase-migration-v37-admin-roles.sql` exists in the folder from another workstream — v37 is taken.
+
+---
+
+*Last updated: June 7, 2026 — Workshop & Assessment Module (v35–v39) deployed to production and documented (Section 15), Decision Room migration catch-up recorded (Section 14). Sponsor narrative is approval-gated; assessments run standalone via `engagement_kind`. Pending hygiene (reminder set for June 10): commit docs, run demo-data cleanup, delete `coach-nav-refactor` + review stash. Next major build: TP3 Assessment V2 (`TP3_ASSESSMENT_V2_SPEC.md`). Update after any session that adds features, changes architecture, or introduces new failure modes.*

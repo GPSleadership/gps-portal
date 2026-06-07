@@ -10,6 +10,19 @@
 -- are scoped by template_set = 'tp3_assessment'.
 -- ============================================================
 
+-- ── 0. Expand response_type check constraint ────────────────
+-- Original constraint only allowed: numeric, scale, text
+-- TP3 questions require: choice, nps, open — expand it now.
+ALTER TABLE workshop_questions
+  DROP CONSTRAINT IF EXISTS workshop_questions_response_type_check;
+
+ALTER TABLE workshop_questions
+  ADD CONSTRAINT workshop_questions_response_type_check
+  CHECK (response_type = ANY (ARRAY[
+    'numeric', 'scale', 'text',
+    'choice', 'nps', 'open', 'yesno', 'rating', 'multiple_choice'
+  ]));
+
 -- ── 1. Add columns to workshop_questions ────────────────────
 
 -- Scopes global templates: 'tp3_assessment', 'workshop_pre', 'workshop_post', etc.
