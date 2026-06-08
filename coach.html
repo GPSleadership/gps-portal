@@ -3897,6 +3897,10 @@ async function loadAdminAccounts() {
           </span>
         </td>
         <td class="owner-only">
+          <button onclick="sendAdminPassword(${a.id}, '${(a.name || '').replace(/'/g, "\\'")}')"
+            style="font-size:12px;background:none;border:1px solid var(--teal);color:var(--teal);border-radius:4px;padding:4px 10px;cursor:pointer;margin-right:6px;">
+            Email new password
+          </button>
           <button onclick="toggleAdminActive(${a.id}, ${a.is_active})"
             style="font-size:12px;background:none;border:1px solid var(--gray-300);border-radius:4px;padding:4px 10px;cursor:pointer;margin-right:6px;">
             ${a.is_active ? 'Deactivate' : 'Activate'}
@@ -3918,6 +3922,14 @@ async function loadAdminAccounts() {
 async function setAdminRole(id, role) {
   try { await coachData({ action: 'admin-update', id, role }); loadAdminAccounts(); }
   catch (e) { alert(e.message); loadAdminAccounts(); }
+}
+
+async function sendAdminPassword(id, name) {
+  if (!confirm(`Generate a new password for ${name} and email it to them?\n\nTheir current password stops working immediately. You will not see the new password — it goes straight to their email.`)) return;
+  try {
+    const r = await coachData({ action: 'admin-send-password', id });
+    alert(`Done — a new password was emailed to ${r.sent_to}.`);
+  } catch (e) { alert('Could not send: ' + e.message); }
 }
 
 function openAddAdminModal() {

@@ -639,8 +639,9 @@ export default async function handler(req, res) {
               <a href="${portalURL}" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;">Open My Coaching Portal &rarr;</a>
             </div>
             <ul style="font-size:13px;color:#444;padding-left:20px;margin:12px 0 0;">
-              <li style="margin-bottom:8px;">This link is unique to you. Please do not share or forward it.</li>
-              <li style="margin-bottom:8px;">Bookmark it so you can get back in easily from your phone or computer.</li>
+              <li style="margin-bottom:8px;">This link is unique to you. Please do not share or forward it. It signs you in automatically.</li>
+              <li style="margin-bottom:8px;"><b>Save it so it is one tap away.</b> On your iPhone: open the link in Safari or Chrome, tap the Share button (the square with the up arrow), then choose &ldquo;Add to Home Screen.&rdquo; You will get a GPS icon you tap like any app. On Android: open it in Chrome and tap &ldquo;Add to Home screen.&rdquo; On your computer: bookmark it (Cmd+D / Ctrl+D).</li>
+              <li style="margin-bottom:8px;">The portal will also offer to set this up the first time you open it, and on a computer it shows a QR code to send it straight to your phone.</li>
               <li>If you ever lose the link, email <a href="mailto:team@gpsleadership.org" style="color:#004369;">team@gpsleadership.org</a> and we will send you a new one.</li>
             </ul>
           </div>

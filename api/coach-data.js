@@ -184,6 +184,43 @@ export default async function handler(req, res) {
       await sb(`/rest/v1/admin_accounts?id=eq.${encodeURIComponent(body.id)}`, 'DELETE', null, { Prefer: 'return=minimal' });
       return res.status(200).json({ ok: true });
     }
+    // Owner emails an admin a freshly generated password (owner never sees it).
+    if (action === 'admin-send-password') {
+      if (!isOwner) return ownerOnly();
+      const ar = await sb(`/rest/v1/admin_accounts?id=eq.${encodeURIComponent(body.id)}&select=id,name,email&limit=1`);
+      const rows = ar.ok ? await ar.json() : [];
+      const acct = rows[0];
+      if (!acct) return res.status(404).json({ error: 'Admin account not found' });
+      if (!acct.email) return res.status(400).json({ error: 'This account has no email on file. Add one first.' });
+      // Readable but strong: 3 word-like chunks + digits.
+      const newPw = crypto.randomBytes(9).toString('base64').replace(/[+/=]/g, '').slice(0, 12);
+      const pr = await sb(`/rest/v1/admin_accounts?id=eq.${encodeURIComponent(acct.id)}`, 'PATCH',
+        { password: hashPassword(newPw) }, { Prefer: 'return=minimal' });
+      if (!pr.ok) return res.status(500).json({ error: 'Could not set the new password' });
+      const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+      const RESEND_FROM = process.env.RESEND_FROM_EMAIL || 'alex@gpsleadership.org';
+      if (!RESEND_API_KEY) return res.status(500).json({ error: 'Email is not configured (RESEND_API_KEY missing)' });
+      const first = (acct.name || 'there').split(' ')[0];
+      const er = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: RESEND_FROM.includes('<') ? RESEND_FROM : `GPS Leadership <${RESEND_FROM}>`,
+          to: [acct.email],
+          subject: 'Your GPS Coach Dashboard access',
+          html: '<div style="font-family:Arial,sans-serif;max-width:540px;margin:0 auto;padding:24px;color:#1a1a1a;">'
+            + '<h2 style="color:#004369;">Your dashboard access</h2>'
+            + `<p>Hi ${first},</p>`
+            + '<p>You have access to the GPS Leadership coach dashboard. Here is your password:</p>'
+            + `<p style="font-size:18px;font-weight:700;background:#f4f6f9;border-radius:8px;padding:12px 16px;letter-spacing:1px;">${newPw}</p>`
+            + '<p>Log in here: <a href="https://portal.gpsleadership.org/coach">portal.gpsleadership.org/coach</a></p>'
+            + '<p style="font-size:13px;color:#555;">Keep this somewhere safe (a password manager is best). If you ever need a new one, Alex can send a fresh password from the dashboard.</p>'
+            + '<p style="font-size:13px;color:#555;">— GPS Leadership Solutions</p></div>',
+        }),
+      });
+      if (!er.ok) return res.status(500).json({ error: 'Password was set but the email failed to send. Try again.' });
+      return res.status(200).json({ ok: true, sent_to: acct.email });
+    }
 
     // ── Generic allowlisted query proxy ─────────────────────────────────────
     const op    = body.op;

@@ -1,11 +1,29 @@
 # GPS Leadership Portal — Survival Package
 ### Everything needed to recreate this system from scratch
 
-**Last updated:** June 7, 2026 (Workshop & Assessment Module v35–v39 LIVE — see Section 15; Decision Room migration catch-up v27–v34 — see Section 14)
+**Last updated:** June 8, 2026 (Installable PWA + branded icons; Owner/Assistant RBAC; coach nav refactor; mobile pass; My Results fix — see Section 16. Plus Workshop Module v35–v39 — Section 15; Decision Room v27–v34 — Section 14)
 **GitHub repo:** https://github.com/GPSleadership/gps-portal
 **Live URL:** https://portal.gpsleadership.org
 **Coach dashboard:** https://portal.gpsleadership.org/coach
 **Client portal:** https://portal.gpsleadership.org/client
+
+---
+
+## 16. June 6–8, 2026 — PWA, Roles, Nav Refactor, Mobile, Results Fix
+
+**Installable app (PWA).** `manifest.webmanifest` (client, start_url /client), `manifest-sponsor.webmanifest` (/decision-room), `manifest-coach.webmanifest` (/coach), and `sw.js` (minimal no-cache service worker, network-only — never caches pages) make the portal installable. Branded icons in `/icons/`: gps-192.png, gps-512.png, gps-maskable-512.png, gps-apple-touch.png, gps-180.png. A platform-aware "Save to device" card (iOS = guided Share→Add to Home Screen; Android/desktop Chrome = one-tap `beforeinstallprompt`; desktop = QR of current URL) appears in client.html, decision-room.html, coach.html. Coach also has a permanent install card in Settings → Account & Security. Token persistence: client.html/decision-room.html store the `?token=` in localStorage and restore it when the installed app launches without one.
+
+> **CRITICAL RECONSTRUCTION LESSON:** binary image files generated in the AI sandbox do NOT reach the real repo (the mount shows them but `git add` finds nothing and they never deploy). Generate icons locally with macOS `sips` (format-jpeg → resize/pad → format-png yields an alpha-free PNG), or reference them via Google Drive thumbnail URLs (`https://drive.google.com/thumbnail?id=FILEID&sz=wNNN`). The apple-touch-icon MUST have no alpha channel (iOS fills transparency with black; the share-sheet preview misleadingly shows white). Cache-bust icon URLs with `?v=N`.
+
+**Owner/Assistant RBAC (migration v37).** `admin_accounts.role` repurposed to owner|assistant (legacy 'admin' tolerated). The coach session token now carries `lvl`; `api/get-client.js` `coachLogin` sets it (main coach password ⇒ owner; admin_accounts password match ⇒ that row's role). `api/coach-data.js` enforces owner-only server-side: writes to OWNER_ONLY_WRITE tables (email_templates, coach_settings, diagnostic_question_overrides, workshop_questions), deletes of OWNER_ONLY_DELETE tables (clients, diagnostics, teams, workshops, diagnostic_team_reports, raters, responses), plan unlock, and all admin-account actions. UI hides owner-only controls via `body.is-assistant .owner-only{display:none}`. New action `admin-send-password`: owner generates a fresh password for an admin and emails it via Resend (owner never sees it). Anna = the assistant account.
+
+**Coach nav refactor.** Five top groups (Today / Clients / Diagnostics & Teams / Communication / Settings) + Workshops group, with sub-tabs and a global search box. `GROUP_OF` / `GROUP_DEFAULT` / `showGroup()` / rewritten `showSection()`. Today is an action-inbox (needs-attention + this-week + quick stats). Team archive (`teams.archived_at`, migration v36) + team delete; archived teams hidden from coach list and paused for sponsors.
+
+**Mobile pass.** A `@media (max-width:768px)` block in client.html and coach.html eliminates horizontal overflow (min-width:0 on flex children, flex-wrap, max-width caps, scrollable tables, capped heading sizes). Favicons added to all 9 user-facing pages.
+
+**My Results fix (was a real outage).** After v26 the Results tab still used dead anon `db.from()` reads → "No results yet" for every client. Now routed through `api/portal-data.js` action `results-data` (checkins, survey_responses, survey_tokens, self_checks, stakeholders). Added a Consistency card: check-ins submitted (% of weeks), coaching attended %, follow-through %.
+
+**Git handoff note for Alex:** give commands one line at a time (block-paste broke a merge in vi); always `git merge --no-edit`; end with `git status` to confirm clean; his terminal sometimes opens in `~` so include the `cd` line.
 
 ---
 
