@@ -994,17 +994,21 @@ export default async function handler(req, res) {
         const wid   = body.workshop_id;
         const email = (body.email || '').trim().toLowerCase();
         const name  = (body.name  || '').trim();
+        const title = (body.title || '').trim() || null;
         if (!wid || !email) return res.status(400).json({ error: 'workshop_id and email required' });
         // Find or create client record
-        let client = await sbOne(`/rest/v1/clients?email=eq.${enc(email)}&select=id,name&limit=1`);
+        let client = await sbOne(`/rest/v1/clients?email=eq.${enc(email)}&select=id,name,title&limit=1`);
         if (!client) {
           if (!name) return res.status(400).json({ error: 'name required when adding a new sponsor' });
           const ins = await sb('/rest/v1/clients', 'POST', {
-            name, email, in_coaching_program: false, is_active: true,
+            name, email, title, in_coaching_program: false, is_active: true,
           }, { Prefer: 'return=representation' });
           const rows = await ins.json().catch(() => []);
           client = Array.isArray(rows) ? rows[0] : rows;
           if (!client?.id) return res.status(500).json({ error: 'Failed to create sponsor record' });
+        } else if (title && !client.title) {
+          // Update title if provided and not already set
+          await sb(`/rest/v1/clients?id=eq.${enc(client.id)}`, 'PATCH', { title }, { Prefer: 'return=minimal' });
         }
         // Insert into junction (ignore duplicate)
         await sb('/rest/v1/workshop_sponsors', 'POST',
