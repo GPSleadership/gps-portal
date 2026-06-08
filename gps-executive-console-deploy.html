@@ -263,9 +263,121 @@
   .coach-action-chip:hover { background:#DBEAFE; }
   .coach-action-chip.added { background:#D1FAE5; border-color:#6EE7B7; color:#065F46; cursor:default; }
   .coach-hint { padding:10px 16px 8px; font-size:11px; color:var(--muted); border-top:1px solid var(--border); background:var(--bg); }
+
+  /* ── BALANCE EDIT MODAL ─────────────────────────────────────────────── */
+  .bal-modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:8500; align-items:flex-start; justify-content:center; overflow-y:auto; padding:20px 12px; }
+  .bal-modal-overlay.open { display:flex; }
+  .bal-modal { background:white; border-radius:12px; padding:24px 24px; width:100%; max-width:440px; box-shadow:0 16px 48px rgba(0,0,0,0.25); margin:auto; }
+  .bal-modal-title { font-size:15px; font-weight:700; color:var(--navy); margin-bottom:16px; }
+  .bal-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
+  .bal-field { display:flex; flex-direction:column; gap:4px; }
+  .bal-label { font-size:10px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; }
+  .bal-input { border:1.5px solid var(--border); border-radius:7px; padding:8px 10px; font-size:14px; font-family:inherit; outline:none; width:100%; box-sizing:border-box; }
+  .bal-input:focus { border-color:var(--teal); }
+  .bal-btn-row { display:flex; gap:8px; }
+  .bal-btn { flex:1; padding:10px; border-radius:7px; font-size:13px; font-weight:600; cursor:pointer; border:none; font-family:inherit; }
+  .bal-btn.primary { background:var(--navy); color:white; }
+  .bal-btn.secondary { background:var(--bg); color:var(--navy); border:1px solid var(--border); }
+
+  /* ── MOBILE RESPONSIVE ───────────────────────────────────────────────── */
+  @media (max-width: 768px) {
+    body { font-size: 14px; }
+    .main { padding: 10px 10px; gap: 12px; }
+
+    /* Header */
+    .header { padding: 10px 12px; flex-wrap: wrap; gap: 8px; }
+    .header-right { flex-wrap: wrap; gap: 6px; }
+    .refresh-btn { padding: 6px 10px; font-size: 11px; }
+    .date-badge { font-size: 11px; padding: 4px 8px; }
+
+    /* Stat rows — 2 columns */
+    .stats-row { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .stat-value { font-size: 18px; }
+
+    /* Main layout — single column */
+    .content-grid { grid-template-columns: 1fr; }
+
+    /* Cash grid — 2 columns */
+    .cash-grid { grid-template-columns: repeat(2, 1fr); }
+
+    /* Runway — stack */
+    .runway-row { grid-template-columns: 1fr; gap: 10px; }
+
+    /* Liabilities — stack */
+    .liability-row { flex-direction: column; gap: 8px; }
+
+    /* Forecast metrics — 2 columns */
+    .forecast-metrics { grid-template-columns: repeat(2, 1fr); }
+
+    /* Action items — bigger touch targets */
+    .action-check { width: 24px; height: 24px; border-radius: 6px; flex-shrink: 0; }
+    .action-item { padding: 10px 10px; gap: 8px; }
+    .action-title { font-size: 13px; }
+
+    /* Notes */
+    .notes-compose { flex-direction: column; gap: 8px; }
+    .notes-controls { flex-direction: row; align-items: center; justify-content: space-between; }
+    .notes-textarea { font-size: 14px; }
+    .notes-footer { flex-direction: column; gap: 4px; font-size: 10px; }
+
+    /* Cards */
+    .card-body { padding: 10px 12px; }
+    .card-header { padding: 10px 12px; }
+    .card-title { font-size: 11px; }
+
+    /* Add action row — wrap */
+    .action-add-row { flex-wrap: wrap; }
+    .action-add-input { min-width: 100%; }
+    .action-add-meta { width: 100%; display: flex; gap: 6px; align-items: center; }
+
+    /* Coach */
+    .coach-field-row { flex-direction: column; }
+    .coach-input { max-width: 100% !important; }
+
+    /* Charts */
+    .fin-chart-wrap { height: 90px; }
+    .forecast-chart-wrap { height: 160px; }
+
+    /* Login overlay */
+    #loginOverlay > div { padding: 28px 20px; margin: 16px; width: calc(100% - 32px); max-width: 100%; }
+
+    /* Password modal */
+    .pw-modal { padding: 20px 18px; }
+
+    /* Scenario tabs */
+    .scenario-tab { font-size: 10px; padding: 8px 2px; }
+
+    /* Net worth bar */
+    .net-worth-bar { flex-direction: column; gap: 6px; text-align: left; }
+
+    /* Balance modal */
+    .bal-grid { grid-template-columns: 1fr; }
+
+    /* Bottom stat cards */
+    .stat-card { padding: 10px 12px; }
+    .stat-sub { font-size: 10px; }
+  }
+
+  @media (max-width: 400px) {
+    .stats-row { grid-template-columns: 1fr; }
+    .cash-grid { grid-template-columns: 1fr; }
+    .forecast-metrics { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
+
+<!-- ─── BALANCE EDIT MODAL ────────────────────────────────────────────────── -->
+<div id="balModal" class="bal-modal-overlay">
+  <div class="bal-modal">
+    <div class="bal-modal-title">✏️ Update Account Balances</div>
+    <div class="bal-grid" id="balGrid"><!-- rendered by openBalModal() --></div>
+    <div class="bal-btn-row">
+      <button class="bal-btn secondary" onclick="closeBalModal()">Cancel</button>
+      <button class="bal-btn primary" onclick="saveBalModal()">Save Balances</button>
+    </div>
+  </div>
+</div>
 
 <!-- ─── PASSWORD CHANGE MODAL ─────────────────────────────────────────────── -->
 <div id="pwModal" class="pw-modal-overlay">
@@ -695,9 +807,15 @@
 
 <script>
 // ─── PASSWORD GATE ────────────────────────────────────────────────────────────
-const FALLBACK_HASH = '16eb771d911a094add575974f8b0a53978f07159823ae14b0473f549c873892f'; // GPS2026!
+const FALLBACK_HASH = '16eb771d911a094add575974f8b0a53978f07159823ae14b0473f549c873892f';
 const SESSION_KEY = 'gps_console_auth';
+const SESSION_TS_KEY = 'gps_console_auth_ts';
+const SESSION_TTL = 8 * 60 * 60 * 1000; // 8 hours
 let LIVE_PW_HASH = FALLBACK_HASH;
+
+// ── Rate limiting ──
+let _loginAttempts = 0;
+let _lockUntil = 0;
 
 async function hashPassword(pw) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw));
@@ -708,12 +826,17 @@ async function loadPwHash() {
   try {
     const rows = await supaFetch('/rest/v1/gps_settings?key=eq.pw_hash&select=value');
     if (rows && rows[0]) LIVE_PW_HASH = rows[0].value;
-  } catch(e) { /* use fallback */ }
+  } catch(e) { /* use fallback hash */ }
 }
 
 async function checkAuth() {
   await loadPwHash();
-  if (sessionStorage.getItem(SESSION_KEY) === 'ok') { showConsole(); return; }
+  const ts = parseInt(sessionStorage.getItem(SESSION_TS_KEY) || '0');
+  const token = sessionStorage.getItem(SESSION_KEY);
+  if (token === 'ok' && Date.now() - ts < SESSION_TTL) { showConsole(); return; }
+  // Clear expired session
+  sessionStorage.removeItem(SESSION_KEY);
+  sessionStorage.removeItem(SESSION_TS_KEY);
   showLoginScreen();
 }
 
@@ -727,6 +850,22 @@ function showConsole() {
   document.getElementById('loginOverlay').style.display = 'none';
   document.getElementById('consoleBody').style.display = 'block';
   loadAll();
+  // Reset idle timer on user activity
+  resetIdleTimer();
+  document.addEventListener('click', resetIdleTimer, {passive: true});
+  document.addEventListener('keydown', resetIdleTimer, {passive: true});
+  document.addEventListener('touchstart', resetIdleTimer, {passive: true});
+}
+
+let _idleTimer = null;
+function resetIdleTimer() {
+  clearTimeout(_idleTimer);
+  sessionStorage.setItem(SESSION_TS_KEY, Date.now());
+  _idleTimer = setTimeout(() => {
+    logout();
+    document.getElementById('loginError').textContent = 'Session expired. Please sign in again.';
+    document.getElementById('loginError').style.display = 'block';
+  }, SESSION_TTL);
 }
 
 async function submitLogin() {
@@ -734,13 +873,31 @@ async function submitLogin() {
   const errEl = document.getElementById('loginError');
   const btn = document.getElementById('loginBtn');
   if (!pw) return;
+
+  // Rate limiting check
+  if (Date.now() < _lockUntil) {
+    const mins = Math.ceil((_lockUntil - Date.now()) / 60000);
+    errEl.textContent = `Too many attempts. Try again in ${mins} minute${mins > 1 ? 's' : ''}.`;
+    errEl.style.display = 'block';
+    return;
+  }
+
   btn.disabled = true; btn.textContent = 'Checking…';
   const h = await hashPassword(pw);
   if (h === LIVE_PW_HASH) {
+    _loginAttempts = 0;
     sessionStorage.setItem(SESSION_KEY, 'ok');
+    sessionStorage.setItem(SESSION_TS_KEY, Date.now());
     showConsole();
   } else {
-    errEl.textContent = 'Incorrect password. Try again.';
+    _loginAttempts++;
+    if (_loginAttempts >= 5) {
+      _lockUntil = Date.now() + 15 * 60 * 1000;
+      _loginAttempts = 0;
+      errEl.textContent = 'Too many failed attempts. Locked for 15 minutes.';
+    } else {
+      errEl.textContent = `Incorrect password. ${5 - _loginAttempts} attempt${5 - _loginAttempts !== 1 ? 's' : ''} remaining.`;
+    }
     errEl.style.display = 'block';
     document.getElementById('loginInput').value = '';
     setTimeout(() => document.getElementById('loginInput').focus(), 50);
@@ -749,7 +906,15 @@ async function submitLogin() {
 }
 
 function logout() {
+  clearTimeout(_idleTimer);
+  document.removeEventListener('click', resetIdleTimer);
+  document.removeEventListener('keydown', resetIdleTimer);
+  document.removeEventListener('touchstart', resetIdleTimer);
   sessionStorage.removeItem(SESSION_KEY);
+  sessionStorage.removeItem(SESSION_TS_KEY);
+  // Clear sensitive data from localStorage
+  ['gps_accounts','gps_accounts_date','gps_action_done','gps_action_custom',
+   'gps_monthly_ops','gps_monthly_comp','gps_console_version'].forEach(k => localStorage.removeItem(k));
   showLoginScreen();
 }
 
@@ -1025,23 +1190,41 @@ function renderAccounts() {
     <div style="text-align:right;"><div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">Net Position</div><div style="font-size:20px;font-weight:800;color:${nwColor};">$${netWorth.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}</div></div>`;
 }
 
-async function editBalances() {
+function editBalances() { openBalModal(); }
+
+function openBalModal() {
   const accts = getAccounts();
-  const names = {income:'Income',bizops:'BIZ OPS',ownercomp:'Owner Comp',taxes:'Taxes',healthcare:'Healthcare',savings:'Savings',carloan:'Car Loan',marketing:'Marketing',emergency:'Family Emergency'};
-  const updates = {};
+  const names = {income:'Income',bizops:'BIZ OPS',ownercomp:'Owner Comp',taxes:'Taxes (🔒 do not touch)',healthcare:'Healthcare',savings:'Savings',carloan:'Car Loan',marketing:'Marketing',emergency:'Family Emergency'};
+  let html = '';
   for (const [k, a] of Object.entries(accts)) {
-    const val = prompt(`${names[k]} balance:`, a.bal.toFixed(2));
-    if (val === null) break;
-    updates[k] = parseFloat(val.replace(/[$,]/g,'')) || a.bal;
+    html += `<div class="bal-field">
+      <label class="bal-label">${names[k] || k}</label>
+      <input class="bal-input" id="bal-${k}" type="number" step="0.01" value="${a.bal.toFixed(2)}" inputmode="decimal">
+    </div>`;
   }
-  const balJson = JSON.stringify(Object.fromEntries(Object.entries(updates)));
+  document.getElementById('balGrid').innerHTML = html;
+  document.getElementById('balModal').classList.add('open');
+}
+
+function closeBalModal() {
+  document.getElementById('balModal').classList.remove('open');
+}
+
+async function saveBalModal() {
+  const accts = getAccounts();
+  const updates = {};
+  for (const k of Object.keys(accts)) {
+    const el = document.getElementById('bal-' + k);
+    if (el) updates[k] = parseFloat(el.value.replace(/[$,]/g,'')) || accts[k].bal;
+  }
+  const balJson = JSON.stringify(updates);
   localStorage.setItem('gps_accounts', balJson);
   const today = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
   localStorage.setItem('gps_accounts_date', today);
   document.getElementById('cashAsOf').textContent = 'As of ' + today;
+  closeBalModal();
   renderAccounts();
   calcRunway();
-  // Sync to Supabase so balances update across all devices
   try {
     await supaFetch('/rest/v1/gps_settings', {
       method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal',

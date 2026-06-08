@@ -3192,8 +3192,14 @@ function showConfirmModal(title, message, btnText, btnClass, onConfirm) {
   btn.onclick = async () => {
     btn.disabled = true;
     btn.textContent = 'Working…';
-    await onConfirm();
-    closeConfirmModal();
+    try {
+      await onConfirm();
+      closeConfirmModal();
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = btnText;
+      alert('That action could not be completed:\n\n' + (e && e.message ? e.message : e) + '\n\nNothing was changed.');
+    }
   };
   document.getElementById('confirmModal').classList.add('open');
 }
