@@ -7343,6 +7343,46 @@ async function drSendSponsor(sponsorId){
     });
     var coa=document.getElementById('wsf_create_org');
     if(coa) coa.onclick=function(e){ e.preventDefault(); var nm=prompt('New organization name:'); if(!nm||!nm.trim()) return; document.getElementById('wsf_org').value=nm.trim(); document.getElementById('wsf_org_id').value='__create__'; };
+
+    // ── Sponsor duplicate check on Create form ──────────────────────────────
+    // Add a lookup notice element after the email field
+    var spEmailField=document.getElementById('wsf_spemail');
+    var spNotice=document.createElement('div');
+    spNotice.id='wsf_sp_notice';
+    spNotice.style.cssText='font-size:12px;margin-top:4px;padding:8px 10px;border-radius:6px;display:none;';
+    spEmailField.parentNode.insertBefore(spNotice, spEmailField.nextSibling);
+
+    spEmailField.addEventListener('blur', async function(){
+      var em=(this.value||'').trim().toLowerCase();
+      spNotice.style.display='none'; spNotice.textContent='';
+      if(!em||!em.includes('@')) return;
+      try{
+        var found=await cdSelect('clients',{eq:{email:em},select:'id,name,email,title,organization',limit:1});
+        if(found&&found.length){
+          var c=found[0];
+          spNotice.style.cssText='font-size:12px;margin-top:4px;padding:8px 10px;border-radius:6px;display:block;background:#ecfdf5;border:1px solid #6ee7b7;color:#065f46;';
+          spNotice.innerHTML='<strong>✓ Found in your system:</strong> '+esc(c.name||c.email)+(c.title?' · '+esc(c.title):'')+(c.organization?' · '+esc(c.organization):'')+'<br><span style="font-size:11px;color:#047857;">Their existing profile will be used — no duplicate created.</span>';
+          // Pre-fill name field
+          var nmEl=document.getElementById('wsf_spname');
+          if(nmEl&&!nmEl.value) nmEl.value=c.name||'';
+          var ttlEl=document.getElementById('wsf_sptitle');
+          if(ttlEl&&!ttlEl.value) ttlEl.value=c.title||'';
+        } else {
+          // No email match — check name for near-duplicate warning
+          var nmVal=(document.getElementById('wsf_spname').value||'').trim();
+          if(nmVal.length>2){
+            var byName=await cdSelect('clients',{ilike:{name:nmVal+'%'},select:'id,name,email',limit:3});
+            if(byName&&byName.length){
+              spNotice.style.cssText='font-size:12px;margin-top:4px;padding:8px 10px;border-radius:6px;display:block;background:#fffbeb;border:1px solid #fcd34d;color:#92400e;';
+              spNotice.innerHTML='<strong>⚠ Similar names in your system:</strong> '+byName.map(function(c){ return esc(c.name)+' ('+esc(c.email)+')'; }).join(', ')+'<br><span style="font-size:11px;">Different email — a new profile will be created. Double-check this isn\'t a duplicate.</span>';
+            } else {
+              spNotice.style.cssText='font-size:12px;margin-top:4px;padding:8px 10px;border-radius:6px;display:block;background:#f0f9ff;border:1px solid #bae6fd;color:#0c4a6e;';
+              spNotice.innerHTML='<span style="font-size:11px;color:#0369a1;">New person — a profile will be created for '+esc(em)+'.</span>';
+            }
+          }
+        }
+      }catch(_){}
+    });
   }
   async function wsCreate(){
     var title=v('wsf_title'); var err=document.getElementById('wsf_err');
@@ -7499,8 +7539,28 @@ async function drSendSponsor(sponsorId){
         var ttl=(spTitleEl.value||'').trim()||null;
         var out=document.getElementById('wsSponsorOut');
         if(!em){ out.textContent='Email required.'; return; }
-        out.textContent='Adding…';
+        out.textContent='Checking…';
         try{
+          // Duplicate guard: look up by email first
+          var existing=await cdSelect('clients',{eq:{email:em},select:'id,name,email,title',limit:1});
+          if(!existing||!existing.length){
+            // No email match — check for name collision before creating
+            if(nm){
+              var nameDup=await cdSelect('clients',{ilike:{name:nm},select:'id,name,email',limit:3});
+              if(nameDup&&nameDup.length){
+                var names=nameDup.map(function(c){ return c.name+' ('+c.email+')'; }).join(', ');
+                if(!confirm('Someone with a similar name is already in your system:\n\n'+names+'\n\nAre you sure you want to create a new profile for '+nm+' ('+em+')?\n\nClick Cancel to go back and select the existing person instead.')){
+                  out.textContent=''; return;
+                }
+              }
+            }
+          } else {
+            // Email match found — fill fields so user can confirm they're adding the right person
+            if(!spNameEl.value) spNameEl.value=existing[0].name||'';
+            if(!spTitleEl.value) spTitleEl.value=existing[0].title||'';
+            nm=spNameEl.value; ttl=spTitleEl.value||null;
+          }
+          out.textContent='Adding…';
           await wsData('add-workshop-sponsor',{workshop_id:w.id,email:em,name:nm,title:ttl});
           spEmailEl.value=''; spNameEl.value=''; spTitleEl.value=''; out.textContent='';
           wsLoadSponsors(w.id); toast('Sponsor added.');
