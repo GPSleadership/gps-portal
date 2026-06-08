@@ -960,7 +960,6 @@ export default async function handler(req, res) {
         const parts = await sbGet(`/rest/v1/workshop_participants?workshop_id=eq.${enc(body.workshop_id)}&select=id,client_id,role,department,location,pre_status,post_status,invited_at,last_reminder_at&order=created_at.asc`);
         const enriched = await Promise.all(parts.map(async p => {
           const c = await sbOne(`/rest/v1/clients?id=eq.${enc(p.client_id)}&select=name,email&limit=1`);
-          // Derive display status
           let status = 'not_sent';
           if (p.pre_status === 'complete') status = 'completed';
           else if (p.last_reminder_at) status = 'reminder_sent';
@@ -968,6 +967,98 @@ export default async function handler(req, res) {
           return { ...p, name: c?.name || '', email: c?.email || '', display_status: status };
         }));
         return res.status(200).json({ ok: true, participants: enriched });
+      }
+
+      // ── Workshop sponsor management (multi-sponsor via workshop_sponsors) ─────
+
+      // List sponsors attached to a workshop
+      case 'get-workshop-sponsors': {
+        const wid = body.workshop_id;
+        if (!wid) return res.status(400).json({ error: 'workshop_id required' });
+        const links = await sbGet(`/rest/v1/workshop_sponsors?workshop_id=eq.${enc(wid)}&select=id,client_id,added_at&order=added_at.asc`);
+        const sponsors = await Promise.all(links.map(async l => {
+          const c = await sbOne(`/rest/v1/clients?id=eq.${enc(l.client_id)}&select=name,email,title&limit=1`);
+          return { ...l, name: c?.name || '', email: c?.email || '', title: c?.title || '' };
+        }));
+        return res.status(200).json({ ok: true, sponsors });
+      }
+
+      // Add a sponsor to a workshop (by email — creates client record if needed)
+      case 'add-workshop-sponsor': {
+        const wid   = body.workshop_id;
+        const email = (body.email || '').trim().toLowerCase();
+        const name  = (body.name  || '').trim();
+        if (!wid || !email) return res.status(400).json({ error: 'workshop_id and email required' });
+        // Find or create client record
+        let client = await sbOne(`/rest/v1/clients?email=eq.${enc(email)}&select=id,name&limit=1`);
+        if (!client) {
+          if (!name) return res.status(400).json({ error: 'name required when adding a new sponsor' });
+          const ins = await sb('/rest/v1/clients', 'POST', {
+            name, email, in_coaching_program: false, is_active: true,
+          }, { Prefer: 'return=representation' });
+          const rows = await ins.json().catch(() => []);
+          client = Array.isArray(rows) ? rows[0] : rows;
+          if (!client?.id) return res.status(500).json({ error: 'Failed to create sponsor record' });
+        }
+        // Insert into junction (ignore duplicate)
+        await sb('/rest/v1/workshop_sponsors', 'POST',
+          { workshop_id: wid, client_id: client.id },
+          { Prefer: 'resolution=ignore,return=minimal' });
+        return res.status(200).json({ ok: true, client_id: client.id, name: client.name });
+      }
+
+      // Remove a sponsor from a workshop
+      case 'remove-workshop-sponsor': {
+        const wid = body.workshop_id;
+        const cid = body.client_id;
+        if (!wid || !cid) return res.status(400).json({ error: 'workshop_id and client_id required' });
+        await sb(`/rest/v1/workshop_sponsors?workshop_id=eq.${enc(wid)}&client_id=eq.${enc(cid)}`, 'DELETE');
+        return res.status(200).json({ ok: true });
+      }
+
+      // Lock the roster so sponsors can no longer upload/replace it
+      case 'lock-roster': {
+        const wid = body.workshop_id;
+        if (!wid) return res.status(400).json({ error: 'workshop_id required' });
+        await sb(`/rest/v1/workshops?id=eq.${enc(wid)}`, 'PATCH',
+          { roster_locked: true, updated_at: isoNow() },
+          { Prefer: 'return=minimal' });
+        return res.status(200).json({ ok: true });
+      }
+
+      // Store roster file URL after upload (coach sets after upload to Supabase Storage)
+      case 'set-roster-file': {
+        const wid = body.workshop_id;
+        const url = body.file_url;
+        if (!wid || !url) return res.status(400).json({ error: 'workshop_id and file_url required' });
+        await sb(`/rest/v1/workshops?id=eq.${enc(wid)}`, 'PATCH',
+          { roster_file_url: url, roster_uploaded_at: isoNow(), updated_at: isoNow() },
+          { Prefer: 'return=minimal' });
+        return res.status(200).json({ ok: true });
+      }
+
+      // Get a single org with all linked projects (workshops + diagnostics)
+      case 'org-get': {
+        const id = body.org_id;
+        if (!id) return res.status(400).json({ error: 'org_id required' });
+        const [org, workshops] = await Promise.all([
+          sbOne(`/rest/v1/organizations?id=eq.${enc(id)}&limit=1`),
+          sbGet(`/rest/v1/workshops?organization_id=eq.${enc(id)}&select=id,title,engagement_kind,status,workshop_date,client_org_name,roster_locked,roster_uploaded_at&order=created_at.desc&limit=50`),
+        ]);
+        if (!org) return res.status(404).json({ error: 'Organization not found' });
+        // TODO: add diagnostics/teams linked to this org when that relationship is added
+        return res.status(200).json({ ok: true, organization: org, workshops });
+      }
+
+      // Link a Decision Room sponsor record to a client portal record (unified access)
+      case 'link-sponsor-to-client': {
+        const sponsorId = body.sponsor_id;
+        const clientId  = body.client_id;
+        if (!sponsorId || !clientId) return res.status(400).json({ error: 'sponsor_id and client_id required' });
+        await sb(`/rest/v1/sponsors?id=eq.${enc(sponsorId)}`, 'PATCH',
+          { linked_client_id: clientId },
+          { Prefer: 'return=minimal' });
+        return res.status(200).json({ ok: true });
       }
 
       default:

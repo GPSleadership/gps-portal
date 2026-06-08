@@ -926,6 +926,8 @@
     .ptab-diag.active { border-bottom-color: #2EA887; }
     #drSponsorPanel { display: none; }
     #drSponsorPanel.active { display: block; }
+    #workshopPanel { display: none; }
+    #workshopPanel.active { display: block; }
     .ptab-dr.active { border-bottom-color: #C9A84C; }
     .diag-inner {
       max-width: 760px;
@@ -2177,6 +2179,7 @@
   <button class="ptab ptab-results" id="tabResults" onclick="showPortalTab('results')">My Results</button>
   <button class="ptab ptab-diag" id="tabDiag" onclick="showPortalTab('diagnostic')" style="display:none;">My Diagnostic</button>
   <button class="ptab ptab-dr" id="tabDR" onclick="showPortalTab('decisionroom')" style="display:none;">Decision Room</button>
+  <button class="ptab ptab-ws" id="tabWorkshop" onclick="showPortalTab('workshop')" style="display:none;">My Workshops</button>
   <button class="ptab ptab-ask" id="tabAsk" onclick="showPortalTab('ask')" style="display:none;">Ask Alex</button>
 </div>
 
@@ -2363,6 +2366,16 @@
 <!-- ── DECISION ROOM PANEL (shown only if this client is also an executive sponsor) ── -->
 <div id="drSponsorPanel">
   <iframe id="drSponsorFrame" title="Decision Room" style="width:100%;height:calc(100vh - 150px);min-height:560px;border:none;display:block;background:#f4f6f9;"></iframe>
+</div>
+
+<!-- ── WORKSHOP / SPONSOR PANEL ── -->
+<div id="workshopPanel">
+  <div class="results-inner" id="workshop-content">
+    <div class="no-data-state">
+      <div class="nds-icon">🏢</div>
+      <h3>Loading workshops…</h3>
+    </div>
+  </div>
 </div>
 
 <div class="bottom-bar"></div>
@@ -3002,12 +3015,16 @@ async function loadClient() {
       // Post-lockdown: all reads go through the token-gated endpoint.
       // (The old anon-key db.from() reads silently returned nothing after v26,
       // which made My Results show "No results yet" for everyone.)
-      const rd = await portalData('results-data', {}).catch(function(){ return {}; });
+      const [rd, wsData] = await Promise.all([
+        portalData('results-data', {}).catch(function(){ return {}; }),
+        portalData('my-workshops', {}).catch(function(){ return { workshops: [] }; })
+      ]);
       const checkins        = rd.checkins         || [];
       const surveyData      = rd.survey_responses || [];
       const surveyTokenData = rd.survey_tokens    || [];
       const selfCheckData   = rd.self_checks      || [];
       const stakeholderData = rd.stakeholders     || [];
+      const myWorkshops     = wsData.workshops    || [];
 
       // Wire portal context for Q&A tool
       portalContext.full_name            = client.name || '';
@@ -3045,6 +3062,12 @@ async function loadClient() {
       if (client.ask_alex_enabled === true) {
         document.getElementById('tabAsk').style.display = '';
         qaInitUI(); // initialize Q&A input listeners
+      }
+
+      // Show Workshops tab if this client is a sponsor on any workshops
+      if (myWorkshops.length > 0) {
+        document.getElementById('tabWorkshop').style.display = '';
+        renderWorkshopTab(myWorkshops);
       }
 
       // Store survey data globally for Results tab
@@ -4752,6 +4775,157 @@ function buildMetricSparklineSVG(checkins, valueKey, targetVal, baselineVal) {
 }
 
 // ─────────────────────────────────────────────
+// WORKSHOP SPONSOR TAB
+// ─────────────────────────────────────────────
+function renderWorkshopTab(workshops) {
+  var el = document.getElementById('workshop-content');
+  if (!el) return;
+
+  if (!workshops || workshops.length === 0) {
+    el.innerHTML = '<div class="no-data-state"><div class="nds-icon">🏢</div><h3>No workshops</h3><p>You have not been assigned as a sponsor on any workshops yet.</p></div>';
+    return;
+  }
+
+  var html = '';
+  workshops.forEach(function(w) {
+    var locked      = !!w.roster_locked;
+    var uploadedAt  = w.roster_uploaded_at ? new Date(w.roster_uploaded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+    var logoHtml    = w.org_logo_url
+      ? '<img src="' + w.org_logo_url + '" alt="Org logo" style="height:40px;max-width:120px;object-fit:contain;margin-bottom:12px;display:block;">'
+      : '';
+    var statusBadge = locked
+      ? '<span style="display:inline-block;background:#f3f4f6;color:#6b7280;border:1px solid #d1d5db;border-radius:4px;font-size:12px;font-weight:600;padding:2px 10px;margin-left:8px;">🔒 Roster locked</span>'
+      : '<span style="display:inline-block;background:#ecfdf5;color:#065f46;border:1px solid #6ee7b7;border-radius:4px;font-size:12px;font-weight:600;padding:2px 10px;margin-left:8px;">✓ Roster open</span>';
+
+    var participantLine = (w.participant_count != null)
+      ? '<div style="color:#6b7280;font-size:13px;margin-bottom:12px;">' + w.participant_count + ' participant' + (w.participant_count !== 1 ? 's' : '') + ' in roster</div>'
+      : '';
+
+    var uploadSection = '';
+    if (!locked) {
+      var lastUpload = uploadedAt
+        ? '<div style="color:#6b7280;font-size:12px;margin-top:6px;">Last upload: ' + uploadedAt + '</div>'
+        : '<div style="color:#9ca3af;font-size:12px;margin-top:6px;">No roster uploaded yet.</div>';
+      uploadSection = '<div style="margin-top:16px;padding-top:16px;border-top:1px solid #e5e7eb;">'
+        + '<div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:8px;">Upload Participant Roster</div>'
+        + '<div style="font-size:12px;color:#6b7280;margin-bottom:10px;">Excel file (.xlsx). Required columns: First Name, Last Name, Email, Role/Title. Optional: Department, Region, Phone.</div>'
+        + '<input type="file" id="rosterFile_' + w.id + '" accept=".xlsx,.xls" style="font-size:13px;">'
+        + '<button onclick="submitRoster(\'' + w.id + '\')" style="margin-left:10px;padding:6px 14px;background:#004369;color:#fff;border:none;border-radius:4px;font-size:13px;font-weight:600;cursor:pointer;">Upload</button>'
+        + '<div id="rosterStatus_' + w.id + '" style="font-size:12px;margin-top:8px;color:#065f46;"></div>'
+        + lastUpload
+        + '</div>';
+    } else {
+      var lastUploadLocked = uploadedAt
+        ? '<div style="color:#6b7280;font-size:12px;margin-top:6px;">Roster submitted: ' + uploadedAt + '</div>'
+        : '';
+      uploadSection = '<div style="margin-top:16px;padding-top:16px;border-top:1px solid #e5e7eb;color:#6b7280;font-size:13px;">🔒 The roster is locked — surveys have gone out and no further changes can be made.' + lastUploadLocked + '</div>';
+    }
+
+    html += '<div class="card" style="margin-bottom:20px;">'
+      + logoHtml
+      + '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:4px;">'
+      + '<span style="font-family:Montserrat,sans-serif;font-size:17px;font-weight:700;color:#004369;">' + (w.title || 'Workshop') + '</span>'
+      + statusBadge
+      + '</div>'
+      + (w.client_org_name ? '<div style="color:#6b7280;font-size:13px;margin-bottom:4px;">' + w.client_org_name + '</div>' : '')
+      + (w.workshop_date ? '<div style="color:#9ca3af;font-size:12px;margin-bottom:10px;">' + new Date(w.workshop_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) + '</div>' : '<div style="margin-bottom:10px;"></div>')
+      + participantLine
+      + uploadSection
+      + '</div>';
+  });
+
+  el.innerHTML = html;
+}
+
+// ── Roster upload handler ──────────────────────────────────────────────────
+window.submitRoster = async function(workshopId) {
+  var fileInput  = document.getElementById('rosterFile_' + workshopId);
+  var statusEl   = document.getElementById('rosterStatus_' + workshopId);
+  if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+    if (statusEl) statusEl.textContent = 'Please select an Excel file first.';
+    return;
+  }
+  var file = fileInput.files[0];
+  statusEl.textContent = 'Reading file…';
+
+  // Parse Excel in browser via SheetJS (loaded from CDN)
+  try {
+    if (!window.XLSX) {
+      // Dynamically load SheetJS if not present
+      await new Promise(function(resolve, reject) {
+        var s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload = resolve; s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+
+    var buf   = await file.arrayBuffer();
+    var wb    = XLSX.read(buf, { type: 'array' });
+    var ws    = wb.Sheets[wb.SheetNames[0]];
+    var rows  = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+    if (!rows || rows.length === 0) {
+      statusEl.textContent = 'The file appears to be empty.';
+      return;
+    }
+
+    // Normalise header keys (lower-case, strip spaces/underscores)
+    function norm(k) { return String(k).toLowerCase().replace(/[\s_\-\/]+/g, ''); }
+    var normRows = rows.map(function(r) {
+      var o = {};
+      Object.keys(r).forEach(function(k) { o[norm(k)] = r[k]; });
+      return o;
+    });
+
+    // Map to canonical field names
+    var fieldMap = {
+      first_name:  ['firstname', 'first'],
+      last_name:   ['lastname', 'last'],
+      email:       ['email', 'emailaddress'],
+      role_title:  ['roletitle', 'role', 'title', 'jobtitle', 'position'],
+      department:  ['department', 'dept'],
+      region:      ['region', 'location'],
+      phone:       ['phone', 'phonenumber', 'mobile']
+    };
+
+    var participants = normRows.map(function(r) {
+      var p = {};
+      Object.keys(fieldMap).forEach(function(field) {
+        fieldMap[field].forEach(function(alias) {
+          if (!p[field] && r[alias] !== undefined && r[alias] !== '') {
+            p[field] = String(r[alias]).trim();
+          }
+        });
+      });
+      return p;
+    }).filter(function(p) {
+      return p.first_name && p.last_name && p.email && p.role_title;
+    });
+
+    if (participants.length === 0) {
+      statusEl.textContent = 'No valid rows found. Make sure First Name, Last Name, Email, and Role/Title columns are present.';
+      return;
+    }
+
+    statusEl.textContent = 'Uploading ' + participants.length + ' participant' + (participants.length !== 1 ? 's' : '') + '…';
+
+    var result = await portalData('sponsor-upload-roster', { workshop_id: workshopId, participants: participants });
+    if (result && result.ok) {
+      statusEl.style.color = '#065f46';
+      var total = (result.linked || 0) + (result.created || 0);
+      statusEl.textContent = '✓ ' + total + ' participant' + (total !== 1 ? 's' : '') + ' uploaded successfully.' + (result.skipped ? ' (' + result.skipped + ' rows skipped — missing required fields)' : '');
+    } else {
+      statusEl.style.color = '#c0222e';
+      statusEl.textContent = '✗ ' + (result && result.error ? result.error : 'Upload failed. Please try again.');
+    }
+  } catch (e) {
+    statusEl.style.color = '#c0222e';
+    statusEl.textContent = '✗ Error reading file: ' + (e.message || e);
+  }
+};
+
+// ─────────────────────────────────────────────
 // RESULTS TAB
 // ─────────────────────────────────────────────
 function renderResultsTab(surveyResponses, checkins, client, surveyTokens, selfChecks) {
@@ -5402,6 +5576,8 @@ function showPortalTab(tab) {
   const tabDiag       = document.getElementById('tabDiag');
   const drPanel       = document.getElementById('drSponsorPanel');
   const tabDR         = document.getElementById('tabDR');
+  const wsPanel       = document.getElementById('workshopPanel');
+  const tabWS         = document.getElementById('tabWorkshop');
 
   // Reset all panels
   mainContent.style.display = 'none';
@@ -5409,11 +5585,13 @@ function showPortalTab(tab) {
   if (resultsPanel) resultsPanel.classList.remove('active');
   if (diagPanel)    diagPanel.classList.remove('active');
   if (drPanel)      drPanel.classList.remove('active');
+  if (wsPanel)      wsPanel.classList.remove('active');
   if (tabPlan)    tabPlan.classList.remove('active');
   if (tabAsk)     tabAsk.classList.remove('active');
   if (tabResults) tabResults.classList.remove('active');
   if (tabDiag)    tabDiag.classList.remove('active');
   if (tabDR)      tabDR.classList.remove('active');
+  if (tabWS)      tabWS.classList.remove('active');
 
   if (tab === 'plan') {
     mainContent.style.display = 'block';
@@ -5429,6 +5607,9 @@ function showPortalTab(tab) {
     if (drPanel) drPanel.classList.add('active');
     if (tabDR)   tabDR.classList.add('active');
     loadSponsorFrame();
+  } else if (tab === 'workshop') {
+    if (wsPanel) wsPanel.classList.add('active');
+    if (tabWS)   tabWS.classList.add('active');
   } else {
     // Check terms consent before showing Q&A
     const needsTerms = !currentClient ||
@@ -5456,18 +5637,22 @@ function activateQATab() {
   const qaPanel      = document.getElementById('qaPanel');
   const resultsPanel = document.getElementById('resultsPanel');
   const diagPanel    = document.getElementById('diagPanel');
+  const wsPanel      = document.getElementById('workshopPanel');
   const tabPlan      = document.getElementById('tabPlan');
   const tabAsk       = document.getElementById('tabAsk');
   const tabResults   = document.getElementById('tabResults');
   const tabDiag      = document.getElementById('tabDiag');
+  const tabWS        = document.getElementById('tabWorkshop');
   mainContent.style.display = 'none';
   if (resultsPanel) resultsPanel.classList.remove('active');
   if (diagPanel)    diagPanel.classList.remove('active');
+  if (wsPanel)      wsPanel.classList.remove('active');
   qaPanel.classList.add('active');
   if (tabAsk)     tabAsk.classList.add('active');
   if (tabPlan)    tabPlan.classList.remove('active');
   if (tabResults) tabResults.classList.remove('active');
   if (tabDiag)    tabDiag.classList.remove('active');
+  if (tabWS)      tabWS.classList.remove('active');
   const qaQi = document.getElementById('qa-qi');
   if (qaQi) setTimeout(() => qaQi.focus(), 100);
 }

@@ -278,6 +278,102 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true });
       }
 
+      // ── Workshop sponsor tab: return workshops this client sponsors ──────────
+      case 'my-workshops': {
+        // Look up workshop_sponsors rows for this client
+        const enc = encodeURIComponent;
+        const links = await (async () => {
+          const r = await sb(`/rest/v1/workshop_sponsors?client_id=eq.${enc(clientId)}&select=workshop_id,added_at`);
+          if (!r.ok) return [];
+          return (await r.json().catch(() => [])) || [];
+        })();
+        if (!links.length) return res.status(200).json({ ok: true, workshops: [] });
+        // Fetch each workshop — only surface-safe fields (no raw data, no survey content)
+        const workshops = (await Promise.all(links.map(async l => {
+          const r = await sb(`/rest/v1/workshops?id=eq.${enc(l.workshop_id)}&select=id,title,engagement_kind,status,workshop_date,client_org_name,roster_locked,roster_file_url,roster_uploaded_at,organization_id&limit=1`);
+          if (!r.ok) return null;
+          const rows = await r.json().catch(() => []);
+          const w = Array.isArray(rows) ? rows[0] : rows;
+          if (!w) return null;
+          // Fetch org logo if org is linked
+          let org_logo_url = null;
+          if (w.organization_id) {
+            const orgR = await sb(`/rest/v1/organizations?id=eq.${enc(w.organization_id)}&select=logo_url&limit=1`);
+            if (orgR.ok) {
+              const orgRows = await orgR.json().catch(() => []);
+              org_logo_url = (Array.isArray(orgRows) ? orgRows[0] : orgRows)?.logo_url || null;
+            }
+          }
+          // Participant count (sponsor sees this but not individual names/data)
+          const countR = await sb(`/rest/v1/workshop_participants?workshop_id=eq.${enc(w.id)}&select=id`);
+          const countRows = countR.ok ? (await countR.json().catch(() => [])) : [];
+          return {
+            ...w,
+            org_logo_url,
+            participant_count: Array.isArray(countRows) ? countRows.length : 0,
+            sponsor_added_at: l.added_at,
+          };
+        }))).filter(Boolean);
+        return res.status(200).json({ ok: true, workshops });
+      }
+
+      // ── Sponsor: upload/replace participant roster (before lock only) ─────────
+      case 'sponsor-upload-roster': {
+        const enc = encodeURIComponent;
+        const wid  = body.workshop_id;
+        const rows = Array.isArray(body.participants) ? body.participants : (Array.isArray(body.rows) ? body.rows : []);
+        if (!wid) return res.status(400).json({ error: 'workshop_id required' });
+        // Verify this client is actually a sponsor for this workshop
+        const linkR = await sb(`/rest/v1/workshop_sponsors?workshop_id=eq.${enc(wid)}&client_id=eq.${enc(clientId)}&select=workshop_id&limit=1`);
+        const linkRows = linkR.ok ? (await linkR.json().catch(() => [])) : [];
+        if (!Array.isArray(linkRows) || !linkRows.length) return res.status(403).json({ error: 'Not a sponsor for this workshop' });
+        // Check roster is not locked
+        const w = await (async () => {
+          const r = await sb(`/rest/v1/workshops?id=eq.${enc(wid)}&select=roster_locked&limit=1`);
+          if (!r.ok) return null;
+          const wr = await r.json().catch(() => []);
+          return Array.isArray(wr) ? wr[0] : wr;
+        })();
+        if (!w) return res.status(404).json({ error: 'Workshop not found' });
+        if (w.roster_locked) return res.status(403).json({ error: 'Roster is locked. Contact Alex to make changes.' });
+        if (!rows.length) return res.status(400).json({ error: 'No rows provided' });
+        // Upsert participants (same logic as coach upload-roster)
+        let created = 0, linked = 0, skipped = 0;
+        for (const raw of rows) {
+          const name  = ((raw.first_name || '') + ' ' + (raw.last_name || '')).trim() || (raw.name || '').trim();
+          const email = (raw.email || '').trim().toLowerCase();
+          if (!email || !name) { skipped++; continue; }
+          let client = await (async () => {
+            const r = await sb(`/rest/v1/clients?email=eq.${enc(email)}&select=id&limit=1`);
+            if (!r.ok) return null;
+            const cr = await r.json().catch(() => []);
+            return Array.isArray(cr) ? cr[0] : cr;
+          })();
+          if (!client) {
+            const ins = await sb('/rest/v1/clients', 'POST', {
+              name, email, title: raw.role_title || raw.role || raw.title || null,
+              is_workshop_participant: true, in_coaching_program: false, is_active: true,
+            }, { Prefer: 'return=representation' });
+            const cr = await ins.json().catch(() => []);
+            client = Array.isArray(cr) ? cr[0] : cr;
+            if (!client?.id) { skipped++; continue; }
+            created++;
+          }
+          const linkIns = await sb('/rest/v1/workshop_participants', 'POST', {
+            workshop_id: wid, client_id: client.id,
+            role: raw.role_title || raw.role || raw.title || null,
+            location: raw.location || raw.region || null,
+            department: raw.department || null,
+          }, { Prefer: 'resolution=merge-duplicates,return=minimal' });
+          if (linkIns.ok) linked++; else skipped++;
+        }
+        // Mark file uploaded timestamp
+        await sb(`/rest/v1/workshops?id=eq.${enc(wid)}`, 'PATCH',
+          { roster_uploaded_at: new Date().toISOString() },
+          { Prefer: 'return=minimal' });
+        return res.status(200).json({ ok: true, created, linked, skipped });
+      }
+
       default:
         return res.status(400).json({ error: 'Unknown action: ' + action });
     }
