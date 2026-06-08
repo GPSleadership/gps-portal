@@ -4986,7 +4986,83 @@ function renderResultsTab(surveyResponses, checkins, client, surveyTokens, selfC
       </div>`;
   }
 
-  if (!hasSurveyData && (!checkins || checkins.length === 0)) {
+  // ── TP3 Scorecard ─────────────────────────────────────────────────────────
+  var tp3HTML = '';
+  var hasTP3 = client.tp3_index_others != null || client.tp3_index_self != null;
+  if (hasTP3) {
+    var tp3Self   = parseFloat(client.tp3_index_self)   || 0;
+    var tp3Others = parseFloat(client.tp3_index_others) || 0;
+    var tp3Gap    = (tp3Others - tp3Self).toFixed(1);
+    var tp3GapNum = parseFloat(tp3Gap);
+    var gapColor  = Math.abs(tp3GapNum) <= 0.3 ? '#2e7d32'
+                  : tp3GapNum > 0 ? '#C47A30'   // others see you better than you see yourself
+                  : '#C0222E';                   // self-overrated
+    var gapLabel  = Math.abs(tp3GapNum) <= 0.3
+                  ? 'Aligned'
+                  : tp3GapNum > 0
+                    ? 'Others rate you higher'
+                    : 'Self-perception gap';
+
+    function tp3Bar(label, selfVal, othersVal) {
+      var sW = Math.round((parseFloat(selfVal) / 5) * 100);
+      var oW = Math.round((parseFloat(othersVal) / 5) * 100);
+      return '<div style="margin-bottom:14px;">'
+        + '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#374151;margin-bottom:6px;">' + label + '</div>'
+        + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">'
+        +   '<div style="width:52px;font-size:11px;color:#6b7280;text-align:right;">Self</div>'
+        +   '<div style="flex:1;height:10px;background:#f3f4f6;border-radius:5px;overflow:hidden;">'
+        +     '<div style="height:100%;width:' + sW + '%;background:#b0bec5;border-radius:5px;transition:width .4s;"></div>'
+        +   '</div>'
+        +   '<div style="width:28px;font-size:12px;font-weight:700;color:#4b5563;">' + parseFloat(selfVal).toFixed(1) + '</div>'
+        + '</div>'
+        + '<div style="display:flex;align-items:center;gap:8px;">'
+        +   '<div style="width:52px;font-size:11px;color:#6b7280;text-align:right;">Others</div>'
+        +   '<div style="flex:1;height:10px;background:#f3f4f6;border-radius:5px;overflow:hidden;">'
+        +     '<div style="height:100%;width:' + oW + '%;background:var(--navy);border-radius:5px;transition:width .4s;"></div>'
+        +   '</div>'
+        +   '<div style="width:28px;font-size:12px;font-weight:700;color:var(--navy);">' + parseFloat(othersVal).toFixed(1) + '</div>'
+        + '</div>'
+        + '</div>';
+    }
+
+    var pillarBars = '';
+    var hasPillars = client.tp3_trust_others != null && client.tp3_proactivity_others != null && client.tp3_productivity_others != null;
+    if (hasPillars) {
+      pillarBars = tp3Bar('Trust', client.tp3_trust_self || 0, client.tp3_trust_others)
+        + tp3Bar('Proactivity', client.tp3_proactivity_self || 0, client.tp3_proactivity_others)
+        + tp3Bar('Productivity', client.tp3_productivity_self || 0, client.tp3_productivity_others);
+    }
+
+    tp3HTML = '<div class="card" style="margin-bottom:20px;">'
+      + '<div class="card-title">TP3™ Leadership Index</div>'
+      + '<div class="card-subtitle">Your scores across the three pillars of the TP3™ framework — Trust, Proactivity, and Productivity.</div>'
+      + '<div style="display:flex;gap:12px;flex-wrap:wrap;margin:16px 0 20px;">'
+      +   '<div style="flex:1;min-width:140px;background:rgba(0,67,105,0.06);border-radius:10px;padding:16px;text-align:center;">'
+      +     '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-600);margin-bottom:4px;">TP3 Index · Others</div>'
+      +     '<div style="font-size:38px;font-weight:900;font-family:\'Montserrat\',sans-serif;color:var(--navy);line-height:1;">' + tp3Others.toFixed(1) + '</div>'
+      +     '<div style="font-size:11px;color:var(--gray-600);margin-top:3px;">out of 5.0</div>'
+      +   '</div>'
+      +   '<div style="flex:1;min-width:140px;background:#f9fafb;border-radius:10px;padding:16px;text-align:center;">'
+      +     '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-600);margin-bottom:4px;">TP3 Index · Self</div>'
+      +     '<div style="font-size:38px;font-weight:900;font-family:\'Montserrat\',sans-serif;color:#4b5563;line-height:1;">' + tp3Self.toFixed(1) + '</div>'
+      +     '<div style="font-size:11px;color:var(--gray-600);margin-top:3px;">out of 5.0</div>'
+      +   '</div>'
+      +   '<div style="flex:1;min-width:140px;border:2px solid ' + gapColor + ';border-radius:10px;padding:16px;text-align:center;">'
+      +     '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-600);margin-bottom:4px;">Gap</div>'
+      +     '<div style="font-size:38px;font-weight:900;font-family:\'Montserrat\',sans-serif;color:' + gapColor + ';line-height:1;">' + (tp3GapNum > 0 ? '+' : '') + tp3Gap + '</div>'
+      +     '<div style="font-size:11px;color:' + gapColor + ';margin-top:3px;font-weight:600;">' + gapLabel + '</div>'
+      +   '</div>'
+      + '</div>'
+      + (hasPillars ? '<div style="padding-top:16px;border-top:1px solid #f3f4f6;">'
+          + '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-bottom:14px;">Pillar Breakdown</div>'
+          + pillarBars
+          + '<div style="font-size:11px;color:#9ca3af;margin-top:8px;">Dark bars = how others rated you &nbsp;·&nbsp; Light bars = your self-rating</div>'
+          + '</div>'
+        : '')
+      + '</div>';
+  }
+
+  if (!hasTP3 && !hasSurveyData && (!checkins || checkins.length === 0)) {
     el.innerHTML = `
       <div class="no-data-state">
         <div class="nds-icon">📊</div>
@@ -4996,7 +5072,7 @@ function renderResultsTab(surveyResponses, checkins, client, surveyTokens, selfC
     return;
   }
 
-  el.innerHTML = nonResponseNotice + consistencyHTML + scorecardHTML + commentsHTML + metricHTML;
+  el.innerHTML = nonResponseNotice + tp3HTML + consistencyHTML + scorecardHTML + commentsHTML + metricHTML;
 }
 
 // ─────────────────────────────────────────────
