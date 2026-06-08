@@ -1995,8 +1995,8 @@ function renderClientCard(client, checkins) {
   const portalURL = `${PORTAL_BASE_URL}?token=${client.token}`;
 
   // ── Edit Client Info section ───────────────────────────────────────────────
-  const industryOpts = ['Trucking / Transportation','Logistics / Supply Chain','Manufacturing','Industrial Services','Parts & Service','Distribution','Healthcare','Construction','Technology','Financial Services','Federal Government','State/Local Government','Other']
-    .map(o => `<option value="${o}"${client.industry===o?' selected':''}>${o}</option>`).join('');
+  const INDUSTRY_LIST = ['Trucking / Transportation','Logistics / Supply Chain','Manufacturing','Industrial Services','Parts & Service','Distribution','Healthcare','Construction','Technology','Financial Services','Federal Government','State/Local Government','Aviation / Airport','Utilities / Energy','Real Estate','Non-Profit','Other'];
+  const industryDatalist = `<datalist id="industryOptions-${client.id}">${INDUSTRY_LIST.map(o=>`<option value="${o}">`).join('')}</datalist>`;
   const editInfoSection = `
     <div class="detail-section">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
@@ -2020,9 +2020,9 @@ function renderClientCard(client, checkins) {
           <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Title</label><input id="editTitle-${client.id}" value="${(client.title||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /></div>
         </div>
         <div style="margin-bottom:10px;"><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Industry</label>
-          <select id="editIndustry-${client.id}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;">
-            <option value="">— Select —</option>${industryOpts}
-          </select>
+          ${industryDatalist}
+          <input id="editIndustry-${client.id}" list="industryOptions-${client.id}" value="${(client.industry||'').replace(/"/g,'&quot;')}" placeholder="Type or select…" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;box-sizing:border-box;" />
+          <div style="font-size:11px;color:#94a3b8;margin-top:3px;">Pick from the list or type a custom industry — it'll be saved as-is.</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
           <button onclick="saveClientInfo('${client.id}')" id="saveInfoBtn-${client.id}" style="padding:7px 16px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;">Save</button>
@@ -2241,9 +2241,9 @@ function renderProfileSection(section, client, checkins) {
           <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Title</label><input id="editTitle-${client.id}" value="${(client.title||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /></div>
         </div>
         <div style="margin-bottom:10px;"><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Industry</label>
-          <select id="editIndustry-${client.id}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;">
-            <option value="">— Select —</option>${industryOpts}
-          </select>
+          ${industryDatalist}
+          <input id="editIndustry-${client.id}" list="industryOptions-${client.id}" value="${(client.industry||'').replace(/"/g,'&quot;')}" placeholder="Type or select…" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;box-sizing:border-box;" />
+          <div style="font-size:11px;color:#94a3b8;margin-top:3px;">Pick from the list or type a custom industry — it'll be saved as-is.</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
           <button onclick="saveClientInfo('${client.id}')" id="saveInfoBtn-${client.id}" style="padding:7px 16px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;">Save</button>
@@ -7573,7 +7573,14 @@ async function drSendSponsor(sponsorId){
     try{
       var r=await wsData('get-workshop-sponsors',{workshop_id:wid});
       var list=r.sponsors||[];
-      var rows=list.length?list.map(function(s){ return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f3f4f6;"><div><div style="font-weight:700;font-size:13px;">'+esc(s.name||s.email)+'</div><div style="font-size:11px;color:#5a6b76;">'+esc(s.email)+(s.title?' · '+esc(s.title):'')+'</div></div><button onclick="wsRemoveSponsor(\''+wid+'\',\''+s.client_id+'\')" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:12px;font-weight:700;padding:4px 8px;">Remove</button></div>'; }).join(''):'<div style="color:#5a6b76;font-size:13px;padding:8px 0;">No sponsors added yet.</div>';
+      var portalBase='https://portal.gpsleadership.org/client.html';
+      var rows=list.length?list.map(function(s){
+        var portalLink=s.token?portalBase+'?token='+encodeURIComponent(s.token):'';
+        var linkBtn=portalLink
+          ?'<button onclick="navigator.clipboard.writeText(\''+portalLink+'\').then(function(){toast(\'Portal link copied.\');})" style="background:none;border:1px solid #dbe3e6;border-radius:5px;padding:3px 9px;font-size:11px;font-weight:700;color:#004369;cursor:pointer;margin-right:6px;">Copy portal link</button>'
+          :'<span style="font-size:11px;color:#9ca3af;">No token — re-add to generate link</span>';
+        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f3f4f6;gap:8px;flex-wrap:wrap;"><div><div style="font-weight:700;font-size:13px;">'+esc(s.name||s.email)+'</div><div style="font-size:11px;color:#5a6b76;">'+esc(s.email)+(s.title?' · '+esc(s.title):'')+'</div></div><div style="display:flex;align-items:center;gap:6px;">'+linkBtn+'<button onclick="wsRemoveSponsor(\''+wid+'\',\''+s.client_id+'\')" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:12px;font-weight:700;padding:4px 8px;">Remove</button></div></div>';
+      }).join(''):'<div style="color:#5a6b76;font-size:13px;padding:8px 0;">No sponsors added yet.</div>';
       sp.querySelector('#wsSponsorList').innerHTML=rows;
     }catch(e){ sp.querySelector('#wsSponsorList').innerHTML='<div style="color:#dc2626;font-size:13px;">'+esc(e.message)+'</div>'; }
   }

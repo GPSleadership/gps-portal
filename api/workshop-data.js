@@ -591,6 +591,7 @@ export default async function handler(req, res) {
             const r = await sb('/rest/v1/clients', 'POST', {
               name: spName || spEmail, email: spEmail, title: spTitle,
               organization: body.org_name || null,
+              token: crypto.randomUUID(),
               in_coaching_program: false, is_active: true,
             }, { Prefer: 'return=representation' });
             const rows = await r.json().catch(() => []);
@@ -983,8 +984,8 @@ export default async function handler(req, res) {
         if (!wid) return res.status(400).json({ error: 'workshop_id required' });
         const links = await sbGet(`/rest/v1/workshop_sponsors?workshop_id=eq.${enc(wid)}&select=id,client_id,added_at&order=added_at.asc`);
         const sponsors = await Promise.all(links.map(async l => {
-          const c = await sbOne(`/rest/v1/clients?id=eq.${enc(l.client_id)}&select=name,email,title&limit=1`);
-          return { ...l, name: c?.name || '', email: c?.email || '', title: c?.title || '' };
+          const c = await sbOne(`/rest/v1/clients?id=eq.${enc(l.client_id)}&select=name,email,title,token&limit=1`);
+          return { ...l, name: c?.name || '', email: c?.email || '', title: c?.title || '', token: c?.token || '' };
         }));
         return res.status(200).json({ ok: true, sponsors });
       }
@@ -1001,7 +1002,8 @@ export default async function handler(req, res) {
         if (!client) {
           if (!name) return res.status(400).json({ error: 'name required when adding a new sponsor' });
           const ins = await sb('/rest/v1/clients', 'POST', {
-            name, email, title, in_coaching_program: false, is_active: true,
+            name, email, title, token: crypto.randomUUID(),
+            in_coaching_program: false, is_active: true,
           }, { Prefer: 'return=representation' });
           const rows = await ins.json().catch(() => []);
           client = Array.isArray(rows) ? rows[0] : rows;

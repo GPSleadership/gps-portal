@@ -3009,7 +3009,22 @@ async function loadClient() {
       if (wrap && !wrap.contains(e.target)) closeUserMenu();
     });
 
-    if (!client.plan_submitted_at || client.allow_plan_edit) {
+    // Sponsor-only clients (workshop sponsors who are NOT coaching clients) skip the
+    // onboarding wizard entirely and land directly on their Workshops tab.
+    var isSponsorOnly = myWorkshops.length > 0 && !client.in_coaching_program && !client.plan_submitted_at;
+
+    if (isSponsorOnly) {
+      // Show portal nav with only the Workshops tab visible
+      document.getElementById('portalTabNav').style.display = 'flex';
+      document.getElementById('tabWorkshop').style.display = '';
+      // Hide coaching-only tabs
+      ['tabPlan','tabResults','tabDiag','tabDR','tabAsk'].forEach(function(id){
+        var el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+      });
+      renderWorkshopTab(myWorkshops);
+      showPortalTab('workshop');
+    } else if (!client.plan_submitted_at || client.allow_plan_edit) {
       initWizard(client);
     } else {
       // Post-lockdown: all reads go through the token-gated endpoint.
