@@ -7325,6 +7325,7 @@ async function drSendSponsor(sponsorId){
       '<div style="margin-bottom:12px;"><label style="display:block;font-size:12px;font-weight:700;color:#5a6b76;margin-bottom:4px;">'+(isA?'Client / organization *':'Client / organization')+'</label><input id="wsf_org" type="text" list="wsf_org_list" value="" placeholder="Type or select org name" style="width:100%;padding:9px 11px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:14px;font-family:inherit;"><datalist id="wsf_org_list">'+orgOpts+'</datalist>'+(isA?'<div style="margin-top:4px;"><a id="wsf_create_org" href="#" style="font-size:12px;color:#01949A;">+ Create new organization</a></div>':'')+'</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;"><div id="wsf_dateWrap"'+(isA?' style="display:none;"':'')+'>'+field('wsf_date','Workshop date','','','date')+'</div>'+field('wsf_debrief',(isA?'Debrief date *':'Debrief date'),'','','date')+'</div>'+
       field('wsf_spname',(isA?'Sponsor / leader name *':'Sponsor / leader name'),'','Jane CEO')+
+      field('wsf_sptitle','Sponsor / leader title','','CEO')+
       field('wsf_spemail',(isA?'Sponsor / leader email *':'Sponsor / leader email'),'','jane@acme.com')+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'+field('wsf_industry','Industry','','Trucking')+'<div style="margin-bottom:12px;"><label style="display:block;font-size:12px;font-weight:700;color:#5a6b76;margin-bottom:4px;">Audience level</label><select id="wsf_level" style="width:100%;padding:9px 11px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:14px;"><option value="">—</option><option value="executive">Executive</option><option value="manager">Manager</option><option value="mixed">Mixed</option><option value="na">N/A</option></select></div></div>'+
       field('wsf_size','Company size band','','$10–25M')+
@@ -7367,7 +7368,7 @@ async function drSendSponsor(sponsorId){
         var r=await wsData('create-assessment',{
           title:title, org_name:orgName,
           org_id:(orgId&&orgId!=='__create__'?orgId:null),
-          debrief_date:v('wsf_debrief'), sponsor_name:v('wsf_spname'), sponsor_email:v('wsf_spemail').toLowerCase(),
+          debrief_date:v('wsf_debrief'), sponsor_name:v('wsf_spname'), sponsor_title:v('wsf_sptitle')||null, sponsor_email:v('wsf_spemail').toLowerCase(),
           industry:v('wsf_industry')||null, audience_level:v('wsf_level')||null, size_band:v('wsf_size')||null,
           tags:tags, is_demo:isDemo, logo_data_url:logoDataUrl
         });

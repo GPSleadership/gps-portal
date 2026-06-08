@@ -578,13 +578,19 @@ export default async function handler(req, res) {
         let sponsorId = null;
         const spEmail = (body.sponsor_email || '').toLowerCase().trim();
         const spName  = (body.sponsor_name  || '').trim();
+        const spTitle = (body.sponsor_title || '').trim() || null;
         if (spEmail) {
           const ex = await sbOne(`/rest/v1/clients?email=eq.${enc(spEmail)}&select=id&limit=1`);
           if (ex) {
             sponsorId = ex.id;
+            // Update title if provided and not already set
+            if (spTitle) {
+              await sb(`/rest/v1/clients?id=eq.${enc(ex.id)}`, 'PATCH', { title: spTitle }, { Prefer: 'return=minimal' });
+            }
           } else {
             const r = await sb('/rest/v1/clients', 'POST', {
-              name: spName || spEmail, email: spEmail, organization: body.org_name || null,
+              name: spName || spEmail, email: spEmail, title: spTitle,
+              organization: body.org_name || null,
               in_coaching_program: false, is_active: true,
             }, { Prefer: 'return=representation' });
             const rows = await r.json().catch(() => []);
