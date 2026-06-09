@@ -50,7 +50,7 @@ function pickWritable(updates) {
 
 async function findClientByToken(token) {
   if (!token) return null;
-  const r = await sb(`/rest/v1/clients?token=eq.${encodeURIComponent(token)}&is_archived=eq.false&limit=1&select=id,in_coaching_program`);
+  const r = await sb(`/rest/v1/clients?token=eq.${encodeURIComponent(token)}&is_archived=eq.false&limit=1&select=id,email,name,in_coaching_program,plan_submitted_at,coaching_sessions_enabled,is_active_coaching`);
   if (!r.ok) return null;
   const rows = await r.json();
   return Array.isArray(rows) && rows[0] ? rows[0] : null;
@@ -359,7 +359,7 @@ export default async function handler(req, res) {
             if (!client?.id) { skipped++; continue; }
             created++;
           }
-          const linkIns = await sb('/rest/v1/workshop_participants', 'POST', {
+          const linkIns = await sb(`/rest/v1/workshop_participants?on_conflict=workshop_id,client_id`, 'POST', {
             workshop_id: wid, client_id: client.id,
             role: raw.role_title || raw.role || raw.title || null,
             location: raw.location || raw.region || null,
