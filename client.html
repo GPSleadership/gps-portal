@@ -3009,6 +3009,10 @@ async function loadClient() {
       if (wrap && !wrap.contains(e.target)) closeUserMenu();
     });
 
+    // Fetch workshops early — needed for the isSponsorOnly check below.
+    const wsEarly = await portalData('my-workshops', {}).catch(function(){ return { workshops: [] }; });
+    const myWorkshops = wsEarly.workshops || [];
+
     // Sponsor-only clients (workshop sponsors who are NOT coaching clients) skip the
     // onboarding wizard entirely and land directly on their Workshops tab.
     var isSponsorOnly = myWorkshops.length > 0 && !client.in_coaching_program && !client.plan_submitted_at;
@@ -3028,18 +3032,14 @@ async function loadClient() {
       initWizard(client);
     } else {
       // Post-lockdown: all reads go through the token-gated endpoint.
-      // (The old anon-key db.from() reads silently returned nothing after v26,
-      // which made My Results show "No results yet" for everyone.)
-      const [rd, wsData] = await Promise.all([
+      const [rd] = await Promise.all([
         portalData('results-data', {}).catch(function(){ return {}; }),
-        portalData('my-workshops', {}).catch(function(){ return { workshops: [] }; })
       ]);
       const checkins        = rd.checkins         || [];
       const surveyData      = rd.survey_responses || [];
       const surveyTokenData = rd.survey_tokens    || [];
       const selfCheckData   = rd.self_checks      || [];
       const stakeholderData = rd.stakeholders     || [];
-      const myWorkshops     = wsData.workshops    || [];
 
       // Wire portal context for Q&A tool
       portalContext.full_name            = client.name || '';

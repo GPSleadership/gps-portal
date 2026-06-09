@@ -413,9 +413,10 @@ export default async function handler(req, res) {
           const r = await sendEmail(c.email, subj, html);
           if (r.ok) { sent++; await sb(`/rest/v1/workshop_participants?id=eq.${enc(p.id)}`, 'PATCH', { invited_at: isoNow() }, { Prefer: 'return=minimal' }); }
         }
+        // Use existing open timestamp if already set — don't overwrite the audit trail.
         const patch = { updated_at: isoNow() };
-        if (phase === 'pre')  { patch.pre_survey_open_at  = patch.pre_survey_open_at  || isoNow(); patch.status = 'pre_survey_open'; }
-        else                  { patch.post_survey_open_at = patch.post_survey_open_at || isoNow(); patch.status = 'post_survey_open'; }
+        if (phase === 'pre')  { patch.pre_survey_open_at  = w.pre_survey_open_at  || isoNow(); patch.status = 'pre_survey_open'; }
+        else                  { patch.post_survey_open_at = w.post_survey_open_at || isoNow(); patch.status = 'post_survey_open'; }
         await sb(`/rest/v1/workshops?id=eq.${enc(body.workshop_id)}`, 'PATCH', patch, { Prefer: 'return=minimal' });
         return res.status(200).json({ ok: true, sent, total: parts.length });
       }
@@ -758,9 +759,10 @@ export default async function handler(req, res) {
         const w = await sbOne(`/rest/v1/workshops?id=eq.${enc(p.workshop_id)}&select=*&limit=1`);
         const c = await sbOne(`/rest/v1/clients?id=eq.${enc(p.client_id)}&select=name,email&limit=1`);
         if (!c?.email) return res.status(400).json({ error: 'No email on file for this participant' });
-        const url = `${PORTAL_BASE_URL}/workshop-survey?token=${enc(p.participant_token)}&phase=pre`;
+        const phase = (w && w.status === 'post_survey_open') ? 'post' : 'pre';
+        const url = `${PORTAL_BASE_URL}/workshop-survey?token=${enc(p.participant_token)}&phase=${phase}`;
         const subj = `Reminder: ${w.title} survey — still need your input`;
-        const html = reminderHtml(c.name, w, 'pre', url, 'is still open');
+        const html = reminderHtml(c.name, w, phase, url, 'is still open');
         const r = await sendEmail(c.email, subj, html);
         if (r.ok) {
           await sb(`/rest/v1/workshop_participants?id=eq.${enc(participantId)}`, 'PATCH',
@@ -985,7 +987,10 @@ export default async function handler(req, res) {
         const links = await sbGet(`/rest/v1/workshop_sponsors?workshop_id=eq.${enc(wid)}&select=id,client_id,added_at&order=added_at.asc`);
         const sponsors = await Promise.all(links.map(async l => {
           const c = await sbOne(`/rest/v1/clients?id=eq.${enc(l.client_id)}&select=name,email,title,token&limit=1`);
-          return { ...l, name: c?.name || '', email: c?.email || '', title: c?.title || '', token: c?.token || '' };
+          // Build portal link server-side; never send raw token to the browser.
+          const PORTAL = process.env.PORTAL_BASE_URL || 'https://portal.gpsleadership.org';
+          const portalLink = c?.token ? `${PORTAL}/client.html?token=${encodeURIComponent(c.token)}` : null;
+          return { ...l, name: c?.name || '', email: c?.email || '', title: c?.title || '', portalLink };
         }));
         return res.status(200).json({ ok: true, sponsors });
       }

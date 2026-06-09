@@ -2244,43 +2244,78 @@ function renderProfileSection(section, client, checkins) {
     </div>`;
 
   if (section === 'overview') {
-    el.innerHTML = `
-      <div class="profile-section-title">Overview</div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;">
-        <div style="background:white;border-radius:8px;padding:16px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
-          <div style="font-family:'Montserrat',sans-serif;font-size:28px;font-weight:800;color:var(--navy);">${currentWeek ? 'Wk ' + currentWeek : '—'}</div>
-          <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);margin-top:4px;">Current Week</div>
+    const isPreProgram = !client.plan_submitted_at && checkins.length === 0;
+    if (isPreProgram) {
+      const enrolled = client.in_coaching_program || client.coaching_sessions_enabled;
+      el.innerHTML = `
+        <div class="profile-section-title">Overview</div>
+        <div style="background:white;border-radius:8px;padding:28px 24px;box-shadow:0 1px 4px rgba(0,0,0,0.06);text-align:center;margin-bottom:18px;">
+          <div style="width:52px;height:52px;border-radius:50%;background:var(--light-sand);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:24px;">👤</div>
+          <div style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:6px;">${esc(client.name || 'This client')} hasn't started their program yet.</div>
+          <div style="font-size:13px;color:var(--gray-600);margin-bottom:20px;max-width:440px;margin-left:auto;margin-right:auto;">
+            ${enrolled
+              ? 'They\'re enrolled as a coaching client. Send them their portal link to begin.'
+              : 'Currently a sponsor / workshop participant only. Enroll them or start a diagnostic to activate their profile.'}
+          </div>
+          <div style="display:flex;justify-content:center;gap:10px;flex-wrap:wrap;">
+            <button onclick="navigator.clipboard.writeText('${portalURL}').then(function(){toast('Portal link copied.')})"
+              style="padding:8px 20px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">
+              Copy Portal Link
+            </button>
+            <button onclick="sendWelcomeEmail('${client.id}')"
+              style="padding:8px 20px;background:var(--navy);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">
+              Send Welcome Email
+            </button>
+            <button onclick="switchProfileNav('diagnostics')"
+              style="padding:8px 20px;background:none;border:2px solid var(--navy);color:var(--navy);border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">
+              Start Diagnostic →
+            </button>
+          </div>
+          ${!enrolled ? `<div style="margin-top:14px;"><button onclick="setEnrolledStatus('${client.id}', true)" id="enrollQuickBtn-${client.id}"
+            style="padding:7px 18px;background:none;border:1px solid var(--teal);color:var(--teal);border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">
+            + Enroll as Coaching Client
+          </button></div>` : ''}
         </div>
-        <div style="background:white;border-radius:8px;padding:16px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
-          <div style="font-family:'Montserrat',sans-serif;font-size:28px;font-weight:800;color:var(--navy);">${completionRate}</div>
-          <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);margin-top:4px;">Follow-Through</div>
+      `;
+    } else {
+      el.innerHTML = `
+        <div class="profile-section-title">Overview</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;">
+          <div style="background:white;border-radius:8px;padding:16px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+            <div style="font-family:'Montserrat',sans-serif;font-size:28px;font-weight:800;color:var(--navy);">${currentWeek ? 'Wk ' + currentWeek : '—'}</div>
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);margin-top:4px;">Current Week</div>
+          </div>
+          <div style="background:white;border-radius:8px;padding:16px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+            <div style="font-family:'Montserrat',sans-serif;font-size:28px;font-weight:800;color:var(--navy);">${completionRate}</div>
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);margin-top:4px;">Follow-Through</div>
+          </div>
+          <div style="background:white;border-radius:8px;padding:16px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+            <div style="font-family:'Montserrat',sans-serif;font-size:28px;font-weight:800;color:var(--navy);">${client.ask_alex_total_questions || 0}</div>
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);margin-top:4px;">Ask Alex Q's</div>
+          </div>
+          <div style="background:white;border-radius:8px;padding:16px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+            <div style="font-family:'Montserrat',sans-serif;font-size:14px;font-weight:700;color:var(--navy);">${lastDate}</div>
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);margin-top:4px;">Last Check-In</div>
+          </div>
         </div>
-        <div style="background:white;border-radius:8px;padding:16px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
-          <div style="font-family:'Montserrat',sans-serif;font-size:28px;font-weight:800;color:var(--navy);">${client.ask_alex_total_questions || 0}</div>
-          <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);margin-top:4px;">Ask Alex Q's</div>
+        <div style="background:white;border-radius:8px;padding:18px 20px;margin-bottom:18px;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);margin-bottom:10px;">13-Week Submission Track</div>
+          <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
+            ${dotRow}
+            <span style="font-size:11px;color:var(--gray-600);margin-left:8px;">${checkins.length}/13 submitted</span>
+          </div>
         </div>
-        <div style="background:white;border-radius:8px;padding:16px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
-          <div style="font-family:'Montserrat',sans-serif;font-size:14px;font-weight:700;color:var(--navy);">${lastDate}</div>
-          <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);margin-top:4px;">Last Check-In</div>
-        </div>
-      </div>
-      <div style="background:white;border-radius:8px;padding:18px 20px;margin-bottom:18px;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);margin-bottom:10px;">13-Week Submission Track</div>
-        <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
-          ${dotRow}
-          <span style="font-size:11px;color:var(--gray-600);margin-left:8px;">${checkins.length}/13 submitted</span>
-        </div>
-      </div>
-      ${client.plan_submitted_at ? `
-      <div style="background:white;border-radius:8px;padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);margin-bottom:10px;">Metric Progress</div>
-        <div class="metric-bar-wrap">
-          <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:4px;">${client.metric_name || 'Metric'}</div>
-          <div class="metric-bar-track"><div class="metric-bar-fill" style="width:${progress}%"></div></div>
-          <div class="metric-nums"><span>Baseline: ${baseline}</span><span style="font-weight:700;color:var(--navy);">Current: ${current} &nbsp;(${Math.round(progress)}%)</span><span>Target: ${target}</span></div>
-        </div>
-      </div>` : ''}
-    `;
+        ${client.plan_submitted_at ? `
+        <div style="background:white;border-radius:8px;padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);margin-bottom:10px;">Metric Progress</div>
+          <div class="metric-bar-wrap">
+            <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:4px;">${client.metric_name || 'Metric'}</div>
+            <div class="metric-bar-track"><div class="metric-bar-fill" style="width:${progress}%"></div></div>
+            <div class="metric-nums"><span>Baseline: ${baseline}</span><span style="font-weight:700;color:var(--navy);">Current: ${current} &nbsp;(${Math.round(progress)}%)</span><span>Target: ${target}</span></div>
+          </div>
+        </div>` : ''}
+      `;
+    }
   } else if (section === 'plan') {
     el.innerHTML = `
       <div class="profile-section-title">Plan</div>
@@ -2377,10 +2412,30 @@ function renderProfileSection(section, client, checkins) {
       ${diagRows}
     `;
   } else if (section === 'settings') {
+    const enrolled = client.in_coaching_program || client.coaching_sessions_enabled;
     // Render settings HTML first, then load async stats
     el.innerHTML = `
       <div class="profile-section-title">Settings</div>
       ${editInfoSection}
+      <div class="detail-section" style="margin-top:20px;">
+        <h4>Client Enrollment</h4>
+        <p id="enrollmentStatus-${client.id}" style="font-size:12px;color:var(--gray-600);margin-bottom:12px;">
+          ${enrolled
+            ? '✓ Enrolled in the coaching program. They can access the portal wizard, check-ins, and plan.'
+            : '⚠️ Not yet enrolled. Currently a sponsor or workshop participant only. Enroll them to activate the full coaching portal.'}
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <button onclick="setEnrolledStatus('${client.id}', ${!enrolled})" id="enrollBtn-${client.id}"
+            style="padding:8px 18px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;border:none;
+              background:${enrolled ? 'var(--red)' : 'var(--teal)'};color:#fff;font-family:'Montserrat',sans-serif;">
+            ${enrolled ? 'Remove from Coaching Program' : 'Enroll as Coaching Client'}
+          </button>
+          <button onclick="switchProfileNav('diagnostics')"
+            style="padding:8px 18px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid var(--navy);background:none;color:var(--navy);font-family:'Montserrat',sans-serif;">
+            Set Up Diagnostic →
+          </button>
+        </div>
+      </div>
       <div class="detail-section" style="margin-top:20px;">
         <h4>Client Portal Link</h4>
         <div class="client-url-box" id="portalUrlBox-${client.id}">
@@ -2956,6 +3011,22 @@ async function toggleCoachingSessions(clientId, currentState) {
     if (statusEl) statusEl.textContent = 'Not enabled. The coaching session attendance question is hidden from their check-in.';
   }
   btn.disabled = false;
+}
+
+async function setEnrolledStatus(clientId, newState) {
+  const btn      = document.getElementById('enrollBtn-' + clientId) || document.getElementById('enrollQuickBtn-' + clientId);
+  const statusEl = document.getElementById('enrollmentStatus-' + clientId);
+  if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
+  try {
+    await cdUpdate('clients', { in_coaching_program: newState }, { eq: { id: clientId } });
+    allClients = allClients.map(c => c.id === clientId ? { ...c, in_coaching_program: newState } : c);
+    toast(newState ? 'Client enrolled in coaching program.' : 'Client removed from coaching program.');
+    // Re-render the settings section so all buttons/text refresh.
+    switchProfileNav(document.querySelector('.profile-nav-item.active')?.id?.replace('profNav-','') || 'settings');
+  } catch (e) {
+    toast('Error: ' + e.message);
+    if (btn) { btn.textContent = newState ? 'Enroll as Coaching Client' : 'Remove from Coaching Program'; btn.disabled = false; }
+  }
 }
 
 async function togglePortalLock(clientId, currentState) {
@@ -7563,12 +7634,11 @@ async function drSendSponsor(sponsorId){
     try{
       var r=await wsData('get-workshop-sponsors',{workshop_id:wid});
       var list=r.sponsors||[];
-      var portalBase='https://portal.gpsleadership.org/client.html';
       var rows=list.length?list.map(function(s){
-        var portalLink=s.token?portalBase+'?token='+encodeURIComponent(s.token):'';
+        var portalLink=s.portalLink||'';
         var linkBtn=portalLink
           ?'<button onclick="navigator.clipboard.writeText(\''+portalLink+'\').then(function(){toast(\'Portal link copied.\');})" style="background:none;border:1px solid #dbe3e6;border-radius:5px;padding:3px 9px;font-size:11px;font-weight:700;color:#004369;cursor:pointer;">Copy portal link</button>'
-          :'<span style="font-size:11px;color:#9ca3af;">No token — re-add to generate link</span>';
+          :'<span style="font-size:11px;color:#9ca3af;">No portal token</span>';
         var viewBtn=s.client_id?'<button onclick="showSection(\'clients\');openClientProfile(\''+s.client_id+'\')" style="background:none;border:1px solid #dbe3e6;border-radius:5px;padding:3px 9px;font-size:11px;font-weight:700;color:#004369;cursor:pointer;">View profile</button>':'';
         return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f3f4f6;gap:8px;flex-wrap:wrap;"><div><div style="font-weight:700;font-size:13px;">'+esc(s.name||s.email)+'</div><div style="font-size:11px;color:#5a6b76;">'+esc(s.email)+(s.title?' · '+esc(s.title):'')+'</div></div><div style="display:flex;align-items:center;gap:6px;">'+viewBtn+linkBtn+'<button onclick="wsRemoveSponsor(\''+wid+'\',\''+s.client_id+'\')" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:12px;font-weight:700;padding:4px 8px;">Remove</button></div></div>';
       }).join(''):'<div style="color:#5a6b76;font-size:13px;padding:8px 0;">No sponsors added yet.</div>';
