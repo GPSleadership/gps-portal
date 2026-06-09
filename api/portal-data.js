@@ -290,7 +290,7 @@ export default async function handler(req, res) {
         if (!links.length) return res.status(200).json({ ok: true, workshops: [] });
         // Fetch each workshop — only surface-safe fields (no raw data, no survey content)
         const workshops = (await Promise.all(links.map(async l => {
-          const r = await sb(`/rest/v1/workshops?id=eq.${enc(l.workshop_id)}&select=id,title,engagement_kind,status,workshop_date,client_org_name,roster_locked,roster_file_url,roster_uploaded_at,organization_id&limit=1`);
+          const r = await sb(`/rest/v1/workshops?id=eq.${enc(l.workshop_id)}&select=id,title,engagement_kind,status,workshop_date,client_org_name,roster_locked,roster_file_url,roster_uploaded_at,organization_id,sponsor_token&limit=1`);
           if (!r.ok) return null;
           const rows = await r.json().catch(() => []);
           const w = Array.isArray(rows) ? rows[0] : rows;
@@ -307,8 +307,14 @@ export default async function handler(req, res) {
           // Participant count (sponsor sees this but not individual names/data)
           const countR = await sb(`/rest/v1/workshop_participants?workshop_id=eq.${enc(w.id)}&select=id`);
           const countRows = countR.ok ? (await countR.json().catch(() => [])) : [];
+          // The sponsor's own status dashboard link, built server-side. The raw token
+          // is not surfaced as its own field — only the ready-to-open URL.
+          const PORTAL = process.env.PORTAL_BASE_URL || 'https://portal.gpsleadership.org';
+          const dashboard_url = w.sponsor_token ? `${PORTAL}/workshop-room?token=${encodeURIComponent(w.sponsor_token)}` : null;
+          const { sponsor_token, ...wSafe } = w;
           return {
-            ...w,
+            ...wSafe,
+            dashboard_url,
             org_logo_url,
             participant_count: Array.isArray(countRows) ? countRows.length : 0,
             sponsor_added_at: l.added_at,

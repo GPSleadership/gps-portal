@@ -4820,6 +4820,14 @@ function renderWorkshopTab(workshops) {
       ? '<div style="color:#6b7280;font-size:13px;margin-bottom:12px;">' + w.participant_count + ' participant' + (w.participant_count !== 1 ? 's' : '') + ' in roster</div>'
       : '';
 
+    // Sponsor's status dashboard — where they track progress and see results as they come in.
+    var dashboardBtn = w.dashboard_url
+      ? '<div style="margin:4px 0 14px;">'
+        + '<a href="' + w.dashboard_url + '" target="_blank" rel="noopener" style="display:inline-block;padding:10px 20px;background:#01949A;color:#fff;border-radius:6px;font-size:14px;font-weight:700;text-decoration:none;font-family:Montserrat,sans-serif;">View Your Dashboard →</a>'
+        + '<div style="color:#6b7280;font-size:12px;margin-top:6px;">See live status, participation, and results as they come in.</div>'
+        + '</div>'
+      : '';
+
     var uploadSection = '';
     if (!locked) {
       var lastUpload = uploadedAt
@@ -4849,6 +4857,7 @@ function renderWorkshopTab(workshops) {
       + (w.client_org_name ? '<div style="color:#6b7280;font-size:13px;margin-bottom:4px;">' + w.client_org_name + '</div>' : '')
       + (w.workshop_date ? '<div style="color:#9ca3af;font-size:12px;margin-bottom:10px;">' + new Date(w.workshop_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) + '</div>' : '<div style="margin-bottom:10px;"></div>')
       + participantLine
+      + dashboardBtn
       + uploadSection
       + '</div>';
   });
