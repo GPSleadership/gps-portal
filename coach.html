@@ -2211,6 +2211,11 @@ function renderProfileSection(section, client, checkins) {
 
   const portalURL = `${PORTAL_BASE_URL}?token=${client.token}`;
 
+  // Defined locally here too — this function runs in its own scope and the copies
+  // in the other detail renderer are not visible to it (referencing them blanks the page).
+  const INDUSTRY_LIST = ['Trucking / Transportation','Logistics / Supply Chain','Manufacturing','Industrial Services','Parts & Service','Distribution','Healthcare','Construction','Technology','Financial Services','Federal Government','State/Local Government','Aviation / Airport','Utilities / Energy','Real Estate','Non-Profit','Other'];
+  const industryDatalist = `<datalist id="industryOptions-${client.id}">${INDUSTRY_LIST.map(o=>`<option value="${o}">`).join('')}</datalist>`;
+
   const industryOpts = ['Trucking / Transportation','Logistics / Supply Chain','Manufacturing','Industrial Services','Parts & Service','Distribution','Healthcare','Construction','Technology','Financial Services','Federal Government','State/Local Government','Other']
     .map(o => `<option value="${o}"${client.industry===o?' selected':''}>${o}</option>`).join('');
 
