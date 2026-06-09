@@ -117,8 +117,8 @@
     if(!o||(o.post==null&&o.pre==null)) return '<div class="tp3-cell tp3-'+cls+'"><div class="tp3-name">'+name+'</div><div class="tp3-score">—</div><div class="tp3-prior">No survey data yet.</div></div>';
     var cur=(o.post!=null?o.post:o.pre);
     var prior='';
-    if(o.pre!=null&&o.post!=null){ var d=o.delta; var tc=d>0?'trend-up':(d<0?'trend-down':'trend-flat'); var ar=d>0?'▲ +':(d<0?'▼ ':'• '); prior='<div class="tp3-prior">Pre '+o.pre+' → Post '+o.post+' <span class="'+tc+'">'+ar+(d!=null?Math.abs(d):'0')+'</span> · 1–5 scale; 4 is healthy</div>'; }
-    else { prior='<div class="tp3-prior">'+cur+' / 5.0 · 1–5 scale; 4 is healthy</div>'; }
+    if(o.pre!=null&&o.post!=null){ var d=o.delta; var tc=d>0?'trend-up':(d<0?'trend-down':'trend-flat'); var ar=d>0?'▲ +':(d<0?'▼ ':'• '); prior='<div class="tp3-prior">Pre '+o.pre+' → Post '+o.post+' <span class="'+tc+'">'+ar+(d!=null?Math.abs(d):'0')+'</span> · 1–5 scale · 4.0 is the bar</div>'; }
+    else { prior='<div class="tp3-prior">'+cur+' / 5.0 · 1–5 scale · 4.0 is the bar</div>'; }
     return '<div class="tp3-cell tp3-'+cls+'"><div class="tp3-name">'+name+'</div><div class="tp3-score">'+cur+' <span>/ 5.0</span></div><div class="bar-track"><div class="bar-fill" style="width:'+pct(cur)+'%"></div></div>'+prior+'</div>';
   }
   function quickRead(s, isA){
@@ -198,7 +198,10 @@
         '<div class="stat"><div class="v">'+(part.total||0)+'</div><div class="l">Participants</div></div></div>';
     }
     var t=s.tp3||{};
-    html+='<div class="tp3-grid">'+tpCell('trust','Trust',t.trust)+tpCell('proactivity','Proactivity',t.proactivity)+tpCell('productivity','Productivity',t.productivity)+'</div></div>';
+    html+='<div class="tp3-grid">'+tpCell('trust','Trust',t.trust)+tpCell('proactivity','Proactivity',t.proactivity)+tpCell('productivity','Productivity',t.productivity)+'</div>'
+      +'<div style="margin-top:14px;background:#f4f7f8;border-left:3px solid #01949A;border-radius:6px;padding:12px 14px;font-size:13px;color:#2b3a42;line-height:1.5;">'
+      +'<span style="font-weight:700;color:#004369;">Why we measure against a 4.0 bar.</span> High-performing teams and organizations are built of 4s and 5s — so we hold every score to that standard on purpose. A <strong>4&ndash;5</strong> is a strength to protect, develop, and grow. A score in the <strong>3s</strong> is a development zone: not a failure, but not &ldquo;good enough&rdquo; either &mdash; it gets a clear plan to reach a 4+. A <strong>1&ndash;2</strong> is a red flag worth a direct, honest conversation. We don&rsquo;t grade on a curve, because your organization wasn&rsquo;t built to be average.'
+      +'</div></div>';
 
     // 1b) Results by theme (factual; always shown)
     html+=themeCompareCard(d.themeTable, isA);
