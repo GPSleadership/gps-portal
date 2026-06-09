@@ -2104,6 +2104,12 @@ function renderClientCard(client, checkins) {
 // ─────────────────────────────────────────────
 let currentProfileClientId = null;
 
+// Global escape + toast helpers. The workshop module defines its own copies inside
+// its IIFE; the client-profile renderer runs in global scope and needs these. Without
+// them, the pre-program (sponsor) overview branch throws and the profile renders blank.
+function esc(s){ return String(s==null?'':s).replace(/[<>&"]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c];}); }
+function toast(m){ try{ alert(m); }catch(e){} }
+
 function openClientProfile(clientId) {
   const client = allClients.find(c => c.id === clientId);
   if (!client) return;

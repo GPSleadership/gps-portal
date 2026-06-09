@@ -314,7 +314,13 @@ export default async function handler(req, res) {
 
   const client = clients[0];
 
-  if (client.in_coaching_program === false) {
+  // Allow coaching clients, workshop sponsors, and workshop participants through.
+  // The client portal renders the right view for each (a sponsor-only client lands
+  // on their Workshops tab). Only true non-members are denied.
+  const isCoaching    = !!(client.in_coaching_program || client.coaching_sessions_enabled || client.is_active_coaching || client.engagement_type === 'diagnostic_plus_coaching');
+  const isSponsor     = client.is_sponsor === true;
+  const isParticipant = client.is_workshop_participant === true;
+  if (!isCoaching && !isSponsor && !isParticipant) {
     return res.status(403).json({ error: 'Access not available. Contact your coach.' });
   }
 
