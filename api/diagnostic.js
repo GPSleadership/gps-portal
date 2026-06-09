@@ -1014,6 +1014,9 @@ SECTION 3: OVERVIEW & TP3 LEADERSHIP OUTCOMES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <h2 class="report-section">Overview & TP3 Leadership Outcomes</h2>
 
+Immediately after this heading, include the following GPS standard VERBATIM — do not paraphrase, soften, shorten, or omit it:
+<div class="insight-callout"><strong>Why we measure against a 4.0 bar</strong><p>High-performing teams and organizations are built of 4s and 5s, so we hold every score to that standard on purpose. A 4&ndash;5 is a strength to protect, develop, and grow. A score in the 3s is a development zone &mdash; not a failure, but not &ldquo;good enough&rdquo; either; it gets a clear plan to reach a 4+. A 1&ndash;2 is a red flag that warrants a direct, honest conversation about fit. We don&rsquo;t grade on a curve, because your organization wasn&rsquo;t built to be average.</p></div>
+
 A. Participant count and group breakdown (2 sentences or small table).
 
 B. 1 paragraph overall narrative — what the TP3 Index and tier tell us about this leader's current impact. Be direct and specific to this person's data.
