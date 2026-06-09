@@ -3028,6 +3028,10 @@ async function loadClient() {
       });
       renderWorkshopTab(myWorkshops);
       showPortalTab('workshop');
+    } else if (client.is_sponsor === true && myWorkshops.length === 0 && !client.is_coaching_client && !client.plan_submitted_at) {
+      // Sponsor with no active workshop and not (yet) a coaching client — show a warm
+      // holding state instead of dropping them into the coaching onboarding wizard.
+      showSponsorWelcome(displayFirstName);
     } else if (!client.plan_submitted_at || client.allow_plan_edit) {
       initWizard(client);
     } else {
@@ -5450,6 +5454,19 @@ function showError(title, message) {
       <div style="font-size:40px;margin-bottom:16px;">🔒</div>
       <h2>${title}</h2>
       <p>${message}</p>
+    </div>
+  `;
+}
+
+// Warm holding state for a sponsor whose workshop results aren't published yet
+// (and who isn't a coaching client). Avoids the lock screen and the coaching wizard.
+function showSponsorWelcome(firstName) {
+  document.getElementById('mainContent').innerHTML = `
+    <div class="state-screen">
+      <div style="font-size:40px;margin-bottom:16px;">👋</div>
+      <h2>Welcome${firstName ? ', ' + firstName : ''}.</h2>
+      <p>Your workshop results aren't published to this page yet. The moment your report is ready, it'll appear here — and we'll email you, so there's no need to check back.</p>
+      <p style="margin-top:14px;font-size:13px;color:#6b7280;">Questions in the meantime? Reach Alex at <a href="mailto:alex@gpsleadership.org" style="color:#1A3D6E;">alex@gpsleadership.org</a>.</p>
     </div>
   `;
 }
