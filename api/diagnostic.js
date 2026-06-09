@@ -956,8 +956,8 @@ Overall Impact (D1): Direct overall-impact rating by raters (the score line stat
 Bench Strength (F1–F2): Developing the people around this leader.
 Custom items (G1, G2): Diagnostic-specific questions.
 
-SCORING TIERS (1–5 scale):
-4.5–5.0 = Exceptional | 4.0–4.4 = Strong | 3.5–3.9 = Solid | 3.0–3.4 = Developing | 2.5–2.9 = Needs Attention | Below 2.5 = Critical Gap
+SCORING TIERS (1–5 scale) — the high-performing bar is 4.0. NEVER round up: a 3.6 is a 3, not "almost a 4." Do NOT call anything under 4.0 "solid," "good," or "healthy."
+4.5–5.0 = Exceptional (4+ — keep, develop, and grow these people) | 4.0–4.4 = Strong (4+ — keep and grow) | 3.0–3.9 = Developing (under the 4.0 bar; counts as a 3; needs a deliberate development plan — frame as a concern to fix, not a win) | 2.0–2.9 = Red Flag (significant gap; build a development-or-role-fit plan) | Below 2.0 = Critical Gap (urgent role-fit decision)
 
 RATER GROUPS: Direct Reports — daily trust and safety. Peers — cross-functional follow-through. Supervisors — strategic presence, upward accountability. Internal Partners — coordination reliability. Self vs. All Others: Self higher = possible gap in self-perception; Self lower = under-confidence or self-awareness.
 

@@ -204,32 +204,32 @@ function recommendFrom(agg, workshop) {
 
   let primary = null;
   // Trust / leadership perception gaps → 14-Day Executive Diagnostic.
-  if (trust != null && trust < 3.5) {
+  if (trust != null && trust < 4.0) {
     primary = {
       step: '14-Day Executive Leadership Diagnostic',
       headline: 'The fastest way to fix the trust pattern the data shows',
-      rationale: `Team trust is reading ${trust}/5 — low enough that it is quietly slowing execution. A 14-Day Executive Leadership Diagnostic surfaces exactly where the perception gaps are between the leader and the team, so the fix is targeted instead of guessed at.`,
+      rationale: `Team trust is reading ${trust}/5 — under the 4.0 high-performing bar, and low enough to be quietly slowing execution. A 14-Day Executive Leadership Diagnostic surfaces exactly where the perception gaps are between the leader and the team, so the fix is targeted instead of guessed at.`,
     };
-    fired.push('trust<3.5 → diagnostic');
+    fired.push('trust<4.0 → diagnostic');
   }
-  // Strong CEO bottleneck pattern (low delegation/proactivity) → 90-Day CEO Reset.
-  if (!primary && ((delegVal != null && delegVal < 3.5) || (proact != null && proact < 3.5))) {
+  // Strong CEO bottleneck pattern (delegation/proactivity under the 4.0 bar) → 90-Day CEO Reset.
+  if (!primary && ((delegVal != null && delegVal < 4.0) || (proact != null && proact < 4.0))) {
     primary = {
       step: '90-Day CEO Reset',
       headline: 'The fastest way to get decisions off your desk',
-      rationale: `Decisions are bottlenecking and ownership is reading low (delegation ${delegVal ?? 'n/a'}/5, proactivity ${proact ?? 'n/a'}/5). A 90-Day CEO Reset installs the operating habits that move decisions to the right level so the company stops waiting on you.`,
+      rationale: `Decisions are bottlenecking and ownership is reading under the 4.0 bar (delegation ${delegVal ?? 'n/a'}/5, proactivity ${proact ?? 'n/a'}/5). A 90-Day CEO Reset installs the operating habits that move decisions to the right level so the company stops waiting on you.`,
     };
-    fired.push('delegation/proactivity<3.5 → CEO reset');
+    fired.push('delegation/proactivity<4.0 → CEO reset');
   }
-  // Broad alignment/operating-system issues across themes → Executive Retreat.
-  const weakThemes = agg.themeTable.filter(x => (x.post ?? x.pre) != null && (x.post ?? x.pre) < 3.5).length;
+  // Broad operating-system issues — several themes under the 4.0 bar → Executive Retreat.
+  const weakThemes = agg.themeTable.filter(x => (x.post ?? x.pre) != null && (x.post ?? x.pre) < 4.0).length;
   if (!primary && weakThemes >= 3) {
     primary = {
       step: 'Executive Retreat',
       headline: 'The fastest way to get the team operating from one playbook',
-      rationale: `Several areas are reading below the line at once — a sign the team is missing a shared operating system, not just one habit. A focused executive retreat aligns the team on how they make decisions and run the business together.`,
+      rationale: `Several areas are landing under the 4.0 bar at once — a sign the team is missing a shared operating system, not just one habit. A focused executive retreat aligns the team on how they make decisions and run the business together.`,
     };
-    fired.push('3+ weak themes → retreat');
+    fired.push('3+ themes under 4.0 → retreat');
   }
   // Healthy result with a satisfied sponsor → reinforce + diagnostic as the next lever.
   if (!primary) {
@@ -248,14 +248,26 @@ function findingsFrom(agg) {
   const strengths = [], risks = [];
   const label = { trust: 'Trust', proactivity: 'Proactivity / ownership', productivity: 'Productivity / focus',
     delegation: 'Delegation', meetings: 'Meeting effectiveness', communication: 'Communication', satisfaction: 'Satisfaction' };
+  // GPS scoring standard on a 1–5 scale (no rounding up):
+  //   4.0–5.0 = strength (high-performing — keep, develop, grow)
+  //   3.0–3.99 = development zone (counts as a 3; under the 4.0 bar; needs a plan)
+  //   1.0–2.99 = red flag (significant gap; address directly and assess role fit)
+  const red = [], dev = [];
   for (const row of agg.themeTable) {
     const v = row.post ?? row.pre;
     if (v == null) continue;
     const name = label[row.theme] || row.theme;
-    if (v >= 4.0) strengths.push(`${name} is a strength (${v}/5).`);
-    else if (v < 3.0) risks.push(`${name} is a risk (${v}/5) and is likely costing time day to day.`);
+    if (v >= 4.0) {
+      strengths.push(`${name}: ${v}/5 — strong (4+). Protect it: keep, develop, and grow these people.`);
+    } else if (v >= 3.0) {
+      dev.push(`${name}: ${v}/5 — counts as a 3, under the 4.0 bar. Not a red flag, but it needs a clear development plan to reach a 4+.`);
+    } else {
+      red.push(`${name}: ${v}/5 — a red flag (1–2 band). A significant gap; address it directly and assess role fit.`);
+    }
   }
-  return { strengths: strengths.slice(0, 4), risks: risks.slice(0, 4) };
+  // Concerns surface red flags first (most severe), then development items. Everything under 4.0 is shown.
+  const concerns = [...red, ...dev];
+  return { strengths: strengths.slice(0, 4), risks: concerns.slice(0, 4), development: dev.slice(0, 4), red_flags: red.slice(0, 4) };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

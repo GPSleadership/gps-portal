@@ -4833,8 +4833,11 @@ function renderWorkshopTab(workshops) {
       var lastUpload = uploadedAt
         ? '<div style="color:#6b7280;font-size:12px;margin-top:6px;">Last upload: ' + uploadedAt + '</div>'
         : '<div style="color:#9ca3af;font-size:12px;margin-top:6px;">No roster uploaded yet.</div>';
+      var rosterHeading = (w.participant_count > 0)
+        ? 'Update your team'
+        : 'Step 1 — Add your team';
       uploadSection = '<div style="margin-top:16px;padding-top:16px;border-top:1px solid #e5e7eb;">'
-        + '<div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:8px;">Upload Participant Roster</div>'
+        + '<div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:8px;">' + rosterHeading + '</div>'
         + '<div style="font-size:12px;color:#6b7280;margin-bottom:10px;">Excel file (.xlsx). Required columns: First Name, Last Name, Email, Role/Title. Optional: Department, Region, Phone.</div>'
         + '<input type="file" id="rosterFile_' + w.id + '" accept=".xlsx,.xls" style="font-size:13px;">'
         + '<button onclick="submitRoster(\'' + w.id + '\')" style="margin-left:10px;padding:6px 14px;background:#004369;color:#fff;border:none;border-radius:4px;font-size:13px;font-weight:600;cursor:pointer;">Upload</button>'
@@ -4856,8 +4859,8 @@ function renderWorkshopTab(workshops) {
       + '</div>'
       + (w.client_org_name ? '<div style="color:#6b7280;font-size:13px;margin-bottom:4px;">' + w.client_org_name + '</div>' : '')
       + (w.workshop_date ? '<div style="color:#9ca3af;font-size:12px;margin-bottom:10px;">' + new Date(w.workshop_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) + '</div>' : '<div style="margin-bottom:10px;"></div>')
-      + participantLine
       + dashboardBtn
+      + participantLine
       + uploadSection
       + '</div>';
   });

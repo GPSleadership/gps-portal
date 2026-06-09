@@ -127,9 +127,9 @@
       var vals=[t.trust,t.proactivity,t.productivity].map(function(x){return x&&(x.post!=null?x.post:x.pre);}).filter(function(x){return x!=null;});
       var lo=vals.length?Math.min.apply(null,vals):null, hi=vals.length?Math.max.apply(null,vals):null;
       if(lo==null) return 'Your organizational read will appear here as responses come in.';
-      if(lo>=4) return 'A healthy read across the organization — trust, proactivity, and productivity are all at or above the healthy line. The opportunity is to protect what works and build bench strength.';
-      if(lo<3) return 'A candid read — at least one core area is below 3.0, which is low enough to be quietly costing time and money day to day. The focus areas below show where to start.';
-      return 'A solid baseline with clear room to move — the lower-scoring themes below are where focused work will pay off fastest.';
+      if(lo>=4) return 'A high-performing read — trust, proactivity, and productivity are all at or above the 4.0 bar. The opportunity is to protect what works and grow your strongest people.';
+      if(lo<3) return 'A candid read — at least one core area is below 3.0, a red flag that is quietly costing time and money day to day. The focus areas below show where to start, and where role fit may need a hard look.';
+      return 'A development read — your core areas are landing in the 3s, under the 4.0 bar we hold high-performing teams to. These are not red flags, but each one needs a clear plan to reach a 4+. The focus areas below show where to start.';
     }
     var ds=[t.trust,t.proactivity,t.productivity].map(function(x){return x&&x.delta;}).filter(function(x){return x!=null;});
     var gained=ds.length&&ds.every(function(x){return x>=0;});
@@ -211,7 +211,7 @@
       var rsk=(s.risks&&s.risks.length?s.risks:(d.findings&&d.findings.risks)||[]);
       html+='<div class="card"><div class="card-title" style="margin-bottom:14px"><span class="dot"></span>What the data says</div>';
       html+='<div class="theme-grid"><div class="theme-col"><div class="theme-head theme-good">Top strengths</div><ul class="theme-list">'+(str.length?str.map(function(x){return '<li>'+esc(x)+'</li>';}).join(''):'<li class="empty">Strengths appear once survey data is in.</li>')+'</ul></div>'+
-        '<div class="theme-col"><div class="theme-head theme-risk">Top risks</div><ul class="theme-list">'+(rsk.length?rsk.map(function(x){return '<li>'+esc(x)+'</li>';}).join(''):'<li class="empty">No notable risks surfaced.</li>')+'</ul></div></div>';
+        '<div class="theme-col"><div class="theme-head theme-risk">Where to focus (under the 4.0 bar)</div><ul class="theme-list">'+(rsk.length?rsk.map(function(x){return '<li>'+esc(x)+'</li>';}).join(''):'<li class="empty">Nothing under the 4.0 bar — strong across the board.</li>')+'</ul></div></div>';
       var focus=s.focus90||[];
       html+='<span class="focus-label">Recommended 90-day focus</span><div class="focus-box">'+(focus.length?'<ol class="focus-list" style="padding-left:18px;list-style:decimal">'+focus.map(focusItem).join('')+'</ol>':'<div class="empty">Your 90-day focus will appear after the debrief.</div>')+'</div></div>';
 

@@ -69,13 +69,24 @@ async function aggregate(workshopId) {
 function findings(agg) {
   const strengths = [], risks = [];
   const label = { trust: 'Trust', proactivity: 'Proactivity / ownership', productivity: 'Productivity / focus', delegation: 'Delegation', meetings: 'Meeting effectiveness', communication: 'Communication', satisfaction: 'Satisfaction' };
+  // GPS scoring standard on a 1–5 scale (no rounding up):
+  //   4.0–5.0 = strength (high-performing — keep, develop, grow)
+  //   3.0–3.99 = development zone (counts as a 3; under the 4.0 bar; needs a plan)
+  //   1.0–2.99 = red flag (significant gap; address directly and assess role fit)
+  const red = [], dev = [];
   for (const row of agg.themeTable) {
     const v = row.post ?? row.pre; if (v == null) continue;
     const name = label[row.theme] || row.theme;
-    if (v >= 4.0) strengths.push(`${name} is a strength (${v}/5).`);
-    else if (v < 3.0) risks.push(`${name} is a risk (${v}/5) and is likely costing time day to day.`);
+    if (v >= 4.0) {
+      strengths.push(`${name}: ${v}/5 — strong (4+). Protect it: keep, develop, and grow these people.`);
+    } else if (v >= 3.0) {
+      dev.push(`${name}: ${v}/5 — counts as a 3, under the 4.0 bar. Not a red flag, but it needs a clear development plan to reach a 4+.`);
+    } else {
+      red.push(`${name}: ${v}/5 — a red flag (1–2 band). A significant gap; address it directly and assess role fit.`);
+    }
   }
-  return { strengths: strengths.slice(0, 4), risks: risks.slice(0, 4) };
+  const concerns = [...red, ...dev];
+  return { strengths: strengths.slice(0, 4), risks: concerns.slice(0, 4), development: dev.slice(0, 4), red_flags: red.slice(0, 4) };
 }
 
 // Ordered lifecycle → timeline. Each milestone: state done|current|upcoming.
