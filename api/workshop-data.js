@@ -984,13 +984,14 @@ export default async function handler(req, res) {
       case 'get-workshop-sponsors': {
         const wid = body.workshop_id;
         if (!wid) return res.status(400).json({ error: 'workshop_id required' });
-        const links = await sbGet(`/rest/v1/workshop_sponsors?workshop_id=eq.${enc(wid)}&select=id,client_id,added_at&order=added_at.asc`);
+        const links = await sbGet(`/rest/v1/workshop_sponsors?workshop_id=eq.${enc(wid)}&select=id,client_id,added_at,sponsor_title&order=added_at.asc`);
         const sponsors = await Promise.all(links.map(async l => {
           const c = await sbOne(`/rest/v1/clients?id=eq.${enc(l.client_id)}&select=name,email,title,token&limit=1`);
           // Build portal link server-side; never send raw token to the browser.
           const PORTAL = process.env.PORTAL_BASE_URL || 'https://portal.gpsleadership.org';
           const portalLink = c?.token ? `${PORTAL}/client.html?token=${encodeURIComponent(c.token)}` : null;
-          return { ...l, name: c?.name || '', email: c?.email || '', title: c?.title || '', portalLink };
+          // Prefer the junction-level sponsor title (per-workshop) over the shared clients.title.
+          return { ...l, name: c?.name || '', email: c?.email || '', title: l.sponsor_title || c?.title || '', portalLink };
         }));
         return res.status(200).json({ ok: true, sponsors });
       }
@@ -1002,26 +1003,35 @@ export default async function handler(req, res) {
         const name  = (body.name  || '').trim();
         const title = (body.title || '').trim() || null;
         if (!wid || !email) return res.status(400).json({ error: 'workshop_id and email required' });
-        // Find or create client record
-        let client = await sbOne(`/rest/v1/clients?email=eq.${enc(email)}&select=id,name,title&limit=1`);
+        // Find or create the client record for this sponsor.
+        let client = await sbOne(`/rest/v1/clients?email=eq.${enc(email)}&select=id,name,title,in_coaching_program,is_workshop_participant&limit=1`);
+        let roleConflict = null;
         if (!client) {
           if (!name) return res.status(400).json({ error: 'name required when adding a new sponsor' });
           const ins = await sb('/rest/v1/clients', 'POST', {
             name, email, title, token: crypto.randomUUID(),
-            in_coaching_program: false, is_active: true,
+            in_coaching_program: false, is_active: true, is_sponsor: true,
           }, { Prefer: 'return=representation' });
           const rows = await ins.json().catch(() => []);
           client = Array.isArray(rows) ? rows[0] : rows;
           if (!client?.id) return res.status(500).json({ error: 'Failed to create sponsor record' });
-        } else if (title && !client.title) {
-          // Update title if provided and not already set
-          await sb(`/rest/v1/clients?id=eq.${enc(client.id)}`, 'PATCH', { title }, { Prefer: 'return=minimal' });
+        } else {
+          // Existing record — mark as sponsor, but never overwrite a coaching client's fields.
+          await sb(`/rest/v1/clients?id=eq.${enc(client.id)}`, 'PATCH', { is_sponsor: true }, { Prefer: 'return=minimal' });
+          if (client.in_coaching_program) roleConflict = 'coaching client';
+          else if (client.is_workshop_participant) roleConflict = 'workshop participant';
         }
-        // Insert into junction (ignore duplicate)
+        // Insert into junction (ignore duplicate). The sponsor's title lives on the junction,
+        // not on the (possibly shared) clients row.
         await sb('/rest/v1/workshop_sponsors', 'POST',
-          { workshop_id: wid, client_id: client.id },
+          { workshop_id: wid, client_id: client.id, sponsor_title: title },
           { Prefer: 'resolution=ignore,return=minimal' });
-        return res.status(200).json({ ok: true, client_id: client.id, name: client.name });
+        // Keep the single-field pointer in sync so the Overview + sponsor dashboard never go blank.
+        const w0 = await sbOne(`/rest/v1/workshops?id=eq.${enc(wid)}&select=sponsor_client_id&limit=1`);
+        if (w0 && !w0.sponsor_client_id) {
+          await sb(`/rest/v1/workshops?id=eq.${enc(wid)}`, 'PATCH', { sponsor_client_id: client.id }, { Prefer: 'return=minimal' });
+        }
+        return res.status(200).json({ ok: true, client_id: client.id, name: client.name, warning: roleConflict ? `This email already belongs to a ${roleConflict}; they are now also marked as a sponsor.` : null });
       }
 
       // Remove a sponsor from a workshop
@@ -1030,6 +1040,12 @@ export default async function handler(req, res) {
         const cid = body.client_id;
         if (!wid || !cid) return res.status(400).json({ error: 'workshop_id and client_id required' });
         await sb(`/rest/v1/workshop_sponsors?workshop_id=eq.${enc(wid)}&client_id=eq.${enc(cid)}`, 'DELETE');
+        // If we just removed the primary sponsor, repoint the single-field pointer to a remaining one (or clear it).
+        const wRem = await sbOne(`/rest/v1/workshops?id=eq.${enc(wid)}&select=sponsor_client_id&limit=1`);
+        if (wRem && wRem.sponsor_client_id === cid) {
+          const next = await sbOne(`/rest/v1/workshop_sponsors?workshop_id=eq.${enc(wid)}&select=client_id&order=added_at.asc&limit=1`);
+          await sb(`/rest/v1/workshops?id=eq.${enc(wid)}`, 'PATCH', { sponsor_client_id: next ? next.client_id : null }, { Prefer: 'return=minimal' });
+        }
         return res.status(200).json({ ok: true });
       }
 

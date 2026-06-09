@@ -1892,7 +1892,7 @@ function renderClients() {
     filtered = filtered.filter(c => diagIds.has(c.id));
   }
   if (wantMember)  filtered = filtered.filter(c => MEMBER_CLIENT_IDS.has(c.id));
-  if (wantSponsor) filtered = filtered.filter(c => SPONSOR_EMAILS.has((c.email || '').toLowerCase()));
+  if (wantSponsor) filtered = filtered.filter(c => c.is_sponsor || SPONSOR_EMAILS.has((c.email || '').toLowerCase()));
 
   // Quick chips
   if (clientChips.noplan) filtered = filtered.filter(c => !c.plan_submitted_at);
