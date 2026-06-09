@@ -30,8 +30,8 @@ const RESEND_API_KEY       = process.env.RESEND_API_KEY;
 const RESEND_FROM          = process.env.RESEND_FROM_EMAIL || 'noreply@portal.gpsleadership.org';
 const PORTAL_BASE_URL      = (process.env.PORTAL_BASE_URL || process.env.SITE_URL || 'https://portal.gpsleadership.org').replace(/\/$/, '');
 
-const CLAUDE_MODEL = 'claude-sonnet-4-6';
-const CLAUDE_FAST  = 'claude-haiku-4-5-20251001';
+const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
+const CLAUDE_FAST  = process.env.CLAUDE_FAST  || 'claude-haiku-4-5-20251001';
 const enc = encodeURIComponent;
 
 // ── Coach session verification (same HMAC scheme as coach-data.js) ───────────
@@ -145,7 +145,7 @@ async function aggregate(workshopId) {
     const ph = r.phase === 'post' ? 'post' : (r.phase === 'pre' ? 'pre' : null);
     if (!ph) continue;
     if (r.response_value != null && !isNaN(r.response_value)) {
-      if (String(r.question_id).startsWith('NPS')) { npsRaw[ph].push(Number(r.response_value)); continue; }
+      if (r.question_theme === 'nps' || /NPS/i.test(String(r.question_id))) { npsRaw[ph].push(Number(r.response_value)); continue; }
       const t = r.question_theme || 'other';
       (themesByPhase[ph][t] = themesByPhase[ph][t] || []).push(Number(r.response_value));
     } else if (r.response_text) {

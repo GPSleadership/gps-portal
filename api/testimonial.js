@@ -2,9 +2,12 @@
 // Testimonial & Referral Flywheel
 // All actions routed via ?action= query param
 
+import crypto from 'node:crypto';
+
 const SB_URL    = process.env.SUPABASE_URL;
 const SB_SECRET = process.env.SUPABASE_SECRET_KEY;
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+const COACH_SESSION_SECRET = process.env.COACH_SESSION_SECRET || '';
 
 const ALLOWED_SOURCES   = ['diagnostic_debrief', 'coaching_midpoint', 'engagement_end'];
 const ALLOWED_ENG_TYPES = ['diagnostic_only', 'diagnostic_plus_coaching'];
@@ -35,13 +38,21 @@ async function authClient(token) {
   return rows[0] || null;
 }
 
-async function authCoach(password) {
-  if (!password) return false;
-  const r = await sb(`/rest/v1/gps_settings?key=eq.coach_password&select=value&limit=1`);
-  if (!r.ok) return false;
-  const rows = await r.json();
-  const stored = rows[0]?.value || 'GPS2026';
-  return password === stored;
+// Coach auth now uses the same signed session as the rest of the portal — no plaintext
+// password, no GPS2026 fallback, and no dependency on the anon-writable gps_settings table.
+function verifyCoachSession(token) {
+  if (!token || !COACH_SESSION_SECRET) return null;
+  const parts = String(token).split('.');
+  if (parts.length !== 2) return null;
+  const expected = Buffer.from(crypto.createHmac('sha256', COACH_SESSION_SECRET).update(parts[0]).digest())
+    .toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const a = Buffer.from(parts[1]), b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  let payload;
+  try { payload = JSON.parse(Buffer.from(parts[0].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString()); }
+  catch { return null; }
+  if (!payload || payload.role !== 'coach' || typeof payload.exp !== 'number' || payload.exp < Date.now()) return null;
+  return payload;
 }
 
 async function extractBenefitSentence(testimonialResponses) {
@@ -261,7 +272,7 @@ async function handleMarkReferralSent(req, res) {
 
 async function handleCoachGetTestimonials(req, res) {
   const { coach_password, client_id } = req.body || {};
-  if (!await authCoach(coach_password)) return res.status(403).json({ error: 'Unauthorized' });
+  if (!verifyCoachSession((req.body || {}).session)) return res.status(403).json({ error: 'Unauthorized' });
   if (!client_id) return res.status(400).json({ error: 'client_id required' });
   const r = await sb(`/rest/v1/testimonials?client_id=eq.${client_id}&order=created_at.desc`);
   if (!r.ok) return res.status(500).json({ error: 'Fetch failed' });
@@ -270,7 +281,7 @@ async function handleCoachGetTestimonials(req, res) {
 
 async function handleCoachGetReferrals(req, res) {
   const { coach_password, client_id } = req.body || {};
-  if (!await authCoach(coach_password)) return res.status(403).json({ error: 'Unauthorized' });
+  if (!verifyCoachSession((req.body || {}).session)) return res.status(403).json({ error: 'Unauthorized' });
   if (!client_id) return res.status(400).json({ error: 'client_id required' });
   const r = await sb(`/rest/v1/referrals?referrer_client_id=eq.${client_id}&order=created_at.desc`);
   if (!r.ok) return res.status(500).json({ error: 'Fetch failed' });
@@ -279,7 +290,7 @@ async function handleCoachGetReferrals(req, res) {
 
 async function handleTogglePermission(req, res) {
   const { coach_password, testimonial_id, permission_public_use } = req.body || {};
-  if (!await authCoach(coach_password)) return res.status(403).json({ error: 'Unauthorized' });
+  if (!verifyCoachSession((req.body || {}).session)) return res.status(403).json({ error: 'Unauthorized' });
   if (!testimonial_id) return res.status(400).json({ error: 'testimonial_id required' });
   const r = await sb(`/rest/v1/testimonials?id=eq.${testimonial_id}`, 'PATCH', { permission_public_use: !!permission_public_use }, { Prefer: 'return=minimal' });
   if (!r.ok) return res.status(500).json({ error: 'Update failed' });
@@ -288,7 +299,7 @@ async function handleTogglePermission(req, res) {
 
 async function handleSetWinFlag(req, res) {
   const { coach_password, client_id, first_big_win_flag } = req.body || {};
-  if (!await authCoach(coach_password)) return res.status(403).json({ error: 'Unauthorized' });
+  if (!verifyCoachSession((req.body || {}).session)) return res.status(403).json({ error: 'Unauthorized' });
   if (!client_id) return res.status(400).json({ error: 'client_id required' });
   const r = await sb(`/rest/v1/clients?id=eq.${client_id}`, 'PATCH', { first_big_win_flag: !!first_big_win_flag, updated_at: new Date().toISOString() }, { Prefer: 'return=minimal' });
   if (!r.ok) return res.status(500).json({ error: 'Update failed' });
@@ -297,7 +308,7 @@ async function handleSetWinFlag(req, res) {
 
 async function handleSetEngagementType(req, res) {
   const { coach_password, client_id, engagement_type } = req.body || {};
-  if (!await authCoach(coach_password)) return res.status(403).json({ error: 'Unauthorized' });
+  if (!verifyCoachSession((req.body || {}).session)) return res.status(403).json({ error: 'Unauthorized' });
   if (!client_id) return res.status(400).json({ error: 'client_id required' });
   if (!ALLOWED_ENG_TYPES.includes(engagement_type)) return res.status(400).json({ error: 'Invalid engagement_type' });
   const r = await sb(`/rest/v1/clients?id=eq.${client_id}`, 'PATCH', { engagement_type, updated_at: new Date().toISOString() }, { Prefer: 'return=minimal' });
@@ -307,7 +318,7 @@ async function handleSetEngagementType(req, res) {
 
 async function handleUpdateConfig(req, res) {
   const { coach_password, key, value } = req.body || {};
-  if (!await authCoach(coach_password)) return res.status(403).json({ error: 'Unauthorized' });
+  if (!verifyCoachSession((req.body || {}).session)) return res.status(403).json({ error: 'Unauthorized' });
   if (!ALLOWED_CFG_KEYS.includes(key)) return res.status(400).json({ error: 'Invalid config key' });
   if (typeof value !== 'string') return res.status(400).json({ error: 'value must be a string' });
   const r = await sb('/rest/v1/gps_settings', 'POST', { key, value, updated_at: new Date().toISOString() }, { Prefer: 'resolution=merge-duplicates,return=minimal' });

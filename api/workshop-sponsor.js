@@ -32,6 +32,11 @@ const TP3_THEMES = ['trust', 'proactivity', 'productivity'];
 async function aggregate(workshopId) {
   const parts = await sbGet(`/rest/v1/workshop_participants?workshop_id=eq.${enc(workshopId)}&select=pre_status,post_status`);
   const resp  = await sbGet(`/rest/v1/workshop_responses?workshop_id=eq.${enc(workshopId)}&select=phase,question_theme,question_id,response_value,response_text`);
+  // Question source map — separates the standard (benchmarkable) core from client-added questions.
+  const qs = await sbGet(`/rest/v1/workshop_questions?workshop_id=eq.${enc(workshopId)}&select=question_id,source,question_text,response_type,question_theme`);
+  const qById = {}; for (const q of qs) qById[q.question_id] = q;
+  const isAdded = (qid) => { const q = qById[qid]; return !!(q && q.source && q.source !== 'standard'); };
+
   const total = parts.length;
   const preDone = parts.filter(p => p.pre_status === 'complete').length;
   const postDone = parts.filter(p => p.post_status === 'complete').length;
@@ -41,7 +46,8 @@ async function aggregate(workshopId) {
   for (const r of resp) {
     const ph = r.phase === 'post' ? 'post' : (r.phase === 'pre' ? 'pre' : null);
     if (!ph || r.response_value == null || isNaN(r.response_value)) continue;
-    if (String(r.question_id).startsWith('NPS')) { npsRaw[ph].push(Number(r.response_value)); continue; }
+    if (r.question_theme === 'nps' || /NPS/i.test(String(r.question_id))) { npsRaw[ph].push(Number(r.response_value)); continue; }
+    if (isAdded(r.question_id)) continue; // client-added questions are reported separately, never folded into TP3
     const t = r.question_theme || 'other';
     (themesByPhase[ph][t] = themesByPhase[ph][t] || []).push(Number(r.response_value));
   }
@@ -60,9 +66,26 @@ async function aggregate(workshopId) {
   let nps = null, npsAvg = null;
   if (npsScores.length) { const prom = npsScores.filter(s => s >= 9).length; const detr = npsScores.filter(s => s <= 6).length; nps = Math.round(((prom - detr) / npsScores.length) * 100); npsAvg = avg(npsScores); }
 
+  // Client-added questions — reported on their own, never mixed into the benchmarkable core.
+  const scoredMap = {}, qualMap = {};
+  for (const r of resp) {
+    if (!isAdded(r.question_id)) continue;
+    const q = qById[r.question_id];
+    if (q.response_type === 'text') {
+      qualMap[r.question_id] = qualMap[r.question_id] || { text: q.question_text, theme: q.question_theme || '', count: 0 };
+      if (r.response_text && String(r.response_text).trim()) qualMap[r.question_id].count++;
+    } else if (r.response_value != null && !isNaN(r.response_value)) {
+      scoredMap[r.question_id] = scoredMap[r.question_id] || { text: q.question_text, theme: q.question_theme || '', vals: [] };
+      scoredMap[r.question_id].vals.push(Number(r.response_value));
+    }
+  }
+  const addedScored = Object.values(scoredMap).map(a => ({ text: a.text, theme: a.theme, score: avg(a.vals), n: a.vals.length }));
+  const addedQualitative = Object.values(qualMap).map(a => ({ text: a.text, theme: a.theme, count: a.count }));
+
   return {
     participation: { total, pre: { done: preDone, rate: total ? Math.round((preDone / total) * 100) : 0 }, post: { done: postDone, rate: total ? Math.round((postDone / total) * 100) : 0 } },
     tp3, themeTable, nps, npsAvg,
+    added: { scored: addedScored, qualitative: addedQualitative },
   };
 }
 
@@ -190,6 +213,7 @@ export default async function handler(req, res) {
         focus90:   approved ? ((summary && summary.focus90) || []) : [],
       },
       themeTable: agg.themeTable,
+      added: agg.added,
       timeline: buildTimeline(w, agg),
       recommendation: approved ? rec : null,
       findings: approved ? f : { strengths: [], risks: [] },

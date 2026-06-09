@@ -178,6 +178,9 @@
     },
     "api/workshop-sponsor.js": {
       "maxDuration": 15
+    },
+    "api/health.js": {
+      "maxDuration": 10
     }
   }
 }

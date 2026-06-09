@@ -6,6 +6,10 @@ const SUPABASE_URL    = process.env.SUPABASE_URL    || 'https://pbnkefuqpoztcxfa
 const SUPABASE_SECRET = process.env.SUPABASE_SECRET_KEY;
 const PORTAL_ORIGIN   = process.env.PORTAL_BASE_URL || 'https://portal.gpsleadership.org';
 const ASK_DAILY_CAP   = 30; // server-side hard cap per client/day (UI shows a softer 20)
+// Model strings live in ONE place (env-overridable) so a model retirement is a single
+// Vercel env change, not a code edit across files. Defaults preserve current behavior.
+const CLAUDE_MODEL    = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
+const CLAUDE_FAST     = process.env.CLAUDE_FAST  || 'claude-haiku-4-5-20251001';
 
 // Validate a portal token server-side → returns the client row (or null).
 async function getClientByToken(token) {
@@ -68,7 +72,7 @@ Generate concrete, specific suggestions. Return ONLY valid JSON — no markdown,
           'anthropic-version': '2023-06-01'
         },
         body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
+          model: CLAUDE_FAST,
           max_tokens: 600,
           messages: [{ role: 'user', content: prefillPrompt }]
         })
@@ -104,7 +108,7 @@ Generate concrete, specific suggestions. Return ONLY valid JSON — no markdown,
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model: CLAUDE_MODEL,
         max_tokens: 1200,
         system,
         messages

@@ -170,6 +170,21 @@
       '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:var(--navy);color:#fff"><th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.4px">Theme</th><th style="padding:8px 10px;font-size:10px;text-transform:uppercase">Pre</th><th style="padding:8px 10px;font-size:10px;text-transform:uppercase">Post</th><th style="padding:8px 10px;font-size:10px;text-transform:uppercase">Post level</th><th style="padding:8px 10px;font-size:10px;text-transform:uppercase">Change</th></tr></thead><tbody>'+body+'</tbody></table></div>';
   }
 
+  function addedCard(added){
+    if(!added || ((!added.scored||!added.scored.length)&&(!added.qualitative||!added.qualitative.length))) return '';
+    var rows='';
+    (added.scored||[]).forEach(function(a){
+      var c=bandColor(a.score);
+      rows+='<div style="display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--gray-200);"><div style="flex:1;font-size:13px;color:#2b3a42;">'+esc(a.text)+'<div style="font-size:11px;color:var(--gray-600);">'+esc(a.theme||'')+' · '+a.n+' responses</div></div><div style="font-weight:800;color:'+c+';font-family:Montserrat,sans-serif;white-space:nowrap;">'+(a.score!=null?a.score+' / 5':'—')+'</div></div>';
+    });
+    var qual='';
+    if(added.qualitative&&added.qualitative.length){
+      qual='<div style="margin-top:10px;font-size:13px;"><div style="font-weight:700;color:#004369;margin-bottom:4px;">Open-ended questions you added</div><ul style="margin:0;padding-left:18px;color:#5a6b76;">'+added.qualitative.map(function(a){return '<li>'+esc(a.text)+' <span style="color:#94a3b8;">('+a.count+' responses — themes summarized in your debrief)</span></li>';}).join('')+'</ul></div>';
+    }
+    return '<div class="card"><div class="card-title" style="margin-bottom:6px"><span class="dot"></span>Your added questions</div>'
+      +'<div class="quick-read" style="margin-bottom:8px;">These are the questions you added beyond our standard assessment. They are reported on their own and are <strong>not</strong> folded into the TP3 Index, so your core scores stay comparable across assessments and against other organizations.</div>'
+      +rows+qual+'</div>';
+  }
   function render(d){
     if(!d||!d.ok){ view.innerHTML='<div class="card"><div class="empty">'+esc(d&&d.error||'Link not recognized.')+'</div></div>'; return; }
     var w=d.workshop, s=d.exec_summary||{}, rec=d.recommendation&&d.recommendation.primary;
@@ -188,13 +203,13 @@
     if(isA){
       html+='<div class="stat-grid" style="grid-template-columns:repeat(3,1fr)">'+
         '<div class="stat"><div class="v">'+(part.pre?part.pre.rate:0)+'%</div><div class="l">Response rate <span class="tip" title="% of invited participants who responded.">i</span></div></div>'+
-        '<div class="stat"><div class="v">'+(s.nps!=null?s.nps:'—')+'</div><div class="l">NPS <span class="tip" title="Promoters minus detractors; 50+ is strong.">i</span></div></div>'+
+        '<div class="stat"><div class="v">'+(s.nps!=null?s.nps:'—')+'</div><div class="l">Employee NPS <span class="tip" title="How likely your people are to recommend the organization as a place to work — employee advocacy, not a rating of GPS. Promoters minus detractors; 50+ is strong.">i</span></div></div>'+
         '<div class="stat"><div class="v">'+(part.total||0)+'</div><div class="l">Participants</div></div></div>';
     } else {
       html+='<div class="stat-grid">'+
         '<div class="stat"><div class="v">'+(part.pre?part.pre.rate:0)+'%</div><div class="l">Pre response <span class="tip" title="% of invited participants who responded.">i</span></div></div>'+
         '<div class="stat"><div class="v">'+(part.post?part.post.rate:0)+'%</div><div class="l">Post response <span class="tip" title="% of invited participants who responded.">i</span></div></div>'+
-        '<div class="stat"><div class="v">'+(s.nps!=null?s.nps:'—')+'</div><div class="l">Workshop NPS <span class="tip" title="Promoters minus detractors; 50+ is strong.">i</span></div></div>'+
+        '<div class="stat"><div class="v">'+(s.nps!=null?s.nps:'—')+'</div><div class="l">Session NPS <span class="tip" title="How likely participants are to recommend this workshop/session — a read on the delivery. Promoters minus detractors; 50+ is strong.">i</span></div></div>'+
         '<div class="stat"><div class="v">'+(part.total||0)+'</div><div class="l">Participants</div></div></div>';
     }
     var t=s.tp3||{};
@@ -203,8 +218,11 @@
       +'<span style="font-weight:700;color:#004369;">Why we measure against a 4.0 bar.</span> High-performing teams and organizations are built of 4s and 5s — so we hold every score to that standard on purpose. A <strong>4&ndash;5</strong> is a strength to protect, develop, and grow. A score in the <strong>3s</strong> is a development zone: not a failure, but not &ldquo;good enough&rdquo; either &mdash; it gets a clear plan to reach a 4+. A <strong>1&ndash;2</strong> is a red flag worth a direct, honest conversation. We don&rsquo;t grade on a curve, because your organization wasn&rsquo;t built to be average.'
       +'</div></div>';
 
-    // 1b) Results by theme (factual; always shown)
+    // 1b) Results by theme (factual; always shown) — standard TP3 core
     html+=themeCompareCard(d.themeTable, isA);
+
+    // 1c) Client-added questions — reported separately, never folded into the TP3 core
+    html+=addedCard(d.added);
 
     // 2) SO WHAT — interpretation (gated behind coach review/approval)
     if(d.finalizing){

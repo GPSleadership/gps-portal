@@ -44,8 +44,8 @@ function verifyCoachSession(tok) {
   return p;
 }
 
-const CLAUDE_MODEL        = 'claude-sonnet-4-6';
-const CLAUDE_REPORT_MODEL = 'claude-sonnet-4-6'; // Full-quality report model — requires Vercel Pro (120s timeout)
+const CLAUDE_MODEL        = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
+const CLAUDE_REPORT_MODEL = process.env.CLAUDE_REPORT_MODEL || process.env.CLAUDE_MODEL || 'claude-sonnet-4-6'; // Full-quality report model — requires Vercel Pro (120s timeout)
 
 // ── Supabase fetch helper ────────────────────────────────────────────────────
 function sb(path, method = 'GET', body = null, extra = {}) {
