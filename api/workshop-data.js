@@ -670,25 +670,39 @@ export default async function handler(req, res) {
           if (org) orgCtx = `Organization: ${org.name}\nIndustry: ${org.industry || ''}\nSize: ${org.size_band || ''}\nOrg notes: ${org.notes || ''}`;
         }
         const discovery = (w.discovery_transcript || w.discovery_notes || '(no discovery notes)').slice(0, 10000);
-        const ctx = `${orgCtx}\nWorkshop: ${w.title}\nAudience level: ${w.audience_level || ''}\nDiscovery notes:\n${discovery}`;
-        const sys = 'You are helping design a TP3 Organizational Assessment survey for an operations-heavy company. The base 21 questions cover trust/proactivity/productivity/NPS/qualitative/bottleneck — those are already included. Your job: propose 5-6 ADDITIONAL client-specific questions based on the discovery context. The mix MUST include: at least 2 additional scale questions (1-5, map to trust/proactivity/productivity), and at least 2 qualitative behavior-focused questions (start with "Describe a recent situation where..." or similar). Return ONLY JSON array: [{"question_id":"AI_V2_1","question_theme":"trust","question_text":"...","response_type":"scale"},{"question_id":"AI_V2_2","question_theme":"qualitative","question_text":"Describe a recent situation where...","response_type":"text"}]. No explanation outside the JSON.';
+        // Existing approved questions — so the AI only proposes ADDITIVE items, never duplicates.
+        const existing = await sbGet(`/rest/v1/workshop_questions?workshop_id=eq.${enc(body.workshop_id)}&status=eq.approved&select=question_text,question_theme&order=sort_order.asc`);
+        const existingList = existing.map(q => `- (${q.question_theme}) ${q.question_text}`).join('\n') || '(none yet)';
+        const ctx = `${orgCtx}\nWorkshop: ${w.title}\nAudience level: ${w.audience_level || ''}\n\nQUESTIONS ALREADY IN THIS SURVEY — do NOT duplicate, rephrase, or lightly reword any of these. Only add what is genuinely new:\n${existingList}\n\nDiscovery notes:\n${discovery}`;
+        const sys = 'You are helping design a TP3 Organizational Assessment survey for an operations-heavy company. The base questions (listed in the context) already cover trust/proactivity/productivity/overall/NPS plus qualitative and bottleneck items. Your job: propose 5-6 ADDITIONAL, client-specific questions from the discovery context that are genuinely ADDITIVE — each must fill a gap NOT already covered by an existing question. Never duplicate or reword an existing question; if a theme is already well covered, skip it rather than forcing a near-duplicate. The mix MUST include at least 2 scale questions (1-5, theme = trust, proactivity, or productivity) and at least 2 qualitative behavior questions (start with "Describe a recent situation where..."). Tag each with its theme so it can be placed next to related questions. Return ONLY a JSON array: [{"question_id":"AI_V2_1","question_theme":"trust","question_text":"...","response_type":"scale"},{"question_id":"AI_V2_2","question_theme":"qualitative","question_text":"Describe a recent situation where...","response_type":"text"}]. No text outside the JSON.';
         const text = await claude(CLAUDE_MODEL, sys, ctx, 1200);
         const arr = parseJsonLoose(text);
         if (!Array.isArray(arr)) return res.status(200).json({ ok: true, suggestions: [], raw: text });
-        const toInsert = arr.slice(0, 6).map((q, i) => ({
-          workshop_id:    body.workshop_id,
-          question_id:    q.question_id || `AI_V2_${Date.now()}_${i}`,
-          question_theme: q.question_theme || 'custom',
-          template_set:   'tp3_assessment',
-          phase:          'pre',
-          question_text:  q.question_text,
-          response_type:  q.response_type === 'text' ? 'text' : 'scale',
-          scale_min:      q.response_type === 'text' ? null : 1,
-          scale_max:      q.response_type === 'text' ? null : 5,
-          source:         'ai_suggested',
-          status:         'draft',
-          sort_order:     250 + i,
-        })).filter(q => q.question_text);
+        // Place each new question WITH its theme group. Scale themes slot just after their standard block;
+        // behavioral/qualitative items slot just before the fixed closing block (start/stop/continue, advice,
+        // bottleneck, consequence — sort_order 150-210), which always stays last.
+        const THEME_SLOT = { trust: 41, proactivity: 81, productivity: 121, overall: 131 };
+        const QUAL_SLOT = 145;
+        const slotCount = {};
+        const toInsert = arr.slice(0, 6).map((q, i) => {
+          const isText = q.response_type === 'text';
+          const base = isText ? QUAL_SLOT : (THEME_SLOT[q.question_theme] || QUAL_SLOT);
+          const n = (slotCount[base] = (slotCount[base] || 0) + 1) - 1;
+          return {
+            workshop_id:    body.workshop_id,
+            question_id:    q.question_id || `AI_V2_${Date.now()}_${i}`,
+            question_theme: q.question_theme || 'custom',
+            template_set:   'tp3_assessment',
+            phase:          'pre',
+            question_text:  q.question_text,
+            response_type:  isText ? 'text' : 'scale',
+            scale_min:      isText ? null : 1,
+            scale_max:      isText ? null : 5,
+            source:         'ai_suggested',
+            status:         'draft',
+            sort_order:     base + n,
+          };
+        }).filter(q => q.question_text);
         if (toInsert.length) await sb('/rest/v1/workshop_questions', 'POST', toInsert, { Prefer: 'return=minimal' });
         return res.status(200).json({ ok: true, suggestions: toInsert });
       }
