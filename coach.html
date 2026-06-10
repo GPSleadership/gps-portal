@@ -7472,9 +7472,7 @@ async function drSendSponsor(sponsorId){
       field('wsf_title','Title *','','e.g. Q3 Leadership Assessment')+
       '<div style="margin-bottom:12px;"><label style="display:block;font-size:12px;font-weight:700;color:#5a6b76;margin-bottom:4px;">'+(isA?'Client / organization *':'Client / organization')+'</label><input id="wsf_org" type="text" list="wsf_org_list" value="" placeholder="Type or select org name" style="width:100%;padding:9px 11px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:14px;font-family:inherit;"><datalist id="wsf_org_list">'+orgOpts+'</datalist>'+(isA?'<div style="margin-top:4px;"><a id="wsf_create_org" href="#" style="font-size:12px;color:#01949A;">+ Create new organization</a></div>':'')+'</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;"><div id="wsf_dateWrap"'+(isA?' style="display:none;"':'')+'>'+field('wsf_date','Workshop date','','','date')+'</div>'+field('wsf_debrief',(isA?'Debrief date *':'Debrief date'),'','','date')+'</div>'+
-      field('wsf_spname',(isA?'Sponsor / leader name *':'Sponsor / leader name'),'','Jane CEO')+
-      field('wsf_sptitle','Sponsor / leader title','','CEO')+
-      field('wsf_spemail',(isA?'Sponsor / leader email *':'Sponsor / leader email'),'','jane@acme.com')+
+      '<div style="margin-bottom:12px;padding:10px 12px;background:#F7F4EE;border:1px solid #dbe3e6;border-radius:7px;font-size:12px;color:#5a6b76;">You\'ll add the sponsor(s) and point of contact on the next screen — start typing a name and pick from your existing contacts.</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'+field('wsf_industry','Industry','','Trucking')+'<div style="margin-bottom:12px;"><label style="display:block;font-size:12px;font-weight:700;color:#5a6b76;margin-bottom:4px;">Audience level</label><select id="wsf_level" style="width:100%;padding:9px 11px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:14px;"><option value="">—</option><option value="executive">Executive</option><option value="manager">Manager</option><option value="mixed">Mixed</option><option value="na">N/A</option></select></div></div>'+
       field('wsf_size','Company size band','','$10–25M')+
       field('wsf_tags','Internal tags (comma-separated)','','trucking, assessment')+
@@ -7492,45 +7490,7 @@ async function drSendSponsor(sponsorId){
     var coa=document.getElementById('wsf_create_org');
     if(coa) coa.onclick=function(e){ e.preventDefault(); var nm=prompt('New organization name:'); if(!nm||!nm.trim()) return; document.getElementById('wsf_org').value=nm.trim(); document.getElementById('wsf_org_id').value='__create__'; };
 
-    // ── Sponsor duplicate check on Create form ──────────────────────────────
-    // Add a lookup notice element after the email field
-    var spEmailField=document.getElementById('wsf_spemail');
-    var spNotice=document.createElement('div');
-    spNotice.id='wsf_sp_notice';
-    spNotice.style.cssText='font-size:12px;margin-top:4px;padding:8px 10px;border-radius:6px;display:none;';
-    spEmailField.parentNode.insertBefore(spNotice, spEmailField.nextSibling);
-
-    spEmailField.addEventListener('blur', async function(){
-      var em=(this.value||'').trim().toLowerCase();
-      spNotice.style.display='none'; spNotice.textContent='';
-      if(!em||!em.includes('@')) return;
-      try{
-        var found=await cdSelect('clients',{eq:{email:em},select:'id,name,email,title,organization',limit:1});
-        if(found&&found.length){
-          var c=found[0];
-          spNotice.style.cssText='font-size:12px;margin-top:4px;padding:8px 10px;border-radius:6px;display:block;background:#ecfdf5;border:1px solid #6ee7b7;color:#065f46;';
-          spNotice.innerHTML='<strong>✓ Found in your system:</strong> '+esc(c.name||c.email)+(c.title?' · '+esc(c.title):'')+(c.organization?' · '+esc(c.organization):'')+'<br><span style="font-size:11px;color:#047857;">Their existing profile will be used — no duplicate created.</span>';
-          // Pre-fill name field
-          var nmEl=document.getElementById('wsf_spname');
-          if(nmEl&&!nmEl.value) nmEl.value=c.name||'';
-          var ttlEl=document.getElementById('wsf_sptitle');
-          if(ttlEl&&!ttlEl.value) ttlEl.value=c.title||'';
-        } else {
-          // No email match — check name for near-duplicate warning
-          var nmVal=(document.getElementById('wsf_spname').value||'').trim();
-          if(nmVal.length>2){
-            var byName=await cdSelect('clients',{ilike:{name:nmVal+'%'},select:'id,name,email',limit:3});
-            if(byName&&byName.length){
-              spNotice.style.cssText='font-size:12px;margin-top:4px;padding:8px 10px;border-radius:6px;display:block;background:#fffbeb;border:1px solid #fcd34d;color:#92400e;';
-              spNotice.innerHTML='<strong>⚠ Similar names in your system:</strong> '+byName.map(function(c){ return esc(c.name)+' ('+esc(c.email)+')'; }).join(', ')+'<br><span style="font-size:11px;">Different email — a new profile will be created. Double-check this isn\'t a duplicate.</span>';
-            } else {
-              spNotice.style.cssText='font-size:12px;margin-top:4px;padding:8px 10px;border-radius:6px;display:block;background:#f0f9ff;border:1px solid #bae6fd;color:#0c4a6e;';
-              spNotice.innerHTML='<span style="font-size:11px;color:#0369a1;">New person — a profile will be created for '+esc(em)+'.</span>';
-            }
-          }
-        }
-      }catch(_){}
-    });
+    // Sponsor / POC are added on the detail screen (with contact typeahead) — not on the create form.
   }
   async function wsCreate(){
     var title=v('wsf_title'); var err=document.getElementById('wsf_err');
@@ -7540,8 +7500,6 @@ async function drSendSponsor(sponsorId){
     var orgName=v('wsf_org'), orgId=v('wsf_org_id');
     if(isA&&!orgName){ err.textContent='Client / organization is required.'; return; }
     if(isA&&!v('wsf_debrief')){ err.textContent='Debrief date is required.'; return; }
-    if(isA&&!v('wsf_spname')){ err.textContent='Sponsor name is required.'; return; }
-    if(isA&&!v('wsf_spemail')){ err.textContent='Sponsor email is required.'; return; }
     document.getElementById('wsSave').disabled=true; err.textContent='Creating…';
     try{
       var tags=v('wsf_tags').split(',').map(function(s){return s.trim();}).filter(Boolean);
@@ -7556,15 +7514,13 @@ async function drSendSponsor(sponsorId){
         var r=await wsData('create-assessment',{
           title:title, org_name:orgName,
           org_id:(orgId&&orgId!=='__create__'?orgId:null),
-          debrief_date:v('wsf_debrief'), sponsor_name:v('wsf_spname'), sponsor_title:v('wsf_sptitle')||null, sponsor_email:v('wsf_spemail').toLowerCase(),
+          debrief_date:v('wsf_debrief'),
           industry:v('wsf_industry')||null, audience_level:v('wsf_level')||null, size_band:v('wsf_size')||null,
           tags:tags, is_demo:isDemo, logo_data_url:logoDataUrl
         });
         if(r.workshop_id) wsOpen(r.workshop_id); else wsRender();
       } else {
-        var sponsorId=null, spEmail=v('wsf_spemail').toLowerCase(), spName=v('wsf_spname');
-        if(spEmail){ var ex=await cdSelect('clients',{eq:{email:spEmail},limit:1}); if(ex&&ex.length) sponsorId=ex[0].id; else { var ins=await cdInsert('clients',{name:spName||spEmail,email:spEmail,organization:orgName||null,in_coaching_program:false,is_active:true}); sponsorId=(ins&&ins[0]&&ins[0].id)||null; } }
-        var rec=await cdInsert('workshops',{title:title,engagement_kind:'workshop',client_org_name:orgName||null,workshop_date:(v('wsf_date')||null),debrief_date:(v('wsf_debrief')||null),sponsor_client_id:sponsorId,industry:v('wsf_industry')||null,company_size_band:v('wsf_size')||null,audience_level:(v('wsf_level')||null),tags:tags,status:'setup',is_archived:false});
+        var rec=await cdInsert('workshops',{title:title,engagement_kind:'workshop',client_org_name:orgName||null,workshop_date:(v('wsf_date')||null),debrief_date:(v('wsf_debrief')||null),sponsor_client_id:null,industry:v('wsf_industry')||null,company_size_band:v('wsf_size')||null,audience_level:(v('wsf_level')||null),tags:tags,status:'setup',is_archived:false});
         var id=rec&&rec[0]&&rec[0].id; if(id) wsOpen(id); else wsRender();
       }
     }catch(e){ err.textContent='Error: '+e.message; document.getElementById('wsSave').disabled=false; }
@@ -7749,7 +7705,7 @@ async function drSendSponsor(sponsorId){
       (!w.roster_locked ? btn('wsLockRoster','🔒 Lock roster — surveys going out','danger') : '')+
       '<span id="wsLockOut" style="font-size:12px;color:#5a6b76;margin-left:8px;"></span>');
     p.innerHTML=rosterStatusCard+card('<div style="font-weight:800;margin-bottom:8px;color:#004369;">'+(isA?'Shared survey link (QR)':'In-room post-survey (QR)')+'</div><div style="font-size:13px;color:#5a6b76;margin-bottom:12px;">'+(isA?'One link for the whole organization — put the QR on a slide, in an email, or on a flyer.':'Run the post-survey live, ~20–30 min before the workshop ends.')+'</div><div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;"><div><div id="wsQrBox" style="width:200px;height:200px;background:#fff;border:1px solid #dbe3e6;border-radius:10px;display:flex;align-items:center;justify-content:center;padding:8px;"></div><div style="margin-top:10px;">'+btn('wsQrDl','Download PNG','ghost')+'</div></div><div style="flex:1;min-width:220px;">'+(isA?'':'<label style="font-size:12px;color:#5a6b76;font-weight:700;">Phase</label> <select id="wsQrPhase" style="padding:7px 10px;border:1.5px solid #dbe3e6;border-radius:7px;"><option value="post" selected>Post-workshop</option><option value="pre">Pre-workshop</option></select> ')+btn('wsQrGen','Update QR','ghost')+'<div style="font-size:12px;color:#004369;background:#F7F4EE;padding:10px;border-radius:7px;margin-top:10px;word-break:break-all;" id="wsQrLink">'+esc(roomLink)+'</div></div></div>')+
-    card('<div style="font-weight:800;margin-bottom:8px;color:#004369;">Upload roster</div><div style="font-size:13px;color:#5a6b76;margin-bottom:8px;">Paste CSV <strong>or</strong> drop an XLSX file — header: <code>name, email, role, location, department</code>.</div>'+
+    card('<div style="font-weight:800;margin-bottom:8px;color:#004369;">Upload roster</div><div style="font-size:13px;color:#5a6b76;margin-bottom:8px;">Paste CSV <strong>or</strong> upload an XLSX. <strong>Required:</strong> a <em>Name</em> column and an <em>Email</em> column. Optional: Title/Role, Department, Location. Header names are auto-detected — "Email Address", "Title", "Department/Area", "First Name"+"Last Name", etc. all work.</div>'+
       '<textarea id="wsRosterCsv" placeholder="name,email,role,location,department" style="width:100%;min-height:80px;border:1.5px solid #dbe3e6;border-radius:7px;padding:10px;font-family:monospace;font-size:13px;margin-bottom:8px;"></textarea>'+
       '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><label style="font-size:12px;font-weight:700;color:#5a6b76;">Or upload XLSX:</label><input type="file" id="wsRosterXlsx" accept=".xlsx,.xls" style="font-size:13px;flex:1;"></div>'+
       '<div style="margin-top:10px;">'+btn('wsUpload','Upload roster')+'</div><div id="wsRosterOut" style="font-size:13px;margin-top:8px;color:#5a6b76;"></div>')+
@@ -7800,8 +7756,8 @@ async function drSendSponsor(sponsorId){
     try{
       var ab=await new Promise(function(res,rej){ var fr=new FileReader(); fr.onload=function(){ res(fr.result); }; fr.onerror=rej; fr.readAsArrayBuffer(f); });
       var wb=XLSX.read(ab,{type:'array'}); var ws=wb.Sheets[wb.SheetNames[0]]; var json=XLSX.utils.sheet_to_json(ws,{defval:''});
-      var rows=json.map(function(r){ return {name:String(r.name||r.Name||'').trim(),email:String(r.email||r.Email||'').trim().toLowerCase(),role:String(r.role||r.Role||'').trim(),location:String(r.location||r.Location||r.site||'').trim(),department:String(r.department||r.Department||r.dept||'').trim()}; }).filter(function(r){return r.email&&r.name;});
-      if(!rows.length){ out.textContent='No valid rows found (need name and email columns).'; return; }
+      var rows=json.map(_rosterMapRow).filter(function(r){return r.email&&r.name;});
+      if(!rows.length){ out.textContent='No valid rows found — need at least a Name column and an Email column.'; return; }
       out.textContent='Uploading '+rows.length+' rows…';
       document.getElementById('wsUpload').disabled=true;
       var result=await wsData('upload-roster',{workshop_id:WS.cur.id,rows:rows});
@@ -7820,7 +7776,21 @@ async function drSendSponsor(sponsorId){
   function wsDownloadQR(){ var box=document.getElementById('wsQrBox'); if(!box) return; var cv=box.querySelector('canvas'), img=box.querySelector('img'); var data=cv?cv.toDataURL('image/png'):(img?img.src:null); if(!data){ toast('Generate the QR first.'); return; } var a=document.createElement('a'); a.href=data; a.download='workshop-post-survey-qr.png'; document.body.appendChild(a); a.click(); a.remove(); }
   function parseCsv(text){ var lines=text.split(/\r?\n/).filter(function(l){return l.trim();}); if(!lines.length) return []; var header=splitCsvLine(lines[0]).map(function(h){return h.trim().toLowerCase();}); return lines.slice(1).map(function(l){ var cells=splitCsvLine(l); var o={}; header.forEach(function(h,i){ o[h]=(cells[i]||'').trim(); }); return o; }); }
   function splitCsvLine(line){ var out=[],cur='',q=false; for(var i=0;i<line.length;i++){ var ch=line[i]; if(q){ if(ch==='"'&&line[i+1]==='"'){cur+='"';i++;} else if(ch==='"'){q=false;} else cur+=ch; } else { if(ch==='"')q=true; else if(ch===','){out.push(cur);cur='';} else cur+=ch; } } out.push(cur); return out; }
-  async function wsUploadRoster(){ var out=document.getElementById('wsRosterOut'); var rows=parseCsv(document.getElementById('wsRosterCsv').value).filter(function(r){return r.email&&r.name;}); if(!rows.length){ out.textContent='No valid rows found (need name and email).'; return; } out.textContent='Uploading '+rows.length+' people…'; document.getElementById('wsUpload').disabled=true; try{ var r=await wsData('upload-roster',{ workshop_id:WS.cur.id, rows:rows }); out.textContent='Done — '+r.created+' new profiles, '+r.linked+' linked, '+r.skipped+' skipped.'; wsOpen(WS.cur.id); }catch(e){ out.textContent=e.message; document.getElementById('wsUpload').disabled=false; } }
+  // Flexible header matcher — pick the first column whose (BOM-stripped, trimmed, lowercased) name is in `keys`.
+  function _rosterPick(o, keys){ for(var k in o){ var lk=String(k).replace(/^﻿/,'').trim().toLowerCase(); if(keys.indexOf(lk)>-1){ var v=o[k]; if(v!=null&&String(v).trim()) return String(v).trim(); } } return ''; }
+  // Map an arbitrary parsed row → the canonical {name,email,role,department,location}. Only name+email are required.
+  function _rosterMapRow(o){
+    var name=_rosterPick(o,['name','full name','fullname','rater','participant','participant name','contact','contact name','employee','employee name']);
+    if(!name){ var fn=_rosterPick(o,['first name','firstname','first','given name']); var ln=_rosterPick(o,['last name','lastname','last','surname','family name']); name=(fn+' '+ln).trim(); }
+    return {
+      name: name,
+      email: _rosterPick(o,['email','email address','e-mail','e mail','emailaddress','email_address','work email']).toLowerCase(),
+      role: _rosterPick(o,['role','title','job title','jobtitle','position','rater type','rater relationship','relationship']),
+      department: _rosterPick(o,['department','department/area','department / area','dept','area','division','team','department/division']),
+      location: _rosterPick(o,['location','site','region','office','city','branch'])
+    };
+  }
+  async function wsUploadRoster(){ var out=document.getElementById('wsRosterOut'); var rows=parseCsv(document.getElementById('wsRosterCsv').value).map(_rosterMapRow).filter(function(r){return r.email&&r.name;}); if(!rows.length){ out.textContent='No valid rows found — need at least a Name column and an Email column.'; return; } out.textContent='Uploading '+rows.length+' people…'; document.getElementById('wsUpload').disabled=true; try{ var r=await wsData('upload-roster',{ workshop_id:WS.cur.id, rows:rows }); out.textContent='Done — '+r.created+' new profiles, '+r.linked+' linked, '+r.skipped+' skipped.'; wsOpen(WS.cur.id); }catch(e){ out.textContent=e.message; document.getElementById('wsUpload').disabled=false; } }
   async function wsSendInvites(phase){ if(!confirm('Send '+phase+'-survey invites to all '+WS.parts.length+' participants?')) return; try{ var r=await wsData('send-invites',{ workshop_id:WS.cur.id, phase:phase }); toast('Sent '+r.sent+' of '+r.total+' '+phase+'-survey invites.'); wsOpen(WS.cur.id); }catch(e){ toast(e.message); } }
 
   function wsQuestions(p){ function group(phase){ var qs=WS.questions.filter(function(q){return q.phase===phase;}); var rows=qs.map(function(q){ var sc=q.status==='approved'||q.status==='live'?'#1A7A3A':(q.status==='draft'?'#BF6A00':'#dc2626'); var act=''; if(q.status==='draft'){ act+=btn('qa_'+q.id,'Approve','ghost')+btn('qr_'+q.id,'Reject','danger'); } act+=btn('qe_'+q.id,'Edit','ghost')+btn('qx_'+q.id,'Remove','danger'); return '<tr style="border-top:1px solid #dbe3e6;"><td style="padding:8px 10px;">'+esc(q.question_text)+'<div style="font-size:11px;color:#94a3b8;">'+esc(q.question_theme||'')+' · '+esc(q.response_type)+' · '+esc(q.source)+'</div></td><td style="padding:8px 10px;color:'+sc+';font-weight:700;font-size:12px;">'+esc(q.status)+'</td><td style="padding:8px 10px;white-space:nowrap;">'+act+'</td></tr>'; }).join(''); return card('<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;"><div style="font-weight:800;text-transform:capitalize;color:#004369;">'+(WS.cur.engagement_kind==='assessment'?'Assessment questions':(phase+'-workshop questions'))+' ('+qs.length+')</div><div>'+(phase==='pre'?btn('wsAiPre','AI suggest from discovery','ghost'):btn('wsAiPost','AI from pre-data','ghost'))+'</div></div>'+(qs.length?'<table style="width:100%;border-collapse:collapse;font-size:13px;"><tbody>'+rows+'</tbody></table>':'<div style="color:#5a6b76;">No '+phase+' questions yet. Standard templates seed automatically; participants fall back to them until you add workshop-specific ones.</div>')+'<div style="margin-top:12px;border-top:1px dashed #dbe3e6;padding-top:12px;"><input id="wsq_text_'+phase+'" placeholder="Add a custom '+phase+' question" style="width:100%;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;margin-bottom:6px;"><div style="display:flex;gap:6px;flex-wrap:wrap;"><input id="wsq_theme_'+phase+'" placeholder="theme (e.g. trust)" style="flex:1;min-width:120px;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;"><select id="wsq_type_'+phase+'" style="padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;"><option value="scale">scale 1-5</option><option value="numeric">numeric</option><option value="text">text</option></select>'+btn('wsAdd_'+phase,'Add')+'</div></div>'); }
