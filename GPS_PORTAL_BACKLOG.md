@@ -33,6 +33,38 @@ _Last updated: 2026-06-05_
       resolution: keep it frictionless for clients (token links, no password — unchanged);
       add named logins only on the COACH/admin side, where the user count is tiny and the
       audit trail actually matters. That gets the security without taxing client adoption._
+- [ ] **Engagement roles: Sponsor vs POC (point of contact / coordinator).** CONFIRMED design
+      (2026-06-09): a person is attached to an engagement with a ROLE, not a fixed profile.
+      **Sponsor** = results owner (dashboard, TP3, NPS, findings, recommendation, report) AND may
+      do logistics. **POC** = logistics owner (upload roster/participant/rater list, review &
+      approve questions, see status/timeline) but **NEVER sees results or report data.** One
+      person can hold both. Applies to **both** workshops/assessments AND diagnostics (on a 360
+      the POC is the HR/chief-of-staff coordinator who provides the rater list + reviews custom
+      questions but must not see who said what — this is a CONFIDENTIALITY feature, the headline
+      selling point). Data: `workshop_sponsors.role` + per-contact `access_token`; diagnostics get
+      `poc_name/poc_email/poc_token`. Portal gates surfaces by role (POC token → logistics only;
+      results require sponsor/leader). Backward-compatible: today's sponsor = "sponsor who also
+      coordinates." (Migration v47.)
+- [ ] **In-portal client/sponsor question review & approval (kills the email back-and-forth) — PHASE 2, full loop.**
+      Routed to whoever owns logistics (POC if present, else Sponsor for assessments / leader-side
+      coordinator for diagnostics).
+      Today the coach generates questions and reviews them in the console; getting the
+      client's sign-off is manual email. Build a tokenized client-facing review flow that
+      works for BOTH products:
+      - Coach clicks **"Send for review"** on the proposed questions → emails the sponsor/leader
+        a link ("Your questions are ready — take a quick look").
+      - **Review page (token-gated, mobile-first):** shows the proposed/AI questions clearly
+        separated from the standard core; each question has **Approve / Request change (comment)
+        / inline Edit**, plus an **Approve all**. Read-only on the standard core.
+      - On submit: update question status (draft → approved, or → needs_edit with the client's
+        note/edit), advance the workshop status (sponsor_review → ready), and notify the coach.
+      - Reuse existing plumbing: `workshop_questions.status` already supports draft/approved/
+        rejected; assessment uses the sponsor/`workshop_sponsors` link, diagnostic uses
+        `leader_token` for the custom G1/G2 questions. New endpoint actions: `get-review-questions(token)`,
+        `submit-question-review(token, decisions)`, and a coach `send-questions-for-review`.
+      - **Phasing:** Phase 1 = a read-only shareable preview link (low effort, lets them SEE
+        the questions in-portal instead of pasted into email). Phase 2 = full approve / request-
+        change / edit-in-place + status flow + notifications. Phase 1 alone removes most friction.
 - [ ] **Upgrade Supabase free → Pro (~$25/mo) for backups + reliability.** The portal's data
       and report PDFs live on the Supabase FREE plan today. It works, but: no automatic DB
       backups / point-in-time recovery (current backups are the manual local zips), and the
