@@ -4839,7 +4839,7 @@ function renderWorkshopTab(workshops) {
       uploadSection = '<div style="margin-top:16px;padding-top:16px;border-top:1px solid #e5e7eb;">'
         + '<div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:8px;">' + rosterHeading + '</div>'
         + '<div style="font-size:12px;color:#6b7280;margin-bottom:10px;">Excel (.xlsx) or CSV. <strong>Required:</strong> Name and Email. Optional: Title, Department, Location. <a href="#" onclick="downloadRosterTemplate();return false;" style="color:#01949A;font-weight:600;">Download template ↓</a></div>'
-        + '<input type="file" id="rosterFile_' + w.id + '" accept=".xlsx,.xls" style="font-size:13px;">'
+        + '<input type="file" id="rosterFile_' + w.id + '" accept=".xlsx,.xls,.csv" style="font-size:13px;">'
         + '<button onclick="submitRoster(\'' + w.id + '\')" style="margin-left:10px;padding:6px 14px;background:#004369;color:#fff;border:none;border-radius:4px;font-size:13px;font-weight:600;cursor:pointer;">Upload</button>'
         + '<div id="rosterStatus_' + w.id + '" style="font-size:12px;margin-top:8px;color:#065f46;"></div>'
         + lastUpload

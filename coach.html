@@ -7707,7 +7707,7 @@ async function drSendSponsor(sponsorId){
     p.innerHTML=rosterStatusCard+card('<div style="font-weight:800;margin-bottom:8px;color:#004369;">'+(isA?'Shared survey link (QR)':'In-room post-survey (QR)')+'</div><div style="font-size:13px;color:#5a6b76;margin-bottom:12px;">'+(isA?'One link for the whole organization — put the QR on a slide, in an email, or on a flyer.':'Run the post-survey live, ~20–30 min before the workshop ends.')+'</div><div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;"><div><div id="wsQrBox" style="width:200px;height:200px;background:#fff;border:1px solid #dbe3e6;border-radius:10px;display:flex;align-items:center;justify-content:center;padding:8px;"></div><div style="margin-top:10px;">'+btn('wsQrDl','Download PNG','ghost')+'</div></div><div style="flex:1;min-width:220px;">'+(isA?'':'<label style="font-size:12px;color:#5a6b76;font-weight:700;">Phase</label> <select id="wsQrPhase" style="padding:7px 10px;border:1.5px solid #dbe3e6;border-radius:7px;"><option value="post" selected>Post-workshop</option><option value="pre">Pre-workshop</option></select> ')+btn('wsQrGen','Update QR','ghost')+'<div style="font-size:12px;color:#004369;background:#F7F4EE;padding:10px;border-radius:7px;margin-top:10px;word-break:break-all;" id="wsQrLink">'+esc(roomLink)+'</div></div></div>')+
     card('<div style="font-weight:800;margin-bottom:8px;color:#004369;">Upload roster</div><div style="font-size:13px;color:#5a6b76;margin-bottom:8px;">Paste CSV <strong>or</strong> upload an XLSX. <strong>Required:</strong> a <em>Name</em> column and an <em>Email</em> column. Optional: Title/Role, Department, Location. Header names are auto-detected — "Email Address", "Title", "Department/Area", "First Name"+"Last Name", etc. all work. <a href="#" id="wsRosterTpl" style="color:#01949A;font-weight:700;">Download template ↓</a></div>'+
       '<textarea id="wsRosterCsv" placeholder="name,email,role,location,department" style="width:100%;min-height:80px;border:1.5px solid #dbe3e6;border-radius:7px;padding:10px;font-family:monospace;font-size:13px;margin-bottom:8px;"></textarea>'+
-      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><label style="font-size:12px;font-weight:700;color:#5a6b76;">Or upload XLSX:</label><input type="file" id="wsRosterXlsx" accept=".xlsx,.xls" style="font-size:13px;flex:1;"></div>'+
+      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><label style="font-size:12px;font-weight:700;color:#5a6b76;">Or upload a file (XLSX or CSV):</label><input type="file" id="wsRosterXlsx" accept=".xlsx,.xls,.csv" style="font-size:13px;flex:1;"></div>'+
       '<div style="margin-top:10px;">'+btn('wsUpload','Upload roster')+'</div><div id="wsRosterOut" style="font-size:13px;margin-top:8px;color:#5a6b76;"></div>')+
     card('<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;" id="wsRosterHdr"><div style="font-weight:800;color:#004369;">Participants ('+WS.parts.length+')</div><div>'+btn('wsSendPre',(isA?'Send survey emails (not-sent)':'Send pre-survey'))+(isA?'':btn('wsSendPost','Send post-survey (email)','ghost'))+'</div></div><div id="wsRosterTable"><div style="color:#5a6b76;font-size:13px;">Loading roster…</div></div>');
     wsRenderQR(); document.getElementById('wsQrGen').onclick=wsRenderQR; document.getElementById('wsQrDl').onclick=wsDownloadQR;
@@ -7752,12 +7752,18 @@ async function drSendSponsor(sponsorId){
   }
   async function wsUploadRosterXlsx(){
     var f=this.files&&this.files[0]; if(!f) return;
-    var out=document.getElementById('wsRosterOut'); out.textContent='Parsing XLSX…';
+    var out=document.getElementById('wsRosterOut'); out.textContent='Parsing file…';
     if(typeof XLSX==='undefined'){ out.textContent='SheetJS not loaded. Refresh and try again.'; return; }
     try{
-      var ab=await new Promise(function(res,rej){ var fr=new FileReader(); fr.onload=function(){ res(fr.result); }; fr.onerror=rej; fr.readAsArrayBuffer(f); });
-      var wb=XLSX.read(ab,{type:'array'}); var ws=wb.Sheets[wb.SheetNames[0]]; var json=XLSX.utils.sheet_to_json(ws,{defval:''});
-      var rows=json.map(_rosterMapRow).filter(function(r){return r.email&&r.name;});
+      var rows;
+      if(/\.csv$/i.test(f.name)){
+        var text=await new Promise(function(res,rej){ var fr=new FileReader(); fr.onload=function(){ res(fr.result); }; fr.onerror=rej; fr.readAsText(f); });
+        rows=parseCsv(text).map(_rosterMapRow).filter(function(r){return r.email&&r.name;});
+      } else {
+        var ab=await new Promise(function(res,rej){ var fr=new FileReader(); fr.onload=function(){ res(fr.result); }; fr.onerror=rej; fr.readAsArrayBuffer(f); });
+        var wb=XLSX.read(ab,{type:'array'}); var ws=wb.Sheets[wb.SheetNames[0]]; var json=XLSX.utils.sheet_to_json(ws,{defval:''});
+        rows=json.map(_rosterMapRow).filter(function(r){return r.email&&r.name;});
+      }
       if(!rows.length){ out.textContent='No valid rows found — need at least a Name column and an Email column.'; return; }
       out.textContent='Uploading '+rows.length+' rows…';
       document.getElementById('wsUpload').disabled=true;
