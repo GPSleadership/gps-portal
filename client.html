@@ -4838,7 +4838,7 @@ function renderWorkshopTab(workshops) {
         : 'Step 1 — Add your team';
       uploadSection = '<div style="margin-top:16px;padding-top:16px;border-top:1px solid #e5e7eb;">'
         + '<div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:8px;">' + rosterHeading + '</div>'
-        + '<div style="font-size:12px;color:#6b7280;margin-bottom:10px;">Excel file (.xlsx). Required columns: First Name, Last Name, Email, Role/Title. Optional: Department, Region, Phone.</div>'
+        + '<div style="font-size:12px;color:#6b7280;margin-bottom:10px;">Excel (.xlsx) or CSV. <strong>Required:</strong> Name and Email. Optional: Title, Department, Location. <a href="#" onclick="downloadRosterTemplate();return false;" style="color:#01949A;font-weight:600;">Download template ↓</a></div>'
         + '<input type="file" id="rosterFile_' + w.id + '" accept=".xlsx,.xls" style="font-size:13px;">'
         + '<button onclick="submitRoster(\'' + w.id + '\')" style="margin-left:10px;padding:6px 14px;background:#004369;color:#fff;border:none;border-radius:4px;font-size:13px;font-weight:600;cursor:pointer;">Upload</button>'
         + '<div id="rosterStatus_' + w.id + '" style="font-size:12px;margin-top:8px;color:#065f46;"></div>'
@@ -4869,6 +4869,16 @@ function renderWorkshopTab(workshops) {
 }
 
 // ── Roster upload handler ──────────────────────────────────────────────────
+window.downloadRosterTemplate = function() {
+  var csv = 'Name,Email,Title,Department,Location\r\n'
+    + 'Jane Doe,jane.doe@company.com,Director of Operations,Operations,Dallas\r\n';
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'GPS_Roster_Template.csv';
+  document.body.appendChild(a); a.click();
+  setTimeout(function() { URL.revokeObjectURL(a.href); a.remove(); }, 100);
+};
+
 window.submitRoster = async function(workshopId) {
   var fileInput  = document.getElementById('rosterFile_' + workshopId);
   var statusEl   = document.getElementById('rosterStatus_' + workshopId);
@@ -4901,41 +4911,22 @@ window.submitRoster = async function(workshopId) {
       return;
     }
 
-    // Normalise header keys (lower-case, strip spaces/underscores)
-    function norm(k) { return String(k).toLowerCase().replace(/[\s_\-\/]+/g, ''); }
-    var normRows = rows.map(function(r) {
-      var o = {};
-      Object.keys(r).forEach(function(k) { o[norm(k)] = r[k]; });
-      return o;
-    });
-
-    // Map to canonical field names
-    var fieldMap = {
-      first_name:  ['firstname', 'first'],
-      last_name:   ['lastname', 'last'],
-      email:       ['email', 'emailaddress'],
-      role_title:  ['roletitle', 'role', 'title', 'jobtitle', 'position'],
-      department:  ['department', 'dept'],
-      region:      ['region', 'location'],
-      phone:       ['phone', 'phonenumber', 'mobile']
-    };
-
-    var participants = normRows.map(function(r) {
-      var p = {};
-      Object.keys(fieldMap).forEach(function(field) {
-        fieldMap[field].forEach(function(alias) {
-          if (!p[field] && r[alias] !== undefined && r[alias] !== '') {
-            p[field] = String(r[alias]).trim();
-          }
-        });
-      });
-      return p;
-    }).filter(function(p) {
-      return p.first_name && p.last_name && p.email && p.role_title;
-    });
+    // Flexible header matcher — a single "Name" column OR First+Last; only Name + Email required.
+    function pick(r, keys) { for (var k in r) { var lk = String(k).replace(/^﻿/, '').trim().toLowerCase(); if (keys.indexOf(lk) > -1) { var v = r[k]; if (v != null && String(v).trim()) return String(v).trim(); } } return ''; }
+    var participants = rows.map(function(r) {
+      var name = pick(r, ['name', 'full name', 'fullname', 'participant', 'participant name', 'contact', 'contact name', 'employee', 'employee name']);
+      if (!name) { var fn = pick(r, ['first name', 'firstname', 'first', 'given name']); var ln = pick(r, ['last name', 'lastname', 'last', 'surname', 'family name']); name = (fn + ' ' + ln).trim(); }
+      return {
+        name: name,
+        email: pick(r, ['email', 'email address', 'e-mail', 'e mail', 'emailaddress', 'email_address', 'work email']).toLowerCase(),
+        role: pick(r, ['role', 'title', 'job title', 'jobtitle', 'position']),
+        department: pick(r, ['department', 'department/area', 'department / area', 'dept', 'area', 'division']),
+        location: pick(r, ['location', 'site', 'region', 'office', 'city'])
+      };
+    }).filter(function(p) { return p.name && p.email; });
 
     if (participants.length === 0) {
-      statusEl.textContent = 'No valid rows found. Make sure First Name, Last Name, Email, and Role/Title columns are present.';
+      statusEl.textContent = 'No valid rows found — make sure there is a Name column and an Email column.';
       return;
     }
 

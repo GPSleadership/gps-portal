@@ -108,6 +108,49 @@ async function sendEmail(to, subject, html) {
   } catch (e) { return { ok: false, error: e.message }; }
 }
 
+// Send one email to multiple recipients (visibility copies / notifications).
+async function sendEmailMulti(toArr, subject, html) {
+  const uniq = Array.from(new Set((toArr || []).map(e => String(e || '').trim().toLowerCase()).filter(Boolean)));
+  if (!RESEND_API_KEY || !uniq.length) return { ok: false };
+  try {
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: `Alex Tremble – GPS Leadership <${RESEND_FROM}>`, to: uniq, subject, html }),
+    });
+    return { ok: r.ok };
+  } catch (e) { return { ok: false }; }
+}
+
+// Visibility list for "survey went out" notifications: Alex + admin always, plus the
+// engagement's sponsor(s) and POC(s).
+async function engagementNotifyList(workshopId, workshop) {
+  const list = ['alex@gpsleadership.org', 'team@gpsleadership.org'];
+  try {
+    const links = await sbGet(`/rest/v1/workshop_sponsors?workshop_id=eq.${enc(workshopId)}&select=client_id`);
+    for (const l of links) {
+      const c = await sbOne(`/rest/v1/clients?id=eq.${enc(l.client_id)}&select=email&limit=1`);
+      if (c?.email) list.push(c.email);
+    }
+    if (workshop && workshop.sponsor_client_id) {
+      const sc = await sbOne(`/rest/v1/clients?id=eq.${enc(workshop.sponsor_client_id)}&select=email&limit=1`);
+      if (sc?.email) list.push(sc.email);
+    }
+  } catch (e) {}
+  return Array.from(new Set(list.map(e => String(e).trim().toLowerCase()).filter(Boolean)));
+}
+
+// One "here's what just went out" copy to the visibility list (not a CC on every participant email).
+async function notifySurveyDispatched(workshop, phase, sent, sampleHtml) {
+  if (!sent) return;
+  const to = await engagementNotifyList(workshop.id, workshop);
+  const org = workshop.client_org_name ? ` (${workshop.client_org_name})` : '';
+  const when = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+  const html = `<p>The ${phase}-survey for <strong>${workshop.title}</strong>${org} just went out to <strong>${sent}</strong> participant${sent === 1 ? '' : 's'} — ${when} ET.</p>`
+    + `<p style="color:#5a6b76;font-size:13px;">Visibility copy for the GPS team, sponsor, and point of contact. Below is exactly what each participant received.</p><hr>${sampleHtml}`;
+  try { await sendEmailMulti(to, `[Sent] ${workshop.title} — ${phase}-survey went out to ${sent}`, html); } catch (e) {}
+}
+
 // ── Anthropic call → returns text ────────────────────────────────────────────
 async function claude(model, system, userText, maxTokens = 1200) {
   if (!ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY not set');
@@ -430,6 +473,7 @@ export default async function handler(req, res) {
         if (phase === 'pre')  { patch.pre_survey_open_at  = w.pre_survey_open_at  || isoNow(); patch.status = 'pre_survey_open'; }
         else                  { patch.post_survey_open_at = w.post_survey_open_at || isoNow(); patch.status = 'post_survey_open'; }
         await sb(`/rest/v1/workshops?id=eq.${enc(body.workshop_id)}`, 'PATCH', patch, { Prefer: 'return=minimal' });
+        await notifySurveyDispatched(w, phase, sent, inviteHtml('[Participant]', w, phase, `${PORTAL_BASE_URL}/workshop-survey?token=SAMPLE&phase=${phase}`));
         return res.status(200).json({ ok: true, sent, total: parts.length });
       }
 
@@ -772,6 +816,7 @@ export default async function handler(req, res) {
             { pre_survey_open_at: isoNow(), status: 'pre_survey_open', updated_at: isoNow() },
             { Prefer: 'return=minimal' });
         }
+        await notifySurveyDispatched(w, 'pre', sent, inviteHtml('[Participant]', w, 'pre', `${PORTAL_BASE_URL}/workshop-survey?token=SAMPLE&phase=pre`));
         return res.status(200).json({ ok: true, sent, total: parts.length, skipped: parts.length - sent });
       }
 
