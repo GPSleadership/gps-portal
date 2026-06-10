@@ -20,6 +20,25 @@ _Last updated: 2026-06-05_
       Generation fills them; quick inline edit by the coach is a fast-follow.
 - [ ] **(Optional) General, project-agnostic "safe build" skill.** Deferred — only needed
       if a second live external-facing portal appears.
+- [ ] **Per-person logins / named user accounts (individual auth).** Today it's a single
+      shared coach password → one signed session. The `admin_accounts` table (hashed
+      passwords, is_active) is the foundation. Build = named accounts + per-user sessions
+      (session token already carries a role; add a user identity) + a light audit log of
+      who did what. **Trigger, not a date:** the first second human in the coach console
+      (EA / VA / associate), OR the first government/enterprise client whose security review
+      asks "who can access our data" — whichever comes first. Given the gov/mid-market
+      pipeline (e.g. JMAA), the client-driven trigger may be 1–2 engagements out.
+      _Open tension Alex is weighing: more auth = more security + audit trail, but also more
+      friction, and people already have too many passwords — friction lowers adoption. Likely
+      resolution: keep it frictionless for clients (token links, no password — unchanged);
+      add named logins only on the COACH/admin side, where the user count is tiny and the
+      audit trail actually matters. That gets the security without taxing client adoption._
+- [ ] **Upgrade Supabase free → Pro (~$25/mo) for backups + reliability.** The portal's data
+      and report PDFs live on the Supabase FREE plan today. It works, but: no automatic DB
+      backups / point-in-time recovery (current backups are the manual local zips), and the
+      1 GB storage + bandwidth ceilings will fill as report PDFs accumulate. Now that the
+      portal is business-critical, Pro is worth it mainly for the automatic backups — worth
+      doing before/around a major engagement, not for capacity.
 
 ## Done (recent)
 - Decision Room: team-tied reports, branded-PDF model, AI recommendations (GPS-aligned,

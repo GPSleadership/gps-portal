@@ -1,11 +1,45 @@
 # GPS Leadership Portal — Survival Package
 ### Everything needed to recreate this system from scratch
 
-**Last updated:** June 8, 2026 (Installable PWA + branded icons; Owner/Assistant RBAC; coach nav refactor; mobile pass; My Results fix — see Section 16. Plus Workshop Module v35–v39 — Section 15; Decision Room v27–v34 — Section 14)
+**Last updated:** June 9, 2026 (Security hardening F1/F3/F4/F5/F9; GPS 4.0 scoring standard platform-wide; client-added-questions split; Employee vs Session NPS; sponsor-model unify + dashboard-first portal; assessment question tooling — see Section 17. Prior: PWA/RBAC/nav — Section 16; Workshop Module — Section 15; Decision Room — Section 14)
 **GitHub repo:** https://github.com/GPSleadership/gps-portal
 **Live URL:** https://portal.gpsleadership.org
 **Coach dashboard:** https://portal.gpsleadership.org/coach
 **Client portal:** https://portal.gpsleadership.org/client
+
+---
+
+## 17. June 9, 2026 — Security hardening, 4.0 scoring standard, added-questions, NPS, sponsor model
+
+**Database migrations (all applied to prod via MCP; files in repo):**
+- **v44 — lock `ghl_export_view` (F1, was the one live data leak).** The view was `SECURITY DEFINER` with `SELECT` granted to `anon`/`authenticated`, so the publishable key could read every leader's name/email/role + TP3 scores + `diagnostic_id`, bypassing the v26 RLS lockdown. Fix: `ALTER VIEW … SET (security_invoker = true)` + `REVOKE SELECT … FROM anon, authenticated`. Verified no live consumer (Make.com scenarios pull FROM GoHighLevel; they don't read this view).
+- **v45 — unify the workshop sponsor model.** Added `clients.is_sponsor` (flag), `workshop_sponsors.sponsor_title` (per-engagement title, so we stop patching a shared client row). Backfilled `is_sponsor` for existing sponsors and synced `workshops.sponsor_client_id` from the `workshop_sponsors` junction where it had drifted to NULL (this is what made JMAA's sponsors show as "none").
+- **v46 — pin `search_path` (F9)** on `update_updated_at`, `update_updated_at_column`, `get_survey_scoreboard`, `increment_ask_alex`. Advisor WARN cleared.
+
+**New serverless function:** `api/health.js` → `/api/health`. Returns 200 when the DB is reachable and `SUPABASE_SECRET_KEY` is present (503 otherwise). Point UptimeRobot/BetterStack here. Registered in `vercel.json` (maxDuration 10).
+
+**Security posture after today:** F1 (data leak) and F3 (testimonial auth) CLOSED; F4/F5/F9 done. **F2 deferred** — `diagnostic-reports` bucket is still public, but it's no longer enumerable now that F1 closed (the IDs aren't leaked anywhere), so it's defense-in-depth, not a live hole. F2 = add a token-gated signed-URL endpoint + update the leader/coach/team-report surfaces, THEN flip the bucket private; do it on a branch with a preview test, never a blind flip. **F8 (CORS) consciously skipped** — every endpoint is token/session-authed so it's low value, and tightening risks conflicting `Access-Control-Allow-Origin` headers with functions that set their own.
+
+**F3 — `api/testimonial.js` coach auth cutover.** Was reading `gps_settings.coach_password` (plaintext) with a hardcoded `GPS2026` fallback — and `gps_settings` is anon-writable, so an outsider could overwrite the password and authenticate. Replaced `authCoach(password)` with `verifyCoachSession(session)` (HMAC-SHA256, same signed session as `coach-data.js`; needs `COACH_SESSION_SECRET`). No frontend currently calls these coach actions, so nothing breaks; a future testimonial-admin UI must send the coach session token as `session`.
+- **NOTE — legacy `gps_*` anon policies intentionally LEFT in place.** `gps_settings`, `gps_notes`, `gps_coach_uploads` still have anon UPDATE/INSERT `USING(true)` policies (advisor WARN). They are NOT retired because `gps-ea-console.html` and `gps-executive-console*.html` read/write those tables directly with the anon key. Securing them is a separate project: route those consoles through an authed endpoint first, then drop the policies.
+
+**Model strings → env vars (F4).** `ask.js`, `diagnostic.js`, `workshop-data.js` now read `CLAUDE_MODEL` / `CLAUDE_FAST` (and `CLAUDE_REPORT_MODEL` in diagnostic.js) from env, defaulting to today's models. A model retirement is now a one-place Vercel env change, not a 3-file edit.
+
+**GPS 4.0 scoring standard — platform-wide (no rounding up).** 4.0–5.0 = strength (keep/grow); 3.0–3.99 = development zone (counts as a 3; under the bar; "not good enough," never "solid"); 1.0–2.99 = red flag (role-fit). Enforced in `findings()` in `workshop-sponsor.js` + `workshop-data.js`, the `workshop-room.html` narrative/labels/colors + a "Why we measure against a 4.0 bar" callout under the TP3 tiles, and `diagnostic.js` (tier scale rewritten so 3.x is never "Solid"; verbatim 4.0 standard inserted at the top of the report's Overview). The workshop recommendation engine's "weak" threshold moved 3.5 → 4.0, so a development recommendation fires unless every theme is 4+.
+
+**Client-added-questions split (measurement integrity).** The TP3 Index is now computed from STANDARD questions ONLY (`workshop_questions.source = 'standard'`). Client-added questions (`ai_suggested` / `custom`) are reported separately — `workshop-sponsor.js` `aggregate()` returns `added: { scored, qualitative }`, and `workshop-room.html` renders a "Your added questions" card (scored add-ons with the 4.0 band colors; open-ended shown as response COUNTS only, never verbatim, to preserve aggregate confidentiality). This keeps the core benchmarkable across clients.
+
+**NPS — detection fix + context labels.** Detection was `question_id.startsWith('NPS')`, which missed the standard `TP3_NPS_1` (theme `nps`); now matches `question_theme === 'nps'` OR `/NPS/i`. Labels are engagement-aware: assessments show **Employee NPS** (would-recommend-as-a-place-to-work = advocacy, NOT a rating of GPS); workshops show **Session NPS** (recommend the session = delivery).
+
+**Sponsor portal + profile fixes.** `api/get-client.js` now admits sponsors/participants (not just coaching clients), so sponsor links open. Sponsor portal is **dashboard-first**: each workshop card leads with "View Your Dashboard →" (`api/portal-data.js` `my-workshops` returns a server-built `dashboard_url`), roster demoted to "Step 1 — Add your team"; a sponsor with no active workshop gets a warm holding screen, not the lock screen or the coaching wizard. **Blank client profile fixed** — `renderProfileSection` in coach.html referenced `esc()`/`toast()` (trapped in the workshop IIFE) and `industryDatalist` (defined in a different function); added global `esc`/`toast` and a local `industryDatalist`. The coach "Sponsor" filter now keys off `is_sponsor`. add/remove-workshop-sponsor keep `sponsor_client_id` synced and store the title on the junction; a warning surfaces when an added email already belongs to a coaching client/participant.
+
+**Assessment question tooling.** Standard questions are now editable/removable per-assessment in the coach Questions tab (each assessment holds its own copy; the global template bank is untouched). AI-suggested questions: (a) the action now receives the existing approved questions and is told to propose only ADDITIVE, non-duplicative items; (b) new questions are sorted INTO their theme group via a slot map (trust→41, proactivity→81, productivity→121, behavioral→145) so the survey flows, while the fixed closing block (START/STOP/CONTINUE → ADVICE → bottleneck → "if we do NOT improve…", sort 150–210) always stays last; (c) AI drafts now have Edit (not just Approve/Reject). Assessments created via the "+ New assessment" button auto-seed the ~21 standard TP3 questions (the `create-assessment` action) — a raw-SQL-created assessment will NOT have them.
+
+**Infra / cost reality.** **Supabase is on the FREE plan** → no automatic backups (only the manual local zips) and 1 GB storage / bandwidth ceilings that report PDFs will fill. Recommend Supabase Pro (~$25/mo) mainly for backups now that the portal is business-critical. Other free tiers in play: Resend (3k emails/mo), Make.com (1k ops/mo). Paid today: Vercel Pro, Anthropic (usage).
+
+**New env vars this round:** `CLAUDE_MODEL`, `CLAUDE_FAST`, `CLAUDE_REPORT_MODEL` (all optional, default to current models); `COACH_SESSION_SECRET` now also required by `api/testimonial.js`.
+
+**Git handoff reminder (reinforced — this bit Alex today):** run git from INSIDE the repo — `cd "$HOME/Documents/Claude/Projects/Tool Creation"` — commands from `~` fail with "not a git repository." Do NOT use `git add -A` (the folder holds multi-GB zips); add specific files. Migrations are applied to prod directly via the Supabase tool, so a code push only needs the changed `.js`/`.html`/`.json`/migration-record files.
 
 ---
 
