@@ -7809,17 +7809,32 @@ async function drSendSponsor(sponsorId){
     try{
       var r=await wsData('get-roster',{workshop_id:WS.cur.id});
       var parts=r.participants||[];
+      var wsOrg=(r.workshop_org||WS.cur.client_org_name||'').trim();
       // Update count header
       var hdr=document.getElementById('wsRosterHdr'); if(hdr){ var d=hdr.querySelector('div'); if(d) d.textContent='Participants ('+parts.length+')'; }
       if(!parts.length){ tbl.innerHTML='<div style="color:#5a6b76;">No participants yet — upload a roster.</div>'; return; }
       var rows=parts.map(function(pt){
         var resend=isA?btn('wsResend_'+pt.id,'Resend','ghost'):'';
-        return '<tr style="border-top:1px solid #dbe3e6;"><td style="padding:8px 10px;">'+esc(pt.name||'—')+'</td><td style="padding:8px 10px;font-size:12px;color:#5a6b76;">'+esc(pt.email||'—')+'</td><td style="padding:8px 10px;font-size:12px;">'+esc(pt.role||'—')+'</td><td style="padding:8px 10px;font-size:12px;">'+esc(pt.department||'—')+'</td><td style="padding:8px 10px;">'+pill(pt.display_status)+'</td><td style="padding:8px 10px;white-space:nowrap;">'+resend+btn('wsRmPart_'+pt.id,'Remove','danger')+'</td></tr>';
+        // Org cell: green dot + name when tied to this engagement; otherwise show whatever's on file (or em-dash).
+        var orgTxt = pt.tied_to_org
+          ? '<span title="Tied to this engagement">●</span> '+esc(pt.organization||wsOrg)
+          : (pt.organization ? esc(pt.organization) : '<span style="color:#9aa7ad;">—</span>');
+        var orgCell='<td style="padding:8px 10px;font-size:12px;color:'+(pt.tied_to_org?'#2e7d32':'#5a6b76')+';">'+orgTxt+'</td>';
+        var tieBtn = wsOrg ? btn('wsTie_'+pt.id, pt.tied_to_org?'Untie':'Tie to org', 'ghost') : '';
+        return '<tr style="border-top:1px solid #dbe3e6;"><td style="padding:8px 10px;">'+esc(pt.name||'—')+'</td><td style="padding:8px 10px;font-size:12px;color:#5a6b76;">'+esc(pt.email||'—')+'</td><td style="padding:8px 10px;font-size:12px;">'+esc(pt.role||'—')+'</td>'+orgCell+'<td style="padding:8px 10px;">'+pill(pt.display_status)+'</td><td style="padding:8px 10px;white-space:nowrap;">'+resend+tieBtn+btn('wsRmPart_'+pt.id,'Remove','danger')+'</td></tr>';
       }).join('');
-      tbl.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#F7F4EE;text-align:left;color:#5a6b76;font-size:11px;text-transform:uppercase;"><th style="padding:8px 10px;">Name</th><th style="padding:8px 10px;">Email</th><th style="padding:8px 10px;">Role</th><th style="padding:8px 10px;">Dept</th><th style="padding:8px 10px;">Status</th><th style="padding:8px 10px;"></th></tr></thead><tbody>'+rows+'</tbody></table>';
+      tbl.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#F7F4EE;text-align:left;color:#5a6b76;font-size:11px;text-transform:uppercase;"><th style="padding:8px 10px;">Name</th><th style="padding:8px 10px;">Email</th><th style="padding:8px 10px;">Role</th><th style="padding:8px 10px;">Organization</th><th style="padding:8px 10px;">Status</th><th style="padding:8px 10px;"></th></tr></thead><tbody>'+rows+'</tbody></table>';
       parts.forEach(function(pt){
         var rb=document.getElementById('wsResend_'+pt.id);
         if(rb) rb.onclick=async function(){ this.disabled=true; this.textContent='Sending…'; try{ var r2=await wsData('resend-survey-email',{participant_id:pt.id}); this.textContent=r2.ok?'Sent':'Error'; setTimeout(function(){ wsLoadRoster(); },1500); }catch(e){ this.textContent='Error'; toast(e.message); } };
+        var tb=document.getElementById('wsTie_'+pt.id);
+        if(tb) tb.onclick=async function(){
+          var untie=pt.tied_to_org;
+          if(untie && !confirm('Untie '+(pt.name||'this person')+' from '+(wsOrg||'this organization')+'?\n\nUse this when they actually work for a different company. Their profile organization will be cleared so you can set the right one.')) return;
+          this.disabled=true; this.textContent=untie?'Untying…':'Tying…';
+          try{ await wsData('set-participant-org',{client_id:pt.client_id,workshop_id:WS.cur.id,mode:untie?'untie':'tie'}); toast(untie?'Untied — set their company on their profile.':'Tied to '+wsOrg+'.'); wsLoadRoster(); }
+          catch(e){ this.textContent='Error'; toast(e.message); }
+        };
         var rm=document.getElementById('wsRmPart_'+pt.id);
         if(rm) rm.onclick=async function(){ if(!confirm('Remove '+(pt.name||'this participant')+' from the roster?')) return; this.disabled=true; this.textContent='Removing…'; try{ await wsData('remove-participant',{participant_id:pt.id}); WS.parts=await cdSelect('workshop_participants',{eq:{workshop_id:WS.cur.id},order:{col:'created_at',asc:true}}); wsLoadRoster(); }catch(e){ this.textContent='Error'; toast(e.message); } };
       });

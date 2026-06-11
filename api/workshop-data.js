@@ -348,22 +348,34 @@ export default async function handler(req, res) {
         const workshopId = body.workshop_id;
         const rows = Array.isArray(body.rows) ? body.rows : [];
         if (!workshopId || !rows.length) return res.status(400).json({ error: 'workshop_id and rows required' });
+        // The org running this engagement — everyone added inherits it unless their row
+        // specifies a different org or they already have one on file.
+        const wForOrg = await sbOne(`/rest/v1/workshops?id=eq.${enc(workshopId)}&select=client_org_name&limit=1`);
+        const workshopOrg = (wForOrg?.client_org_name || '').trim() || null;
         let created = 0, linked = 0, skipped = 0;
         for (const raw of rows) {
           const name  = (raw.name || '').trim();
           const email = (raw.email || '').trim().toLowerCase();
           if (!email || !name) { skipped++; continue; }
+          const rowOrg = (raw.org || '').trim() || null;
           // One profile per person: find existing client by email first.
-          let client = await sbOne(`/rest/v1/clients?email=eq.${enc(email)}&select=id&limit=1`);
+          let client = await sbOne(`/rest/v1/clients?email=eq.${enc(email)}&select=id,organization&limit=1`);
           if (!client) {
             const ins = await sb('/rest/v1/clients', 'POST', {
-              name, email, title: raw.role || null, organization: raw.org || null,
+              // Row org wins; otherwise inherit the engagement's org.
+              name, email, title: raw.role || null, organization: rowOrg || workshopOrg,
               is_workshop_participant: true, in_coaching_program: false, is_active: true,
             }, { Prefer: 'return=representation' });
             const cr = await ins.json().catch(() => []);
             client = Array.isArray(cr) ? cr[0] : cr;
             if (!client?.id) { skipped++; continue; }
             created++;
+          } else {
+            // Existing person: fill org only when it's blank, so we never clobber a real value.
+            const wantOrg = rowOrg || workshopOrg;
+            if (wantOrg && !(client.organization || '').trim()) {
+              await sb(`/rest/v1/clients?id=eq.${enc(client.id)}`, 'PATCH', { organization: wantOrg }, { Prefer: 'return=minimal' });
+            }
           }
           // Link to workshop (idempotent on workshop_id+client_id).
           const link = await sb('/rest/v1/workshop_participants?on_conflict=workshop_id,client_id', 'POST', {
@@ -1037,16 +1049,38 @@ export default async function handler(req, res) {
       // ── Get roster with full client details (name, email, status) ────────────
 
       case 'get-roster': {
+        const wOrgRow = await sbOne(`/rest/v1/workshops?id=eq.${enc(body.workshop_id)}&select=client_org_name&limit=1`);
+        const wOrg = (wOrgRow?.client_org_name || '').trim();
         const parts = await sbGet(`/rest/v1/workshop_participants?workshop_id=eq.${enc(body.workshop_id)}&select=id,client_id,role,department,location,pre_status,post_status,invited_at,last_reminder_at&order=created_at.asc`);
         const enriched = await Promise.all(parts.map(async p => {
-          const c = await sbOne(`/rest/v1/clients?id=eq.${enc(p.client_id)}&select=name,email&limit=1`);
+          const c = await sbOne(`/rest/v1/clients?id=eq.${enc(p.client_id)}&select=name,email,organization&limit=1`);
           let status = 'not_sent';
           if (p.pre_status === 'complete') status = 'completed';
           else if (p.last_reminder_at) status = 'reminder_sent';
           else if (p.invited_at) status = 'sent';
-          return { ...p, name: c?.name || '', email: c?.email || '', display_status: status };
+          const org = (c?.organization || '').trim();
+          // tied_to_org = their profile org matches the engagement's org.
+          const tiedToOrg = !!wOrg && org.toLowerCase() === wOrg.toLowerCase();
+          return { ...p, name: c?.name || '', email: c?.email || '', organization: org, tied_to_org: tiedToOrg, display_status: status };
         }));
-        return res.status(200).json({ ok: true, participants: enriched });
+        return res.status(200).json({ ok: true, participants: enriched, workshop_org: wOrg });
+      }
+
+      // ── Tie / untie a participant's profile org to this engagement's org ───────
+      // tie:   set the client's organization to the engagement org.
+      // untie: clear it (used when a participant actually works for a different company).
+      case 'set-participant-org': {
+        const clientId = body.client_id;
+        if (!clientId) return res.status(400).json({ error: 'client_id required' });
+        let org = null;
+        if (body.mode === 'tie') {
+          const wRow = await sbOne(`/rest/v1/workshops?id=eq.${enc(body.workshop_id)}&select=client_org_name&limit=1`);
+          org = (wRow?.client_org_name || '').trim() || null;
+        } else if (typeof body.organization === 'string') {
+          org = body.organization.trim() || null;   // explicit value (e.g. a different company)
+        } // else untie → null
+        await sb(`/rest/v1/clients?id=eq.${enc(clientId)}`, 'PATCH', { organization: org }, { Prefer: 'return=minimal' });
+        return res.status(200).json({ ok: true, organization: org });
       }
 
       // ── Workshop sponsor management (multi-sponsor via workshop_sponsors) ─────
@@ -1127,6 +1161,24 @@ export default async function handler(req, res) {
         await sb(`/rest/v1/workshops?id=eq.${enc(wid)}`, 'PATCH',
           { roster_locked: true, updated_at: isoNow() },
           { Prefer: 'return=minimal' });
+        return res.status(200).json({ ok: true });
+      }
+
+      // Unlock the roster so it can be edited again (coach override).
+      case 'unlock-roster': {
+        const wid = body.workshop_id;
+        if (!wid) return res.status(400).json({ error: 'workshop_id required' });
+        await sb(`/rest/v1/workshops?id=eq.${enc(wid)}`, 'PATCH',
+          { roster_locked: false, updated_at: isoNow() },
+          { Prefer: 'return=minimal' });
+        return res.status(200).json({ ok: true });
+      }
+
+      // Remove a single participant (coach only; works even when the roster is locked).
+      case 'remove-participant': {
+        const pid = body.participant_id;
+        if (!pid) return res.status(400).json({ error: 'participant_id required' });
+        await sb(`/rest/v1/workshop_participants?id=eq.${enc(pid)}`, 'DELETE', null, { Prefer: 'return=minimal' });
         return res.status(200).json({ ok: true });
       }
 
