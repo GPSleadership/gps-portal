@@ -89,8 +89,18 @@ export default async function handler(req, res) {
     } catch (_) { /* if the check fails, fall through to insert */ }
   }
 
+  const existedCount = skipped.filter(s => /already exists/i.test(s.reason)).length;
+  const invalidCount = skipped.length - existedCount;
+
   if (records.length === 0) {
-    return res.status(400).json({ error: 'No new clients to import (all already exist or were invalid).', skipped });
+    // Not an error — most commonly everyone on the list is already a client.
+    return res.status(200).json({
+      success:       true,
+      imported:      0,
+      already_exist: existedCount,
+      invalid:       invalidCount,
+      skipped,
+    });
   }
 
   // Bulk insert using service role key
@@ -116,9 +126,11 @@ export default async function handler(req, res) {
   const inserted = await insertRes.json();
 
   return res.status(200).json({
-    success:  true,
-    imported: inserted.length,
-    skipped:  skipped.length > 0 ? skipped : undefined,
-    clients:  inserted,
+    success:       true,
+    imported:      inserted.length,
+    already_exist: existedCount,
+    invalid:       invalidCount,
+    skipped:       skipped.length > 0 ? skipped : undefined,
+    clients:       inserted,
   });
 }

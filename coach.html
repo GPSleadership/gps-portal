@@ -3266,8 +3266,28 @@ async function confirmImport() {
       return;
     }
 
+    const imported = result.imported || 0;
+    const existed  = result.already_exist || 0;
+    const invalid  = result.invalid || 0;
+
+    // Build a plain-language summary of what happened.
+    let msg;
+    if (imported > 0) {
+      msg = `✅ ${imported} new client${imported !== 1 ? 's' : ''} added.`;
+      const notes = [];
+      if (existed) notes.push(`${existed} already in your list (skipped)`);
+      if (invalid) notes.push(`${invalid} skipped — missing name/email`);
+      if (notes.length) msg += `\n\n${notes.join('\n')}`;
+    } else if (existed && !invalid) {
+      msg = `Everyone on this list (${existed}) is already in your client list — nothing new to add. You'll find them under Active Clients; set up their diagnostic from there.`;
+    } else if (existed && invalid) {
+      msg = `Nothing new to add: ${existed} already in your list, ${invalid} skipped for missing name/email.`;
+    } else {
+      msg = `No clients added — ${invalid} row${invalid !== 1 ? 's were' : ' was'} missing a name or email.`;
+    }
+
     closeImportModal();
-    alert(`✅ ${result.imported} client${result.imported !== 1 ? 's' : ''} imported successfully${result.skipped ? ` (${result.skipped} skipped due to missing data)` : ''}.`);
+    alert(msg);
     await loadDashboard();
   } catch (err) {
     errEl.textContent = 'Error: ' + err.message;
