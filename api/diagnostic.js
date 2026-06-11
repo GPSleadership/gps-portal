@@ -899,12 +899,13 @@ function formatRaterGroupDataForPrompt(gd, diag) {
     { label: 'BENCH (F1–F2)', codes: ['F1','F2'] },
   ];
   if (diag.custom_g1_question) ITEM_SECTIONS.push({ label: 'G1 VISION ALIGNMENT', codes: ['G1'] });
-  if (diag.custom_g2_question) ITEM_SECTIONS.push({ label: 'G2 GPS GAP PROBE', codes: ['G2'] });
+  if (diag.custom_g2_question) ITEM_SECTIONS.push({ label: 'G2 CUSTOM QUESTION', codes: ['G2'] });
+  if (diag.custom_g3_question) ITEM_SECTIONS.push({ label: 'G3 CUSTOM QUESTION', codes: ['G3'] });
 
   for (const { label, codes } of ITEM_SECTIONS) {
     lines.push(`\n${label}:`);
     for (const c of codes) {
-      const qText = QUESTIONS[c] || (c === 'G1' ? diag.custom_g1_question : diag.custom_g2_question) || c;
+      const qText = QUESTIONS[c] || (c === 'G1' ? diag.custom_g1_question : c === 'G2' ? diag.custom_g2_question : c === 'G3' ? diag.custom_g3_question : null) || c;
       const vals = GRPS.map(([g]) => f(gd[g]?.avgScores?.[c]).padStart(5)).join(' | ');
       lines.push(`  ${c}: ${qText.slice(0, 65)}${qText.length > 65 ? '…' : ''}`);
       lines.push(`     → ${vals}  (DR | Peer | Supr | IntP | Self | All-Oth)`);
@@ -1136,7 +1137,7 @@ async function handleGenerateReport(req, res) {
 
   try {
     const diagRes = await sb(
-      `/rest/v1/diagnostics?id=eq.${diagnostic_id}&select=id,client_id,client_name,client_title,client_org,close_date,tier,custom_g1_question,custom_g2_question,self_three_year_vision,self_future_self_capabilities,self_immediate_successor_view,self_successor_candidates,self_successor_development_actions,intake_notes,coaching_notes,interview_notes,impact_scale&limit=1`
+      `/rest/v1/diagnostics?id=eq.${diagnostic_id}&select=id,client_id,client_name,client_title,client_org,close_date,tier,custom_g1_question,custom_g2_question,custom_g3_question,self_three_year_vision,self_future_self_capabilities,self_immediate_successor_view,self_successor_candidates,self_successor_development_actions,intake_notes,coaching_notes,interview_notes,impact_scale&limit=1`
     );
     const diags = await diagRes.json();
     if (!Array.isArray(diags) || diags.length === 0) return res.status(404).json({ error: 'Diagnostic not found' });
@@ -1216,7 +1217,7 @@ ${diag.intake_notes    ? `Kick-off / Intake Notes:\n${diag.intake_notes}\n`    :
 
     const userPrompt = `LEADER: ${diag.client_name}${diag.client_title ? `, ${diag.client_title}` : ''}${diag.client_org ? ` — ${diag.client_org}` : ''}
 DIAGNOSTIC TIER: ${diag.tier || 'standard'}${clientWebsite ? `\nCOMPANY WEBSITE (background context only — may be outdated; do NOT treat as authoritative or quote it; use lightly to make language relevant to the organization): ${clientWebsite}` : ''}
-${diag.custom_g1_question ? `\nCUSTOM G1 QUESTION (Vision Alignment): "${diag.custom_g1_question}"` : ''}${diag.custom_g2_question ? `\nCUSTOM G2 QUESTION (GPS Gap Probe): "${diag.custom_g2_question}"` : ''}${overrideNotes}
+${diag.custom_g1_question ? `\nCUSTOM G1 QUESTION (Vision Alignment): "${diag.custom_g1_question}"` : ''}${diag.custom_g2_question ? `\nCUSTOM G2 QUESTION (coach + leader): "${diag.custom_g2_question}"` : ''}${diag.custom_g3_question ? `\nCUSTOM G3 QUESTION (coach + leader): "${diag.custom_g3_question}"` : ''}${overrideNotes}
 
 ${formatRaterGroupDataForPrompt(groupData, diag)}
 

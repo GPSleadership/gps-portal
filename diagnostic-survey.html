@@ -359,11 +359,13 @@ const QUESTION_BANK = [
     text_rater:'What is one thing [First Name] could do over the next 12–18 months to better prepare the team to succeed if they were not in this role?' },
 
   // ── SECTION G: CUSTOM ALIGNMENT (rater only) ──────────────────────────────
-  // G1 and G2 text are dynamically injected from diagnostics.custom_g1_question / custom_g2_question
+  // G1/G2/G3 text are injected from diagnostics.custom_g1_question / custom_g2_question / custom_g3_question
   { sec:'G', code:'G1', type:'rated_5', raterOnly:true,
     text_rater:'[G1_QUESTION]' },
   { sec:'G', code:'G2', type:'rated_5', raterOnly:true,
     text_rater:'[G2_QUESTION]' },
+  { sec:'G', code:'G3', type:'rated_5', raterOnly:true,
+    text_rater:'[G3_QUESTION]' },
 
 ];
 
@@ -444,8 +446,8 @@ async function init() {
   if (IS_SELF) {
     SECTIONS = ['A','B','C','D','E'];
   } else {
-    // Include G section if at least one custom question (G1 or G2) exists
-    SECTIONS = (DIAGNOSTIC.custom_g1_question || DIAGNOSTIC.custom_g2_question)
+    // Include G section if at least one custom question (G1, G2 or G3) exists
+    SECTIONS = (DIAGNOSTIC.custom_g1_question || DIAGNOSTIC.custom_g2_question || DIAGNOSTIC.custom_g3_question)
       ? ['A','B','C','D','F','G']
       : ['A','B','C','D','F'];
   }
@@ -508,9 +510,10 @@ function renderSection(idx) {
     if (q.sec !== secCode) return false;
     if (q.selfOnly  && !IS_SELF)  return false;
     if (q.raterOnly &&  IS_SELF)  return false;
-    // Skip G1 / G2 if their custom text hasn't been generated yet
+    // Skip G1 / G2 / G3 if their custom text hasn't been set yet
     if (q.code === 'G1' && !DIAGNOSTIC.custom_g1_question) return false;
     if (q.code === 'G2' && !DIAGNOSTIC.custom_g2_question) return false;
+    if (q.code === 'G3' && !DIAGNOSTIC.custom_g3_question) return false;
     return true;
   });
 
@@ -564,12 +567,15 @@ function buildQuestionHtml(q) {
   // Replace [First Name] placeholder
   text = text.replace(/\[First Name\]/g, LEADER_FIRST);
 
-  // Replace G1 / G2 custom question text
+  // Replace G1 / G2 / G3 custom question text
   if (q.code === 'G1' && DIAGNOSTIC.custom_g1_question) {
     text = DIAGNOSTIC.custom_g1_question;
   }
   if (q.code === 'G2' && DIAGNOSTIC.custom_g2_question) {
     text = DIAGNOSTIC.custom_g2_question;
+  }
+  if (q.code === 'G3' && DIAGNOSTIC.custom_g3_question) {
+    text = DIAGNOSTIC.custom_g3_question;
   }
 
   // Fallback: replace any leftover [Leader] placeholder with leader's first name
@@ -693,9 +699,10 @@ function validateSection() {
     if (q.selfOnly  && !IS_SELF)  return false;
     if (q.raterOnly &&  IS_SELF)  return false;
     if (q.optional) return false; // optional → skip validation
-    // Skip G1/G2 if their text hasn't been generated
+    // Skip G1/G2/G3 if their text hasn't been set
     if (q.code === 'G1' && !DIAGNOSTIC.custom_g1_question) return false;
     if (q.code === 'G2' && !DIAGNOSTIC.custom_g2_question) return false;
+    if (q.code === 'G3' && !DIAGNOSTIC.custom_g3_question) return false;
     return true;
   });
 

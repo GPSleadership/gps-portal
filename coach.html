@@ -5783,29 +5783,65 @@ function renderQuestionsTab() {
       </div>
     </div>`;
   });
-  html += `<div style="font-size:11px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.05em;margin:20px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--d-border);">Section G — Custom Vision Alignment</div>
-  <div class="q-edit" style="border-color:#A78BFA;">
+  html += `<div style="font-size:11px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.05em;margin:20px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--d-border);">Section G — Custom Questions</div>`;
+  // G1 — AI Vision Alignment question (kept as its own dedicated slot).
+  html += `<div class="q-edit" style="border-color:#A78BFA;margin-bottom:12px;">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
       <div class="q-edit-code">G1</div>
-      <span class="ai-badge">AI-Generated</span>
+      <span class="ai-badge">AI · Vision Alignment</span>
     </div>
     ${g1
-      ? `<div style="font-size:13px;font-style:italic;color:var(--d-dark);padding:10px 12px;background:#F3F0FF;border:1px solid #A78BFA;border-radius:6px;">"${g1}"</div>
-         <div style="font-size:11px;color:var(--d-mid);margin-top:6px;">Generated ${diagFormatDate(DIAG_SEL.custom_g1_generated_at)} from leader's 3-year vision</div>`
+      ? `<div style="font-size:13px;font-style:italic;color:var(--d-dark);padding:10px 12px;background:#F3F0FF;border:1px solid #A78BFA;border-radius:6px;">"${escHtml(g1)}"</div>
+         <div style="font-size:11px;color:var(--d-mid);margin-top:6px;">Generated ${diagFormatDate(DIAG_SEL.custom_g1_generated_at)} from the leader's 3-year vision</div>`
       : `<div class="dalert dalert-amber" style="margin-bottom:0;"><span class="dalert-icon">⚡</span>
-         <div>Not yet generated. Complete when leader finishes self-assessment.
+         <div>Generated from the leader's 3-year vision once they finish the self-assessment.
          ${DIAG_SEL.self_three_year_vision
-            ? (() => {
-                const used = _g1AttemptsUsed();
-                const left = G1_MAX_ATTEMPTS - used;
-                return left > 0
-                  ? `<button class="dbtn dbtn-outline dbtn-sm" onclick="generateG1()" style="margin-left:8px;">Generate Now →</button> <span style="font-size:11px;color:var(--d-mid);">${used}/${G1_MAX_ATTEMPTS} attempts used</span>`
-                  : `<span style="font-size:12px;color:var(--d-red2);margin-left:8px;">Generation limit reached (${G1_MAX_ATTEMPTS}/${G1_MAX_ATTEMPTS}). Edit manually above.</span>`;
-              })()
+            ? (() => { const used=_g1AttemptsUsed(); const left=G1_MAX_ATTEMPTS-used; return left>0
+                ? `<button class="dbtn dbtn-outline dbtn-sm" onclick="generateG1()" style="margin-left:8px;">Generate Now →</button> <span style="font-size:11px;color:var(--d-mid);">${used}/${G1_MAX_ATTEMPTS} attempts used</span>`
+                : `<span style="font-size:12px;color:var(--d-red2);margin-left:8px;">Generation limit reached (${G1_MAX_ATTEMPTS}/${G1_MAX_ATTEMPTS}).</span>`; })()
             : 'Leader must complete self-assessment first.'}</div></div>`}
   </div>`;
+  // Two manual custom questions the coach agreed with the leader at kickoff.
+  html += `<div style="font-size:12px;color:var(--d-mid);margin:4px 0 10px;">Your two custom questions — the ones you agreed with the leader. Raters score them 1–5 and they appear in the report. Leave a box blank to omit it.</div>`;
+  [['g2','Custom 1',DIAG_SEL.custom_g2_question,DIAG_SEL.custom_g2_generated_at],['g3','Custom 2',DIAG_SEL.custom_g3_question,DIAG_SEL.custom_g3_generated_at]].forEach(function(row){
+    const n=row[0], code=row[1], val=row[2]||'', gen=row[3];
+    html += `<div class="q-edit" style="border-color:#A78BFA;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <div class="q-edit-code">${code}</div>
+        <span style="font-size:10px;font-weight:700;color:#6D28D9;background:#F3F0FF;border:1px solid #A78BFA;padding:1px 8px;border-radius:8px;text-transform:uppercase;letter-spacing:.03em;">Custom</span>
+        ${(val&&gen)?`<span style="font-size:11px;color:var(--d-mid);">saved ${diagFormatDate(gen)}</span>`:''}
+      </div>
+      <textarea id="customq-${n}" style="min-height:58px;font-size:13px;" placeholder="Type a custom question scored 1–5. Use ${firstName}'s name, e.g. '${firstName} clearly connects the team's work to the company's long-term vision.'">${escHtml(val)}</textarea>
+      <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap;">
+        <button class="dbtn dbtn-outline dbtn-sm" onclick="saveCustomQ('${n}')">Save question</button>
+        <span id="customq-${n}-msg" style="font-size:12px;color:var(--d-green);"></span>
+      </div>
+    </div>`;
+  });
   const qc = document.getElementById('questions-content');
   if (qc) qc.innerHTML = html;
+}
+
+// Manually save a custom Section-G question (G1 or G2). No self-assessment gate —
+// these are coach-entered (e.g., agreed with the leader at kickoff).
+async function saveCustomQ(n) {
+  const ta  = document.getElementById('customq-' + n);
+  const txt = (ta ? ta.value : '').trim();
+  const map = { g1: ['custom_g1_question','custom_g1_generated_at'], g2: ['custom_g2_question','custom_g2_generated_at'], g3: ['custom_g3_question','custom_g3_generated_at'] };
+  const pair = map[n] || map.g2;
+  const field = pair[0], genField = pair[1];
+  const patch = {};
+  patch[field]    = txt || null;
+  patch[genField] = txt ? new Date().toISOString() : null;
+  const msg = document.getElementById('customq-' + n + '-msg');
+  if (msg) { msg.style.color = 'var(--d-mid)'; msg.textContent = 'Saving…'; }
+  try {
+    await updateDiag(patch);
+    renderQuestionsTab();
+  } catch (e) {
+    if (msg) { msg.style.color = 'var(--d-red2)'; msg.textContent = e.message; }
+    else alert('Could not save: ' + e.message);
+  }
 }
 
 // ── Tab: Report ───────────────────────────────────────────────────────────────
