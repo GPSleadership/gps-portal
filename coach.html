@@ -6487,6 +6487,15 @@ async function downloadDiagRaterTemplate() {
       cell.alignment = { vertical: 'middle' };
       cell.border = { bottom: { style: 'thin', color: { argb: 'FFBBBBBB' } } };
     });
+    // Relationship is column C — make it a pick-from-list dropdown for the first 200 rows.
+    const REL_LIST = 'Direct Report,Skip-Level Report,Peer,Supervisor / Manager,Owner,Board Member,Internal Customer,External Customer,External Stakeholder,Other';
+    for (let r = 2; r <= 201; r++) {
+      ws.getCell('C' + r).dataValidation = {
+        type: 'list', allowBlank: true, formulae: ['"' + REL_LIST + '"'],
+        showErrorMessage: true, errorStyle: 'warning',
+        errorTitle: 'Pick from the list', error: 'Please choose one of the listed relationship values (or leave blank for "Other").',
+      };
+    }
     const ws2 = wb.addWorksheet('Instructions'); ws2.getColumn(1).width = 70;
     helpRows.forEach(function (r) { ws2.addRow(r); });
     ws2.getRow(1).font = { bold: true };
