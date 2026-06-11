@@ -7030,15 +7030,34 @@ async function drRender(){
   try { teams=await cdSelect('teams',{ order:{col:'created_at',asc:true} }); }
   catch(e){ el.innerHTML='<div style="color:#b00;padding:16px;">Could not load: '+drEsc(e.message)+'</div>'; return; }
   var rows=teams.map(function(t){
-    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #eee;">'
-      +'<div><b style="font-family:\'Montserrat\',sans-serif;color:#004369;">'+drEsc(t.client_org_name||t.name)+'</b> — '+drEsc(t.name)
-      +'<div style="font-size:12px;color:#666;">'+drEsc(t.team_type)+(t.active===false?' · inactive':'')+'</div></div>'
-      +'<button class="btn-add" onclick="drManageTeam(\''+t.id+'\')">Manage →</button></div>';
+    var arch=!!t.archived_at;
+    return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #eee;'+(arch?'opacity:.55;':'')+'">'
+      +'<div><b style="font-family:\'Montserrat\',sans-serif;color:#004369;">'+drEsc(t.client_org_name||t.name||'(no organization)')+'</b> — '+drEsc(t.name)
+      +(arch?' <span style="font-size:11px;background:#eee;color:#666;padding:1px 7px;border-radius:10px;">archived</span>':'')
+      +'<div style="font-size:12px;color:#666;">'+drEsc(t.team_type)+'</div></div>'
+      +'<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">'
+      +'<button class="btn-add" onclick="drManageTeam(\''+t.id+'\')">Manage →</button>'
+      +'<button onclick="drArchiveTeam(\''+t.id+'\','+(arch?'false':'true')+')" style="padding:6px 12px;border:1px solid #dbe3e6;background:#fff;border-radius:6px;font-size:12px;cursor:pointer;color:#5a6b76;">'+(arch?'Unarchive':'Archive')+'</button>'
+      +'<button data-name="'+drEsc(t.client_org_name||t.name||'').replace(/"/g,'&quot;')+'" onclick="drDeleteTeam(\''+t.id+'\',this)" style="padding:6px 12px;border:1px solid #f3b4c0;background:#fff;border-radius:6px;font-size:12px;cursor:pointer;color:#DB1F48;">Delete</button>'
+      +'</div></div>';
   }).join('');
   el.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">'
     +'<h2 style="font-family:\'Montserrat\',sans-serif;color:#004369;font-size:18px;">Decision Room — Teams</h2>'
     +'<button class="btn-add" onclick="drCreateTeam()">+ New Team</button></div>'
     +(rows||'<div style="color:#666;padding:8px 0;">No teams yet. Create one to start.</div>');
+}
+
+async function drArchiveTeam(id, archive){
+  try{ await cdUpdate('teams', { archived_at: archive ? new Date().toISOString() : null }, { eq:{ id:id } }); drRender(); }
+  catch(e){ alert('Could not update team: '+e.message); }
+}
+
+async function drDeleteTeam(id, btn){
+  var nm = (btn && btn.getAttribute) ? btn.getAttribute('data-name') : '';
+  if(!confirm('Delete '+(nm||'this team')+'?\n\nThis permanently removes the team and its Decision Room data (members, recommendations, signals). Generated reports are kept but unlinked. This cannot be undone.\n\nTip: use Archive instead if you just want to hide it.')) return;
+  if(btn){ btn.disabled=true; btn.textContent='Deleting…'; }
+  try{ await cdDelete('teams', { eq:{ id:id } }); drRender(); }
+  catch(e){ alert('Could not delete team: '+e.message); if(btn){ btn.disabled=false; btn.textContent='Delete'; } }
 }
 
 async function drCreateTeam(){
@@ -7070,8 +7089,9 @@ async function drCreateTeam(){
     var type=document.getElementById('drct_type').value;
     var errEl=document.getElementById('drct_err');
     if(!name){ errEl.textContent='Team name is required.'; return; }
+    if(!org){ errEl.textContent='Client organization is required.'; return; }
     this.disabled=true; this.textContent='Creating…';
-    try{ var r=await cdInsert('teams',{ name:name, client_org_name:org||null, team_type:type }); var t=r[0]; ov.remove(); drManageTeam(t? t.id : null); }
+    try{ var r=await cdInsert('teams',{ name:name, client_org_name:org, team_type:type }); var t=r[0]; ov.remove(); drManageTeam(t? t.id : null); }
     catch(e){ errEl.textContent='Could not create team: '+e.message; this.disabled=false; this.textContent='Create team'; }
   };
 }
