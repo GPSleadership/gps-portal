@@ -5188,7 +5188,11 @@ function renderDiagTable() {
       <td style="font-size:12px;color:var(--d-mid);">${d.close_date ? diagFormatDate(d.close_date) : '—'}</td>
       <td style="font-size:12px;">${d.status==='survey_open' && daysLeft !== null ? `<span style="color:${dayColor};font-weight:600;">${daysLeft}d</span>` : '—'}</td>
       <td style="font-size:12px;">${d.status==='survey_open' && s.total > 0 ? `<span style="font-weight:700;color:${pctColor};">${s.pct}%</span><span style="color:var(--d-mid);font-size:11px;"> (${s.responded}/${s.total})</span>` : '—'}</td>
-      <td><button class="dbtn dbtn-outline dbtn-sm">Open →</button></td>
+      <td style="white-space:nowrap;text-align:right;">
+        <button class="dbtn dbtn-outline dbtn-sm" onclick="event.stopPropagation();openDiag('${d.id}')">Open →</button>
+        <button class="dbtn dbtn-outline dbtn-sm" onclick="event.stopPropagation();archiveDiagById('${d.id}',${d.is_archived?'false':'true'})">${d.is_archived?'Unarchive':'Archive'}</button>
+        <button class="dbtn dbtn-outline dbtn-sm" style="color:var(--d-red2);border-color:var(--d-red2);" data-n="${escHtml(d.client_name||'')}" onclick="event.stopPropagation();deleteDiagById('${d.id}', this.getAttribute('data-n'))">Delete</button>
+      </td>
     </tr>`;
   }).join('');
 
@@ -6599,6 +6603,21 @@ async function archiveDiag(archive) {
   ALL_DIAGS = ALL_DIAGS.map(d => d.id === DIAG_SEL.id ? { ...d, is_archived: archive } : d);
   renderDetailHeader();
   renderDiagList();
+}
+
+// Row-level archive / delete from the All Diagnostics table.
+async function archiveDiagById(id, archive) {
+  try { await cdUpdate('diagnostics', { is_archived: archive }, { eq: { id } }); }
+  catch (e) { alert('Error: ' + e.message); return; }
+  ALL_DIAGS = ALL_DIAGS.map(d => d.id === id ? { ...d, is_archived: archive } : d);
+  renderDiagTable();
+}
+async function deleteDiagById(id, name) {
+  if (!confirm('Delete the diagnostic for ' + (name || 'this leader') + '?\n\nThis permanently removes the diagnostic and its raters, responses, and report drafts. It cannot be undone.\n\nTip: Archive instead if you just want it hidden.')) return;
+  try { await cdDelete('diagnostics', { eq: { id } }); }
+  catch (e) { alert('Could not delete: ' + e.message); return; }
+  ALL_DIAGS = ALL_DIAGS.filter(d => d.id !== id);
+  renderDiagTable();
 }
 
 async function saveOverride(code) {
