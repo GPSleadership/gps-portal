@@ -6439,31 +6439,66 @@ async function coachBulkAddRaters() {
   });
   await _raterCommit(rows);
 }
-function downloadDiagRaterTemplate() {
-  if (typeof XLSX === 'undefined') { alert('Spreadsheet library is still loading — try again in a moment.'); return; }
+function _loadExcelJS() {
+  return new Promise(function (res, rej) {
+    if (window.ExcelJS) return res(window.ExcelJS);
+    var sc = document.createElement('script');
+    sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
+    sc.onload = function () { res(window.ExcelJS); };
+    sc.onerror = function () { rej(new Error('ExcelJS load failed')); };
+    document.head.appendChild(sc);
+  });
+}
+function _dlBlob(buf, name) {
+  var blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 100);
+}
+async function downloadDiagRaterTemplate() {
   const leader = (typeof DIAG_SEL !== 'undefined' && DIAG_SEL && DIAG_SEL.client_name) ? DIAG_SEL.client_name : 'Leader';
-  const main = [
-    ['Name', 'Email', 'Relationship'],
-    ['Jane Doe', 'jane@company.com', 'Direct Report'],
-    ['Sam Lee', 'sam@company.com', 'Peer'],
-    ['Pat Kim', 'pat@company.com', 'Supervisor / Manager'],
+  const safe = String(leader).replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || 'Leader';
+  const headers   = ['Name', 'Email', 'Relationship', 'Department', 'Title'];
+  const widths     = [26, 32, 24, 22, 26];
+  const examples  = [
+    ['Jane Doe', 'jane@company.com', 'Direct Report', 'Operations', 'Operations Manager'],
+    ['Sam Lee', 'sam@company.com', 'Peer', 'Finance', 'Controller'],
+    ['Pat Kim', 'pat@company.com', 'Supervisor / Manager', 'Executive', 'COO'],
   ];
-  const help = [
+  const helpRows = [
     ['How to use this template'],
     ['1. Replace the example rows on the "Raters" tab with the people who will give feedback.'],
-    ['2. Name and Email are required. Relationship is optional (defaults to "Other").'],
-    ['3. Valid Relationship values:'],
-    ['   Direct Report'], ['   Peer'], ['   Supervisor / Manager'], ['   Board Member'],
-    ['   Internal Customer'], ['   External Customer'], ['   External Stakeholder'], ['   Other'],
+    ['2. Name and Email are required. Relationship is recommended. Department and Title are optional context.'],
+    ['3. Valid Relationship values: Direct Report, Peer, Supervisor / Manager, Board Member, Internal Customer, External Customer, External Stakeholder, Other.'],
     ['4. Save the file and send it back — it uploads directly into the portal.'],
   ];
-  const wb = XLSX.utils.book_new();
-  const ws1 = XLSX.utils.aoa_to_sheet(main); ws1['!cols'] = [{ wch: 26 }, { wch: 32 }, { wch: 24 }];
-  XLSX.utils.book_append_sheet(wb, ws1, 'Raters');
-  const ws2 = XLSX.utils.aoa_to_sheet(help); ws2['!cols'] = [{ wch: 64 }];
-  XLSX.utils.book_append_sheet(wb, ws2, 'Instructions');
-  const safe = String(leader).replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || 'Leader';
-  XLSX.writeFile(wb, 'GPS_Diagnostic_Raters_' + safe + '.xlsx');
+  try {
+    const ExcelJS = await _loadExcelJS();
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Raters');
+    ws.columns = headers.map(function (h, i) { return { header: h, width: widths[i] }; });
+    examples.forEach(function (r) { ws.addRow(r); });
+    const hr = ws.getRow(1); hr.height = 18;
+    hr.eachCell(function (cell) {
+      cell.font = { bold: true, color: { argb: 'FF1A1A1A' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF200' } };
+      cell.alignment = { vertical: 'middle' };
+      cell.border = { bottom: { style: 'thin', color: { argb: 'FFBBBBBB' } } };
+    });
+    const ws2 = wb.addWorksheet('Instructions'); ws2.getColumn(1).width = 70;
+    helpRows.forEach(function (r) { ws2.addRow(r); });
+    ws2.getRow(1).font = { bold: true };
+    const buf = await wb.xlsx.writeBuffer();
+    _dlBlob(buf, 'GPS_Diagnostic_Raters_' + safe + '.xlsx');
+  } catch (e) {
+    // Fallback: unstyled via SheetJS (still a valid template, just no yellow header).
+    if (typeof XLSX === 'undefined') { alert('Could not build the template — refresh and try again.'); return; }
+    const wb = XLSX.utils.book_new();
+    const s1 = XLSX.utils.aoa_to_sheet([headers].concat(examples)); s1['!cols'] = widths.map(function (w) { return { wch: w }; });
+    XLSX.utils.book_append_sheet(wb, s1, 'Raters');
+    const s2 = XLSX.utils.aoa_to_sheet(helpRows); s2['!cols'] = [{ wch: 70 }];
+    XLSX.utils.book_append_sheet(wb, s2, 'Instructions');
+    XLSX.writeFile(wb, 'GPS_Diagnostic_Raters_' + safe + '.xlsx');
+  }
 }
 async function coachBulkRaterFile(input) {
   const file = input.files && input.files[0]; if (!file) return;
