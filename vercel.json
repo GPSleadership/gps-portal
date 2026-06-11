@@ -181,6 +181,9 @@
     },
     "api/health.js": {
       "maxDuration": 10
+    },
+    "api/import-clients.js": {
+      "maxDuration": 30
     }
   }
 }

@@ -69,8 +69,28 @@ export default async function handler(req, res) {
     });
   }
 
+  // Skip anyone who already exists (by email) so re-importing an overlapping list never duplicates.
+  if (records.length) {
+    try {
+      const emailIn = records.map(r => `"${r.email}"`).join(',');
+      const existRes = await fetch(`${SUPABASE_URL}/rest/v1/clients?select=email&email=in.(${emailIn})`, {
+        headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}` },
+      });
+      if (existRes.ok) {
+        const existing = await existRes.json().catch(() => []);
+        const have = new Set((existing || []).map(c => String(c.email || '').toLowerCase()));
+        for (let i = records.length - 1; i >= 0; i--) {
+          if (have.has(String(records[i].email).toLowerCase())) {
+            skipped.push({ row: records[i], reason: 'Already exists — skipped to avoid a duplicate' });
+            records.splice(i, 1);
+          }
+        }
+      }
+    } catch (_) { /* if the check fails, fall through to insert */ }
+  }
+
   if (records.length === 0) {
-    return res.status(400).json({ error: 'No valid clients to import', skipped });
+    return res.status(400).json({ error: 'No new clients to import (all already exist or were invalid).', skipped });
   }
 
   // Bulk insert using service role key

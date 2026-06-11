@@ -3236,7 +3236,7 @@ async function handleImportFile(input) {
         </tr></thead>
         <tbody>${preview}</tbody>
       </table>
-      <p style="font-size:11px;color:var(--gray-600);margin-top:8px;">Columns used: Name, Email, Organization (optional), Title (optional), Industry (optional).</p>
+      <p style="font-size:11px;color:var(--gray-600);margin-top:8px;">Captured: Name, Email, Title, Organization, Phone, Industry (Name + Email required).</p>
     `;
     document.getElementById('importConfirmBtn').style.display = 'inline-block';
   } catch (err) {

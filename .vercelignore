@@ -1,6 +1,5 @@
 api/test-survey.js
 api/run-reminders-now.js
-api/import-clients.js
 gps-executive-console.html
 gps-executive-console-deploy.html
 diagnostic-coach.html
