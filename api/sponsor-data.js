@@ -290,6 +290,12 @@ export default async function handler(req, res) {
       const team = teamRows.find(t => t.id === teamId);
       if (!link || !team) return res.status(403).json({ error: 'Not authorized for this team' });
 
+      // Org logo (matched by organization name) — shown in the Decision Room header.
+      let orgLogo = null;
+      if (team.client_org_name) {
+        try { const olr = await sbGet(`/rest/v1/organizations?name=eq.${enc(team.client_org_name)}&select=logo_url&limit=1`); if (olr && olr[0] && olr[0].logo_url) orgLogo = olr[0].logo_url; } catch (_) { /* optional */ }
+      }
+
       const isPrivate = link.confidentiality_mode === 'private';
       const supervises = Array.isArray(link.supervises_client_ids) ? link.supervises_client_ids
                        : (link.supervises_client_ids ? JSON.parse(link.supervises_client_ids) : []);
@@ -301,7 +307,7 @@ export default async function handler(req, res) {
       if (owed.length) {
         return res.status(200).json({
           ok: true, gated: true,
-          team: { id: team.id, name: team.name, client_org_name: team.client_org_name },
+          team: { id: team.id, name: team.name, client_org_name: team.client_org_name, org_logo_url: orgLogo },
           owed: owed.map(o => ({ role: o.member, checkpoint: o.checkpoint,
             // deep-link to the EXISTING survey with the supervisor's existing token
             survey_url: `/diagnostic-survey?token=${enc(o.token)}` })),
@@ -328,6 +334,7 @@ export default async function handler(req, res) {
         show_succession: link.show_succession_to_sponsor !== false,
         team: {
           id: team.id, name: team.name, client_org_name: team.client_org_name, team_type: team.team_type,
+          org_logo_url: orgLogo,
           primary_sponsor: sponsor.name,
           quick_read: team.quick_read, summary: team.summary, last_updated: team.last_updated,
           snapshot: team.snapshot, themes: team.themes,

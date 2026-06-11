@@ -135,6 +135,7 @@
     <div class="header-logo-text">GPS</div>
     <div><div class="header-title">Leadership Solutions</div><div class="header-sub">Decision Room</div></div>
   </div>
+  <img id="headerOrgLogo" alt="" style="display:none;max-height:36px;max-width:120px;object-fit:contain;margin-left:auto;margin-right:14px;" />
   <div class="header-who" id="headerWho"></div>
 </header>
 <div class="wrap">
@@ -183,10 +184,16 @@ function init(){
 }
 function showError(err){ document.getElementById('view').innerHTML='<div class="card"><div class="empty">'+esc(err.message||'Could not load. Please try your link again.')+'</div></div>'; }
 
+function setHeaderOrgLogo(t){
+  var el=document.getElementById('headerOrgLogo'); if(!el) return;
+  if(t && t.org_logo_url){ el.src=t.org_logo_url; el.alt=(t.client_org_name||'')+' logo'; el.style.display='block'; }
+  else { el.style.display='none'; }
+}
 function loadTeam(teamId){
   CURRENT_TEAM = teamId;
   document.getElementById('view').innerHTML='<div class="loading"><div class="spinner"></div>Loading…</div>';
   api('team', { team_id:teamId }).then(function(res){
+    setHeaderOrgLogo(res.team);
     if(res.gated){ renderGate(res); return; }
     DATA = res;
     var t=res.team;
