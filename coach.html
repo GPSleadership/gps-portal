@@ -902,6 +902,7 @@
             <div onclick="openAddModal()" style="padding:11px 15px;cursor:pointer;border-bottom:1px solid #f5f5f5;"><b style="font-family:'Montserrat',sans-serif;color:#004369;font-size:13px;">Client / Member</b><div style="font-size:11px;color:#666;">Add a person; set diagnostic and/or coaching in the form</div></div>
             <div onclick="drCreateTeam();" style="padding:11px 15px;cursor:pointer;border-bottom:1px solid #f5f5f5;"><b style="font-family:'Montserrat',sans-serif;color:#004369;font-size:13px;">Team</b><div style="font-size:11px;color:#666;">Create a leadership team for the Decision Room</div></div>
             <div onclick="drOpenSponsor(null);" style="padding:11px 15px;cursor:pointer;border-bottom:1px solid #f5f5f5;"><b style="font-family:'Montserrat',sans-serif;color:#004369;font-size:13px;">Sponsor</b><div style="font-size:11px;color:#666;">Provision an executive sponsor (Decision Room access)</div></div>
+            <div onclick="if(window.openOrgModal)openOrgModal();" style="padding:11px 15px;cursor:pointer;border-bottom:1px solid #f5f5f5;"><b style="font-family:'Montserrat',sans-serif;color:#004369;font-size:13px;">Organization</b><div style="font-size:11px;color:#666;">Add a company — name, website, logo, industry, notes</div></div>
             <div onclick="openImportModal();" style="padding:11px 15px;cursor:pointer;"><b style="font-family:'Montserrat',sans-serif;color:#004369;font-size:13px;">Import from Excel / CSV</b><div style="font-size:11px;color:#666;">Bulk-add many people at once from a spreadsheet</div></div>
           </div>
         </div>
@@ -7614,17 +7615,71 @@ async function drSendSponsor(sponsorId){
   }
 
   window.wsOpen = async function(id){ try{ localStorage.setItem('gps_coach_ws', id); }catch(_){} var c=el(); c.innerHTML='<div style="padding:24px;text-align:center;color:#5a6b76;">Loading…</div>'; try{ var rows=await cdSelect('workshops',{ eq:{ id:id }, limit:1 }); WS.cur=rows[0]; if(!WS.cur){ wsRender(); return; } WS.parts=await cdSelect('workshop_participants',{ eq:{ workshop_id:id }, order:{col:'created_at',asc:true} }); WS.questions=await cdSelect('workshop_questions',{ eq:{ workshop_id:id }, order:{col:'sort_order',asc:true} }); WS.tab='overview'; wsDetail(); }catch(e){ c.innerHTML='<div style="padding:24px;color:#dc2626;">'+esc(e.message)+'</div>'; } };
+  // ── Add / Edit Organization modal (usable from the + Add menu and the org list) ─
+  window.openOrgModal = async function(orgId){
+    function fld(label,id,val,ph,type){ return '<div><label style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#5a6b76;font-weight:700;display:block;margin-bottom:4px;">'+label+'</label><input id="'+id+'" type="'+(type||'text')+'" value="'+esc(val||'')+'" placeholder="'+(ph||'')+'" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;"></div>'; }
+    var org = null;
+    if(orgId){
+      org = (WS.orgs||[]).find(function(o){ return o.id===orgId; }) || null;
+      if(!org){ try{ var g=await wsData('org-get',{org_id:orgId}); org=g.organization||null; }catch(e){} }
+    }
+    org = org || {};
+    var editing = !!orgId;
+    var ex=document.getElementById('orgModalOverlay'); if(ex) ex.remove();
+    var ov=document.createElement('div'); ov.id='orgModalOverlay';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10000;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:40px 16px;';
+    ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:520px;width:100%;box-shadow:0 16px 48px rgba(0,0,0,.25);">'+
+      '<div style="padding:18px 22px;border-bottom:1px solid #e8e8e8;display:flex;align-items:center;justify-content:space-between;"><div style="font-family:Montserrat,sans-serif;font-weight:800;color:#004369;font-size:17px;">'+(editing?'Edit Organization':'Add Organization')+'</div><div id="orgF_x" style="cursor:pointer;font-size:18px;color:#888;">✕</div></div>'+
+      '<div style="padding:20px 22px;display:flex;flex-direction:column;gap:14px;">'+
+        fld('Name *','orgF_name',org.name)+
+        fld('Website','orgF_website',org.website,'https://www.company.com','url')+
+        fld('Industry','orgF_industry',org.industry,'e.g. Trucking / Transportation')+
+        fld('Size band','orgF_size',org.size_band,'e.g. $10–25M or 50–200 employees')+
+        fld('Logo URL','orgF_logo',org.logo_url,'https://… paste an image URL','url')+
+        '<div id="orgF_logoPrev">'+(org.logo_url?'<img src="'+esc(org.logo_url)+'" style="max-height:48px;max-width:160px;object-fit:contain;border:1px solid #eee;border-radius:6px;padding:4px;">':'')+'</div>'+
+        '<div><label style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#5a6b76;font-weight:700;display:block;margin-bottom:4px;">Notes</label><textarea id="orgF_notes" rows="3" placeholder="Anything useful for context when writing reports" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;font-family:inherit;">'+esc(org.notes||'')+'</textarea></div>'+
+        '<div id="orgF_err" style="color:#dc2626;font-size:12px;"></div>'+
+      '</div>'+
+      '<div style="padding:14px 22px;border-top:1px solid #e8e8e8;display:flex;justify-content:flex-end;gap:8px;"><button id="orgF_cancel" style="padding:8px 16px;border:1px solid #dbe3e6;background:#fff;border-radius:7px;font-size:13px;cursor:pointer;color:#5a6b76;">Cancel</button><button id="orgF_save" style="padding:8px 18px;border:none;background:#01949A;color:#fff;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;">'+(editing?'Save changes':'Create organization')+'</button></div>'+
+    '</div>';
+    document.body.appendChild(ov);
+    function close(){ ov.remove(); }
+    function val(id){ var e=document.getElementById(id); return e? e.value.trim() : ''; }
+    document.getElementById('orgF_x').onclick=close;
+    document.getElementById('orgF_cancel').onclick=close;
+    ov.addEventListener('click', function(e){ if(e.target===ov) close(); });
+    document.getElementById('orgF_logo').addEventListener('input', function(){ var u=this.value.trim(); document.getElementById('orgF_logoPrev').innerHTML = u?'<img src="'+esc(u)+'" style="max-height:48px;max-width:160px;object-fit:contain;border:1px solid #eee;border-radius:6px;padding:4px;">':''; });
+    document.getElementById('orgF_save').onclick=async function(){
+      var name=val('orgF_name'); var errEl=document.getElementById('orgF_err');
+      if(!name){ errEl.textContent='Name is required.'; return; }
+      var payload={ name:name, website:val('orgF_website'), industry:val('orgF_industry'), size_band:val('orgF_size'), logo_url:val('orgF_logo'), notes:document.getElementById('orgF_notes').value.trim() };
+      this.disabled=true; this.textContent='Saving…';
+      try{
+        if(editing){ await wsData('org-update', Object.assign({org_id:orgId}, payload)); }
+        else { await wsData('org-create', payload); }
+        if(typeof loadOrgs==='function') await loadOrgs();
+        close();
+        if(typeof toast==='function') toast(editing?'Organization updated.':'Organization added.');
+        if(document.getElementById('wsOrgListBack')) wsOrgsPane();      // refresh list if it's open
+        else if(editing && document.getElementById('wsOrgBack2') && window.wsOrgProfile) window.wsOrgProfile(orgId); // refresh profile if it's open
+      }catch(e){ errEl.textContent=e.message; this.disabled=false; this.textContent=editing?'Save changes':'Create organization'; }
+    };
+  };
+
   // ── Organizations list view ──────────────────────────────────────────────────
   function wsOrgsPane(){
     var c=el(); if(!c) return;
     var orgs=WS.orgs||[];
     var rows=orgs.length?orgs.map(function(o){
-      return '<tr style="border-top:1px solid #dbe3e6;"><td style="padding:10px;cursor:pointer;font-weight:700;color:#004369;" onclick="wsOrgProfile(\''+o.id+'\')">'+esc(o.name)+'</td><td style="padding:10px;color:#5a6b76;font-size:12px;">'+esc(o.industry||'—')+'</td><td style="padding:10px;font-size:12px;color:#5a6b76;">'+(o.logo_url?'<img src="'+esc(o.logo_url)+'" style="height:24px;max-width:80px;object-fit:contain;border-radius:3px;vertical-align:middle;" />':'—')+'</td></tr>';
-    }).join(''):'<tr><td colspan="3" style="padding:24px;color:#5a6b76;text-align:center;">No organizations yet. They\'re created automatically when you create a workshop or assessment.</td></tr>';
-    c.innerHTML='<div style="margin-bottom:12px;">'+btn('wsOrgListBack','← Back','ghost')+'</div>'+
+      var web=o.website?'<a href="'+esc(o.website)+'" target="_blank" rel="noopener" style="color:#01949A;">'+esc(o.website.replace(/^https?:\/\//,''))+'</a>':'—';
+      return '<tr style="border-top:1px solid #dbe3e6;"><td style="padding:10px;cursor:pointer;font-weight:700;color:#004369;" onclick="wsOrgProfile(\''+o.id+'\')">'+esc(o.name)+'</td><td style="padding:10px;color:#5a6b76;font-size:12px;">'+esc(o.industry||'—')+'</td><td style="padding:10px;font-size:12px;">'+web+'</td><td style="padding:10px;font-size:12px;color:#5a6b76;">'+(o.logo_url?'<img src="'+esc(o.logo_url)+'" style="height:24px;max-width:80px;object-fit:contain;border-radius:3px;vertical-align:middle;" />':'—')+'</td><td style="padding:10px;text-align:right;">'+btn('wsOrgEdit_'+o.id,'Edit','ghost')+'</td></tr>';
+    }).join(''):'<tr><td colspan="5" style="padding:24px;color:#5a6b76;text-align:center;">No organizations yet — click “+ New organization” to add one.</td></tr>';
+    c.innerHTML='<div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">'+btn('wsOrgListBack','← Back','ghost')+btn('wsOrgNew','+ New organization')+'</div>'+
       '<div style="font-family:Montserrat,sans-serif;font-size:18px;font-weight:800;color:#004369;margin-bottom:16px;">Organizations</div>'+
-      '<div style="background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.06);overflow:hidden;"><table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#F7F4EE;text-align:left;color:#5a6b76;font-size:11px;text-transform:uppercase;letter-spacing:.4px;"><th style="padding:10px;">Organization</th><th style="padding:10px;">Industry</th><th style="padding:10px;">Logo</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+      '<div style="background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.06);overflow:hidden;"><table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#F7F4EE;text-align:left;color:#5a6b76;font-size:11px;text-transform:uppercase;letter-spacing:.4px;"><th style="padding:10px;">Organization</th><th style="padding:10px;">Industry</th><th style="padding:10px;">Website</th><th style="padding:10px;">Logo</th><th style="padding:10px;"></th></tr></thead><tbody>'+rows+'</tbody></table></div>';
     document.getElementById('wsOrgListBack').onclick=wsRender;
+    document.getElementById('wsOrgNew').onclick=function(){ openOrgModal(); };
+    orgs.forEach(function(o){ var b=document.getElementById('wsOrgEdit_'+o.id); if(b) b.onclick=function(ev){ ev.stopPropagation(); openOrgModal(o.id); }; });
   }
 
   // ── Org profile view ────────────────────────────────────────────────────────
@@ -7638,16 +7693,15 @@ async function drSendSponsor(sponsorId){
       var logoHtml=org.logo_url?'<img src="'+esc(org.logo_url)+'" style="max-height:60px;max-width:200px;object-fit:contain;border-radius:6px;margin-bottom:12px;" />':'';
       var projRows=wsList.length?wsList.map(function(w){ return '<tr style="border-top:1px solid #dbe3e6;"><td style="padding:9px 10px;font-weight:700;color:#004369;cursor:pointer;" onclick="wsOpen(\''+w.id+'\')">'+esc(w.title||'Untitled')+'</td><td style="padding:9px 10px;font-size:12px;color:#5a6b76;">'+esc(w.engagement_kind==='assessment'?'Assessment':'Workshop')+'</td><td style="padding:9px 10px;font-size:12px;color:#5a6b76;"><span style="font-size:11px;font-weight:700;background:#E8F7F7;color:#004369;padding:2px 8px;border-radius:10px;">'+esc(w.status||'setup')+'</span></td><td style="padding:9px 10px;font-size:12px;color:#5a6b76;">'+(w.roster_uploaded_at?'✓ Roster uploaded':'No roster')+(w.roster_locked?' · <span style="color:#DB1F48;font-weight:700;">Locked</span>':'')+'</td></tr>'; }).join(''):'<tr><td colspan="4" style="padding:20px;color:#5a6b76;text-align:center;">No projects yet.</td></tr>';
       c.innerHTML='<div style="margin-bottom:12px;">'+btn('wsOrgBack2','← All workshops','ghost')+'</div>'+
-        card(logoHtml+'<div style="font-size:20px;font-weight:800;color:#004369;font-family:Montserrat,sans-serif;">'+esc(org.name||'')+'</div>'+
-          (org.industry?'<div style="font-size:13px;color:#5a6b76;margin-top:2px;">'+esc(org.industry)+(org.size_band?' · '+esc(org.size_band):'')+'</div>':'')+
-          '<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">'+
-          '<label style="font-size:12px;font-weight:700;color:#5a6b76;">Logo URL</label><input id="orgLogoUrl" value="'+esc(org.logo_url||'')+'" placeholder="https://…" style="flex:1;min-width:240px;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;">'+
-          btn('orgLogoSave','Save','ghost')+
-          '<span id="orgLogoOut" style="font-size:12px;color:#5a6b76;"></span></div>')+
+        card(logoHtml+'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;"><div><div style="font-size:20px;font-weight:800;color:#004369;font-family:Montserrat,sans-serif;">'+esc(org.name||'')+'</div>'+
+          (org.industry||org.size_band?'<div style="font-size:13px;color:#5a6b76;margin-top:2px;">'+esc(org.industry||'')+(org.size_band?(org.industry?' · ':'')+esc(org.size_band):'')+'</div>':'')+
+          (org.website?'<div style="font-size:13px;margin-top:2px;"><a href="'+esc(org.website)+'" target="_blank" rel="noopener" style="color:#01949A;">'+esc(org.website.replace(/^https?:\/\//,''))+'</a></div>':'')+
+          (org.notes?'<div style="font-size:12px;color:#5a6b76;margin-top:6px;white-space:pre-wrap;">'+esc(org.notes)+'</div>':'')+
+          '</div>'+btn('orgEditFull','Edit organization','ghost')+'</div>')+
         card('<div style="font-weight:800;color:#004369;margin-bottom:10px;">Projects</div>'+
           '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#F7F4EE;text-align:left;color:#5a6b76;font-size:11px;text-transform:uppercase;letter-spacing:.4px;"><th style="padding:9px 10px;">Title</th><th style="padding:9px 10px;">Type</th><th style="padding:9px 10px;">Status</th><th style="padding:9px 10px;">Roster</th></tr></thead><tbody>'+projRows+'</tbody></table>');
       document.getElementById('wsOrgBack2').onclick=wsRender;
-      document.getElementById('orgLogoSave').onclick=async function(){ var out=document.getElementById('orgLogoOut'); out.textContent='Saving…'; try{ await wsData('org-update',{org_id:orgId,logo_url:document.getElementById('orgLogoUrl').value.trim()||null}); out.textContent='Saved.'; }catch(e){ out.textContent=e.message; } };
+      var oef=document.getElementById('orgEditFull'); if(oef) oef.onclick=function(){ openOrgModal(orgId); };
     }catch(e){ c.innerHTML='<div style="margin-bottom:12px;">'+btn('wsOrgErrBack','← Back','ghost')+'</div><div style="padding:20px;color:#dc2626;">'+esc(e.message)+'</div>'; document.getElementById('wsOrgErrBack').onclick=wsRender; }
   };
 

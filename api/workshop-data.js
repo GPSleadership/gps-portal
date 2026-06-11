@@ -571,6 +571,7 @@ export default async function handler(req, res) {
           name, industry: body.industry || null, size_band: body.size_band || null,
           tags: Array.isArray(body.tags) ? body.tags : [],
           logo_url: body.logo_url || null, notes: body.notes || null,
+          website: body.website || null,
           created_at: isoNow(), updated_at: isoNow(),
         }, { Prefer: 'return=representation' });
         const rows = await r.json().catch(() => []);
@@ -589,6 +590,7 @@ export default async function handler(req, res) {
         if (body.tags      != null) patch.tags      = body.tags;
         if (body.logo_url  != null) patch.logo_url  = body.logo_url;
         if (body.notes     != null) patch.notes     = body.notes;
+        if (body.website   != null) patch.website   = body.website;
         await sb(`/rest/v1/organizations?id=eq.${enc(id)}`, 'PATCH', patch, { Prefer: 'return=minimal' });
         return res.status(200).json({ ok: true });
       }
