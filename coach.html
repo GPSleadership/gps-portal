@@ -826,6 +826,7 @@
       <div class="section-tab"        id="grp-diagteams" onclick="showGroup('diagteams')">Diagnostics &amp; Teams</div>
       <div class="section-tab"        id="grp-comms"     onclick="showGroup('comms')">Communication</div>
       <div class="section-tab"        id="grp-workshops" onclick="showGroup('workshops')">Workshops &amp; Assessments</div>
+      <div class="section-tab"        id="grp-organizations" onclick="showGroup('organizations')">Organizations</div>
       <div class="section-tab"        id="grp-settings"  onclick="showGroup('settings')">Settings</div>
       <div style="flex:1;min-width:12px;"></div>
       <div style="position:relative;">
@@ -1059,6 +1060,10 @@
 
     <div id="section-workshops" style="display:none;">
       <div id="wsAdmin"></div>
+    </div>
+
+    <div id="section-organizations" style="display:none;">
+      <div id="orgSection"></div>
     </div>
 
     <div id="section-diagnostics" style="display:none;">
@@ -3569,21 +3574,21 @@ document.getElementById('addAdminModal').addEventListener('click', function(e) {
 let _currentSection = 'dashboard';
 
 // Refactored IA: 5 top-level groups, each mapping to one or more underlying sections.
-var GROUP_OF = { dashboard:'today', clients:'clients', diagnostics:'diagteams', decisionroom:'diagteams', emails:'comms', templates:'comms', admins:'settings', security:'settings', workshops:'workshops' };
-var GROUP_DEFAULT = { today:'dashboard', clients:'clients', diagteams:'diagnostics', comms:'emails', settings:'admins', workshops:'workshops' };
+var GROUP_OF = { dashboard:'today', clients:'clients', diagnostics:'diagteams', decisionroom:'diagteams', emails:'comms', templates:'comms', admins:'settings', security:'settings', workshops:'workshops', organizations:'organizations' };
+var GROUP_DEFAULT = { today:'dashboard', clients:'clients', diagteams:'diagnostics', comms:'emails', settings:'admins', workshops:'workshops', organizations:'organizations' };
 function showGroup(group){ showSection(GROUP_DEFAULT[group] || 'dashboard'); }
 
 function showSection(name, skipHooks) {
   _currentSection = name;
   try { localStorage.setItem('gps_coach_section', name); } catch (_) {}
   // Toggle the underlying content sections.
-  ['dashboard', 'clients', 'emails', 'templates', 'admins', 'security', 'diagnostics', 'decisionroom', 'workshops'].forEach(s => {
+  ['dashboard', 'clients', 'emails', 'templates', 'admins', 'security', 'diagnostics', 'decisionroom', 'workshops', 'organizations'].forEach(s => {
     var sec = document.getElementById('section-' + s);
     if (sec) sec.style.display = s === name ? 'block' : 'none';
   });
   // Light up the parent group tab.
   var grp = GROUP_OF[name] || 'today';
-  ['today', 'clients', 'diagteams', 'comms', 'settings', 'workshops'].forEach(g => {
+  ['today', 'clients', 'diagteams', 'comms', 'settings', 'workshops', 'organizations'].forEach(g => {
     var t = document.getElementById('grp-' + g);
     if (t) t.classList.toggle('active', g === grp);
   });
@@ -3607,6 +3612,29 @@ function showSection(name, skipHooks) {
   if (name === 'templates')   loadEmailTemplates();
   if (name === 'dashboard')   renderDiagHome();
   if (name === 'diagnostics') { diagBoot(); renderDiagTable(); }
+  if (name === 'organizations') renderOrganizations();
+}
+
+// ── Organizations: standalone top-level manager (add / edit companies) ──────
+async function renderOrganizations(){
+  var host = document.getElementById('orgSection'); if(!host) return;
+  host.innerHTML = '<div style="padding:30px;text-align:center;color:#5a6b76;">Loading organizations…</div>';
+  var orgs = [];
+  try { orgs = await cdSelect('organizations', { order: { col: 'name', asc: true } }) || []; }
+  catch(e){ host.innerHTML = '<div style="padding:20px;color:#dc2626;">'+esc(e.message)+'</div>'; return; }
+  var rows = orgs.length ? orgs.map(function(o){
+    var web = o.website ? '<a href="'+esc(o.website)+'" target="_blank" rel="noopener" style="color:#01949A;">'+esc(String(o.website).replace(/^https?:\/\//,''))+'</a>' : '—';
+    var logo = o.logo_url ? '<img src="'+esc(o.logo_url)+'" style="height:24px;max-width:80px;object-fit:contain;border-radius:3px;vertical-align:middle;" />' : '—';
+    return '<tr style="border-top:1px solid #dbe3e6;"><td style="padding:10px;font-weight:700;color:#004369;">'+esc(o.name||'')+'</td><td style="padding:10px;color:#5a6b76;font-size:12px;">'+esc(o.industry||'—')+'</td><td style="padding:10px;font-size:12px;">'+web+'</td><td style="padding:10px;">'+logo+'</td><td style="padding:10px;text-align:right;"><button class="org-edit-btn" data-id="'+esc(o.id)+'" style="padding:5px 12px;border:1px solid #dbe3e6;background:#fff;border-radius:6px;font-size:12px;cursor:pointer;color:#004369;font-weight:600;">Edit</button></td></tr>';
+  }).join('') : '<tr><td colspan="5" style="padding:28px;color:#5a6b76;text-align:center;">No organizations yet — click “+ New organization” to add one.</td></tr>';
+  host.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px;">'+
+      '<div style="font-family:Montserrat,sans-serif;font-size:18px;font-weight:800;color:#004369;">Organizations</div>'+
+      '<button id="orgSectionNew" style="padding:8px 16px;background:#01949A;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;font-family:Montserrat,sans-serif;">+ New organization</button>'+
+    '</div>'+
+    '<div id="orgSectionList" style="background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.06);overflow:hidden;"><table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#F7F4EE;text-align:left;color:#5a6b76;font-size:11px;text-transform:uppercase;letter-spacing:.4px;"><th style="padding:10px;">Organization</th><th style="padding:10px;">Industry</th><th style="padding:10px;">Website</th><th style="padding:10px;">Logo</th><th style="padding:10px;"></th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  var nb = document.getElementById('orgSectionNew'); if(nb) nb.onclick = function(){ if(window.openOrgModal) openOrgModal(); };
+  Array.prototype.forEach.call(host.querySelectorAll('.org-edit-btn'), function(b){ b.onclick = function(){ if(window.openOrgModal) openOrgModal(b.getAttribute('data-id')); }; });
 }
 
 // ── Global search: jump to a client, diagnostic, or team by name/email ──────
@@ -7537,12 +7565,11 @@ async function drSendSponsor(sponsorId){
     }
     await loadOrgs();
     var rows=WS.list.map(function(w){ return '<tr style="border-top:1px solid #dbe3e6;"><td style="padding:11px 10px;font-weight:700;color:#004369;cursor:pointer;" onclick="wsOpen(\''+w.id+'\')">'+esc(w.title)+'</td><td style="padding:11px 10px;color:#5a6b76;cursor:pointer;" onclick="wsOpen(\''+w.id+'\')">'+esc(w.client_org_name||'—')+'</td><td style="padding:11px 10px;color:#5a6b76;cursor:pointer;" onclick="wsOpen(\''+w.id+'\')">'+fmtDate(w.debrief_date||w.workshop_date)+'</td><td style="padding:11px 10px;cursor:pointer;" onclick="wsOpen(\''+w.id+'\')"><span style="font-size:11px;font-weight:700;background:#E8F7F7;color:#004369;padding:2px 9px;border-radius:20px;">'+esc(w.status||'setup')+'</span>'+(w.engagement_kind==='assessment'?' <span style="font-size:11px;font-weight:700;background:#F7F4EE;color:#004369;border:1px solid #dbe3e6;padding:2px 9px;border-radius:20px;">Assessment</span>':'')+(w.is_demo?' <span style="font-size:11px;font-weight:700;background:#fde8ec;color:#DB1F48;padding:2px 9px;border-radius:20px;">DEMO</span>':'')+'</td><td style="padding:8px 10px;white-space:nowrap;">'+btn('wsArch_'+w.id,'Archive','ghost')+btn('wsDel_'+w.id,'Delete','danger')+'</td></tr>'; }).join('');
-    c.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;"><div style="font-family:Montserrat,sans-serif;font-size:18px;font-weight:800;color:#004369;">Workshops &amp; Assessments</div><div>'+btn('wsNew','+ New workshop')+btn('wsNewA','+ New assessment')+btn('wsOrgBtn','Organizations','ghost')+'</div></div>'+
+    c.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;"><div style="font-family:Montserrat,sans-serif;font-size:18px;font-weight:800;color:#004369;">Workshops &amp; Assessments</div><div>'+btn('wsNew','+ New workshop')+btn('wsNewA','+ New assessment')+'</div></div>'+
       '<div style="background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);padding:12px 14px;margin-bottom:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;"><label style="font-size:12px;font-weight:700;color:#5a6b76;">Sponsor "Schedule a call" link</label><input id="wsCtaUrl" type="text" placeholder="https://…booking link" style="flex:1;min-width:240px;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;">'+btn('wsCtaSave','Save link','ghost')+'<span id="wsCtaOut" style="font-size:12px;color:#5a6b76;"></span></div>'+
       '<div style="background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);overflow:hidden;">'+(WS.list.length?'<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#F7F4EE;text-align:left;color:#5a6b76;font-size:11px;text-transform:uppercase;letter-spacing:.4px;"><th style="padding:10px;">Title</th><th style="padding:10px;">Org</th><th style="padding:10px;">Date</th><th style="padding:10px;">Status</th><th style="padding:10px;"></th></tr></thead><tbody>'+rows+'</tbody></table>':'<div style="padding:30px;text-align:center;color:#5a6b76;">No active engagements. Click <strong>New workshop</strong> or <strong>New assessment</strong>.</div>')+'</div>';
     document.getElementById('wsNew').onclick=function(){ wsNewForm('workshop'); };
     var na=document.getElementById('wsNewA'); if(na) na.onclick=function(){ wsNewForm('assessment'); };
-    var ob=document.getElementById('wsOrgBtn'); if(ob) ob.onclick=function(){ wsOrgsPane(); };
     (async function(){ try{ var r=await coachData({action:'get-setting',key:'workshop_cta_url'}); var el2=document.getElementById('wsCtaUrl'); if(el2&&r&&r.value) el2.value=r.value; }catch(e){} })();
     document.getElementById('wsCtaSave').onclick=async function(){ var out=document.getElementById('wsCtaOut'); out.textContent='Saving…'; try{ await coachData({action:'set-setting',key:'workshop_cta_url',value:document.getElementById('wsCtaUrl').value.trim()}); out.textContent='Saved.'; }catch(e){ out.textContent=e.message; } };
     WS.list.forEach(function(w){
@@ -7660,7 +7687,8 @@ async function drSendSponsor(sponsorId){
         if(typeof loadOrgs==='function') await loadOrgs();
         close();
         if(typeof toast==='function') toast(editing?'Organization updated.':'Organization added.');
-        if(document.getElementById('wsOrgListBack')) wsOrgsPane();      // refresh list if it's open
+        if(document.getElementById('orgSectionList') && typeof renderOrganizations==='function') renderOrganizations(); // standalone Organizations tab
+        else if(document.getElementById('wsOrgListBack')) wsOrgsPane();      // workshop-area list if it's open
         else if(editing && document.getElementById('wsOrgBack2') && window.wsOrgProfile) window.wsOrgProfile(orgId); // refresh profile if it's open
       }catch(e){ errEl.textContent=e.message; this.disabled=false; this.textContent=editing?'Save changes':'Create organization'; }
     };
