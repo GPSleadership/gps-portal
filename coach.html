@@ -1778,6 +1778,7 @@ async function loadDashboard() {
   renderClients();
   diagBoot(); // loads diagnostic data and renders merged dashboard
   loadClientBuckets(); // member/sponsor sets for the client filters
+  loadOrgNames(); // org autocomplete source (clients + organizations + workshops)
   restoreLastView(); // return to where the coach was before a refresh
 }
 
@@ -2013,7 +2014,7 @@ function renderClientCard(client, checkins) {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
           <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Name</label><input id="editName-${client.id}" value="${(client.name||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /></div>
           <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Email</label><input id="editEmail-${client.id}" type="email" value="${(client.email||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /></div>
-          <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Organization</label><input id="editOrg-${client.id}" value="${(client.organization||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /></div>
+          <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Organization</label><input id="editOrg-${client.id}" list="editOrgList-${client.id}" autocomplete="off" value="${(client.organization||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /><datalist id="editOrgList-${client.id}">${orgOptionsHtml()}</datalist></div>
           <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Title</label><input id="editTitle-${client.id}" value="${(client.title||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /></div>
         </div>
         <div style="margin-bottom:10px;"><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Industry</label>
@@ -2245,7 +2246,7 @@ function renderProfileSection(section, client, checkins) {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
           <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Name</label><input id="editName-${client.id}" value="${(client.name||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /></div>
           <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Email</label><input id="editEmail-${client.id}" type="email" value="${(client.email||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /></div>
-          <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Organization</label><input id="editOrg-${client.id}" value="${(client.organization||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /></div>
+          <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Organization</label><input id="editOrg-${client.id}" list="editOrgList-${client.id}" autocomplete="off" value="${(client.organization||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /><datalist id="editOrgList-${client.id}">${orgOptionsHtml()}</datalist></div>
           <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Title</label><input id="editTitle-${client.id}" value="${(client.title||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /></div>
         </div>
         <div style="margin-bottom:10px;"><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Industry</label>
@@ -2870,13 +2871,19 @@ function openAddModal() {
 }
 
 // Populate the org autocomplete from existing orgs (clients, the organizations table, and workshops).
-async function populateOrgDatalist() {
-  var dl = document.getElementById('newOrgList'); if (!dl) return;
+var ORG_NAMES = [];
+async function loadOrgNames() {
   var names = {};
   (allClients || []).forEach(function(c){ var o = (c.organization || '').trim(); if (o) names[o] = true; });
   try { var orgs = await cdSelect('organizations', { select: 'name', order: { col: 'name', asc: true } }); (orgs || []).forEach(function(o){ var n = (o.name || '').trim(); if (n) names[n] = true; }); } catch (_) {}
   try { var ws = await cdSelect('workshops', { select: 'client_org_name' }); (ws || []).forEach(function(w){ var n = (w.client_org_name || '').trim(); if (n) names[n] = true; }); } catch (_) {}
-  dl.innerHTML = Object.keys(names).sort().map(function(n){ return '<option value="' + n.replace(/"/g,'&quot;') + '"></option>'; }).join('');
+  ORG_NAMES = Object.keys(names).sort();
+}
+function orgOptionsHtml() { return ORG_NAMES.map(function(n){ return '<option value="' + String(n).replace(/"/g,'&quot;') + '"></option>'; }).join(''); }
+async function populateOrgDatalist() {
+  var dl = document.getElementById('newOrgList'); if (!dl) return;
+  if (!ORG_NAMES.length) { await loadOrgNames(); }
+  dl.innerHTML = orgOptionsHtml();
 }
 
 function closeAddModal() {
