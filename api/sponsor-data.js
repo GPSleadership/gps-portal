@@ -125,8 +125,16 @@ async function buildMemberReport(m, confidential) {
   // m.report_json.{succession, focus, summaryLine, name, readinessLevel}.
   report.report_json = Object.assign({}, m.report_json || {});
   // Surface the leader's name at the top level too, so the roster, nine-box grid,
-  // and succession table label people by NAME (initials), not by job title.
+  // and succession table label people by NAME, not "Leader 1/2/3". The report_json
+  // name only exists after a report is generated, so fall back to the client record.
+  // (Confidentiality hides individual SCORES, not identities, so names are fine.)
   report.name = report.report_json.name || null;
+  if (!report.name) {
+    try {
+      const crow = await sbGet(`/rest/v1/clients?id=eq.${enc(m.client_id)}&select=name&limit=1`);
+      if (crow && crow[0] && crow[0].name) report.name = crow[0].name;
+    } catch (_) { /* non-fatal: falls back to role/Leader N */ }
+  }
 
   // 90-day stakeholder scoreboard + engagement (post-diagnostic — always shown)
   report.scoreboard = await buildScoreboard(m.client_id);

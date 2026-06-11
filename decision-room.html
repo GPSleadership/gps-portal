@@ -415,12 +415,12 @@ function renderRecs(recs){
     + ((r.owner||r.timeframe)?'<div class="rec-meta">'+(r.owner?'Owner: '+esc(r.owner):'')+(r.owner&&r.timeframe?' &middot; ':'')+(r.timeframe?'Timeframe: '+esc(r.timeframe):'')+'</div>':'')
     + (bands?'<div style="margin-top:4px;">'+bands+'</div>':'')
     + '<div class="rec-desc">'+esc(r.description)+'</div>'+ qs +(r.updated_at?'<div class="rec-foot">Updated '+fmtDate(r.updated_at)+'</div>':'')+'</div>'; }
-  var s=scope.length?scope.map(card).join(''):'<div class="empty">Nothing in motion to show yet.</div>';
-  var a=accel.length?accel.map(card).join(''):'<div class="empty">No optional accelerators at this time.</div>';
-  return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Recommendations</div></div>'
-    +'<div class="rec-group-title" style="color:var(--proactivity);">In Progress — Included in current scope<span class="gline"></span></div>'+s
-    +'<div class="rec-group-title" style="color:var(--productivity);margin-top:16px;">Optional Accelerators — available, not yet in scope<span class="gline"></span></div>'+a
-    +'<div style="text-align:center;margin-top:20px;"><a class="cta-btn" href="https://gpsleadership.org/discuss">Discuss these options</a></div></div>';
+  // Until there's actual content, keep this neutral — no scope/accelerator framing
+  // and no "discuss these options" CTA (that reads like a sales pitch on an empty page).
+  var all = scope.concat(accel);
+  var body = all.length ? all.map(card).join('') : '<div class="empty">Nothing in motion yet.</div>';
+  var cta  = all.length ? '<div style="text-align:center;margin-top:20px;"><a class="cta-btn" href="https://gpsleadership.org/discuss">Discuss these options</a></div>' : '';
+  return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Recommendations</div></div>'+body+cta+'</div>';
 }
 
 var SIG={green:'On track',yellow:'Watch',red:'Off track'};
