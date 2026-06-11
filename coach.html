@@ -901,7 +901,8 @@
           <div id="drAddMenu" style="display:none;position:absolute;right:0;top:46px;background:#fff;border:1px solid #e8e8e8;border-radius:9px;box-shadow:0 8px 28px rgba(0,0,0,0.14);min-width:240px;z-index:60;overflow:hidden;text-align:left;">
             <div onclick="openAddModal()" style="padding:11px 15px;cursor:pointer;border-bottom:1px solid #f5f5f5;"><b style="font-family:'Montserrat',sans-serif;color:#004369;font-size:13px;">Client / Member</b><div style="font-size:11px;color:#666;">Add a person; set diagnostic and/or coaching in the form</div></div>
             <div onclick="drCreateTeam();" style="padding:11px 15px;cursor:pointer;border-bottom:1px solid #f5f5f5;"><b style="font-family:'Montserrat',sans-serif;color:#004369;font-size:13px;">Team</b><div style="font-size:11px;color:#666;">Create a leadership team for the Decision Room</div></div>
-            <div onclick="drOpenSponsor(null);" style="padding:11px 15px;cursor:pointer;"><b style="font-family:'Montserrat',sans-serif;color:#004369;font-size:13px;">Sponsor</b><div style="font-size:11px;color:#666;">Provision an executive sponsor (Decision Room access)</div></div>
+            <div onclick="drOpenSponsor(null);" style="padding:11px 15px;cursor:pointer;border-bottom:1px solid #f5f5f5;"><b style="font-family:'Montserrat',sans-serif;color:#004369;font-size:13px;">Sponsor</b><div style="font-size:11px;color:#666;">Provision an executive sponsor (Decision Room access)</div></div>
+            <div onclick="openImportModal();" style="padding:11px 15px;cursor:pointer;"><b style="font-family:'Montserrat',sans-serif;color:#004369;font-size:13px;">Import from Excel / CSV</b><div style="font-size:11px;color:#666;">Bulk-add many people at once from a spreadsheet</div></div>
           </div>
         </div>
       </div>
@@ -1442,8 +1443,8 @@
   <div class="modal" style="max-width:680px;">
     <h2>Import Clients from Excel</h2>
     <p style="font-size:13px;color:var(--gray-600);margin-bottom:16px;">
-      Upload an <strong>.xlsx</strong> or <strong>.csv</strong> file. Required columns: <strong>Name</strong>, <strong>Email</strong>. Optional: Organization, Title, Industry.
-      <br/>Each client will receive a unique portal link automatically.
+      Upload an <strong>.xlsx</strong> or <strong>.csv</strong>. <strong>Required:</strong> Name and Email. Optional: Title, Organization, Phone, Industry. Headers are auto-detected ("Email Address", "Title", "First Name"+"Last Name", etc. all work). <a href="#" onclick="downloadClientTemplate();return false;" style="color:#01949A;font-weight:700;">Download template ↓</a>
+      <br/>Imported people come in as clients (not auto-enrolled in coaching) — set up their diagnostic or coaching after.
     </p>
     <div class="form-group">
       <label>Select File</label>
@@ -3150,6 +3151,16 @@ async function saveCoachingDates(clientId) {
 // ─────────────────────────────────────────────
 // IMPORT CLIENTS
 // ─────────────────────────────────────────────
+function downloadClientTemplate() {
+  var csv = 'Name,Email,Title,Organization,Phone,Industry\r\n'
+    + 'Kimberly Carlisle,kcarlisle@example.com,General Counsel,Example Org,601-555-0142,Aviation / Airport\r\n';
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'GPS_Client_Import_Template.csv';
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 100);
+}
+
 function openImportModal() {
   document.getElementById('importModal').classList.add('open');
   document.getElementById('importPreview').innerHTML = '';
@@ -3184,13 +3195,20 @@ async function handleImportFile(input) {
       return;
     }
 
-    importParsedClients = rows;
+    // Flexible header mapping — single "Name" or First+Last; common email/title/phone headers.
+    function _impPick(r, keys){ for(var k in r){ var lk=String(k).replace(/^﻿/,'').trim().toLowerCase(); if(keys.indexOf(lk)>-1){ var v=r[k]; if(v!=null&&String(v).trim()) return String(v).trim(); } } return ''; }
+    const mapped = rows.map(function(r){
+      var nm=_impPick(r,['name','full name','fullname','client','participant','contact','employee','employee name']);
+      if(!nm){ var fn=_impPick(r,['first name','firstname','first','given name']); var ln=_impPick(r,['last name','lastname','last','surname','family name']); nm=(fn+' '+ln).trim(); }
+      return { name:nm, email:_impPick(r,['email','email address','e-mail','e mail','emailaddress','work email']).toLowerCase(), title:_impPick(r,['title','role','job title','jobtitle','position']), organization:_impPick(r,['organization','organisation','org','company','client/org']), industry:_impPick(r,['industry','sector']), phone:_impPick(r,['phone','phone number','phonenumber','mobile','cell','telephone','phone #']) };
+    });
+    importParsedClients = mapped;
 
     // Build preview table
-    const preview = rows.slice(0, 20).map(r => {
-      const name  = (r.Name  || r.name  || '').toString().trim();
-      const email = (r.Email || r.email || '').toString().trim();
-      const org   = (r.Organization || r.organization || r.Org || r.org || '').toString().trim();
+    const preview = mapped.slice(0, 20).map(r => {
+      const name  = r.name;
+      const email = r.email;
+      const org   = r.organization || '';
       const valid = name && email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
       return `<tr style="background:${valid ? '' : '#fff8f0'};">
         <td style="padding:6px 10px;font-size:13px;border-bottom:1px solid var(--gray-200);">${name || '<span style="color:var(--red)">Missing</span>'}</td>

@@ -62,9 +62,10 @@ export default async function handler(req, res) {
       organization: (row.organization || row.Organization || row.org || row.Org || '').toString().trim() || null,
       industry:     (row.industry     || row.Industry     || '').toString().trim() || null,
       revenue_band: (row.revenue_band || row.Revenue      || '').toString().trim() || null,
+      phone:        (row.phone        || row.Phone        || '').toString().trim() || null,
       token:        generateToken(),
       is_active:    true,
-      in_coaching_program: true,
+      in_coaching_program: false,
     });
   }
 
