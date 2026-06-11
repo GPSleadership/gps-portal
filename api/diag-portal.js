@@ -111,6 +111,14 @@ export default async function handler(req, res) {
         const diags = dr.ok ? await dr.json() : [];
         const diagnostic = diags[0] || null;
         if (!diagnostic) return res.status(404).json({ error: 'Diagnostic not found' });
+        // Org logo (matched by organization name) — shown in the survey header.
+        if (diagnostic.client_org) {
+          try {
+            const olr = await sb(`/rest/v1/organizations?name=eq.${encodeURIComponent(diagnostic.client_org)}&select=logo_url&limit=1`);
+            const orows = olr.ok ? await olr.json() : [];
+            if (orows[0] && orows[0].logo_url) diagnostic.org_logo_url = orows[0].logo_url;
+          } catch (_) { /* logo is optional */ }
+        }
         const or = await sb(`/rest/v1/diagnostic_question_overrides?diagnostic_id=eq.${rater.diagnostic_id}&select=question_code,override_text`);
         const overrides = or.ok ? await or.json() : [];
         return res.status(200).json({ ok: true, rater, diagnostic, overrides });

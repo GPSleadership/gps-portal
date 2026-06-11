@@ -469,10 +469,13 @@ function renderWelcome() {
   container.innerHTML = `
   <div class="screen active" id="screen-welcome">
     <div class="card" style="border-top:4px solid var(--blue);">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
-        <div style="background:var(--blue);color:var(--gold);font-weight:900;font-size:18px;padding:6px 12px;border-radius:4px;font-style:italic;">GPS</div>
-        <div><div style="font-size:11px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.05em;">GPS Leadership Solutions</div>
-        <div style="font-size:12px;color:var(--mid);">14-Day Executive Leadership Diagnostic</div></div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="background:var(--blue);color:var(--gold);font-weight:900;font-size:18px;padding:6px 12px;border-radius:4px;font-style:italic;">GPS</div>
+          <div><div style="font-size:11px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.05em;">GPS Leadership Solutions</div>
+          <div style="font-size:12px;color:var(--mid);">14-Day Executive Leadership Diagnostic</div></div>
+        </div>
+        ${DIAGNOSTIC.org_logo_url ? `<img src="${DIAGNOSTIC.org_logo_url}" alt="${(DIAGNOSTIC.client_org || '').replace(/"/g,'&quot;')} logo" style="max-height:40px;max-width:140px;object-fit:contain;flex:0 0 auto;" />` : ''}
       </div>
       ${IS_SELF
         ? `<div class="welcome-leader">Your Self-Assessment</div>
