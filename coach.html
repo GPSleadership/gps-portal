@@ -7043,12 +7043,37 @@ async function drRender(){
 
 async function drCreateTeam(){
   showSection('decisionroom', true);
-  var name=prompt('Team name (e.g., Executive Team):'); if(!name){ drRender(); return; }
-  var org=prompt('Client organization name:')||'';
-  var type=prompt('Team type — Exec, Director/Manager, or Custom:','Exec')||'Custom';
-  if(['Exec','Director/Manager','Custom'].indexOf(type)<0) type='Custom';
-  try{ var r=await cdInsert('teams',{ name:name, client_org_name:org, team_type:type }); var t=r[0]; drManageTeam(t? t.id : null); }
-  catch(e){ alert('Could not create team: '+e.message); }
+  if(typeof loadOrgNames==='function'){ try{ await loadOrgNames(); }catch(e){} }
+  var orgOpts = (typeof orgOptionsHtml==='function') ? orgOptionsHtml() : '';
+  var ex=document.getElementById('drTeamModalOverlay'); if(ex) ex.remove();
+  var ov=document.createElement('div'); ov.id='drTeamModalOverlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10000;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:48px 16px;';
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:480px;width:100%;box-shadow:0 16px 48px rgba(0,0,0,.25);">'+
+    '<div style="padding:18px 22px;border-bottom:1px solid #e8e8e8;display:flex;align-items:center;justify-content:space-between;"><div style="font-family:Montserrat,sans-serif;font-weight:800;color:#004369;font-size:17px;">New Team</div><div id="drct_x" style="cursor:pointer;font-size:18px;color:#888;">✕</div></div>'+
+    '<div style="padding:20px 22px;display:flex;flex-direction:column;gap:14px;">'+
+      '<div><label style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#5a6b76;font-weight:700;display:block;margin-bottom:4px;">Team name *</label><input id="drct_name" placeholder="e.g. Executive Team" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;"></div>'+
+      '<div><label style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#5a6b76;font-weight:700;display:block;margin-bottom:4px;">Client organization</label><input id="drct_org" list="drct_orglist" autocomplete="off" placeholder="Type — existing organizations pop up" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;"><datalist id="drct_orglist">'+orgOpts+'</datalist><div style="font-size:11px;color:#94a3b8;margin-top:3px;">Pick an existing organization so it matches the rest of the portal, or type a new one.</div></div>'+
+      '<div><label style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#5a6b76;font-weight:700;display:block;margin-bottom:4px;">Team type</label><select id="drct_type" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;"><option value="Exec">Exec</option><option value="Director/Manager">Director/Manager</option><option value="Custom">Custom</option></select></div>'+
+      '<div id="drct_err" style="color:#dc2626;font-size:12px;"></div>'+
+    '</div>'+
+    '<div style="padding:14px 22px;border-top:1px solid #e8e8e8;display:flex;justify-content:flex-end;gap:8px;"><button id="drct_cancel" style="padding:8px 16px;border:1px solid #dbe3e6;background:#fff;border-radius:7px;font-size:13px;cursor:pointer;color:#5a6b76;">Cancel</button><button id="drct_save" style="padding:8px 18px;border:none;background:#01949A;color:#fff;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;">Create team</button></div>'+
+  '</div>';
+  document.body.appendChild(ov);
+  function close(){ ov.remove(); drRender(); }
+  document.getElementById('drct_x').onclick=close;
+  document.getElementById('drct_cancel').onclick=close;
+  ov.addEventListener('click', function(e){ if(e.target===ov) close(); });
+  document.getElementById('drct_name').focus();
+  document.getElementById('drct_save').onclick=async function(){
+    var name=document.getElementById('drct_name').value.trim();
+    var org=document.getElementById('drct_org').value.trim();
+    var type=document.getElementById('drct_type').value;
+    var errEl=document.getElementById('drct_err');
+    if(!name){ errEl.textContent='Team name is required.'; return; }
+    this.disabled=true; this.textContent='Creating…';
+    try{ var r=await cdInsert('teams',{ name:name, client_org_name:org||null, team_type:type }); var t=r[0]; ov.remove(); drManageTeam(t? t.id : null); }
+    catch(e){ errEl.textContent='Could not create team: '+e.message; this.disabled=false; this.textContent='Create team'; }
+  };
 }
 
 async function drManageTeam(teamId){
