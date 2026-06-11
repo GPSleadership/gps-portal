@@ -6652,7 +6652,11 @@ async function createDiagnostic() {
   resetDiagModal();
   ALL_DIAGS.unshift(data);
 
-  // Navigate to the new diagnostic in the Diagnostics tab
+  // If launched from a client profile, close that overlay first — otherwise it
+  // covers the dashboard and it looks like nothing happened.
+  if (typeof closeClientProfile === 'function') closeClientProfile();
+
+  // Navigate to the new diagnostic and open its setup screen.
   showSection('diagnostics');
   await diagBoot();
   openDiag(data.id);
