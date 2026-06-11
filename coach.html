@@ -7128,12 +7128,13 @@ async function drManageTeam(teamId){
   var panelRecs=drRecsPanel(team, recs);
   var panelSignals=drSignalsPanel(team, signals);
   var panelSponsors=drSponsorsPanel(team, links, sponsors, members, nameById);
+  var panelPOC=drPocPanel(team);
   var panelNarr=drNarrativePanel(team);
 
   el.innerHTML='<div style="margin-bottom:14px;"><button class="btn-add" style="background:#fff;color:#004369;border:1.5px solid #d0d0d0;" onclick="drRender()">← All teams</button></div>'
     +'<h2 style="font-family:\'Montserrat\',sans-serif;color:#004369;font-size:20px;">'+drEsc(team.client_org_name||team.name)+' — '+drEsc(team.name)+'</h2>'
     +'<div style="font-size:12px;color:#666;margin-bottom:16px;">'+drEsc(team.team_type)+' team</div>'
-    +panelNarr+panelMembers+panelReport+panelSponsors+panelRecs+panelSignals;
+    +panelNarr+panelMembers+panelReport+panelSponsors+panelPOC+panelRecs+panelSignals;
   try{ drFillRole(); }catch(e){}
 }
 
@@ -7526,6 +7527,23 @@ function drSponsorsPanel(t, links, sponsors, members, nameById){
     +'<div style="margin-top:12px;border-top:1px solid #eee;padding-top:12px;"><button class="btn-add" onclick="drOpenSponsor(\''+t.id+'\')">+ Add sponsor to this team</button></div>');
 }
 
+function drPocPanel(t){
+  function v(x){ return drEsc(x||''); }
+  var inner='<div style="font-size:12px;color:#666;margin-bottom:10px;">A logistics contact for this engagement — no portal access, no results. Saving does not send any email.</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'
+    +'<div><label style="font-size:11px;font-weight:700;color:#5a6b76;text-transform:uppercase;display:block;margin-bottom:4px;">Name</label><input id="dr_pocname" value="'+v(t.poc_name)+'" placeholder="e.g. Michael Gater" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;"></div>'
+    +'<div><label style="font-size:11px;font-weight:700;color:#5a6b76;text-transform:uppercase;display:block;margin-bottom:4px;">Email</label><input id="dr_pocemail" value="'+v(t.poc_email)+'" placeholder="email@company.com" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;"></div>'
+    +'</div>'
+    +'<div style="margin-top:10px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;"><div><label style="font-size:11px;font-weight:700;color:#5a6b76;text-transform:uppercase;display:block;margin-bottom:4px;">Phone</label><input id="dr_pocphone" value="'+v(t.poc_phone)+'" placeholder="optional" style="padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;"></div>'
+    +'<button class="btn-add" onclick="drSavePoc(\''+t.id+'\')">Save contact</button><span id="dr_pocout" style="font-size:12px;color:#5a6b76;"></span></div>';
+  return drCard('Point of contact', inner);
+}
+async function drSavePoc(teamId){
+  var out=document.getElementById('dr_pocout'); if(out) out.textContent='Saving…';
+  try{ await cdUpdate('teams',{ poc_name:drVal('dr_pocname')||null, poc_email:drVal('dr_pocemail')||null, poc_phone:drVal('dr_pocphone')||null }, { eq:{ id:teamId } }); if(out) out.textContent='Saved.'; }
+  catch(e){ if(out) out.textContent=e.message; }
+}
+
 async function drOpenSponsor(preTeamId){
   showSection('decisionroom', true);
   var el=document.getElementById('drAdmin'); el.innerHTML='<div class="spinner"></div>';
@@ -7572,8 +7590,8 @@ async function drSaveSponsor(){
     var sp=r[0];
     await cdInsert('sponsor_teams',{ sponsor_id:sp.id, team_id:teamId, confidentiality_mode:drVal('dr_spconf'), supervises_client_ids:sup });
     var link=location.origin+'/decision-room?token='+sp.sponsor_token;
-    if(drVal('dr_spemail')){ try{ await drSendSponsor(sp.id); }catch(e){} }
-    alert('Sponsor created.\n\nDecision Room link:\n'+link+(drVal('dr_spemail')?'\n\n(Invite email sent.)':''));
+    // No email is sent on add. Use the "Email link" button next to the sponsor when ready.
+    alert('Sponsor added — no email sent.\n\nDecision Room link:\n'+link+'\n\nWhen you\'re ready, click “Email link” next to the sponsor to notify them.');
     drManageTeam(teamId);
   } catch(e){ alert('Could not create sponsor: '+e.message); }
 }
