@@ -1360,22 +1360,10 @@
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
       <div class="form-group" style="margin:0;">
         <label>Industry</label>
-        <select id="newIndustry">
-          <option value="">— Select —</option>
-          <option value="Trucking / Transportation">Trucking / Transportation</option>
-          <option value="Logistics / Supply Chain">Logistics / Supply Chain</option>
-          <option value="Manufacturing">Manufacturing</option>
-          <option value="Industrial Services">Industrial Services</option>
-          <option value="Parts & Service">Parts &amp; Service</option>
-          <option value="Distribution">Distribution</option>
-          <option value="Healthcare">Healthcare</option>
-          <option value="Construction">Construction</option>
-          <option value="Technology">Technology</option>
-          <option value="Financial Services">Financial Services</option>
-          <option value="Federal Government">Federal Government</option>
-          <option value="State/Local Government">State/Local Government</option>
-          <option value="Other">Other</option>
-        </select>
+        <input id="newIndustry" list="newIndustryList" placeholder="Type or pick — or enter a new one" autocomplete="off" style="width:100%;padding:8px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;box-sizing:border-box;" />
+        <datalist id="newIndustryList">
+          <option value="Trucking / Transportation"></option><option value="Logistics / Supply Chain"></option><option value="Manufacturing"></option><option value="Industrial Services"></option><option value="Parts &amp; Service"></option><option value="Distribution"></option><option value="Healthcare"></option><option value="Construction"></option><option value="Technology"></option><option value="Financial Services"></option><option value="Federal Government"></option><option value="State/Local Government"></option><option value="Aviation / Airport"></option><option value="Utilities / Energy"></option><option value="Non-Profit"></option>
+        </datalist>
       </div>
       <div class="form-group" style="margin:0;">
         <label>Revenue Band</label>
@@ -7489,7 +7477,7 @@ async function drSendSponsor(sponsorId){
       '<div style="margin-bottom:14px;"><span style="font-size:12px;font-weight:700;background:'+(isA?'#E8F7F7':'#F7F4EE')+';color:#004369;border:1px solid #dbe3e6;padding:4px 12px;border-radius:20px;">'+(isA?'Assessment · one survey across the organization':'Workshop · pre + post survey around your session')+'</span></div>'+
       field('wsf_title','Title *','','e.g. Q3 Leadership Assessment')+
       '<div style="margin-bottom:12px;"><label style="display:block;font-size:12px;font-weight:700;color:#5a6b76;margin-bottom:4px;">'+(isA?'Client / organization *':'Client / organization')+'</label><input id="wsf_org" type="text" list="wsf_org_list" value="" placeholder="Type or select org name" style="width:100%;padding:9px 11px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:14px;font-family:inherit;"><datalist id="wsf_org_list">'+orgOpts+'</datalist>'+(isA?'<div style="margin-top:4px;"><a id="wsf_create_org" href="#" style="font-size:12px;color:#01949A;">+ Create new organization</a></div>':'')+'</div>'+
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;"><div id="wsf_dateWrap"'+(isA?' style="display:none;"':'')+'>'+field('wsf_date','Workshop date','','','date')+'</div>'+field('wsf_debrief',(isA?'Debrief date *':'Debrief date'),'','','date')+'</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;"><div id="wsf_dateWrap"'+(isA?' style="display:none;"':'')+'>'+field('wsf_date','Workshop date','','','date')+'</div>'+field('wsf_debrief','Debrief date (optional — adjust anytime)','','','date')+'</div>'+
       '<div style="margin-bottom:12px;padding:10px 12px;background:#F7F4EE;border:1px solid #dbe3e6;border-radius:7px;font-size:12px;color:#5a6b76;">You\'ll add the sponsor(s) and point of contact on the next screen — start typing a name and pick from your existing contacts.</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'+field('wsf_industry','Industry','','Trucking')+'<div style="margin-bottom:12px;"><label style="display:block;font-size:12px;font-weight:700;color:#5a6b76;margin-bottom:4px;">Audience level</label><select id="wsf_level" style="width:100%;padding:9px 11px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:14px;"><option value="">—</option><option value="executive">Executive</option><option value="manager">Manager</option><option value="mixed">Mixed</option><option value="na">N/A</option></select></div></div>'+
       field('wsf_size','Company size band','','$10–25M')+
@@ -7517,7 +7505,6 @@ async function drSendSponsor(sponsorId){
     var isA=(kind==='assessment');
     var orgName=v('wsf_org'), orgId=v('wsf_org_id');
     if(isA&&!orgName){ err.textContent='Client / organization is required.'; return; }
-    if(isA&&!v('wsf_debrief')){ err.textContent='Debrief date is required.'; return; }
     document.getElementById('wsSave').disabled=true; err.textContent='Creating…';
     try{
       var tags=v('wsf_tags').split(',').map(function(s){return s.trim();}).filter(Boolean);
@@ -7603,11 +7590,12 @@ async function drSendSponsor(sponsorId){
     var statuses=isA?['setup','discovery_complete','questions_drafted','sponsor_review','pre_survey_open','pre_survey_closed','debrief_scheduled','report_uploaded','complete']:['setup','discovery_complete','questions_drafted','sponsor_review','pre_survey_open','pre_survey_closed','workshop_delivered','post_survey_open','post_survey_closed','debrief_scheduled','report_uploaded','complete'];
     var opts=statuses.map(function(s){ var lab=isA?s.replace('pre_survey','survey'):s; return '<option value="'+s+'"'+(w.status===s?' selected':'')+'>'+lab+'</option>'; }).join('');
     p.innerHTML=
-      card('<div style="font-weight:800;margin-bottom:10px;color:#004369;">Status &amp; dates</div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;"><label style="font-size:12px;color:#5a6b76;font-weight:700;">Status</label><select id="wsStatus" style="padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;">'+opts+'</select>'+btn('wsStatusSave','Save status','ghost')+'</div><div style="font-size:13px;color:#5a6b76;">'+(isA?'':('Workshop: '+fmtDate(w.workshop_date)+' · '))+'Debrief: '+fmtDate(w.debrief_date)+'</div>')+
+      card('<div style="font-weight:800;margin-bottom:10px;color:#004369;">Status &amp; dates</div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;"><label style="font-size:12px;color:#5a6b76;font-weight:700;">Status</label><select id="wsStatus" style="padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;">'+opts+'</select>'+btn('wsStatusSave','Save status','ghost')+'</div><div style="font-size:13px;color:#5a6b76;">'+(isA?'':('Workshop: '+fmtDate(w.workshop_date)+' · '))+'Debrief date</div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px;"><input type="date" id="wsEditDebrief" value="'+(w.debrief_date||'')+'" style="padding:7px 10px;border:1.5px solid #dbe3e6;border-radius:7px;">'+btn('wsDatesSave','Save','ghost')+'<span id="wsDatesOut" style="font-size:12px;color:#5a6b76;"></span></div>')+
       card('<div style="font-weight:800;margin-bottom:8px;color:#004369;">Sponsor dashboard link</div><div style="font-size:12px;background:#F7F4EE;padding:10px;border-radius:7px;word-break:break-all;color:#004369;">'+esc(spLink)+'</div><div style="margin-top:10px;">'+btn('wsCopyLink','Copy link','ghost')+'</div>')+
       card('<div style="font-weight:800;margin-bottom:6px;color:#004369;">Discovery call notes / transcript</div><div style="font-size:12px;color:#5a6b76;margin-bottom:8px;">Paste the discovery call transcript or your notes. The AI uses this to suggest client-specific questions (Questions tab → "AI suggest from discovery") and to draft the recap email.</div>'+wsTa('wsDisc', w.discovery_transcript||w.discovery_notes||'', 140)+'<div style="margin-top:8px;">'+btn('wsDiscSave','Save notes','ghost')+'<span id="wsDiscOut" style="font-size:12px;color:#5a6b76;margin-left:8px;"></span></div>'+(isA?'<div style="margin-top:12px;border-top:1px dashed #dbe3e6;padding-top:12px;"><div style="font-size:12px;font-weight:700;color:#5a6b76;margin-bottom:6px;">Attach discovery file (PDF, DOCX, TXT, max 10 MB)</div><input type="file" id="wsDiscFile" accept=".pdf,.docx,.txt" style="font-size:13px;width:100%;"><div id="wsDiscFileOut" style="font-size:12px;color:#5a6b76;margin-top:6px;">'+(w.discovery_attachment_url?'Attached: <a href="'+esc(w.discovery_attachment_url)+'" target="_blank" style="color:#01949A;">view file</a>':'No file attached.')+'</div></div>':''))+
       card('<div style="font-weight:800;margin-bottom:12px;color:#004369;">Sponsors</div><div style="font-size:12px;color:#5a6b76;margin-bottom:12px;">Sponsors can log into their portal and see this project. Add them by email — they\'ll get a portal tab for this '+esc(isA?'assessment':'workshop')+'.</div><div id="wsSponsorsPanel"><div id="wsSponsorList" style="margin-bottom:14px;"></div><div style="padding-top:10px;border-top:1px solid #f3f4f6;"><div style="position:relative;margin-bottom:8px;"><input id="wsSponsorEmail" placeholder="Search by email or name…" autocomplete="off" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;"><div id="wsSponsorSuggest" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid #dbe3e6;border-top:none;border-radius:0 0 7px 7px;z-index:50;max-height:180px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.1);"></div></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;"><input id="wsSponsorName" placeholder="Full name" style="flex:1;min-width:140px;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;"><input id="wsSponsorTitle" placeholder="Title (e.g. CEO)" style="flex:1;min-width:140px;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;"></div>'+btn('wsSponsorAdd','Add sponsor')+'<span id="wsSponsorOut" style="font-size:12px;color:#dc2626;margin-left:8px;"></span></div></div>');
     document.getElementById('wsStatusSave').onclick=async function(){ try{ await cdUpdate('workshops',{status:document.getElementById('wsStatus').value,updated_at:new Date().toISOString()},{eq:{id:w.id}}); w.status=document.getElementById('wsStatus').value; toast('Status saved.'); wsDetail(); }catch(e){ toast(e.message); } };
+    var wsDatesBtn=document.getElementById('wsDatesSave'); if(wsDatesBtn) wsDatesBtn.onclick=async function(){ var o=document.getElementById('wsDatesOut'); o.textContent='Saving…'; var patch={ debrief_date:(document.getElementById('wsEditDebrief').value||null), updated_at:new Date().toISOString() }; var wd=document.getElementById('wsEditWsDate'); if(wd) patch.workshop_date=(wd.value||null); try{ await cdUpdate('workshops',patch,{eq:{id:w.id}}); w.debrief_date=patch.debrief_date; if(wd) w.workshop_date=patch.workshop_date; o.textContent='Saved.'; }catch(e){ o.textContent=e.message; } };
     document.getElementById('wsCopyLink').onclick=function(){ navigator.clipboard.writeText(spLink).then(function(){ toast('Link copied.'); },function(){ toast(spLink); }); };
     document.getElementById('wsDiscSave').onclick=async function(){ var o=document.getElementById('wsDiscOut'); o.textContent='Saving…'; try{ await cdUpdate('workshops',{discovery_transcript:document.getElementById('wsDisc').value,updated_at:new Date().toISOString()},{eq:{id:w.id}}); w.discovery_transcript=document.getElementById('wsDisc').value; o.textContent='Saved.'; }catch(e){ o.textContent=e.message; } };
     var df=document.getElementById('wsDiscFile');
@@ -7720,15 +7708,15 @@ async function drSendSponsor(sponsorId){
       (w.roster_uploaded_at
         ? '<div style="font-size:12px;color:#5a6b76;margin-bottom:10px;">Last sponsor upload: '+new Date(w.roster_uploaded_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</div>'
         : '<div style="font-size:12px;color:#5a6b76;margin-bottom:10px;">No sponsor upload yet.</div>')+
-      (!w.roster_locked ? btn('wsLockRoster','🔒 Lock roster — surveys going out','danger') : '')+
+      (w.roster_locked ? btn('wsUnlockRoster','🔓 Unlock roster — allow edits','ghost') : btn('wsLockRoster','🔒 Lock roster — surveys going out','danger'))+
       '<span id="wsLockOut" style="font-size:12px;color:#5a6b76;margin-left:8px;"></span>');
-    p.innerHTML=rosterStatusCard+card('<div style="font-weight:800;margin-bottom:8px;color:#004369;">'+(isA?'Shared survey link (QR)':'In-room post-survey (QR)')+'</div><div style="font-size:13px;color:#5a6b76;margin-bottom:12px;">'+(isA?'One link for the whole organization — put the QR on a slide, in an email, or on a flyer.':'Run the post-survey live, ~20–30 min before the workshop ends.')+'</div><div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;"><div><div id="wsQrBox" style="width:200px;height:200px;background:#fff;border:1px solid #dbe3e6;border-radius:10px;display:flex;align-items:center;justify-content:center;padding:8px;"></div><div style="margin-top:10px;">'+btn('wsQrDl','Download PNG','ghost')+'</div></div><div style="flex:1;min-width:220px;">'+(isA?'':'<label style="font-size:12px;color:#5a6b76;font-weight:700;">Phase</label> <select id="wsQrPhase" style="padding:7px 10px;border:1.5px solid #dbe3e6;border-radius:7px;"><option value="post" selected>Post-workshop</option><option value="pre">Pre-workshop</option></select> ')+btn('wsQrGen','Update QR','ghost')+'<div style="font-size:12px;color:#004369;background:#F7F4EE;padding:10px;border-radius:7px;margin-top:10px;word-break:break-all;" id="wsQrLink">'+esc(roomLink)+'</div></div></div>')+
+    p.innerHTML=rosterStatusCard+(isA?'':card('<div style="font-weight:800;margin-bottom:8px;color:#004369;">'+(isA?'Shared survey link (QR)':'In-room post-survey (QR)')+'</div><div style="font-size:13px;color:#5a6b76;margin-bottom:12px;">'+(isA?'One link for the whole organization — put the QR on a slide, in an email, or on a flyer.':'Run the post-survey live, ~20–30 min before the workshop ends.')+'</div><div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;"><div><div id="wsQrBox" style="width:200px;height:200px;background:#fff;border:1px solid #dbe3e6;border-radius:10px;display:flex;align-items:center;justify-content:center;padding:8px;"></div><div style="margin-top:10px;">'+btn('wsQrDl','Download PNG','ghost')+'</div></div><div style="flex:1;min-width:220px;">'+(isA?'':'<label style="font-size:12px;color:#5a6b76;font-weight:700;">Phase</label> <select id="wsQrPhase" style="padding:7px 10px;border:1.5px solid #dbe3e6;border-radius:7px;"><option value="post" selected>Post-workshop</option><option value="pre">Pre-workshop</option></select> ')+btn('wsQrGen','Update QR','ghost')+'<div style="font-size:12px;color:#004369;background:#F7F4EE;padding:10px;border-radius:7px;margin-top:10px;word-break:break-all;" id="wsQrLink">'+esc(roomLink)+'</div></div></div>'))+
     card('<div style="font-weight:800;margin-bottom:8px;color:#004369;">Upload roster</div><div style="font-size:13px;color:#5a6b76;margin-bottom:8px;">Paste CSV <strong>or</strong> upload an XLSX. <strong>Required:</strong> a <em>Name</em> column and an <em>Email</em> column. Optional: Title/Role, Department, Location. Header names are auto-detected — "Email Address", "Title", "Department/Area", "First Name"+"Last Name", etc. all work. <a href="#" id="wsRosterTpl" style="color:#01949A;font-weight:700;">Download template ↓</a></div>'+
       '<textarea id="wsRosterCsv" placeholder="name,email,role,location,department" style="width:100%;min-height:80px;border:1.5px solid #dbe3e6;border-radius:7px;padding:10px;font-family:monospace;font-size:13px;margin-bottom:8px;"></textarea>'+
       '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><label style="font-size:12px;font-weight:700;color:#5a6b76;">Or upload a file (XLSX or CSV):</label><input type="file" id="wsRosterXlsx" accept=".xlsx,.xls,.csv" style="font-size:13px;flex:1;"></div>'+
       '<div style="margin-top:10px;">'+btn('wsUpload','Upload roster')+'</div><div id="wsRosterOut" style="font-size:13px;margin-top:8px;color:#5a6b76;"></div>')+
     card('<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;" id="wsRosterHdr"><div style="font-weight:800;color:#004369;">Participants ('+WS.parts.length+')</div><div>'+btn('wsSendPre',(isA?'Send survey emails (not-sent)':'Send pre-survey'))+(isA?'':btn('wsSendPost','Send post-survey (email)','ghost'))+'</div></div><div id="wsRosterTable"><div style="color:#5a6b76;font-size:13px;">Loading roster…</div></div>');
-    wsRenderQR(); document.getElementById('wsQrGen').onclick=wsRenderQR; document.getElementById('wsQrDl').onclick=wsDownloadQR;
+    var qrGen=document.getElementById('wsQrGen'); if(qrGen){ wsRenderQR(); qrGen.onclick=wsRenderQR; var qrDl=document.getElementById('wsQrDl'); if(qrDl) qrDl.onclick=wsDownloadQR; }
     document.getElementById('wsUpload').onclick=wsUploadRoster;
     var tplBtn=document.getElementById('wsRosterTpl'); if(tplBtn) tplBtn.onclick=function(e){ e.preventDefault(); download('GPS_Roster_Template.csv','Name,Email,Title,Department,Location\r\nJane Doe,jane.doe@company.com,Director of Operations,Operations,Dallas\r\n'); };
     var xlsxIn=document.getElementById('wsRosterXlsx');
@@ -7746,6 +7734,16 @@ async function drSendSponsor(sponsorId){
         wsRoster(p);
       }catch(e){ out.textContent=e.message; }
     };
+    var unlockBtn=document.getElementById('wsUnlockRoster');
+    if(unlockBtn) unlockBtn.onclick=async function(){
+      var out=document.getElementById('wsLockOut'); out.textContent='Unlocking…';
+      try{
+        await wsData('unlock-roster',{workshop_id:WS.cur.id});
+        WS.cur.roster_locked=false;
+        toast('Roster unlocked — you can edit it again.');
+        wsRoster(p);
+      }catch(e){ out.textContent=e.message; }
+    };
     wsLoadRoster();
   }
   async function wsLoadRoster(){
@@ -7759,12 +7757,14 @@ async function drSendSponsor(sponsorId){
       if(!parts.length){ tbl.innerHTML='<div style="color:#5a6b76;">No participants yet — upload a roster.</div>'; return; }
       var rows=parts.map(function(pt){
         var resend=isA?btn('wsResend_'+pt.id,'Resend','ghost'):'';
-        return '<tr style="border-top:1px solid #dbe3e6;"><td style="padding:8px 10px;">'+esc(pt.name||'—')+'</td><td style="padding:8px 10px;font-size:12px;color:#5a6b76;">'+esc(pt.email||'—')+'</td><td style="padding:8px 10px;font-size:12px;">'+esc(pt.role||'—')+'</td><td style="padding:8px 10px;font-size:12px;">'+esc(pt.department||'—')+'</td><td style="padding:8px 10px;">'+pill(pt.display_status)+'</td>'+(isA?'<td style="padding:8px 10px;">'+resend+'</td>':'')+'</tr>';
+        return '<tr style="border-top:1px solid #dbe3e6;"><td style="padding:8px 10px;">'+esc(pt.name||'—')+'</td><td style="padding:8px 10px;font-size:12px;color:#5a6b76;">'+esc(pt.email||'—')+'</td><td style="padding:8px 10px;font-size:12px;">'+esc(pt.role||'—')+'</td><td style="padding:8px 10px;font-size:12px;">'+esc(pt.department||'—')+'</td><td style="padding:8px 10px;">'+pill(pt.display_status)+'</td><td style="padding:8px 10px;white-space:nowrap;">'+resend+btn('wsRmPart_'+pt.id,'Remove','danger')+'</td></tr>';
       }).join('');
-      tbl.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#F7F4EE;text-align:left;color:#5a6b76;font-size:11px;text-transform:uppercase;"><th style="padding:8px 10px;">Name</th><th style="padding:8px 10px;">Email</th><th style="padding:8px 10px;">Role</th><th style="padding:8px 10px;">Dept</th><th style="padding:8px 10px;">Status</th>'+(isA?'<th style="padding:8px 10px;"></th>':'')+'</tr></thead><tbody>'+rows+'</tbody></table>';
+      tbl.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#F7F4EE;text-align:left;color:#5a6b76;font-size:11px;text-transform:uppercase;"><th style="padding:8px 10px;">Name</th><th style="padding:8px 10px;">Email</th><th style="padding:8px 10px;">Role</th><th style="padding:8px 10px;">Dept</th><th style="padding:8px 10px;">Status</th><th style="padding:8px 10px;"></th></tr></thead><tbody>'+rows+'</tbody></table>';
       parts.forEach(function(pt){
         var rb=document.getElementById('wsResend_'+pt.id);
         if(rb) rb.onclick=async function(){ this.disabled=true; this.textContent='Sending…'; try{ var r2=await wsData('resend-survey-email',{participant_id:pt.id}); this.textContent=r2.ok?'Sent':'Error'; setTimeout(function(){ wsLoadRoster(); },1500); }catch(e){ this.textContent='Error'; toast(e.message); } };
+        var rm=document.getElementById('wsRmPart_'+pt.id);
+        if(rm) rm.onclick=async function(){ if(!confirm('Remove '+(pt.name||'this participant')+' from the roster?')) return; this.disabled=true; this.textContent='Removing…'; try{ await wsData('remove-participant',{participant_id:pt.id}); WS.parts=await cdSelect('workshop_participants',{eq:{workshop_id:WS.cur.id},order:{col:'created_at',asc:true}}); wsLoadRoster(); }catch(e){ this.textContent='Error'; toast(e.message); } };
       });
     }catch(e){ tbl.innerHTML='<div style="color:#dc2626;">'+esc(e.message)+'</div>'; }
   }
