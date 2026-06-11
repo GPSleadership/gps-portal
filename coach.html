@@ -1351,8 +1351,8 @@
       <datalist id="newOrgList"></datalist>
     </div>
     <div class="form-group">
-      <label>Diagnostic Report Link <span style="font-weight:400;text-transform:none;opacity:0.6;">(optional — paste Google Drive URL)</span></label>
-      <input type="url" id="newDiagnosticUrl" placeholder="https://drive.google.com/..." />
+      <label>Company Website <span style="font-weight:400;text-transform:none;opacity:0.6;">(optional — used for context when writing reports)</span></label>
+      <input type="url" id="newWebsite" placeholder="https://www.company.com" />
     </div>
 
     <div style="margin:18px 0 10px;padding-top:16px;border-top:1px solid var(--gray-200);">
@@ -1759,7 +1759,20 @@ async function verifyAndChangePassword() {
 // ─────────────────────────────────────────────
 // LOAD DATA
 // ─────────────────────────────────────────────
+// ── Diagnostic tier pricing ───────────────────────────────────────────────────
+// Display label ONLY — this does not bill anyone or drive any math. To reprice,
+// change the two values below and redeploy. They show in the Start Diagnostic
+// dropdowns (coach-only; clients never see them).
+const TIER_PRICES = { standard: '$5K', pro: '$10K' };
+function applyTierPriceLabels() {
+  document.querySelectorAll('select#nd-tier option, select#newDiagTier option').forEach(o => {
+    if (o.value === 'standard') o.textContent = 'Standard (' + TIER_PRICES.standard + ')';
+    if (o.value === 'pro')      o.textContent = 'Pro (' + TIER_PRICES.pro + ')';
+  });
+}
+
 async function loadDashboard() {
+  applyTierPriceLabels(); // keep the tier dropdowns in sync with TIER_PRICES
   let clientsRows, checkinsRows;
   try {
     [clientsRows, checkinsRows] = await Promise.all([
@@ -2860,7 +2873,7 @@ function openAddModal() {
   document.getElementById('newTitle').value = '';
   document.getElementById('newOrg').value = '';
   populateOrgDatalist();
-  document.getElementById('newDiagnosticUrl').value = '';
+  document.getElementById('newWebsite').value = '';
   document.getElementById('newIndustry').value = '';
   document.getElementById('newRevenueBand').value = '';
   document.getElementById('newNumLocations').value = '';
@@ -2895,7 +2908,7 @@ async function addClient() {
   const email           = document.getElementById('newEmail').value.trim();
   const title           = document.getElementById('newTitle').value.trim();
   const org             = document.getElementById('newOrg').value.trim();
-  const diagnosticUrl   = document.getElementById('newDiagnosticUrl').value.trim();
+  const website         = document.getElementById('newWebsite').value.trim();
   const industry        = document.getElementById('newIndustry').value || null;
   const revenueBand     = document.getElementById('newRevenueBand').value || null;
   const numLocations    = document.getElementById('newNumLocations').value || null;
@@ -2916,7 +2929,7 @@ async function addClient() {
 
   let data = null, error = null;
   try {
-    const _rows = await cdInsert('clients', { name, email: email || null, title: title || null, organization: org || null, diagnostic_report_url: diagnosticUrl || null, is_active: true, ask_alex_enabled: true, industry, revenue_band: revenueBand, num_locations: numLocations, direct_reports_count: directReports, coaching_sessions_enabled: coachingSessionsEnabled });
+    const _rows = await cdInsert('clients', { name, email: email || null, title: title || null, organization: org || null, website: website || null, is_active: true, ask_alex_enabled: true, industry, revenue_band: revenueBand, num_locations: numLocations, direct_reports_count: directReports, coaching_sessions_enabled: coachingSessionsEnabled });
     data = Array.isArray(_rows) ? _rows[0] : _rows;
   } catch (e) { error = e; }
 
@@ -6632,15 +6645,19 @@ async function createDiagnostic() {
 
   let data = null, error = null;
   try {
+    const tier = document.getElementById('nd-tier').value;
     const _r = await cdInsert('diagnostics', {
       client_name:         name,
       client_email:        email,
       client_title:        document.getElementById('nd-title').value || null,
       client_org:          document.getElementById('nd-org').value   || null,
-      tier:                document.getElementById('nd-tier').value,
+      tier:                tier,
       email_delivery_mode: document.getElementById('nd-delivery').value,
       client_id:           clientId,
       status:              'setup',
+      // Pro includes 1:1 interviews — turn them on up front so the Raters tab
+      // immediately shows the scheduling-link field. Standard can still enable manually.
+      interviews_enabled:  tier === 'pro',
     });
     data = Array.isArray(_r) ? _r[0] : _r;
   } catch (e) { error = e; }
