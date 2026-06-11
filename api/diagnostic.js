@@ -1136,11 +1136,21 @@ async function handleGenerateReport(req, res) {
 
   try {
     const diagRes = await sb(
-      `/rest/v1/diagnostics?id=eq.${diagnostic_id}&select=id,client_name,client_title,client_org,close_date,tier,custom_g1_question,custom_g2_question,self_three_year_vision,self_future_self_capabilities,self_immediate_successor_view,self_successor_candidates,self_successor_development_actions,intake_notes,coaching_notes,interview_notes,impact_scale&limit=1`
+      `/rest/v1/diagnostics?id=eq.${diagnostic_id}&select=id,client_id,client_name,client_title,client_org,close_date,tier,custom_g1_question,custom_g2_question,self_three_year_vision,self_future_self_capabilities,self_immediate_successor_view,self_successor_candidates,self_successor_development_actions,intake_notes,coaching_notes,interview_notes,impact_scale&limit=1`
     );
     const diags = await diagRes.json();
     if (!Array.isArray(diags) || diags.length === 0) return res.status(404).json({ error: 'Diagnostic not found' });
     const diag = diags[0];
+
+    // Optional: the client's company website, used as light background context only.
+    let clientWebsite = null;
+    if (diag.client_id) {
+      try {
+        const cRes = await sb(`/rest/v1/clients?id=eq.${diag.client_id}&select=website&limit=1`);
+        const cRows = await cRes.json();
+        clientWebsite = (Array.isArray(cRows) && cRows[0]?.website) ? cRows[0].website : null;
+      } catch (_) { /* non-fatal */ }
+    }
 
     // Fetch ALL completed raters (self + non-self) so we can compute per-group scores
     const allRatersRes = await sb(
@@ -1205,7 +1215,7 @@ ${diag.intake_notes    ? `Kick-off / Intake Notes:\n${diag.intake_notes}\n`    :
       : '';
 
     const userPrompt = `LEADER: ${diag.client_name}${diag.client_title ? `, ${diag.client_title}` : ''}${diag.client_org ? ` — ${diag.client_org}` : ''}
-DIAGNOSTIC TIER: ${diag.tier || 'standard'}
+DIAGNOSTIC TIER: ${diag.tier || 'standard'}${clientWebsite ? `\nCOMPANY WEBSITE (background context only — may be outdated; do NOT treat as authoritative or quote it; use lightly to make language relevant to the organization): ${clientWebsite}` : ''}
 ${diag.custom_g1_question ? `\nCUSTOM G1 QUESTION (Vision Alignment): "${diag.custom_g1_question}"` : ''}${diag.custom_g2_question ? `\nCUSTOM G2 QUESTION (GPS Gap Probe): "${diag.custom_g2_question}"` : ''}${overrideNotes}
 
 ${formatRaterGroupDataForPrompt(groupData, diag)}
