@@ -7105,7 +7105,7 @@ async function drManageTeam(teamId){
     var b1 = await Promise.all([
       cdSelect('teams',{ eq:{id:teamId} }),
       cdSelect('team_members',{ eq:{team_id:teamId}, order:{col:'sort_order',asc:true} }),
-      cdSelect('clients',{ select:'id,name,title', order:{col:'name',asc:true} }),
+      cdSelect('clients',{ select:'id,name,title,organization', order:{col:'name',asc:true} }),
       cdSelect('recommendations',{ eq:{team_id:teamId}, order:{col:'updated_at',asc:false} }),
       cdSelect('external_signals',{ eq:{team_id:teamId}, order:{col:'date_observed',asc:false} }),
       cdSelect('sponsor_teams',{ eq:{team_id:teamId} }),
@@ -7174,16 +7174,27 @@ function drMembersPanel(t, members, clients, nameById){
       +'<button class="btn-add" style="background:#fff;color:#DB1F48;border:1px solid #DB1F48;padding:4px 10px;font-size:11px;" onclick="drRemoveMember(\''+m.id+'\',\''+t.id+'\')">Remove</button></div>';
   }).join('') || '<div style="color:#666;font-size:13px;">No members yet.</div>';
   var existing={}; members.forEach(function(m){ existing[m.client_id]=1; });
-  var opts=clients.filter(function(c){ return !existing[c.id]; }).map(function(c){ return '<option value="'+c.id+'" data-title="'+drEsc(c.title||'')+'">'+drEsc(c.name)+(c.title?' — '+drEsc(c.title):'')+'</option>'; }).join('');
-  var add = opts
+  var teamOrg=(t.client_org_name||'').trim();
+  function optsFrom(arr){ return arr.filter(function(c){ return !existing[c.id]; }).map(function(c){ return '<option value="'+c.id+'" data-title="'+drEsc(c.title||'')+'">'+drEsc(c.name)+(c.title?' — '+drEsc(c.title):'')+'</option>'; }).join(''); }
+  var matchClients = teamOrg ? clients.filter(function(c){ return (c.organization||'').trim().toLowerCase()===teamOrg.toLowerCase(); }) : [];
+  var optsAll=optsFrom(clients), optsMatch=optsFrom(matchClients);
+  window._drMemberOpts={ all:optsAll, match:optsMatch };
+  var showMatchDefault=!!(teamOrg && optsMatch);          // default to org-only when we have matches
+  var initialOpts=showMatchDefault?optsMatch:optsAll;
+  var scopeNote=teamOrg
+    ? '<label style="font-size:12px;color:#5a6b76;display:inline-flex;gap:6px;align-items:center;cursor:pointer;margin-bottom:6px;"><input type="checkbox" id="dr_mscope" '+(showMatchDefault?'':'checked')+' onchange="drMemberScope(this.checked)"> Show everyone in the system (not just '+drEsc(teamOrg)+')</label>'
+    : '';
+  var add = initialOpts
     ? '<div style="margin-top:12px;border-top:1px solid #eee;padding-top:12px;">'
-      +'<div style="font-size:11px;color:#666;margin-bottom:6px;">Select one or more people (Cmd/Ctrl-click for several). Each person\'s role auto-fills from their profile.</div>'
-      +'<select id="dr_mclients" multiple size="6" style="width:100%;padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;">'+opts+'</select>'
+      +scopeNote
+      +'<div style="font-size:11px;color:#666;margin:6px 0;">Select one or more people (Cmd/Ctrl-click for several). Each person\'s role auto-fills from their profile.</div>'
+      +'<select id="dr_mclients" multiple size="6" style="width:100%;padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;">'+initialOpts+'</select>'
       +'<div style="display:flex;gap:14px;align-items:center;margin-top:8px;flex-wrap:wrap;"><label style="font-size:13px;"><input type="checkbox" id="dr_mcoach" /> Mark selected as coaching clients</label>'
       +'<button class="btn-add" onclick="drAddMembers(\''+t.id+'\')">Add selected members</button></div></div>'
-    : '<div style="margin-top:12px;border-top:1px solid #eee;padding-top:12px;font-size:12px;color:#888;">Every client is already on this team.</div>';
+    : '<div style="margin-top:12px;border-top:1px solid #eee;padding-top:12px;font-size:12px;color:#888;">'+(teamOrg?('No one tied to '+drEsc(teamOrg)+' is available — '+(optsAll?'<a href="#" onclick="drMemberScope(true);return false;" style="color:#01949A;">show everyone</a> to pick from all clients.':'every client is already on this team.')):'Every client is already on this team.')+'</div>';
   return drCard('Leadership Team members', list+add);
 }
+function drMemberScope(showAll){ var s=document.getElementById('dr_mclients'); if(s && window._drMemberOpts){ s.innerHTML = showAll ? window._drMemberOpts.all : window._drMemberOpts.match; var cb=document.getElementById('dr_mscope'); if(cb) cb.checked=!!showAll; } }
 function drFillRole(){
   var sel=document.getElementById('dr_mclient'); var ro=document.getElementById('dr_mrole');
   if(sel && ro){ var opt=sel.options[sel.selectedIndex]; ro.value = (opt && opt.getAttribute('data-title')) || ''; }
