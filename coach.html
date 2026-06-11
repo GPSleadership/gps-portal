@@ -5595,8 +5595,11 @@ function renderRatersTab() {
       <button class="dbtn dbtn-primary" style="height:42px;" onclick="coachAddRater()">Add</button>
     </div>
     <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--d-border);">
-      <div style="font-size:13px;font-weight:600;margin-bottom:6px;">Bulk add raters</div>
-      <div style="font-size:12px;color:var(--d-mid);margin-bottom:8px;">Paste one rater per line as <code>name, email, relationship</code> <strong>or</strong> upload an XLSX/CSV with those columns. Relationship is optional (defaults to "Other"); duplicates are skipped.</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+        <div style="font-size:13px;font-weight:600;">Bulk add raters</div>
+        <button class="dbtn dbtn-outline dbtn-sm" onclick="downloadDiagRaterTemplate()">⬇ Download Excel template</button>
+      </div>
+      <div style="font-size:12px;color:var(--d-mid);margin-bottom:8px;">Send the leader the template above to fill in, then upload it here. Or paste one rater per line as <code>name, email, relationship</code>. Relationship is optional (defaults to "Other"); duplicates are skipped.</div>
       <textarea id="ar-bulk" rows="4" placeholder="Jane Doe, jane@co.com, Direct Report&#10;Sam Lee, sam@co.com, Peer" style="width:100%;box-sizing:border-box;font-size:12px;padding:8px;border:1.5px solid var(--d-border);border-radius:6px;font-family:monospace;"></textarea>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;">
         <button class="dbtn dbtn-primary dbtn-sm" onclick="coachBulkAddRaters()">Add all from text</button>
@@ -6435,6 +6438,32 @@ async function coachBulkAddRaters() {
     return { name: c[0] || '', email: c[1] || '', relationship: c[2] || '' };
   });
   await _raterCommit(rows);
+}
+function downloadDiagRaterTemplate() {
+  if (typeof XLSX === 'undefined') { alert('Spreadsheet library is still loading — try again in a moment.'); return; }
+  const leader = (typeof DIAG_SEL !== 'undefined' && DIAG_SEL && DIAG_SEL.client_name) ? DIAG_SEL.client_name : 'Leader';
+  const main = [
+    ['Name', 'Email', 'Relationship'],
+    ['Jane Doe', 'jane@company.com', 'Direct Report'],
+    ['Sam Lee', 'sam@company.com', 'Peer'],
+    ['Pat Kim', 'pat@company.com', 'Supervisor / Manager'],
+  ];
+  const help = [
+    ['How to use this template'],
+    ['1. Replace the example rows on the "Raters" tab with the people who will give feedback.'],
+    ['2. Name and Email are required. Relationship is optional (defaults to "Other").'],
+    ['3. Valid Relationship values:'],
+    ['   Direct Report'], ['   Peer'], ['   Supervisor / Manager'], ['   Board Member'],
+    ['   Internal Customer'], ['   External Customer'], ['   External Stakeholder'], ['   Other'],
+    ['4. Save the file and send it back — it uploads directly into the portal.'],
+  ];
+  const wb = XLSX.utils.book_new();
+  const ws1 = XLSX.utils.aoa_to_sheet(main); ws1['!cols'] = [{ wch: 26 }, { wch: 32 }, { wch: 24 }];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Raters');
+  const ws2 = XLSX.utils.aoa_to_sheet(help); ws2['!cols'] = [{ wch: 64 }];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Instructions');
+  const safe = String(leader).replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || 'Leader';
+  XLSX.writeFile(wb, 'GPS_Diagnostic_Raters_' + safe + '.xlsx');
 }
 async function coachBulkRaterFile(input) {
   const file = input.files && input.files[0]; if (!file) return;
