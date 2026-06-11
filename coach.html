@@ -5589,8 +5589,8 @@ function renderRatersTab() {
       <div class="dform-group" style="margin-bottom:0;"><label>Email</label><input id="ar-email" type="email" placeholder="email@co.com"></div>
       <div class="dform-group" style="margin-bottom:0;"><label>Relationship</label>
         <select id="ar-rel"><option value="">Select…</option>
-          <option>Direct Report</option><option>Peer</option><option>Supervisor / Manager</option>
-          <option>Board Member</option><option>Internal Customer</option>
+          <option>Direct Report</option><option>Skip-Level Report</option><option>Peer</option><option>Supervisor / Manager</option>
+          <option>Owner</option><option>Board Member</option><option>Internal Customer</option>
           <option>External Customer</option><option>External Stakeholder</option><option>Other</option></select></div>
       <button class="dbtn dbtn-primary" style="height:42px;" onclick="coachAddRater()">Add</button>
     </div>
@@ -6397,6 +6397,9 @@ async function coachAddRater() {
 function _raterNormalizeRel(v) {
   const s = String(v || '').trim().toLowerCase();
   if (!s) return 'Other';
+  // Check skip/indirect BEFORE 'direct' — "indirect" contains "direct".
+  if (s.indexOf('skip') > -1 || s.indexOf('indirect') > -1 || s.indexOf('two level') > -1 || s.indexOf('2 level') > -1) return 'Skip-Level Report';
+  if (s.indexOf('owner') > -1) return 'Owner';
   if (s.indexOf('direct') > -1) return 'Direct Report';
   if (s.indexOf('peer') > -1) return 'Peer';
   if (s.indexOf('superv') > -1 || s.indexOf('manager') > -1 || s.indexOf('boss') > -1) return 'Supervisor / Manager';
@@ -6468,7 +6471,7 @@ async function downloadDiagRaterTemplate() {
     ['How to use this template'],
     ['1. Replace the example rows on the "Raters" tab with the people who will give feedback.'],
     ['2. Name and Email are required. Relationship is recommended. Department and Title are optional context.'],
-    ['3. Valid Relationship values: Direct Report, Peer, Supervisor / Manager, Board Member, Internal Customer, External Customer, External Stakeholder, Other.'],
+    ['3. Valid Relationship values: Direct Report, Skip-Level Report (reports two levels below), Peer, Supervisor / Manager, Owner, Board Member, Internal Customer, External Customer, External Stakeholder, Other.'],
     ['4. Save the file and send it back — it uploads directly into the portal.'],
   ];
   try {
