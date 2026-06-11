@@ -1353,7 +1353,7 @@
     </div>
     <div class="form-group">
       <label>Organization</label>
-      <input type="text" id="newOrg" list="newOrgList" autocomplete="off" placeholder="Type — existing organizations pop up" />
+      <input type="text" id="newOrg" list="newOrgList" autocomplete="off" oninput="autofillFromOrg()" placeholder="Type — existing organizations pop up" />
       <datalist id="newOrgList"></datalist>
     </div>
     <div class="form-group">
@@ -2894,14 +2894,25 @@ function openAddModal() {
 
 // Populate the org autocomplete from existing orgs (clients, the organizations table, and workshops).
 var ORG_NAMES = [];
+var ORG_RECORDS = {};   // lowercased org name -> { website, industry, size_band } for add-client auto-fill
 async function loadOrgNames() {
   var names = {};
   (allClients || []).forEach(function(c){ var o = (c.organization || '').trim(); if (o) names[o] = true; });
-  try { var orgs = await cdSelect('organizations', { select: 'name', order: { col: 'name', asc: true } }); (orgs || []).forEach(function(o){ var n = (o.name || '').trim(); if (n) names[n] = true; }); } catch (_) {}
+  try { var orgs = await cdSelect('organizations', { select: 'name,website,industry,size_band', order: { col: 'name', asc: true } }); (orgs || []).forEach(function(o){ var n = (o.name || '').trim(); if (n) { names[n] = true; ORG_RECORDS[n.toLowerCase()] = { website: o.website || '', industry: o.industry || '', size_band: o.size_band || '' }; } }); } catch (_) {}
   try { var ws = await cdSelect('workshops', { select: 'client_org_name' }); (ws || []).forEach(function(w){ var n = (w.client_org_name || '').trim(); if (n) names[n] = true; }); } catch (_) {}
   ORG_NAMES = Object.keys(names).sort();
 }
 function orgOptionsHtml() { return ORG_NAMES.map(function(n){ return '<option value="' + String(n).replace(/"/g,'&quot;') + '"></option>'; }).join(''); }
+// When the new-client Organization matches an existing org, fill website/industry/revenue.
+// Only fills EMPTY fields so it never overwrites something the user already typed.
+function autofillFromOrg() {
+  var el = document.getElementById('newOrg'); if (!el) return;
+  var rec = ORG_RECORDS[(el.value || '').trim().toLowerCase()]; if (!rec) return;
+  var w = document.getElementById('newWebsite');     if (w   && !w.value.trim()   && rec.website)  w.value   = rec.website;
+  var ind = document.getElementById('newIndustry');  if (ind && !ind.value.trim() && rec.industry) ind.value = rec.industry;
+  var rb = document.getElementById('newRevenueBand');
+  if (rb && !rb.value && rec.size_band && Array.prototype.some.call(rb.options, function(o){ return o.value === rec.size_band; })) rb.value = rec.size_band;
+}
 async function populateOrgDatalist() {
   var dl = document.getElementById('newOrgList'); if (!dl) return;
   if (!ORG_NAMES.length) { await loadOrgNames(); }
@@ -6476,27 +6487,41 @@ async function downloadDiagRaterTemplate() {
   ];
   try {
     const ExcelJS = await _loadExcelJS();
+    const REL_LIST = 'Direct Report,Skip-Level Report,Peer,Supervisor / Manager,Owner,Board Member,Internal Customer,External Customer,External Stakeholder,Other';
+    const N = 30, BAND = 'FFDDEBF7';   // table depth; zebra band = Accent5 Lighter 80%
     const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet('Raters');
+    const ws = wb.addWorksheet('Raters', { views: [{ showGridLines: false }] });
     ws.columns = headers.map(function (h, i) { return { header: h, width: widths[i] }; });
     examples.forEach(function (r) { ws.addRow(r); });
-    const hr = ws.getRow(1); hr.height = 18;
-    hr.eachCell(function (cell) {
-      cell.font = { bold: true, color: { argb: 'FF1A1A1A' } };
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF200' } };
-      cell.alignment = { vertical: 'middle' };
-      cell.border = { bottom: { style: 'thin', color: { argb: 'FFBBBBBB' } } };
-    });
-    // Relationship is column C — make it a pick-from-list dropdown for the first 200 rows.
-    const REL_LIST = 'Direct Report,Skip-Level Report,Peer,Supervisor / Manager,Owner,Board Member,Internal Customer,External Customer,External Stakeholder,Other';
+    ws.getRow(1).height = 18;
+    // Bordered, zebra-banded block: medium outer outline, thin inner grid, header yellow.
+    for (let r = 1; r <= N; r++) {
+      for (let c = 1; c <= 5; c++) {
+        const cell = ws.getRow(r).getCell(c);
+        cell.border = {
+          top:    { style: r === 1 ? 'medium' : 'thin' },
+          bottom: { style: r === N ? 'medium' : 'thin' },
+          left:   { style: c === 1 ? 'medium' : 'thin' },
+          right:  { style: c === 5 ? 'medium' : 'thin' },
+        };
+        if (r === 1) {
+          cell.font = { bold: true, color: { argb: 'FF1A1A1A' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF200' } };
+          cell.alignment = { vertical: 'middle' };
+        } else if (r % 2 === 0) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BAND } };
+        }
+      }
+    }
+    // Relationship (col C) — pick-from-list dropdown, Stop mode (no typing off-list).
     for (let r = 2; r <= 201; r++) {
       ws.getCell('C' + r).dataValidation = {
         type: 'list', allowBlank: true, formulae: ['"' + REL_LIST + '"'],
-        showErrorMessage: true, errorStyle: 'warning',
-        errorTitle: 'Pick from the list', error: 'Please choose one of the listed relationship values (or leave blank for "Other").',
+        showErrorMessage: true, errorStyle: 'stop',
+        errorTitle: 'Pick from the list', error: 'Choose one of the listed relationship values from the dropdown (or leave blank for "Other").',
       };
     }
-    const ws2 = wb.addWorksheet('Instructions'); ws2.getColumn(1).width = 70;
+    const ws2 = wb.addWorksheet('Instructions', { views: [{ showGridLines: false }] }); ws2.getColumn(1).width = 70;
     helpRows.forEach(function (r) { ws2.addRow(r); });
     ws2.getRow(1).font = { bold: true };
     const buf = await wb.xlsx.writeBuffer();
