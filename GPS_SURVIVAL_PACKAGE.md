@@ -1,7 +1,14 @@
 # GPS Leadership — Complete Survival Package
-**Last updated:** 2026-06-10  
-**Author:** Alex Tremble / GPS Leadership Solutions  
+**Last updated:** 2026-06-11
+**Author:** Alex Tremble / GPS Leadership Solutions
 **Purpose:** Complete reconstruction guide — enough to rebuild every system from scratch on a new platform if needed.
+
+> **Three things make this system work. All three must be preserved:**
+> 1. **The system prompt** — defines how Ask Alex thinks, speaks, and routes advice. Extracted to `ASK_ALEX_SYSTEM_PROMPT.md`.
+> 2. **The content/data layer** — client context (TP3 scores, goals, behaviors) stored in Supabase, injected at query time.
+> 3. **The wiring** — `client.html` + `api/ask.js` + Vercel environment variables connecting them.
+>
+> Without all three, Ask Alex either doesn't work or doesn't sound like Alex.
 
 ---
 
@@ -72,9 +79,10 @@ Both systems were built to be operated by one person (Alex) and maintained by AI
 | File | What It Does |
 |---|---|
 | `supabase-setup.sql` | Initial schema — creates all base tables |
-| `supabase-migration-v2.sql` through `v19.sql` | Incremental schema changes — apply in order on a fresh database |
+| `supabase-migration-v2.sql` through `v50.sql` | Incremental schema changes — apply in order on a fresh database (50 migrations as of June 2026) |
 | `supabase-ask-alex.sql` | Schema additions for the Ask Alex AI feature |
 | `supabase-add-*.sql` | Targeted column/table additions (30-day goal, archived flag, coach settings, etc.) |
+| `supabase_schema_snapshot_2026-06-09.sql` | Full schema snapshot as of June 9, 2026 — use this instead of running all migrations one-by-one on a completely fresh rebuild |
 
 ### Config
 | File | What It Does |
@@ -83,6 +91,13 @@ Both systems were built to be operated by one person (Alex) and maintained by AI
 | `.env.example` | Template for all environment variables — fill in and add to Vercel settings |
 | `.vercelignore` | Files excluded from Vercel deployment |
 
+### Ask Alex AI
+| File | What It Does |
+|---|---|
+| `ASK_ALEX_SYSTEM_PROMPT.md` | **START HERE IF REBUILDING ASK ALEX.** Full system prompt extracted from `client.html`. Defines Alex's voice, TP3 framework, tool routing, talent bar logic, audience variants (private sector / federal / state-local), response format, and escalation rules. |
+| `api/ask.js` | Serverless function that receives the question + system prompt from `client.html`, validates the portal token, enforces the daily rate limit, and calls the Anthropic API |
+| `supabase-ask-alex.sql` | Schema additions that created the `ask_alex_log` and `ask_alex_usage` tables |
+
 ### Documentation
 | File | What It Does |
 |---|---|
@@ -90,6 +105,7 @@ Both systems were built to be operated by one person (Alex) and maintained by AI
 | `PORTAL_STATE.md` | Current state of the portal — what's built, what's in progress |
 | `SETUP-GUIDE.md` | Technical setup guide for onboarding the portal |
 | `GPS_SURVIVAL_PACKAGE.md` | This file — complete reconstruction guide |
+| `ASK_ALEX_SYSTEM_PROMPT.md` | Standalone copy of the Ask Alex system prompt — critical for rebuilding the AI layer |
 
 ### Skills & Automation
 | File | What It Does |
@@ -122,13 +138,13 @@ All variables must be added to Vercel → Project Settings → Environment Varia
 
 ### Step 1: Supabase
 1. Go to supabase.com → New project → Name it "gps-leadership"
-2. Note the Project URL and both API keys (anon and service role)
+2. Note the Project URL and both API keys (anon key and service role key)
 3. Go to SQL Editor
-4. Run `supabase-setup.sql` first
-5. Run each migration file in order: v2 → v3 → ... → v19
-6. Run `supabase-ask-alex.sql`
-7. Run each `supabase-add-*.sql` file
-8. Verify tables exist: `clients`, `sprints`, `assessments`, `surveys`, `gps_settings`, `coach_notes`
+4. **Fastest path:** run `supabase_schema_snapshot_2026-06-09.sql` — this is the full schema in one file. Skip to step 7.
+5. **Manual path (if snapshot doesn't work):** run `supabase-setup.sql` first, then each migration in order: v2 → v3 → ... → v50, then `supabase-ask-alex.sql`, then each `supabase-add-*.sql`
+6. Enable Row Level Security on all tables (already set in migrations — verify in Table Editor → RLS toggle)
+7. Verify these tables exist: `clients`, `sprints`, `assessments`, `surveys`, `gps_settings`, `coach_notes`, `ask_alex_log`, `ask_alex_usage`, `organizations`, `workshop_modules`
+8. Import any existing client data from a Supabase backup or CSV export from the old project
 
 ### Step 2: Resend
 1. Go to resend.com → Create account
@@ -232,9 +248,10 @@ coach_notes
 3. Update `RESEND_API_KEY` to the new provider's key
 
 ### If Anthropic Claude goes away
-1. In `api/ask.js`, replace the Anthropic SDK with the OpenAI SDK
-2. Change `model: 'claude-sonnet-4-6'` to `model: 'gpt-4o'`
-3. The system prompt and message format are compatible — minor syntax changes only
+1. Open `ASK_ALEX_SYSTEM_PROMPT.md` — this is the full system prompt, already extracted and platform-agnostic
+2. In `api/ask.js`, replace the Anthropic API call with the OpenAI SDK: change the endpoint from `https://api.anthropic.com/v1/messages` to the OpenAI equivalent, swap the auth header, and change `model` to `gpt-4o`
+3. The system prompt content requires no changes — it is plain text and works on any model
+4. Update `ANTHROPIC_API_KEY` env variable to `OPENAI_API_KEY` and update the reference in `ask.js`
 
 ### If Make.com goes away
 1. Build a direct integration with GHL's API in a new `/api/sync-pipeline.js` function
@@ -269,14 +286,32 @@ coach_notes
 - Make.com pipeline sync
 - Outreach tracking system (GPS_Client_Contact_List.xlsx)
 
-**Planned but not yet built:**
+**Planned / in progress:**
 - GPS Portal mobile optimization
 - Automated P&L sync from QuickBooks Online
 - Portal onboarding flow for self-serve clients
-- Proposal generation skill (SOW automation)
+- Decision Room Team View (sandbox built — not yet in production)
+- TP3 Assessment V2 (spec written — not yet deployed)
 
 ---
 
 *This document should be updated any time a major feature is added, a new service is integrated, or the deployment architecture changes. The nightly ZIP backup captures the code; this document captures the knowledge of why it was built this way.*
 
-*Generated: 2026-05-28 | GPS Leadership Solutions | alex@gpsleadership.org*
+---
+
+## 11. Ask Alex — Rebuild Checklist
+
+If you need to reconstruct Ask Alex from scratch on a new platform, do these in order:
+
+- [ ] Get the system prompt from `ASK_ALEX_SYSTEM_PROMPT.md`
+- [ ] Spin up Supabase (Step 1 above) — client context lives here
+- [ ] Deploy `api/ask.js` as a serverless function with `ANTHROPIC_API_KEY` set
+- [ ] In `client.html`, find `buildSystemPrompt(ctx)` — this is where the dynamic context is assembled. Replicate this logic on your new platform
+- [ ] Verify the response parser in `client.html` handles the five JSON fields: `guidance`, `next_step`, `tools`, `handoff`, `escalation`
+- [ ] Test with a real client token — check that daily rate limiting works (`ask_alex_usage` table)
+- [ ] Confirm government audience variants load correctly based on `ctx.industry`
+
+---
+
+*Last updated: 2026-06-11 | GPS Leadership Solutions | alex@gpsleadership.org*
+*Update this document any time a major feature is added, a new service is integrated, or the deployment architecture changes.*

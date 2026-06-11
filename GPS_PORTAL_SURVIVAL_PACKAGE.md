@@ -1,11 +1,30 @@
 # GPS Leadership Portal — Survival Package
 ### Everything needed to recreate this system from scratch
 
-**Last updated:** June 9, 2026 (Security hardening F1/F3/F4/F5/F9; GPS 4.0 scoring standard platform-wide; client-added-questions split; Employee vs Session NPS; sponsor-model unify + dashboard-first portal; assessment question tooling — see Section 17. Prior: PWA/RBAC/nav — Section 16; Workshop Module — Section 15; Decision Room — Section 14)
+**Last updated:** June 11, 2026 (Roster import overhaul — flexible headers, CSV+XLSX, template download; sponsor/POC moved off the create form to the detail screen; survey-send visibility email; migration v47 engagement-roles — see Section 18. Prior: Security hardening + 4.0 scoring + NPS + sponsor model — Section 17; PWA/RBAC/nav — Section 16; Workshop Module — Section 15; Decision Room — Section 14)
 **GitHub repo:** https://github.com/GPSleadership/gps-portal
 **Live URL:** https://portal.gpsleadership.org
 **Coach dashboard:** https://portal.gpsleadership.org/coach
 **Client portal:** https://portal.gpsleadership.org/client
+
+---
+
+## 18. June 10–11, 2026 — Roster import overhaul, sponsor/POC moved to detail, survey-send visibility email, v47 roles
+
+**Migration v47 — engagement roles (Sponsor vs POC) + question-review foundation** (`supabase-migration-v47-engagement-roles.sql`, applied to prod June 9, additive-only; old code ignores every new column). Design (confirmed): **Sponsor = results owner** (may also do logistics); **POC = logistics only, NEVER sees results/report**; one person can be both; applies to workshops/assessments AND diagnostics. New columns:
+- `workshop_sponsors.role` (text NOT NULL DEFAULT `'sponsor'`, CHECK in `('sponsor','poc')`) + `workshop_sponsors.access_token` (per-contact token, unique index, backfilled for existing rows).
+- `diagnostics.poc_name`, `poc_email`, `poc_token` (single diagnostic coordinator — supplies raters + reviews questions, no report access; unique partial index on `poc_token`).
+- `workshops.questions_review_status` / `diagnostics.questions_review_status` (text NOT NULL DEFAULT `'not_sent'`: not_sent | pending | approved | changes_requested) + `questions_review_sent_at` / `questions_review_done_at` on both.
+- `workshop_questions.client_decision` (approved | change_requested | null) + `client_note`.
+- Rollback statements are in the migration footer. The question-review loop UI is foundation only (columns exist; flow not yet wired in the frontend).
+
+**Roster import overhaul (coach `coach.html` + client `client.html`).** Both roster uploaders now accept **CSV or XLSX**, require only a **Name column + an Email column**, and auto-detect headers. A single `_rosterPick(row, keys)` / `pick(row, keys)` matcher strips BOM, trims, lowercases, and maps many aliases → canonical `{name, email, role, department, location}`: name from `name/full name/participant/contact/employee/...` OR `First Name`+`Last Name`; email from `email/email address/e-mail/work email/...`; role from `role/title/job title/position/rater type/relationship`; department from `department/department/area/dept/division/team`; location from `site/region/office/city/branch`. Replaces the old rigid map that required First Name + Last Name + Email + Role/Title (which silently dropped valid rosters). Each page exposes a **Download template** link (`GPS_Roster_Template.csv`, header `Name,Email,Title,Department,Location`). In coach.html the old `wsUploadRosterXlsx` became `wsUploadRosterFile(file)` (branches CSV vs XLSX by extension; CSV path reuses `parseCsv`), and the **Upload roster button now uses the chosen file** — `wsUpload` checks the file input first and only falls back to the paste box if empty (previously it always read the textarea and ignored a picked file).
+
+**Sponsor / POC moved off the create form.** The coach "+ New" assessment/workshop create form no longer collects sponsor name/title/email; it shows a note that sponsor(s) and POC are added on the detail screen via the contact typeahead. `wsCreate` dropped the sponsor-required validation; workshops are created with `sponsor_client_id: null` and the `create-assessment` action no longer receives `sponsor_name/title/email`. The blur-time duplicate-sponsor lookup on the create form was removed (it lives on the detail screen now). Rationale: one contact-picker path (detail screen) instead of two, and it lets a person be both sponsor and POC per the v47 model.
+
+**Survey-send visibility email (`api/workshop-data.js`).** New helpers: `sendEmailMulti(toArr, subject, html)` (dedupes/normalizes, single Resend call to many recipients); `engagementNotifyList(workshopId, workshop)` (Alex + team@ always, plus each `workshop_sponsors` client email and `workshops.sponsor_client_id`); `notifySurveyDispatched(workshop, phase, sent, sampleHtml)` (one "[Sent] {title} — {phase}-survey went out to N" copy to the visibility list, including a SAMPLE of exactly what each participant received — not a CC on every participant email). Fired after the `send-invites` dispatch and the assessment/pre dispatch path once `sent > 0`.
+
+**Git note:** v47 was applied directly to prod via the Supabase tool; the code push covers `coach.html`, `client.html`, `api/workshop-data.js`, and the v47 migration-record file.
 
 ---
 
@@ -328,6 +347,9 @@ diagnostics
   report_release_at           — 22:00 UTC day before debrief_date; leader portal shows report after this (v24)
   report_pdf_url              — public Supabase Storage URL of uploaded PDF report (v23)
   coaching_portal_url         — coaching client's portal URL; set on debrief complete; shows button in leader Step 8 (v25)
+  poc_name, poc_email, poc_token  — single coordinator: supplies raters + reviews questions, NEVER sees report (v47)
+  questions_review_status     — not_sent | pending | approved | changes_requested (v47)
+  questions_review_sent_at, questions_review_done_at  — question-review loop timestamps (v47)
 
 diagnostic_raters
   id, diagnostic_id (→diagnostics), name, email
