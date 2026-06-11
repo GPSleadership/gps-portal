@@ -1788,6 +1788,23 @@ async function loadDashboard() {
   renderClients();
   diagBoot(); // loads diagnostic data and renders merged dashboard
   loadClientBuckets(); // member/sponsor sets for the client filters
+  restoreLastView(); // return to where the coach was before a refresh
+}
+
+// Restore the last section (and open workshop) after a page refresh, so refreshing
+// doesn't bounce the coach back to the home dashboard.
+function restoreLastView() {
+  try {
+    var sec = localStorage.getItem('gps_coach_section');
+    if (!sec || sec === 'dashboard') return;
+    if (sec === 'workshops') {
+      var wid = localStorage.getItem('gps_coach_ws');
+      showSection('workshops', true);   // skipHooks; we render the right view next
+      if (wid) wsOpen(wid); else wsRender();
+    } else {
+      showSection(sec);
+    }
+  } catch (_) {}
 }
 
 function renderStats() {
@@ -3496,6 +3513,7 @@ function showGroup(group){ showSection(GROUP_DEFAULT[group] || 'dashboard'); }
 
 function showSection(name, skipHooks) {
   _currentSection = name;
+  try { localStorage.setItem('gps_coach_section', name); } catch (_) {}
   // Toggle the underlying content sections.
   ['dashboard', 'clients', 'emails', 'templates', 'admins', 'security', 'diagnostics', 'decisionroom', 'workshops'].forEach(s => {
     var sec = document.getElementById('section-' + s);
@@ -7438,7 +7456,7 @@ async function drSendSponsor(sponsorId){
   function pill(s){ var map={ complete:'#1A7A3A', completed:'#1A7A3A', in_progress:'#BF6A00', sent:'#004369', reminder_sent:'#6d28d9', not_sent:'#94a3b8' }; var lbl={ complete:'Completed', completed:'Completed', in_progress:'In progress', sent:'Sent', reminder_sent:'Reminder sent', not_sent:'Not sent' }; return '<span style="font-size:11px;font-weight:700;color:'+(map[s]||'#94a3b8')+';">'+(lbl[s]||esc(s||'—'))+'</span>'; }
   async function loadOrgs(){ try{ WS.orgs=await cdSelect('organizations',{order:{col:'name',asc:true}}); }catch(e){ WS.orgs=[]; } }
 
-  window.wsRender = async function(){
+  window.wsRender = async function(){ try{ localStorage.removeItem('gps_coach_ws'); }catch(_){}
     var c=el(); if(!c) return; c.innerHTML='<div style="padding:24px;text-align:center;color:#5a6b76;">Loading…</div>';
     try{
       WS.list=await cdSelect('workshops',{eq:{is_archived:false},order:{col:'created_at',asc:false}});
@@ -7526,7 +7544,7 @@ async function drSendSponsor(sponsorId){
     }catch(e){ err.textContent='Error: '+e.message; document.getElementById('wsSave').disabled=false; }
   }
 
-  window.wsOpen = async function(id){ var c=el(); c.innerHTML='<div style="padding:24px;text-align:center;color:#5a6b76;">Loading…</div>'; try{ var rows=await cdSelect('workshops',{ eq:{ id:id }, limit:1 }); WS.cur=rows[0]; if(!WS.cur){ wsRender(); return; } WS.parts=await cdSelect('workshop_participants',{ eq:{ workshop_id:id }, order:{col:'created_at',asc:true} }); WS.questions=await cdSelect('workshop_questions',{ eq:{ workshop_id:id }, order:{col:'sort_order',asc:true} }); WS.tab='overview'; wsDetail(); }catch(e){ c.innerHTML='<div style="padding:24px;color:#dc2626;">'+esc(e.message)+'</div>'; } };
+  window.wsOpen = async function(id){ try{ localStorage.setItem('gps_coach_ws', id); }catch(_){} var c=el(); c.innerHTML='<div style="padding:24px;text-align:center;color:#5a6b76;">Loading…</div>'; try{ var rows=await cdSelect('workshops',{ eq:{ id:id }, limit:1 }); WS.cur=rows[0]; if(!WS.cur){ wsRender(); return; } WS.parts=await cdSelect('workshop_participants',{ eq:{ workshop_id:id }, order:{col:'created_at',asc:true} }); WS.questions=await cdSelect('workshop_questions',{ eq:{ workshop_id:id }, order:{col:'sort_order',asc:true} }); WS.tab='overview'; wsDetail(); }catch(e){ c.innerHTML='<div style="padding:24px;color:#dc2626;">'+esc(e.message)+'</div>'; } };
   // ── Organizations list view ──────────────────────────────────────────────────
   function wsOrgsPane(){
     var c=el(); if(!c) return;
