@@ -595,6 +595,27 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true });
       }
 
+      // Upload an organization logo (base64 data URL → Supabase Storage → logo_url)
+      case 'org-logo-upload': {
+        const id = body.org_id;
+        if (!id) return res.status(400).json({ error: 'org_id required' });
+        const match = (body.logo_data_url || '').match(/^data:([a-zA-Z/]+);base64,(.+)$/);
+        if (!match) return res.status(400).json({ error: 'Invalid image data — use a PNG or JPG.' });
+        const mime = match[1];
+        const buf  = Buffer.from(match[2], 'base64');
+        const ext  = mime.includes('png') ? 'png' : 'jpg';
+        const path = `org-logos/${id}.${ext}`;
+        const up = await fetch(`${SUPABASE_URL}/storage/v1/object/org-assets/${path}`, {
+          method: 'POST',
+          headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}`, 'Content-Type': mime, 'x-upsert': 'true' },
+          body: buf,
+        });
+        if (!up.ok) { const e = await up.text().catch(() => ''); return res.status(500).json({ error: 'Logo upload failed', detail: e }); }
+        const logoUrl = `${SUPABASE_URL}/storage/v1/object/public/org-assets/${path}`;
+        await sb(`/rest/v1/organizations?id=eq.${enc(id)}`, 'PATCH', { logo_url: logoUrl, updated_at: isoNow() }, { Prefer: 'return=minimal' });
+        return res.status(200).json({ ok: true, logo_url: logoUrl });
+      }
+
       // ── TP3 Assessment creation (v40) — creates workshop + seeds 21 Qs ───────
 
       case 'create-assessment': {

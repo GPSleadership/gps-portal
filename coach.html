@@ -7697,6 +7697,8 @@ async function drSendSponsor(sponsorId){
     }
     org = org || {};
     var editing = !!orgId;
+    var ORG_IND=['Trucking / Transportation','Logistics / Supply Chain','Manufacturing','Industrial Services','Parts & Service','Distribution','Healthcare','Construction','Technology','Financial Services','Federal Government','State/Local Government','Aviation / Airport','Utilities / Energy','Real Estate','Non-Profit','Other'];
+    var indOpts=ORG_IND.map(function(x){ return '<option value="'+x.replace(/"/g,'&quot;')+'"></option>'; }).join('');
     var ex=document.getElementById('orgModalOverlay'); if(ex) ex.remove();
     var ov=document.createElement('div'); ov.id='orgModalOverlay';
     ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10000;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:40px 16px;';
@@ -7705,10 +7707,9 @@ async function drSendSponsor(sponsorId){
       '<div style="padding:20px 22px;display:flex;flex-direction:column;gap:14px;">'+
         fld('Name *','orgF_name',org.name)+
         fld('Website','orgF_website',org.website,'https://www.company.com','url')+
-        fld('Industry','orgF_industry',org.industry,'e.g. Trucking / Transportation')+
+        '<div><label style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#5a6b76;font-weight:700;display:block;margin-bottom:4px;">Industry</label><input id="orgF_industry" list="orgF_industryList" autocomplete="off" value="'+esc(org.industry||'')+'" placeholder="Type or pick — existing industries pop up" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;"><datalist id="orgF_industryList">'+indOpts+'</datalist></div>'+
         fld('Size band','orgF_size',org.size_band,'e.g. $10–25M or 50–200 employees')+
-        fld('Logo URL','orgF_logo',org.logo_url,'https://… paste an image URL','url')+
-        '<div id="orgF_logoPrev">'+(org.logo_url?'<img src="'+esc(org.logo_url)+'" style="max-height:48px;max-width:160px;object-fit:contain;border:1px solid #eee;border-radius:6px;padding:4px;">':'')+'</div>'+
+        '<div><label style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#5a6b76;font-weight:700;display:block;margin-bottom:4px;">Logo</label><div id="orgF_logoPrev" style="margin-bottom:8px;">'+(org.logo_url?'<img src="'+esc(org.logo_url)+'" style="max-height:48px;max-width:160px;object-fit:contain;border:1px solid #eee;border-radius:6px;padding:4px;">':'<span style="font-size:12px;color:#94a3b8;">No logo yet</span>')+'</div><input type="file" id="orgF_logoFile" accept="image/png,image/jpeg" style="font-size:13px;"><div style="font-size:11px;color:#94a3b8;margin-top:4px;">PNG or JPG, up to ~5 MB. Choose a file — it uploads when you save. Leave blank to keep the current logo.</div></div>'+
         '<div><label style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#5a6b76;font-weight:700;display:block;margin-bottom:4px;">Notes</label><textarea id="orgF_notes" rows="3" placeholder="Anything useful for context when writing reports" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;font-family:inherit;">'+esc(org.notes||'')+'</textarea></div>'+
         '<div id="orgF_err" style="color:#dc2626;font-size:12px;"></div>'+
       '</div>'+
@@ -7720,15 +7721,22 @@ async function drSendSponsor(sponsorId){
     document.getElementById('orgF_x').onclick=close;
     document.getElementById('orgF_cancel').onclick=close;
     ov.addEventListener('click', function(e){ if(e.target===ov) close(); });
-    document.getElementById('orgF_logo').addEventListener('input', function(){ var u=this.value.trim(); document.getElementById('orgF_logoPrev').innerHTML = u?'<img src="'+esc(u)+'" style="max-height:48px;max-width:160px;object-fit:contain;border:1px solid #eee;border-radius:6px;padding:4px;">':''; });
+    document.getElementById('orgF_logoFile').addEventListener('change', function(){ var f=this.files&&this.files[0]; if(!f){ return; } if(f.size>5*1024*1024){ document.getElementById('orgF_err').textContent='Logo is over 5 MB — pick a smaller image.'; this.value=''; return; } document.getElementById('orgF_err').textContent=''; var rd=new FileReader(); rd.onload=function(){ document.getElementById('orgF_logoPrev').innerHTML='<img src="'+rd.result+'" style="max-height:48px;max-width:160px;object-fit:contain;border:1px solid #eee;border-radius:6px;padding:4px;">'; }; rd.readAsDataURL(f); });
     document.getElementById('orgF_save').onclick=async function(){
       var name=val('orgF_name'); var errEl=document.getElementById('orgF_err');
       if(!name){ errEl.textContent='Name is required.'; return; }
-      var payload={ name:name, website:val('orgF_website'), industry:val('orgF_industry'), size_band:val('orgF_size'), logo_url:val('orgF_logo'), notes:document.getElementById('orgF_notes').value.trim() };
+      var payload={ name:name, website:val('orgF_website'), industry:val('orgF_industry'), size_band:val('orgF_size'), notes:document.getElementById('orgF_notes').value.trim() };
       this.disabled=true; this.textContent='Saving…';
       try{
+        var savedId=orgId;
         if(editing){ await wsData('org-update', Object.assign({org_id:orgId}, payload)); }
-        else { await wsData('org-create', payload); }
+        else { var resp=await wsData('org-create', payload); savedId=resp&&resp.organization&&resp.organization.id; }
+        // Logo upload (if a file was chosen) — runs after create/update because it needs the org id.
+        var lf=document.getElementById('orgF_logoFile');
+        if(lf&&lf.files&&lf.files[0]&&savedId){
+          this.textContent='Uploading logo…';
+          try{ var dataUrl=await new Promise(function(res,rej){ var fr=new FileReader(); fr.onload=function(){ res(fr.result); }; fr.onerror=rej; fr.readAsDataURL(lf.files[0]); }); await wsData('org-logo-upload',{org_id:savedId,logo_data_url:dataUrl}); }catch(le){ /* non-fatal — org still saved */ }
+        }
         if(typeof loadOrgs==='function') await loadOrgs();
         close();
         if(typeof toast==='function') toast(editing?'Organization updated.':'Organization added.');
