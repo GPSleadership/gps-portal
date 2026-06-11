@@ -1762,9 +1762,10 @@ async function verifyAndChangePassword() {
 // ── Diagnostic tier pricing ───────────────────────────────────────────────────
 // Display label ONLY — this does not bill anyone or drive any math. To reprice,
 // change the two values below and redeploy. They show in the Start Diagnostic
-// dropdowns (coach-only; clients never see them).
-const TIER_PRICES = { standard: '$5K', pro: '$10K' };
+// dropdowns (coach-only; clients never see them). Defined inside the function so
+// it can never be referenced before initialization during page load.
 function applyTierPriceLabels() {
+  const TIER_PRICES = { standard: '$5K', pro: '$10K' };
   document.querySelectorAll('select#nd-tier option, select#newDiagTier option').forEach(o => {
     if (o.value === 'standard') o.textContent = 'Standard (' + TIER_PRICES.standard + ')';
     if (o.value === 'pro')      o.textContent = 'Pro (' + TIER_PRICES.pro + ')';
