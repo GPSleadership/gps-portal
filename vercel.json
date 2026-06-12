@@ -43,6 +43,10 @@
     {
       "source": "/workshop-survey",
       "destination": "/workshop-survey.html"
+    },
+    {
+      "source": "/workshop-poc",
+      "destination": "/workshop-poc.html"
     }
   ],
   "crons": [
@@ -177,6 +181,9 @@
       "maxDuration": 15
     },
     "api/workshop-sponsor.js": {
+      "maxDuration": 15
+    },
+    "api/workshop-poc.js": {
       "maxDuration": 15
     },
     "api/health.js": {

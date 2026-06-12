@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GPS — Engagement Progress</title>
+<link rel="icon" type="image/png" sizes="192x192" href="https://drive.google.com/thumbnail?id=1ysVzaHFlxivjp1WwuWw04H7bV4Tc6vAm&amp;sz=w192" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{ --navy:#004369; --navy-d:#002D47; --teal:#01949A; --gold:#C09A2A; --green:#1A7A3A; --amber:#BF6A00; --mid:#5a6b76; --border:#dbe3e6; --bg:#f4f6f8; --sand:#F7F4EE; }
+  *{box-sizing:border-box;} html,body{max-width:100%;overflow-x:hidden;}
+  body{margin:0;font-family:'Open Sans',Arial,sans-serif;background:var(--bg);color:#1a2730;}
+  .topbar{height:6px;background:linear-gradient(90deg,var(--navy),var(--teal),#DB1F48);}
+  header{background:var(--navy);color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+  .brand{display:flex;align-items:center;gap:10px;}
+  .logo{background:var(--teal);color:#fff;font-weight:900;font-size:16px;padding:6px 11px;border-radius:6px;font-style:italic;}
+  .brand-sub{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#bcd;}
+  .brand-title{font-size:13px;font-weight:700;}
+  .org-logo{max-height:36px;max-width:130px;object-fit:contain;}
+  .wrap{max-width:760px;margin:0 auto;padding:20px 16px 60px;}
+  .card{background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.05);padding:18px 20px;margin-bottom:16px;}
+  h1{font-family:Montserrat,Arial,sans-serif;font-size:20px;color:var(--navy);margin:0 0 2px;}
+  .sub{font-size:13px;color:var(--mid);margin-bottom:0;}
+  .stage{display:inline-block;font-size:12px;font-weight:700;background:#E8F7F7;color:var(--navy);border:1px solid #99E6E8;border-radius:20px;padding:4px 12px;}
+  .stage-note{font-size:13px;color:var(--mid);margin-top:10px;}
+  .stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:6px;}
+  .stat{background:var(--sand);border:1px solid var(--border);border-radius:10px;padding:12px 14px;text-align:center;}
+  .stat-num{font-size:26px;font-weight:800;color:var(--navy);line-height:1;}
+  .stat-lbl{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mid);margin-top:5px;}
+  .bar{height:10px;background:var(--sand);border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-top:14px;}
+  .bar-fill{height:100%;background:linear-gradient(90deg,var(--teal),var(--green));}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{background:var(--sand);text-align:left;color:var(--mid);font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:9px 10px;}
+  td{padding:9px 10px;border-top:1px solid var(--border);}
+  .pill{font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;}
+  .pill-done{background:#D1FAE5;color:var(--green);}
+  .pill-wait{background:#FEF3C7;color:var(--amber);}
+  .title-row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
+  .h2{font-family:Montserrat,Arial,sans-serif;font-weight:800;color:var(--navy);font-size:15px;}
+  textarea,input[type=file]{width:100%;box-sizing:border-box;font-size:13px;}
+  textarea{min-height:90px;border:1.5px solid var(--border);border-radius:8px;padding:9px;font-family:monospace;}
+  .btn{background:var(--navy);color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer;}
+  .btn:disabled{opacity:.55;cursor:not-allowed;}
+  .muted{font-size:12px;color:var(--mid);}
+  .msg{font-size:13px;margin-top:8px;}
+  .loading,.error{padding:40px 16px;text-align:center;color:var(--mid);}
+  .lock{font-size:12px;color:var(--amber);background:#FEF8EC;border:1px solid #F3E0B5;border-radius:8px;padding:8px 12px;}
+</style>
+</head>
+<body>
+<div class="topbar"></div>
+<header>
+  <div class="brand">
+    <div class="logo">GPS</div>
+    <div><div class="brand-sub">GPS Leadership Solutions</div><div class="brand-title">Engagement Progress</div></div>
+  </div>
+  <img id="orgLogo" class="org-logo" alt="" style="display:none;" />
+</header>
+<div class="wrap">
+  <div id="view"><div class="loading">Loading…</div></div>
+</div>
+
+<script>
+var TOKEN = new URLSearchParams(location.search).get('token') || '';
+var DATA = null;
+
+function esc(s){ return String(s==null?'':s).replace(/[<>&"]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c];}); }
+
+function api(action, extra){
+  return fetch('/api/workshop-poc', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(Object.assign({token:TOKEN, action:action}, extra||{})) })
+    .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||('Request failed ('+r.status+')')); return j; }); });
+}
+
+var STAGE = {
+  setup:                 ['Getting set up', 'Your GPS coach is preparing the assessment.'],
+  discovery_complete:    ['Discovery complete', 'Kickoff is done; questions are being prepared.'],
+  questions_drafted:     ['Questions drafted', 'The question set is being finalized.'],
+  sponsor_review:        ['In review', 'The questions are being reviewed before launch.'],
+  pre_survey_open:       ['Survey open', 'Participants can complete the survey now.'],
+  pre_survey_closed:     ['Survey closed', 'Responses are in; analysis is underway.'],
+  workshop_delivered:    ['Session delivered', 'The session is complete.'],
+  post_survey_open:      ['Follow-up survey open', 'Participants can complete the follow-up now.'],
+  post_survey_closed:    ['Follow-up closed', 'Analysis is underway.'],
+  debrief_scheduled:     ['Debrief scheduled', 'A debrief session is on the calendar.'],
+  report_uploaded:       ['Report ready', 'The results have been prepared for your leadership.'],
+  complete:              ['Complete', 'This engagement is wrapped up.']
+};
+
+function load(){
+  api('get').then(function(res){
+    DATA = res; render();
+  }).catch(function(e){
+    document.getElementById('view').innerHTML = '<div class="card error"><div style="font-size:30px;margin-bottom:8px;">🔒</div><div style="font-weight:700;color:#004369;font-size:16px;margin-bottom:6px;">Link not recognized</div><div>'+esc(e.message)+'</div></div>';
+  });
+}
+
+function render(){
+  var w = DATA.workshop, c = DATA.counts, ps = DATA.participants || [];
+  var lg = document.getElementById('orgLogo');
+  if (w.org_logo_url){ lg.src=w.org_logo_url; lg.alt=(w.org||'')+' logo'; lg.style.display='block'; }
+  var stage = STAGE[w.status] || [w.status||'In progress',''];
+  var pct = c.total ? Math.round((c.completed/c.total)*100) : 0;
+
+  var rows = ps.length ? ps.map(function(p){
+    return '<tr><td style="font-weight:600;color:#1a2730;">'+esc(p.name||'—')+'</td><td class="muted">'+esc(p.email||'')+'</td><td>'+(p.completed?'<span class="pill pill-done">Completed</span>':'<span class="pill pill-wait">'+(p.invited?'Invited':'Not started')+'</span>')+'</td></tr>';
+  }).join('') : '<tr><td colspan="3" class="muted" style="text-align:center;padding:22px;">No participants added yet.</td></tr>';
+
+  var lockNote = w.roster_locked ? '<div class="lock">The participant list is locked. Contact your GPS coach to make changes.</div>' : '';
+  var uploadCard = w.roster_locked ? '' :
+    '<div class="card"><div class="title-row"><div class="h2">Add participants</div></div>'
+    +'<div class="muted" style="margin-bottom:8px;">Paste one person per line as <b>name, email</b> (one per line), or upload a spreadsheet with Name and Email columns. Duplicates are skipped automatically.</div>'
+    +'<textarea id="pocPaste" placeholder="Jane Doe, jane@company.com&#10;Sam Lee, sam@company.com"></textarea>'
+    +'<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;">'
+    +'<button class="btn" id="pocAddBtn" onclick="addFromPaste()">Add people</button>'
+    +'<label class="muted" style="font-weight:700;">or file:</label>'
+    +'<input type="file" id="pocFile" accept=".xlsx,.xls,.csv" onchange="addFromFile(this)" style="width:auto;">'
+    +'<span id="pocMsg" class="msg"></span></div></div>';
+
+  document.getElementById('view').innerHTML =
+    '<div class="card">'
+    +'<div class="title-row"><div><h1>'+esc(w.title||'Assessment')+'</h1><div class="sub">'+esc(w.org||'')+(w.kind==='assessment'?' · Organizational Assessment':'')+'</div></div><span class="stage">'+esc(stage[0])+'</span></div>'
+    +(stage[1]?'<div class="stage-note">'+esc(stage[1])+'</div>':'')
+    +'</div>'
+    +'<div class="card"><div class="h2" style="margin-bottom:12px;">Participation</div>'
+    +'<div class="stat-row">'
+    +'<div class="stat"><div class="stat-num">'+c.total+'</div><div class="stat-lbl">Participants</div></div>'
+    +'<div class="stat"><div class="stat-num" style="color:var(--green);">'+c.completed+'</div><div class="stat-lbl">Completed</div></div>'
+    +'<div class="stat"><div class="stat-num" style="color:var(--amber);">'+c.pending+'</div><div class="stat-lbl">Outstanding</div></div>'
+    +'</div>'
+    +'<div class="bar"><div class="bar-fill" style="width:'+pct+'%;"></div></div>'
+    +'<div class="muted" style="margin-top:6px;text-align:right;">'+pct+'% complete</div>'
+    +'</div>'
+    +'<div class="card"><div class="title-row"><div class="h2">Participants</div></div>'+lockNote
+    +'<div style="overflow-x:auto;"><table><thead><tr><th>Name</th><th>Email</th><th>Status</th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+    +'<div class="muted" style="margin-top:8px;">You can see who has completed the survey — not their individual answers or scores. Results are shared with your leadership separately.</div>'
+    +'</div>'
+    + uploadCard;
+}
+
+function _map(o){
+  function pick(keys){ for(var k in o){ var kn=String(k).toLowerCase().trim(); if(keys.indexOf(kn)>-1) return String(o[k]==null?'':o[k]).trim(); } return ''; }
+  return { name: pick(['name','full name','fullname','participant','first name']) || (function(){ var f=pick(['first name','firstname','first']); var l=pick(['last name','lastname','last']); return (f+' '+l).trim(); })(),
+           email: pick(['email','email address','e-mail','emailaddress','work email']).toLowerCase(),
+           role: pick(['role','title','job title','position']),
+           department: pick(['department','dept','area','division']) };
+}
+function _commit(rows){
+  rows = (rows||[]).filter(function(r){ return r.name && r.email; });
+  var msg=document.getElementById('pocMsg'), btn=document.getElementById('pocAddBtn');
+  if(!rows.length){ if(msg){ msg.style.color='#BF6A00'; msg.textContent='Add at least one row with a name and an email.'; } return; }
+  if(btn) btn.disabled=true; if(msg){ msg.style.color='#5a6b76'; msg.textContent='Adding '+rows.length+'…'; }
+  api('upload-roster',{rows:rows}).then(function(r){
+    if(msg){ msg.style.color='#1A7A3A'; msg.textContent='Added '+r.linked+' ('+r.created+' new)'+(r.skipped?(', '+r.skipped+' skipped'):'')+'.'; }
+    load();
+  }).catch(function(e){ if(msg){ msg.style.color='#DB1F48'; msg.textContent=e.message; } if(btn) btn.disabled=false; });
+}
+function addFromPaste(){
+  var t=(document.getElementById('pocPaste')||{}).value||'';
+  var rows=t.split('\n').map(function(line){ var p=line.split(',').map(function(x){return x.trim();}); return { name:p[0]||'', email:(p[1]||'').toLowerCase(), role:p[2]||'' }; });
+  _commit(rows);
+}
+function addFromFile(input){
+  var f=input.files&&input.files[0]; if(!f) return;
+  var msg=document.getElementById('pocMsg'); if(msg){ msg.style.color='#5a6b76'; msg.textContent='Reading file…'; }
+  var fr=new FileReader();
+  fr.onload=function(){ try{ var wb=XLSX.read(fr.result,{type:'array'}); var ws=wb.Sheets[wb.SheetNames[0]]; var json=XLSX.utils.sheet_to_json(ws,{defval:''}); _commit(json.map(_map)); }catch(e){ if(msg){ msg.style.color='#DB1F48'; msg.textContent='Could not read that file.'; } } };
+  fr.readAsArrayBuffer(f);
+}
+
+if(!TOKEN){ document.getElementById('view').innerHTML='<div class="card error">This link is missing its access token. Please use the link from your GPS contact.</div>'; }
+else { load(); }
+</script>
+</body>
+</html>
