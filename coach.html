@@ -4758,17 +4758,10 @@ async function sendWelcomeEmail(clientId) {
     btn.style.background = '#2e7d32';
     setTimeout(() => { btn.textContent = 'Send Welcome Email'; btn.style.background = ''; btn.disabled = false; }, 4000);
 
-    // Stamp welcome_sent_at so the reminder cron can track follow-up
-    await fetch(`${SUPABASE_URL}/rest/v1/clients?id=eq.${clientId}`, {
-      method: 'PATCH',
-      headers: {
-        apikey: SUPABASE_ANON,
-        Authorization: `Bearer ${SUPABASE_ANON}`,
-        'Content-Type': 'application/json',
-        Prefer: 'return=minimal'
-      },
-      body: JSON.stringify({ welcome_sent_at: new Date().toISOString() })
-    });
+    // Stamp welcome_sent_at so the reminder cron can track follow-up.
+    // (Was an anon-key PATCH — dead since the v26 lockdown, so the stamp
+    // silently never landed. Routed through coach-data instead.)
+    await cdUpdate('clients', { welcome_sent_at: new Date().toISOString() }, { eq: { id: clientId } });
 
   } catch (err) {
     alert('Error sending welcome email: ' + err.message);
@@ -5130,6 +5123,8 @@ function renderDiagHome() {
 
   ${needsSection}
 
+  <div id="emailFailFlags"></div>
+
   <div class="card" style="margin-bottom:22px;">
     <div class="card-title" style="margin-bottom:14px;">This Week</div>
     <div style="display:flex;flex-direction:column;gap:8px;">${weekHtml}</div>
@@ -5141,6 +5136,43 @@ function renderDiagHome() {
     ${diagStatCard(attention,'Need Attention',attention>0?'var(--d-amber)':'var(--d-blue)',attention>0?'dstat-top-amber':null)}
     ${diagStatCard(closingWeek,'Closing This Week',closingWeek>0?'var(--d-red2)':'var(--d-blue)',closingWeek>0?'dstat-top-red':null)}
   </div>`;
+
+  loadEmailFailureFlags();
+}
+
+// ── P1 #6: surface email delivery failures (last 7 days) on the Today view ──
+// Every send path now writes to email_log; this makes failures impossible to miss.
+async function loadEmailFailureFlags() {
+  const box = document.getElementById('emailFailFlags');
+  if (!box) return;
+  try {
+    const since = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+    const fails = await cdSelect('email_log', {
+      eq:    { status: 'error' },
+      gte:   { sent_at: since },
+      order: { col: 'sent_at', asc: false },
+      limit: 20,
+      select: 'sent_at,recipient_email,recipient_name,email_type,subject,error_details',
+    });
+    if (!fails.length) { box.innerHTML = ''; return; }
+    const rows = fails.map(f => {
+      const when = new Date(f.sent_at).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+      const who  = f.recipient_name ? `${f.recipient_name} (${f.recipient_email})` : f.recipient_email;
+      return `<div style="padding:8px 0;border-bottom:1px solid #f0ebe3;">
+        <div style="font-size:13px;font-weight:700;color:var(--d-red2);">${(f.email_type||'email')} → ${who}</div>
+        <div style="font-size:12px;color:var(--d-mid);margin-top:2px;">${when}${f.subject ? ' · ' + f.subject : ''}</div>
+        ${f.error_details ? `<div style="font-size:11px;color:var(--d-mid);margin-top:2px;font-family:monospace;">${String(f.error_details).slice(0,140)}</div>` : ''}
+      </div>`;
+    }).join('');
+    box.innerHTML = `<div class="card" style="margin-bottom:20px;border-left:4px solid var(--d-red2);">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <div class="card-title" style="color:var(--d-red2);">⚠️ Email Delivery Failures (last 7 days)</div>
+        <span style="font-size:12px;color:var(--d-mid);">${fails.length} failed</span>
+      </div>
+      <div style="font-size:12px;color:var(--d-mid);margin-bottom:6px;">These emails did NOT reach the recipient. Resend manually or fix the address.</div>
+      ${rows}
+    </div>`;
+  } catch (_) { box.innerHTML = ''; }
 }
 
 
@@ -6306,19 +6338,24 @@ async function markDebriefComplete() {
       // Save portal URL on the diagnostic so the leader portal can show the button
       await updateDiag({ coaching_portal_url: portalURL });
       try {
-        await fetch('/api/notify', {
+        const nr = await fetch('/api/notify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             type: 'portal_welcome',
+            clientId: DIAG_SEL.client_id,
             clientName: clientData.name,
             clientEmail: clientData.email,
             portalURL,
             debriefDate: DIAG_SEL.debrief_date || null
           })
         });
+        const nd = await nr.json().catch(() => ({}));
+        if (!nr.ok) throw new Error(nd.error || 'send failed');
       } catch(e) {
-        console.warn('Portal welcome email failed to send:', e.message);
+        // This is the client's portal link — a silent drop here means they
+        // never get access. Make the failure loud.
+        alert('⚠️ Portal welcome email FAILED to send to ' + clientData.email + ' — send their portal link manually.\n\n(' + e.message + ')');
       }
     }
   }

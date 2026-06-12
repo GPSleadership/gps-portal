@@ -6,6 +6,53 @@
 const RESEND_API_KEY = process.env.RESEND_API_KEY;                                          // Vercel env var: RESEND_API_KEY
 const RESEND_FROM    = process.env.RESEND_FROM_EMAIL || 'noreply@portal.gpsleadership.org'; // Vercel env var: RESEND_FROM_EMAIL
 const COACH_EMAIL    = 'alex@gpsleadership.org';
+const SUPABASE_URL    = process.env.SUPABASE_URL || 'https://pbnkefuqpoztcxfagiod.supabase.co';
+const SUPABASE_SECRET = process.env.SUPABASE_SECRET_KEY;
+
+// ── P1 #6: every send is recorded in email_log (sent or error) so failures
+//    surface in the coach dashboard instead of vanishing into function logs. ──
+async function logEmail({ clientId, recipientEmail, recipientName, emailType, subject, status, errorDetails, resendId }) {
+  if (!SUPABASE_SECRET || !recipientEmail) return;
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/email_log`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        client_id:       clientId || null,
+        recipient_email: recipientEmail,
+        recipient_name:  recipientName || null,
+        email_type:      emailType,
+        subject:         subject || null,
+        status,
+        error_details:   errorDetails ? String(typeof errorDetails === 'string' ? errorDetails : JSON.stringify(errorDetails)).slice(0, 500) : null,
+        resend_id:       resendId || null,
+      }),
+    });
+  } catch (_) { /* logging must never break the send path */ }
+}
+
+// Send via Resend AND log the outcome. Returns { ok, result }.
+async function sendAndLog({ from, to, subject, html, emailType, clientId, recipientName }) {
+  let response, result;
+  try {
+    response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to, subject, html }),
+    });
+    result = await response.json();
+  } catch (err) {
+    await logEmail({ clientId, recipientEmail: to[0], recipientName, emailType, subject, status: 'error', errorDetails: err.message });
+    throw err;
+  }
+  await logEmail({
+    clientId, recipientEmail: to[0], recipientName, emailType, subject,
+    status: response.ok ? 'sent' : 'error',
+    errorDetails: response.ok ? null : result,
+    resendId: response.ok ? (result.id || null) : null,
+  });
+  return { ok: response.ok, result };
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -157,21 +204,11 @@ export default async function handler(req, res) {
 
     // Send to Alex (coach only)
     try {
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${RESEND_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from:    `GPS Leadership <${RESEND_FROM}>`,
-          to:      [COACH_EMAIL],
-          subject,
-          html,
-        }),
+      const { ok, result } = await sendAndLog({
+        from: `GPS Leadership <${RESEND_FROM}>`, to: [COACH_EMAIL], subject, html,
+        emailType: 'password_change_code', recipientName: 'Alex Tremble',
       });
-      const result = await response.json();
-      if (!response.ok) return res.status(500).json({ error: 'Verification email failed', detail: result });
+      if (!ok) return res.status(500).json({ error: 'Verification email failed', detail: result });
       return res.status(200).json({ success: true });
     } catch (err) {
       return res.status(500).json({ error: err.message });
@@ -229,26 +266,14 @@ export default async function handler(req, res) {
 
     // Send to CLIENT (not Alex)
     try {
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${RESEND_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from:    `Alex Tremble – GPS Leadership <${RESEND_FROM}>`,
-          to:      [clientEmail],
-          subject,
-          html,
-        }),
+      const { ok, result } = await sendAndLog({
+        from: `Alex Tremble – GPS Leadership <${RESEND_FROM}>`, to: [clientEmail], subject, html,
+        emailType: 'week9_client', clientId: body.clientId, recipientName: clientName,
       });
-
-      const result = await response.json();
-      if (!response.ok) {
+      if (!ok) {
         console.error('Week 9 email error:', result);
         return res.status(500).json({ error: 'Week 9 email failed', detail: result });
       }
-
       return res.status(200).json({ success: true, sent_to: clientEmail });
     } catch (err) {
       console.error('Week 9 email exception:', err);
@@ -436,18 +461,11 @@ export default async function handler(req, res) {
 
     // Send to CLIENT (not Alex)
     try {
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from:    `Alex Tremble – GPS Leadership <${RESEND_FROM}>`,
-          to:      [clientEmail],
-          subject,
-          html,
-        }),
+      const { ok, result } = await sendAndLog({
+        from: `Alex Tremble – GPS Leadership <${RESEND_FROM}>`, to: [clientEmail], subject, html,
+        emailType: body.type, clientId: body.clientId, recipientName: body.clientName,
       });
-      const result = await response.json();
-      if (!response.ok) return res.status(500).json({ error: 'Email send failed', detail: result });
+      if (!ok) return res.status(500).json({ error: 'Email send failed', detail: result });
       return res.status(200).json({ success: true, sent_to: clientEmail });
     } catch (err) {
       return res.status(500).json({ error: err.message });
@@ -524,13 +542,11 @@ export default async function handler(req, res) {
     }
 
     try {
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: FROM, to: [clientEmail], subject: wrSubject, html: wrHtml }),
+      const { ok, result } = await sendAndLog({
+        from: FROM, to: [clientEmail], subject: wrSubject, html: wrHtml,
+        emailType: body.type, clientId: body.clientId, recipientName: clientName,
       });
-      const result = await response.json();
-      if (!response.ok) return res.status(500).json({ error: 'Welcome reminder email failed', detail: result });
+      if (!ok) return res.status(500).json({ error: 'Welcome reminder email failed', detail: result });
       return res.status(200).json({ success: true, sent_to: clientEmail, type: body.type });
     } catch (err) {
       return res.status(500).json({ error: err.message });
@@ -593,13 +609,11 @@ export default async function handler(req, res) {
     }
 
     try {
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: FROM, to: [clientEmail], subject: seqSubject, html: seqHtml }),
+      const { ok, result } = await sendAndLog({
+        from: FROM, to: [clientEmail], subject: seqSubject, html: seqHtml,
+        emailType: body.type, clientId: body.clientId, recipientName: clientName,
       });
-      const result = await response.json();
-      if (!response.ok) return res.status(500).json({ error: 'Continuation email failed', detail: result });
+      if (!ok) return res.status(500).json({ error: 'Continuation email failed', detail: result });
       return res.status(200).json({ success: true, sent_to: clientEmail, type: body.type });
     } catch (err) {
       return res.status(500).json({ error: err.message });
@@ -675,13 +689,11 @@ export default async function handler(req, res) {
       </div>`;
 
     try {
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: FROM, to: [clientEmail], subject, html }),
+      const { ok, result } = await sendAndLog({
+        from: FROM, to: [clientEmail], subject, html,
+        emailType: 'portal_welcome', clientId: body.clientId, recipientName: clientName,
       });
-      const result = await response.json();
-      if (!response.ok) return res.status(500).json({ error: 'Email send failed', detail: result });
+      if (!ok) return res.status(500).json({ error: 'Email send failed', detail: result });
       return res.status(200).json({ success: true, sent_to: clientEmail });
     } catch (err) {
       return res.status(500).json({ error: err.message });
@@ -692,29 +704,16 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Unknown notification type' });
   }
 
-  // ─── SEND VIA RESEND ────────────────────────────────────────────────────────
+  // ─── SEND VIA RESEND (coach notifications: plan/check-in/test) ─────────────
   try {
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: `GPS Leadership <${RESEND_FROM}>`,
-        to:   [COACH_EMAIL],
-        subject,
-        html,
-      }),
+    const { ok, result } = await sendAndLog({
+      from: `GPS Leadership <${RESEND_FROM}>`, to: [COACH_EMAIL], subject, html,
+      emailType: body.type, clientId: body.clientId, recipientName: 'Alex Tremble',
     });
-
-    const result = await response.json();
-
-    if (!response.ok) {
+    if (!ok) {
       console.error('Resend error:', result);
       return res.status(500).json({ error: 'Email send failed', detail: result });
     }
-
     return res.status(200).json({ success: true });
   } catch (err) {
     console.error('Notification error:', err);
