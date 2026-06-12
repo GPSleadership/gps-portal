@@ -1429,6 +1429,34 @@
       transition: all .15s;
     }
     .qa-hist-copy:hover { border-color: var(--teal); color: var(--navy); }
+    /* Wide screens: dock Recent Questions as a sticky left sidebar (ChatGPT-style)
+       so the thread and composer stay front and center. Narrow screens keep the
+       stacked layout. */
+    @media (min-width: 1100px) {
+      .qa-main {
+        max-width: 1120px;
+        display: grid;
+        grid-template-columns: 280px minmax(0, 760px);
+        column-gap: 36px;
+        align-items: start;
+      }
+      .qa-main > * { grid-column: 2; }
+      .qa-hist-section {
+        grid-column: 1;
+        grid-row: 1 / span 30;
+        position: sticky;
+        top: 24px;
+        margin-bottom: 0;
+        background: #fff;
+        border: 1px solid #e2ddd5;
+        border-radius: 10px;
+        padding: 14px;
+        max-height: calc(100vh - 60px);
+        overflow-y: auto;
+      }
+      /* Keep the bottom composer aligned with the thread column */
+      .qa-input-inner { transform: translateX(158px); }
+    }
     .qa-typing { display: none; padding: 8px 0; }
     .qa-typing.v { display: flex; align-items: center; gap: 10px; }
     .qa-ld { display: flex; gap: 5px; }
@@ -5558,6 +5586,10 @@ async function loadAskAlexHistory() {
   try {
     data = (await portalData('ask-history')).history || [];
   } catch (_) { data = []; }
+
+  // Drop exact-duplicate questions (keep the newest occurrence)
+  data = data.filter((e, idx, arr) =>
+    idx === arr.findIndex(x => (x.question_text || '').trim() === (e.question_text || '').trim()));
 
   if (!data || data.length === 0) {
     section.style.display = 'none';
