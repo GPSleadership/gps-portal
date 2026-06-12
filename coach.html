@@ -3288,7 +3288,7 @@ async function confirmImport() {
     const res = await fetch('/api/import-clients', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clients: importParsedClients }),
+      body: JSON.stringify({ clients: importParsedClients, session: getCoachSessionToken() }),
     });
     const result = await res.json();
 
@@ -4281,6 +4281,13 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
         ? `<span style="background:#f0e6ff;color:#6b21a8;font-size:9px;font-weight:700;padding:1px 5px;border-radius:6px;margin-left:4px;">${s.is_board_member ? 'Board' : 'Supervisor'}</span>`
         : '';
 
+      // Resend available once a survey has been sent but the person hasn't responded
+      // (e.g. their copy went to junk). Sends a fresh link; the old one stops working.
+      const canResend = sent && !responded;
+      const resendBtn = canResend
+        ? `<button onclick="resendStakeholderSurvey('${s.id}','${clientId}','${(tkStatus && tkStatus.checkpoint) || 'baseline'}',this)" style="font-size:11px;color:var(--teal);background:none;border:1px solid var(--teal);border-radius:4px;padding:3px 8px;cursor:pointer;white-space:nowrap;">↻ Resend</button>`
+        : '';
+
       return `
         <div class="stakeholder-row">
           <div>
@@ -4289,10 +4296,13 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
           </div>
           <span class="stakeholder-role">${roleLabel(s)}</span>
           ${statusBadge}
-          <button onclick="removeStakeholder('${s.id}','${clientId}','${s.name.replace(/'/g,"\\'").replace(/"/g,'\\"')}',this)"
-            style="margin-left:auto;font-size:11px;color:var(--red);background:none;border:1px solid var(--red);border-radius:4px;padding:3px 8px;cursor:pointer;white-space:nowrap;">
-            Remove
-          </button>
+          <div style="margin-left:auto;display:flex;gap:6px;align-items:center;">
+            ${resendBtn}
+            <button onclick="removeStakeholder('${s.id}','${clientId}','${s.name.replace(/'/g,"\\'").replace(/"/g,'\\"')}',this)"
+              style="font-size:11px;color:var(--red);background:none;border:1px solid var(--red);border-radius:4px;padding:3px 8px;cursor:pointer;white-space:nowrap;">
+              Remove
+            </button>
+          </div>
         </div>`;
     }).join('');
   }
@@ -4550,6 +4560,23 @@ async function removeStakeholder(stakeholderId, clientId, name, btn) {
   btn.disabled = true;
   await cdUpdate('stakeholders', { is_active: false }, { eq: { id: stakeholderId } });
   loadStakeholderData(clientId);
+}
+
+async function resendStakeholderSurvey(stakeholderId, clientId, checkpoint, btn) {
+  if (!confirm('Resend the survey email to this stakeholder?\n\nThey’ll get a fresh link (their old link stops working). Useful if the first email went to junk.')) return;
+  const orig = btn.textContent; btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    const session = getCoachSessionToken();
+    const res = await fetch('/api/survey?action=resend', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_id: clientId, stakeholder_id: stakeholderId, checkpoint: checkpoint || 'baseline', session })
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || j.error) { alert('Could not resend:\n\n' + (j.error || ('HTTP ' + res.status))); btn.disabled = false; btn.textContent = orig; return; }
+    alert('✓ Survey resent to ' + (j.name || 'the stakeholder') + '.');
+    loadStakeholderData(clientId);
+    if (_currentSection === 'emails') setTimeout(loadEmailLog, 500);
+  } catch (err) { alert('Error: ' + err.message); btn.disabled = false; btn.textContent = orig; }
 }
 
 async function triggerBaselineSurvey(clientId, btn) {
