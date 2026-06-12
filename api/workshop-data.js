@@ -71,6 +71,20 @@ async function sbGet(path) {
 }
 async function sbOne(path) { const rows = await sbGet(path); return rows[0] || null; }
 
+// Batched client lookup (P1 #12): one id=in.(...) query instead of N single
+// fetches — the live logs showed 25+ clients?id=eq.X calls per roster load.
+// Returns a Map of client_id → row. Chunked to keep URLs a safe length.
+async function clientsMapByIds(ids, select = 'name,email') {
+  const uniq = [...new Set((ids || []).filter(Boolean))];
+  const map = new Map();
+  for (let i = 0; i < uniq.length; i += 80) {
+    const chunk = uniq.slice(i, i + 80);
+    const rows = await sbGet(`/rest/v1/clients?id=in.(${chunk.map(enc).join(',')})&select=id,${select}`);
+    for (const r of rows) map.set(r.id, r);
+  }
+  return map;
+}
+
 // ── Small utilities ──────────────────────────────────────────────────────────
 function avg(nums) {
   const v = (nums || []).filter(s => s != null && !isNaN(s)).map(Number);
@@ -468,9 +482,10 @@ export default async function handler(req, res) {
         const w = await sbOne(`/rest/v1/workshops?id=eq.${enc(body.workshop_id)}&select=*&limit=1`);
         if (!w) return res.status(404).json({ error: 'Workshop not found' });
         const parts = await sbGet(`/rest/v1/workshop_participants?workshop_id=eq.${enc(body.workshop_id)}&select=id,participant_token,client_id`);
+        const cmapInv = await clientsMapByIds(parts.map(p => p.client_id));
         let sent = 0;
         for (const p of parts) {
-          const c = await sbOne(`/rest/v1/clients?id=eq.${enc(p.client_id)}&select=name,email&limit=1`);
+          const c = cmapInv.get(p.client_id);
           if (!c?.email) continue;
           const url = `${PORTAL_BASE_URL}/workshop-survey?token=${enc(p.participant_token)}&phase=${phase}`;
           const subj = phase === 'pre'
@@ -831,9 +846,10 @@ export default async function handler(req, res) {
         const allParts = await sbGet(`/rest/v1/workshop_participants?workshop_id=eq.${enc(body.workshop_id)}&select=id,participant_token,client_id,invited_at`);
         // Filter to only not-yet-invited (allow force_all flag for resend-all)
         const parts = body.force_all ? allParts : allParts.filter(p => !p.invited_at);
+        const cmapSend = await clientsMapByIds(parts.map(p => p.client_id));
         let sent = 0;
         for (const p of parts) {
-          const c = await sbOne(`/rest/v1/clients?id=eq.${enc(p.client_id)}&select=name,email&limit=1`);
+          const c = cmapSend.get(p.client_id);
           if (!c?.email) continue;
           const url = `${PORTAL_BASE_URL}/workshop-survey?token=${enc(p.participant_token)}&phase=pre`;
           const subj = `Your ${w.title} survey — 5–10 minutes, completely confidential`;
@@ -977,9 +993,10 @@ export default async function handler(req, res) {
 
         // All participants with client details
         const parts = await sbGet(`/rest/v1/workshop_participants?workshop_id=eq.${enc(body.workshop_id)}&select=id,client_id,role,department,location,pre_status,invited_at,last_reminder_at`);
+        const cmapExp = await clientsMapByIds(parts.map(p => p.client_id));
         const clientMap = {};
         for (const p of parts) {
-          const c = await sbOne(`/rest/v1/clients?id=eq.${enc(p.client_id)}&select=name,email&limit=1`);
+          const c = cmapExp.get(p.client_id);
           if (c) clientMap[p.id] = c;
         }
 
@@ -1075,8 +1092,9 @@ export default async function handler(req, res) {
         const wOrgRow = await sbOne(`/rest/v1/workshops?id=eq.${enc(body.workshop_id)}&select=client_org_name&limit=1`);
         const wOrg = (wOrgRow?.client_org_name || '').trim();
         const parts = await sbGet(`/rest/v1/workshop_participants?workshop_id=eq.${enc(body.workshop_id)}&select=id,client_id,role,department,location,pre_status,post_status,invited_at,last_reminder_at&order=created_at.asc`);
-        const enriched = await Promise.all(parts.map(async p => {
-          const c = await sbOne(`/rest/v1/clients?id=eq.${enc(p.client_id)}&select=name,email,organization&limit=1`);
+        const cmapRoster = await clientsMapByIds(parts.map(p => p.client_id), 'name,email,organization');
+        const enriched = parts.map(p => {
+          const c = cmapRoster.get(p.client_id);
           let status = 'not_sent';
           if (p.pre_status === 'complete') status = 'completed';
           else if (p.last_reminder_at) status = 'reminder_sent';
@@ -1085,7 +1103,7 @@ export default async function handler(req, res) {
           // tied_to_org = their profile org matches the engagement's org.
           const tiedToOrg = !!wOrg && org.toLowerCase() === wOrg.toLowerCase();
           return { ...p, name: c?.name || '', email: c?.email || '', organization: org, tied_to_org: tiedToOrg, display_status: status };
-        }));
+        });
         return res.status(200).json({ ok: true, participants: enriched, workshop_org: wOrg });
       }
 
@@ -1113,14 +1131,15 @@ export default async function handler(req, res) {
         const wid = body.workshop_id;
         if (!wid) return res.status(400).json({ error: 'workshop_id required' });
         const links = await sbGet(`/rest/v1/workshop_sponsors?workshop_id=eq.${enc(wid)}&select=id,client_id,added_at,sponsor_title&order=added_at.asc`);
-        const sponsors = await Promise.all(links.map(async l => {
-          const c = await sbOne(`/rest/v1/clients?id=eq.${enc(l.client_id)}&select=name,email,title,token&limit=1`);
+        const cmapSp = await clientsMapByIds(links.map(l => l.client_id), 'name,email,title,token');
+        const sponsors = links.map(l => {
+          const c = cmapSp.get(l.client_id);
           // Build portal link server-side; never send raw token to the browser.
           const PORTAL = process.env.PORTAL_BASE_URL || 'https://portal.gpsleadership.org';
           const portalLink = c?.token ? `${PORTAL}/client.html?token=${encodeURIComponent(c.token)}` : null;
           // Prefer the junction-level sponsor title (per-workshop) over the shared clients.title.
           return { ...l, name: c?.name || '', email: c?.email || '', title: l.sponsor_title || c?.title || '', portalLink };
-        }));
+        });
         return res.status(200).json({ ok: true, sponsors });
       }
 
@@ -1272,8 +1291,9 @@ async function runReminders() {
       if (![3, 1, 0].includes(days)) continue;
       const statusCol = phase === 'pre' ? 'pre_status' : 'post_status';
       const parts = await sbGet(`/rest/v1/workshop_participants?workshop_id=eq.${enc(w.id)}&${statusCol}=neq.complete&select=id,participant_token,client_id`);
+      const cmapNudge = await clientsMapByIds(parts.map(p => p.client_id));
       for (const p of parts) {
-        const c = await sbOne(`/rest/v1/clients?id=eq.${enc(p.client_id)}&select=name,email&limit=1`);
+        const c = cmapNudge.get(p.client_id);
         if (!c?.email) continue;
         const url = `${PORTAL_BASE_URL}/workshop-survey?token=${enc(p.participant_token)}&phase=${phase}`;
         const when = days === 0 ? 'closes today' : `closes in ${days} day${days === 1 ? '' : 's'}`;

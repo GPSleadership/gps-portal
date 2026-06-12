@@ -1814,7 +1814,9 @@ async function loadDashboard() {
   try {
     [clientsRows, checkinsRows] = await Promise.all([
       cdSelect('clients',  { order: { col: 'created_at',   asc: false } }),
-      cdSelect('checkins', { order: { col: 'submitted_at', asc: false } })
+      // P1 #12: the dashboard only needs recent check-ins, not all history ever —
+      // this table grows forever and was being pulled in full on every load.
+      cdSelect('checkins', { order: { col: 'submitted_at', asc: false }, limit: 1000 })
     ]);
   } catch (e) {
     if (isSessionError(e)) { showLoginScreen('Your session expired. Please log in again.'); return; }
