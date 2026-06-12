@@ -2482,7 +2482,14 @@ const token = new URLSearchParams(window.location.search).get('token');
           line_no: line || null,
           col_no: col || null,
           stack: String(stack || '').slice(0, 1500),
-          token_hint: (token || '').slice(0, 8) || null,
+          token_hint: (function () {
+            // Best-effort: the lexical `token` is null on PWA loads where the
+            // URL param was stripped; the restored value lives on window.token.
+            try {
+              var t = token || window.token || new URLSearchParams(location.search).get('token') || '';
+              return String(t).slice(0, 8) || null;
+            } catch (_) { return null; }
+          })(),
         }),
       }).catch(() => {});
     } catch (_) {}

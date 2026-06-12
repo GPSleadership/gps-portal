@@ -796,8 +796,15 @@ function buildRaterGroupData(responses, allRaters) {
     if (!rel) return null;
     const n = rel.toLowerCase().replace(/[\s\-]+/g, '_');
     if (n === 'manager') return 'supervisor';     // legacy alias
-    if (n === 'other' || n === 'board') return null; // no bucket for these
-    return GKEYS.includes(n) ? n : null;
+    if (GKEYS.includes(n)) return n;
+    // Current taxonomy (leader page, coach bulk import, Excel template):
+    // map onto the four report groups; everything else has no group bucket
+    // (still counted in All Others via the fallback below).
+    const s = n.replace(/[^a-z]/g, '');
+    if (s.includes('skip') || s.includes('indirect')) return 'direct_report';
+    if (s.includes('superv') || s.includes('manager') || s.includes('boss') || s.includes('owner')) return 'supervisor';
+    if (s.includes('internal')) return 'internal_partner';
+    return null;
   };
 
   const mkBucket = () => ({
@@ -828,17 +835,20 @@ function buildRaterGroupData(responses, allRaters) {
       rowIsSelf = false;
       key = normalizeRel(resp.rater_relationship);
     }
-    if (!key) continue;
+    // Rows with no group bucket (Board Member, External Customer, free-text
+    // Other, …) still count toward All Others — their feedback must not
+    // silently vanish from the report.
+    if (!key && rowIsSelf) continue;
     if (resp.rater_id != null) {
-      buckets[key].raterIds.add(resp.rater_id);
+      if (key) buckets[key].raterIds.add(resp.rater_id);
       if (!rowIsSelf) buckets.all_others.raterIds.add(resp.rater_id);
     }
     if (resp.score != null && RATED.includes(resp.question_code)) {
-      buckets[key].scores[resp.question_code].push(Number(resp.score));
+      if (key) buckets[key].scores[resp.question_code].push(Number(resp.score));
       if (!rowIsSelf) buckets.all_others.scores[resp.question_code].push(Number(resp.score));
     }
     if (resp.text_response?.trim() && OPEN.includes(resp.question_code)) {
-      buckets[key].verbatims[resp.question_code].push(resp.text_response.trim());
+      if (key) buckets[key].verbatims[resp.question_code].push(resp.text_response.trim());
       if (!rowIsSelf) buckets.all_others.verbatims[resp.question_code].push(resp.text_response.trim());
     }
   }
@@ -848,9 +858,8 @@ function buildRaterGroupData(responses, allRaters) {
   const completedCounts = { direct_report: 0, peer: 0, supervisor: 0, internal_partner: 0, self: 0, all_others: 0 };
   for (const r of allRaters) {
     const k = r.is_self ? 'self' : normalizeRel(r.relationship);
-    if (!k) continue;
-    completedCounts[k]++;
-    if (!r.is_self) completedCounts.all_others++;
+    if (k) completedCounts[k]++;
+    if (!r.is_self) completedCounts.all_others++;  // every non-self rater counts here, bucketed or not
   }
 
   const GROUP_LABELS = {

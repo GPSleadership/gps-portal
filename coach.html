@@ -6603,12 +6603,13 @@ async function _raterCommit(rows) {
   });
   if (!toAdd.length) { if (msg) msg.textContent = 'No new valid raters found (need name + email; duplicates skipped). Skipped ' + skipped + '.'; return; }
   if (msg) msg.textContent = 'Adding ' + toAdd.length + ' raters…';
-  let added = 0;
+  let added = 0, lastErr = '';
   for (let i = 0; i < toAdd.length; i++) {
     try { const _r = await cdInsert('diagnostic_raters', toAdd[i]); const d = Array.isArray(_r) ? _r[0] : _r; if (d) { DIAG_RATERS.push(d); added++; } else { skipped++; } }
-    catch (e) { skipped++; }
+    catch (e) { skipped++; lastErr = e.message || String(e); }
   }
-  if (msg) msg.textContent = 'Added ' + added + ' rater' + (added === 1 ? '' : 's') + (skipped ? (' · skipped ' + skipped + ' (duplicates/invalid)') : '') + '.';
+  if (msg) msg.textContent = 'Added ' + added + ' rater' + (added === 1 ? '' : 's')
+    + (skipped ? (' · skipped ' + skipped + (lastErr ? ' — last error: ' + lastErr.slice(0, 160) : ' (duplicates/invalid)')) : '') + '.';
   const bulk = document.getElementById('ar-bulk'); if (bulk) bulk.value = '';
   renderRatersTab();
   const rc2 = document.getElementById('tab-rater-count'); if (rc2) rc2.textContent = DIAG_RATERS.filter(r => !r.is_self).length;

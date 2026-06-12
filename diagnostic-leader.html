@@ -232,6 +232,17 @@ input:focus,select:focus{outline:none;border-color:var(--blue);}
         <strong>Other</strong> = describe in the field above
       </div>
       <div id="add-rater-msg" style="margin-top:10px;font-size:12px;color:var(--red);"></div>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--border);">
+        <div style="font-size:13px;font-weight:700;margin-bottom:4px;">Add many at once</div>
+        <div style="font-size:12px;color:#555;margin-bottom:8px;">Upload a spreadsheet (.xlsx or .csv) with columns Name, Email, Relationship — or paste one person per line as <code>name, email, relationship</code>. Duplicates are skipped.</div>
+        <textarea id="bulk-raters" rows="3" placeholder="Jane Doe, jane@co.com, Direct Report&#10;Sam Lee, sam@co.com, Peer" style="width:100%;box-sizing:border-box;font-size:12px;padding:8px;border:1.5px solid var(--border);border-radius:6px;font-family:monospace;"></textarea>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;">
+          <button class="btn btn-primary" style="font-size:13px;padding:8px 16px;" onclick="bulkAddRatersFromText()">Add all from text</button>
+          <label style="font-size:12px;font-weight:700;color:#555;">or upload file:</label>
+          <input type="file" id="bulk-raters-file" accept=".xlsx,.xls,.csv" onchange="bulkAddRatersFromFile(this)" style="font-size:12px;">
+        </div>
+        <div id="bulk-raters-msg" style="font-size:12px;color:#555;margin-top:6px;"></div>
+      </div>
     </div>
     <div id="rater-submit-section" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);"></div>
   </div>
@@ -821,6 +832,91 @@ async function addRater() {
   const otherWrap = document.getElementById('add-rel-other-wrap');
   if (otherWrap) otherWrap.style.display = 'none';
   renderPendingRaters();
+}
+
+// ── Bulk add raters (paste or spreadsheet upload) ────────────────────────────
+function bulkNormalizeRel(v) {
+  const s = String(v || '').trim().toLowerCase();
+  if (!s) return 'Other';
+  if (s.indexOf('skip') > -1 || s.indexOf('indirect') > -1) return 'Skip-Level Report';
+  if (s.indexOf('owner') > -1) return 'Owner';
+  if (s.indexOf('direct') > -1) return 'Direct Report';
+  if (s.indexOf('peer') > -1) return 'Peer';
+  if (s.indexOf('superv') > -1 || s.indexOf('manager') > -1 || s.indexOf('boss') > -1) return 'Supervisor / Manager';
+  if (s.indexOf('board') > -1) return 'Board Member';
+  if (s.indexOf('internal') > -1) return 'Internal Customer';
+  if (s.indexOf('external cust') > -1) return 'External Customer';
+  if (s.indexOf('external') > -1 || s.indexOf('stakeholder') > -1) return 'External Stakeholder';
+  return 'Other: ' + String(v).trim();
+}
+
+async function bulkCommitRaters(rows) {
+  const msg = document.getElementById('bulk-raters-msg');
+  const existing = {}; RATERS.forEach(r => { existing[String(r.email || '').toLowerCase()] = true; });
+  const toAdd = []; let skipped = 0; const seen = {};
+  rows.forEach(r => {
+    const name = String(r.name || '').trim();
+    const email = String(r.email || '').trim().toLowerCase();
+    if (!name || !email || email.indexOf('@') < 0) { skipped++; return; }
+    if (existing[email] || seen[email]) { skipped++; return; }
+    seen[email] = true;
+    toAdd.push({ name, email, relationship: bulkNormalizeRel(r.relationship) });
+  });
+  if (!toAdd.length) { if (msg) msg.textContent = 'No new valid people found (need name + email; duplicates skipped).'; return; }
+  if (msg) msg.textContent = 'Adding ' + toAdd.length + ' people…';
+  let added = 0, lastErr = '';
+  for (let i = 0; i < toAdd.length; i++) {
+    try {
+      const r = await diagPortal('leader-add-rater', { rater: toAdd[i] });
+      if (r && r.rater) { RATERS.push(r.rater); added++; } else { skipped++; }
+    } catch (e) { skipped++; lastErr = e.message || String(e); }
+  }
+  if (msg) msg.textContent = 'Added ' + added + ' of ' + (added + skipped) + '.'
+    + (skipped && lastErr ? ' Last error: ' + lastErr.slice(0, 140) : '');
+  const ta = document.getElementById('bulk-raters'); if (ta) ta.value = '';
+  const fi = document.getElementById('bulk-raters-file'); if (fi) fi.value = '';
+  renderPendingRaters();
+}
+
+async function bulkAddRatersFromText() {
+  const text = (document.getElementById('bulk-raters') || {}).value || '';
+  const rows = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => {
+    const c = l.split(',').map(x => x.trim());
+    return { name: c[0] || '', email: c[1] || '', relationship: c[2] || '' };
+  });
+  await bulkCommitRaters(rows);
+}
+
+function loadSheetJS() {
+  return new Promise(function (res, rej) {
+    if (window.XLSX) return res(window.XLSX);
+    var sc = document.createElement('script');
+    sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    sc.onload = function () { res(window.XLSX); };
+    sc.onerror = function () { rej(new Error('Could not load the spreadsheet reader. Check your connection and try again.')); };
+    document.head.appendChild(sc);
+  });
+}
+
+async function bulkAddRatersFromFile(input) {
+  const file = input.files && input.files[0]; if (!file) return;
+  const msg = document.getElementById('bulk-raters-msg'); if (msg) msg.textContent = 'Reading file…';
+  try {
+    const X = await loadSheetJS();
+    const buf = await file.arrayBuffer();
+    const wb = X.read(buf, { type: 'array' });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const raw = X.utils.sheet_to_json(sheet, { defval: '' });
+    const get = (o, keys) => { for (const k in o) { if (keys.indexOf(k.trim().toLowerCase()) > -1) return o[k]; } return ''; };
+    const rows = raw.map(o => ({
+      name: get(o, ['name', 'full name', 'rater', 'rater name']),
+      email: get(o, ['email', 'e-mail', 'email address']),
+      relationship: get(o, ['relationship', 'role', 'category', 'type']),
+    }));
+    await bulkCommitRaters(rows);
+  } catch (e) {
+    if (msg) msg.textContent = 'Could not read that file: ' + (e.message || e) + '. Use .xlsx or .csv with Name, Email, Relationship columns.';
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
