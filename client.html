@@ -4132,9 +4132,37 @@ function renderPortal(client, checkins) {
   const closeoutDone        = !!client.closeout_submitted_at;
 
   const displayName = client.preferred_name || (client.name || '').split(' ')[0] || 'Your';
+
+  // ── Finish line: visible progress through the 90 days ──────────────────────
+  // Each visit shows motion toward the end of the sprint instead of an
+  // open-ended chore. Time-based bar (12 weeks) + check-ins logged.
+  const flWeek    = Math.min(Math.max(currentWeek, 1), 12);
+  const flPct     = Math.min(100, Math.max(2, Math.round((daysDiff / 84) * 100)));
+  const flDone    = checkins.length;
+  const flLine    = isEngagementComplete
+    ? 'You went the distance. 90 days, done.'
+    : flWeek <= 2 ? 'Strong starts are built in the first two weeks. Keep the streak.'
+    : flWeek <= 6 ? 'Momentum phase. The habit you run now is the one that sticks.'
+    : flWeek <= 9 ? 'Past halfway. This is where most leaders ease up. Don\'t.'
+    : 'The finish line is in sight. Finish strong.';
+  const finishLineHtml = client.plan_start_date ? `
+    <div class="card" style="margin-top:24px;padding:16px 22px;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;">
+        <div style="font-size:13px;font-weight:800;color:var(--navy,#004369);font-family:'Montserrat',sans-serif;">
+          ${isEngagementComplete ? '90-Day Sprint Complete' : `Week ${flWeek} of 12`}
+        </div>
+        <div style="font-size:12px;color:#666;">${flDone} check-in${flDone === 1 ? '' : 's'} logged${isEngagementComplete ? '' : ` · ${flPct}% of your 90 days`}</div>
+      </div>
+      <div style="height:8px;background:#eee8df;border-radius:4px;margin-top:8px;overflow:hidden;">
+        <div style="height:100%;width:${isEngagementComplete ? 100 : flPct}%;background:linear-gradient(90deg,#004369,#01949A);border-radius:4px;transition:width .6s;"></div>
+      </div>
+      <div style="font-size:12px;color:#555;margin-top:8px;">${flLine}</div>
+    </div>` : '';
+
   document.getElementById('mainContent').innerHTML = `
     <div class="portal-layout">
     <div class="portal-main">
+    ${finishLineHtml}
     ${alreadyCheckedInThisWeek && !isEngagementComplete ? `
       <div class="success-banner" style="margin-top:24px;">
         <div class="icon">✅</div>
