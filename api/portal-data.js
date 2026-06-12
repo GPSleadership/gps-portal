@@ -147,6 +147,13 @@ export default async function handler(req, res) {
         });
       }
 
+      // ── Ask Alex history (post-lockdown read path; anon reads are dead) ─────
+      case 'ask-history': {
+        const r = await sb(`/rest/v1/ask_alex_log?client_id=eq.${clientId}&select=id,asked_at,question_text,response_text&order=asked_at.desc&limit=7`);
+        if (!r.ok) return res.status(500).json({ error: 'Could not load history' });
+        return res.status(200).json({ ok: true, history: await r.json() });
+      }
+
       case 'get-stakeholders': {
         const r = await sb(`/rest/v1/stakeholders?client_id=eq.${clientId}&is_active=eq.true&select=*`);
         const rows = r.ok ? await r.json() : [];

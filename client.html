@@ -5542,6 +5542,7 @@ const CURRENT_TERMS_VERSION = 'v1.0';
 
 // ── Ask Alex: load recent question history from ask_alex_log ─────────────────
 let qaHistoryLoaded = false;
+let qaHistData = [];
 
 async function loadAskAlexHistory() {
   const section = document.getElementById('qa-hist-section');
@@ -5551,17 +5552,18 @@ async function loadAskAlexHistory() {
   list.innerHTML = '<div style="font-size:12px;color:var(--gray-600);padding:6px 0;">Loading…</div>';
   section.style.display = 'block';
 
-  const { data, error } = await db
-    .from('ask_alex_log')
-    .select('id, asked_at, question_text, response_text')
-    .eq('client_id', currentClient.id)
-    .order('asked_at', { ascending: false })
-    .limit(7);
+  // Post-lockdown read path: anon-key reads on ask_alex_log are dead.
+  // History comes through the token-validated server endpoint instead.
+  let data = [];
+  try {
+    data = (await portalData('ask-history')).history || [];
+  } catch (_) { data = []; }
 
-  if (error || !data || data.length === 0) {
+  if (!data || data.length === 0) {
     section.style.display = 'none';
     return;
   }
+  qaHistData = data;
 
   list.innerHTML = data.map((entry, i) => {
     const q = (entry.question_text || '').trim();
@@ -5575,6 +5577,7 @@ async function loadAskAlexHistory() {
       <div class="qa-hist-a" id="qahi-a-${i}" style="display:none;">
         <div class="qa-hist-a-text" id="qahi-atext-${i}">${wizEsc(a)}</div>
         <button class="qa-hist-copy" onclick="copyHistItem(${i}, this)">Copy answer</button>
+        <button class="qa-hist-copy" onclick="emailHistItem(${i})">Email this answer</button>
       </div>
     </div>`;
   }).join('');
@@ -5598,6 +5601,34 @@ function copyHistItem(i, btn) {
     btn.textContent = 'Copied!';
     setTimeout(() => { btn.textContent = 'Copy answer'; }, 2000);
   }).catch(() => {});
+}
+
+// ── Ask Alex: email an answer via the client's own mail app ──────────────────
+const QA_EMAIL_FOOTER = '\n\n----\nGenerated in "Ask Alex", Executive Impact Portal by GPS Leadership Solutions\n© 2026 GPS Leadership Solutions. All rights reserved. | gpsleadership.org';
+
+function qaEmailAnswer(question, answerText) {
+  const subject = 'Leadership guidance from Ask Alex';
+  let body = '';
+  if (question) body += 'Question:\n' + question + '\n\nAnswer:\n';
+  body += (answerText || '') + QA_EMAIL_FOOTER;
+  const href = 'mailto:?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+  if (href.length > 1900) {
+    // Some mail apps reject long pre-filled bodies. Copy the full text instead
+    // and open a compose window with a paste note.
+    const note = '(The full answer was copied to your clipboard. Paste it here.)' + QA_EMAIL_FOOTER;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(body).catch(() => {});
+    }
+    window.location.href = 'mailto:?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(note);
+  } else {
+    window.location.href = href;
+  }
+}
+
+function emailHistItem(i) {
+  const entry = qaHistData && qaHistData[i];
+  if (!entry) return;
+  qaEmailAnswer((entry.question_text || '').trim(), (entry.response_text || '').trim());
 }
 
 function showPortalTab(tab) {
@@ -6359,6 +6390,10 @@ function qaAppendAlexMsg(parsed, question) {
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="13" height="13" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" stroke="currentColor" stroke-width="1.8"/></svg>
           Copy
         </button>
+        <button class="qa-copy-btn" id="qa-em-${msgId}" title="Email this answer">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="2" y="4" width="20" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M2 7l10 6L22 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          Email
+        </button>
       </div>
       <div class="qa-fbform" id="qa-fbf-${msgId}">
         <label>What was missing or off? (optional)</label>
@@ -6425,6 +6460,16 @@ function qaAppendAlexMsg(parsed, question) {
       ta.value = text; document.body.appendChild(ta); ta.select();
       document.execCommand('copy'); document.body.removeChild(ta); finish();
     }
+  });
+
+  const emailBtn = document.getElementById(`qa-em-${msgId}`);
+  emailBtn.addEventListener('click', () => {
+    const bodyEl = div.querySelector('.qa-body');
+    const nextStepEl = div.querySelector('.qa-next-step-body');
+    const parts = [];
+    if (bodyEl) parts.push(bodyEl.innerText.trim());
+    if (nextStepEl) parts.push('Suggested Next Step:\n' + nextStepEl.innerText.trim());
+    qaEmailAnswer(question || '', parts.join('\n\n'));
   });
 }
 
