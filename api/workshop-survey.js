@@ -61,7 +61,11 @@ function phaseOpen(w, phase) {
 }
 
 // Replace this participant's responses for a phase (clean resume / re-submit).
-async function replaceResponses(workshopId, participantId, phase, responses, questions) {
+// anonymize (hard cut, final submit on anonymous engagements): the linked draft
+// rows are deleted as usual, but the final rows are inserted with
+// participant_id = NULL — identity is never attached to submitted answers.
+// The in-room QR path has always written such rows; aggregation handles them.
+async function replaceResponses(workshopId, participantId, phase, responses, questions, anonymize = false) {
   await sb(`/rest/v1/workshop_responses?participant_id=eq.${enc(participantId)}&phase=eq.${enc(phase)}`, 'DELETE', null, { Prefer: 'return=minimal' });
   const qById = Object.fromEntries((questions || []).map(q => [q.question_id, q]));
   const rows = (responses || [])
@@ -69,7 +73,7 @@ async function replaceResponses(workshopId, participantId, phase, responses, que
     .map(a => {
       const q = qById[a.question_id] || {};
       return {
-        workshop_id: workshopId, participant_id: participantId, phase,
+        workshop_id: workshopId, participant_id: anonymize ? null : participantId, phase,
         question_id: a.question_id, question_text: q.question_text || a.question_text || null,
         question_theme: q.question_theme || a.question_theme || null,
         response_value: (a.value != null && a.value !== '' && !isNaN(a.value)) ? Number(a.value) : null,
@@ -99,7 +103,7 @@ export default async function handler(req, res) {
         const phase = body.phase === 'post' ? 'post' : 'pre';
         const p = await participantByToken(token);
         if (!p) return res.status(401).json({ error: 'Invalid or expired link' });
-        const w = await sbOne(`/rest/v1/workshops?id=eq.${enc(p.workshop_id)}&select=id,title,client_org_name,workshop_date,engagement_kind,organization_id,pre_survey_open_at,pre_survey_close_at,post_survey_open_at,post_survey_close_at&limit=1`);
+        const w = await sbOne(`/rest/v1/workshops?id=eq.${enc(p.workshop_id)}&select=id,title,client_org_name,workshop_date,engagement_kind,organization_id,pre_survey_open_at,pre_survey_close_at,post_survey_open_at,post_survey_close_at,anonymous_feedback&limit=1`);
         if (!w) return res.status(404).json({ error: 'Workshop not found' });
         const open = phaseOpen(w, phase);
         const completed = phase === 'pre' ? !!p.pre_completed_at : !!p.post_completed_at;
@@ -119,7 +123,7 @@ export default async function handler(req, res) {
         }
         return res.status(200).json({
           ok: true, open, completed, phase,
-          workshop: { title: w.title, org: w.client_org_name, workshop_date: w.workshop_date, kind: w.engagement_kind || 'workshop', org_logo_url: orgLogoUrl },
+          workshop: { title: w.title, org: w.client_org_name, workshop_date: w.workshop_date, kind: w.engagement_kind || 'workshop', org_logo_url: orgLogoUrl, anonymous: !!w.anonymous_feedback },
           participant: { name: client?.name || '', role: client?.title || p.role || '' },
           questions, saved,
         });
@@ -145,8 +149,12 @@ export default async function handler(req, res) {
         const w = await sbOne(`/rest/v1/workshops?id=eq.${enc(p.workshop_id)}&select=*&limit=1`);
         if (!w) return res.status(404).json({ error: 'Workshop not found' });
         if (!phaseOpen(w, phase)) return res.status(200).json({ ok: false, closed: true });
+        // Double-submit guard: once complete, anonymous rows can't be replaced
+        // (no participant link), so a re-submit would duplicate them.
+        const doneColPre = phase === 'pre' ? p.pre_completed_at : p.post_completed_at;
+        if (doneColPre) return res.status(200).json({ ok: false, already: true });
         const questions = await liveQuestions(w.id, phase);
-        const n = await replaceResponses(w.id, p.id, phase, body.responses, questions);
+        const n = await replaceResponses(w.id, p.id, phase, body.responses, questions, !!w.anonymous_feedback);
         const statusCol = phase === 'pre' ? 'pre_status' : 'post_status';
         const doneCol   = phase === 'pre' ? 'pre_completed_at' : 'post_completed_at';
         await sb(`/rest/v1/workshop_participants?id=eq.${enc(p.id)}`, 'PATCH', { [statusCol]: 'complete', [doneCol]: isoNow() }, { Prefer: 'return=minimal' });
@@ -168,7 +176,7 @@ export default async function handler(req, res) {
         }
         return res.status(200).json({
           ok: true, open, phase, room: true,
-          workshop: { title: w.title, org: w.client_org_name, workshop_date: w.workshop_date, kind: w.engagement_kind || 'workshop', org_logo_url: roomOrgLogoUrl },
+          workshop: { title: w.title, org: w.client_org_name, workshop_date: w.workshop_date, kind: w.engagement_kind || 'workshop', org_logo_url: roomOrgLogoUrl, anonymous: !!w.anonymous_feedback },
           questions,
         });
       }
@@ -182,8 +190,10 @@ export default async function handler(req, res) {
         const questions = await liveQuestions(w.id, phase);
 
         // Optional identify: match/create ONE profile per person, link to workshop.
+        // Anonymous engagements never identify — even if a respondent was somehow
+        // sent an email/name, it is ignored and the rows stay unlinked.
         let participantId = null;
-        const email = (body.respondent && body.respondent.email || '').trim().toLowerCase();
+        const email = w.anonymous_feedback ? '' : (body.respondent && body.respondent.email || '').trim().toLowerCase();
         const name  = (body.respondent && body.respondent.name  || '').trim();
         if (email) {
           let client = await sbOne(`/rest/v1/clients?email=eq.${enc(email)}&select=id&limit=1`);

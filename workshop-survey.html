@@ -103,9 +103,11 @@
       '<h1>'+esc(d.workshop.title)+'</h1>'+
       '<p class="sub">'+(d.workshop.kind==='assessment'?'TP3 Organizational Assessment':(PHASE==='pre'?'Pre-workshop pulse':'Post-workshop pulse'))+(d.workshop.org?' · '+esc(d.workshop.org):'')+'</p>'+
       '<span class="est">Takes about '+(PHASE==='pre'?'5':'3')+' minutes · '+STATE.questions.length+' questions</span>'+
-      '<p class="muted" style="margin-top:16px;">Your answers are confidential and shared only as a team-level summary.</p>'+
-      '<div class="field"><label>Your email (optional — lets us match your before &amp; after)</label><input id="rm_email" type="email" placeholder="you@company.com"></div>'+
-      '<div class="field"><label>Your name (optional)</label><input id="rm_name" placeholder="Name"></div>'+
+      (d.workshop.anonymous
+        ? '<p class="muted" style="margin-top:16px;"><b>Your answers are anonymous.</b> No name or email is collected, and nothing you write can be traced back to you. Only the team-level picture is ever shared.</p>'
+        : '<p class="muted" style="margin-top:16px;">Your answers are confidential and shared only as a team-level summary.</p>'+
+          '<div class="field"><label>Your email (optional — lets us match your before &amp; after)</label><input id="rm_email" type="email" placeholder="you@company.com"></div>'+
+          '<div class="field"><label>Your name (optional)</label><input id="rm_name" placeholder="Name"></div>')+
       '<div class="nav"><button class="btn btn-primary" id="begin">Begin</button></div>';
     document.getElementById('begin').onclick=function(){
       var e=document.getElementById('rm_email'), n=document.getElementById('rm_name');
@@ -150,7 +152,9 @@
       '<h1>'+esc(d.workshop.title)+'</h1>'+
       '<p class="sub">'+(d.workshop.kind==='assessment'?'TP3 Organizational Assessment':(PHASE==='pre'?'Pre-workshop pulse':'Post-workshop follow-up'))+(d.workshop.org?' · '+esc(d.workshop.org):'')+'</p>'+
       '<span class="est">This will take about '+(PHASE==='pre'?'5–7':'5')+' minutes · '+total+' questions</span>'+
-      '<p class="muted" style="margin-top:16px;">Your answers are confidential. '+esc(d.participant.name||'')+', I only ever share the team-level picture — never individual responses.</p>'+
+      (d.workshop.anonymous
+        ? '<p class="muted" style="margin-top:16px;"><b>Your answers are anonymous.</b> Your name and email are used only to deliver this survey. The moment you submit, your responses are stored with no link to you. Only the team-level picture is ever shared.</p>'
+        : '<p class="muted" style="margin-top:16px;">Your answers are confidential. '+esc(d.participant.name||'')+', I only ever share the team-level picture — never individual responses.</p>')+
       '<div class="nav"><button class="btn btn-primary" id="begin">Begin</button></div>';
     document.getElementById('begin').onclick=function(){ STATE.idx=0; renderPage(); };
   }
