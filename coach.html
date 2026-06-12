@@ -5931,16 +5931,20 @@ function renderQuestionsTab() {
             : 'Leader must complete self-assessment first.'}</div></div>`}
   </div>`;
   // Two manual custom questions the coach agreed with the leader at kickoff.
-  html += `<div style="font-size:12px;color:var(--d-mid);margin:4px 0 10px;">Your two custom questions — the ones you agreed with the leader. Raters score them 1–5 and they appear in the report. Leave a box blank to omit it.</div>`;
-  [['g2','Custom 1',DIAG_SEL.custom_g2_question,DIAG_SEL.custom_g2_generated_at],['g3','Custom 2',DIAG_SEL.custom_g3_question,DIAG_SEL.custom_g3_generated_at]].forEach(function(row){
-    const n=row[0], code=row[1], val=row[2]||'', gen=row[3];
+  html += `<div style="font-size:12px;color:var(--d-mid);margin:4px 0 10px;">Your two custom questions — the ones you agreed with the leader. Each can be rated 1–5 or open-ended (written answer); both appear in the report. Leave a box blank to omit it. You can edit and re-save any time before invites go out.</div>`;
+  [['g2','Custom 1',DIAG_SEL.custom_g2_question,DIAG_SEL.custom_g2_generated_at,DIAG_SEL.custom_g2_type],['g3','Custom 2',DIAG_SEL.custom_g3_question,DIAG_SEL.custom_g3_generated_at,DIAG_SEL.custom_g3_type]].forEach(function(row){
+    const n=row[0], code=row[1], val=row[2]||'', gen=row[3], qtype=row[4]||'scale';
     html += `<div class="q-edit" style="border-color:#A78BFA;margin-bottom:12px;">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
         <div class="q-edit-code">${code}</div>
         <span style="font-size:10px;font-weight:700;color:#6D28D9;background:#F3F0FF;border:1px solid #A78BFA;padding:1px 8px;border-radius:8px;text-transform:uppercase;letter-spacing:.03em;">Custom</span>
+        <select id="customq-${n}-type" style="font-size:12px;padding:3px 8px;border:1.5px solid var(--d-border);border-radius:6px;">
+          <option value="scale"${qtype !== 'open' ? ' selected' : ''}>Rated 1–5</option>
+          <option value="open"${qtype === 'open' ? ' selected' : ''}>Open-ended (written answer)</option>
+        </select>
         ${(val&&gen)?`<span style="font-size:11px;color:var(--d-mid);">saved ${diagFormatDate(gen)}</span>`:''}
       </div>
-      <textarea id="customq-${n}" style="min-height:58px;font-size:13px;" placeholder="Type a custom question scored 1–5. Use ${firstName}'s name, e.g. '${firstName} clearly connects the team's work to the company's long-term vision.'">${escHtml(val)}</textarea>
+      <textarea id="customq-${n}" style="min-height:58px;font-size:13px;" placeholder="Type a custom question. Rated example: '${firstName} clearly connects the team's work to the company's long-term vision.' Open-ended example: 'What is one thing ${firstName} could do to communicate priorities more clearly?'">${escHtml(val)}</textarea>
       <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap;">
         <button class="dbtn dbtn-outline dbtn-sm" onclick="saveCustomQ('${n}')">Save question</button>
         <span id="customq-${n}-msg" style="font-size:12px;color:var(--d-green);"></span>
@@ -5962,6 +5966,9 @@ async function saveCustomQ(n) {
   const patch = {};
   patch[field]    = txt || null;
   patch[genField] = txt ? new Date().toISOString() : null;
+  // Question type (rated 1-5 vs open-ended) for the two manual customs.
+  const typeSel = document.getElementById('customq-' + n + '-type');
+  if (typeSel && (n === 'g2' || n === 'g3')) patch['custom_' + n + '_type'] = typeSel.value === 'open' ? 'open' : 'scale';
   const msg = document.getElementById('customq-' + n + '-msg');
   if (msg) { msg.style.color = 'var(--d-mid)'; msg.textContent = 'Saving…'; }
   try {

@@ -773,6 +773,7 @@ function formatVerbatimsForPrompt(verbatims) {
     { label: 'Productivity open-ended (C7-C9)', codes: ['C7','C8','C9'] },
     { label: 'Overall impact comment (D2)', codes: ['D2'] },
     { label: 'Bench / succession comment (F3)', codes: ['F3'] },
+    { label: 'Custom question written answers (G2-G3)', codes: ['G2','G3'] },
   ];
   const lines = [];
   for (const s of sections) {
@@ -786,8 +787,11 @@ function formatVerbatimsForPrompt(verbatims) {
 function buildRaterGroupData(responses, allRaters) {
   const raterMetaMap = new Map(allRaters.map(r => [r.id, r]));
 
-  const RATED  = ['A1','A2','A3','A4','A5','A6','A7','B1','B2','B3','B4','B5','B6','C1','C2','C3','C4','C5','C6','D1','F1','F2','G1','G2'];
-  const OPEN   = ['A8','A9','A10','B7','B8','B9','B10','C7','C8','C9','D2','F3'];
+  // G2/G3 appear in BOTH lists: each custom question is either rated (score
+  // rows) or open (text rows) per diagnostics.custom_gX_type — a response row
+  // only ever carries one of the two, so dual membership is safe.
+  const RATED  = ['A1','A2','A3','A4','A5','A6','A7','B1','B2','B3','B4','B5','B6','C1','C2','C3','C4','C5','C6','D1','F1','F2','G1','G2','G3'];
+  const OPEN   = ['A8','A9','A10','B7','B8','B9','B10','C7','C8','C9','D2','F3','G2','G3'];
   const GKEYS  = ['direct_report','peer','supervisor','internal_partner'];
 
   // Normalize DB relationship values to GKEYS — DB may store title-case ("Peer", "Direct Report")
@@ -952,6 +956,7 @@ function formatRaterGroupDataForPrompt(gd, diag) {
     { label: 'Productivity verbatims (C7–C9)', codes: ['C7','C8','C9'] },
     { label: 'Impact comments (D2)', codes: ['D2'] },
     { label: 'Bench/succession comments (F3)', codes: ['F3'] },
+    { label: 'Custom question written answers (G2–G3)', codes: ['G2','G3'] },
   ];
   const NON_SELF = GRPS.filter(([g]) => g !== 'self' && g !== 'all_others');
   for (const { label, codes } of VERB_SECTIONS) {
