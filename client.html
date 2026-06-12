@@ -1457,6 +1457,31 @@
       /* Keep the bottom composer aligned with the thread column */
       .qa-input-inner { transform: translateX(158px); }
     }
+    /* Email-share popover menu */
+    #qa-email-menu {
+      position: absolute;
+      z-index: 9999;
+      width: 220px;
+      background: #fff;
+      border: 1px solid #e2ddd5;
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(15, 40, 60, 0.16);
+      overflow: hidden;
+    }
+    #qa-email-menu button {
+      display: block;
+      width: 100%;
+      padding: 11px 14px;
+      background: none;
+      border: none;
+      text-align: left;
+      font-size: 13px;
+      font-family: inherit;
+      color: var(--navy);
+      cursor: pointer;
+    }
+    #qa-email-menu button:hover { background: var(--light-sand); }
+    #qa-email-menu button + button { border-top: 1px solid #eee8df; }
     .qa-typing { display: none; padding: 8px 0; }
     .qa-typing.v { display: flex; align-items: center; gap: 10px; }
     .qa-ld { display: flex; gap: 5px; }
@@ -5599,7 +5624,7 @@ async function loadAskAlexHistory() {
 
   list.innerHTML = data.map((entry, i) => {
     const q = (entry.question_text || '').trim();
-    const a = (entry.response_text || '').trim();
+    const a = qaPlainAnswer(entry.response_text);
     const qShort = q.length > 110 ? q.substring(0, 110) + '…' : q;
     return `<div class="qa-hist-item">
       <div class="qa-hist-q" onclick="toggleHistItem(${i})">
@@ -5609,7 +5634,7 @@ async function loadAskAlexHistory() {
       <div class="qa-hist-a" id="qahi-a-${i}" style="display:none;">
         <div class="qa-hist-a-text" id="qahi-atext-${i}">${wizEsc(a)}</div>
         <button class="qa-hist-copy" onclick="copyHistItem(${i}, this)">Copy answer</button>
-        <button class="qa-hist-copy" onclick="emailHistItem(${i})">Email this answer</button>
+        <button class="qa-hist-copy" onclick="emailHistItem(${i}, this)">Email this answer</button>
       </div>
     </div>`;
   }).join('');
@@ -5635,32 +5660,72 @@ function copyHistItem(i, btn) {
   }).catch(() => {});
 }
 
-// ── Ask Alex: email an answer via the client's own mail app ──────────────────
+// ── Ask Alex: email an answer (client's own mail app, or Gmail) ──────────────
 const QA_EMAIL_FOOTER = '\n\n----\nGenerated in "Ask Alex", Executive Impact Portal by GPS Leadership Solutions\n© 2026 GPS Leadership Solutions. All rights reserved. | gpsleadership.org';
 
-function qaEmailAnswer(question, answerText) {
+// Stored responses are the model's raw JSON. Convert to readable plain text
+// for the history panel and email bodies.
+function qaPlainAnswer(raw) {
+  const parsed = qaParseResponse(raw) || {};
+  let t = (parsed.guidance || '')
+    .replace(/PARAGRAPH_BREAK/g, '\n\n')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .trim();
+  if (parsed.next_step) t += '\n\nSuggested next step: ' + parsed.next_step;
+  return t || String(raw || '').trim();
+}
+
+// Clicking Email shows a two-option menu: the OS mail app handler (mailto:) is
+// silently ignored on machines with no default mail app, so Gmail is offered
+// as a path that always works for anyone with a Gmail/Workspace account.
+function qaEmailAnswer(question, answerText, btn) {
   const subject = 'Leadership guidance from Ask Alex';
   let body = '';
   if (question) body += 'Question:\n' + question + '\n\nAnswer:\n';
   body += (answerText || '') + QA_EMAIL_FOOTER;
-  const href = 'mailto:?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
-  if (href.length > 1900) {
-    // Some mail apps reject long pre-filled bodies. Copy the full text instead
-    // and open a compose window with a paste note.
-    const note = '(The full answer was copied to your clipboard. Paste it here.)' + QA_EMAIL_FOOTER;
+
+  const old = document.getElementById('qa-email-menu');
+  if (old) old.remove();
+
+  const menu = document.createElement('div');
+  menu.id = 'qa-email-menu';
+  menu.innerHTML =
+    '<button type="button" data-via="mail">Open in your mail app</button>' +
+    '<button type="button" data-via="gmail">Open in Gmail</button>';
+  document.body.appendChild(menu);
+  const r = btn.getBoundingClientRect();
+  menu.style.top  = (window.scrollY + r.bottom + 6) + 'px';
+  menu.style.left = Math.max(12, window.scrollX + r.left + r.width - 220) + 'px';
+
+  function clipNote() {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(body).catch(() => {});
     }
-    window.location.href = 'mailto:?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(note);
-  } else {
-    window.location.href = href;
+    return '(The full answer was copied to your clipboard. Paste it here.)' + QA_EMAIL_FOOTER;
   }
+  function go(via) {
+    menu.remove();
+    if (via === 'gmail') {
+      const gBody = body.length > 6500 ? clipNote() : body;
+      window.open('https://mail.google.com/mail/?view=cm&su=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(gBody), '_blank', 'noopener');
+      return;
+    }
+    let mBody = body;
+    if (('mailto:?subject=&body=' + encodeURIComponent(body)).length > 1900) mBody = clipNote();
+    window.location.href = 'mailto:?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(mBody);
+  }
+  menu.querySelectorAll('button').forEach(b => b.addEventListener('click', () => go(b.dataset.via)));
+  setTimeout(() => {
+    document.addEventListener('click', function closeMenu(e) {
+      if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', closeMenu); }
+    });
+  }, 0);
 }
 
-function emailHistItem(i) {
+function emailHistItem(i, btn) {
   const entry = qaHistData && qaHistData[i];
-  if (!entry) return;
-  qaEmailAnswer((entry.question_text || '').trim(), (entry.response_text || '').trim());
+  if (!entry || !btn) return;
+  qaEmailAnswer((entry.question_text || '').trim(), qaPlainAnswer(entry.response_text), btn);
 }
 
 function showPortalTab(tab) {
@@ -6501,7 +6566,7 @@ function qaAppendAlexMsg(parsed, question) {
     const parts = [];
     if (bodyEl) parts.push(bodyEl.innerText.trim());
     if (nextStepEl) parts.push('Suggested Next Step:\n' + nextStepEl.innerText.trim());
-    qaEmailAnswer(question || '', parts.join('\n\n'));
+    qaEmailAnswer(question || '', parts.join('\n\n'), emailBtn);
   });
 }
 
