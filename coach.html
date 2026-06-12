@@ -5616,6 +5616,35 @@ function renderRatersTab() {
   const rc = document.getElementById('raters-content');
   if (!rc) return;
 
+  // ── Anonymous feedback panel ──────────────────────────────────────────────────
+  // Hard cut: when ON, rater submissions store no rater link (relationship
+  // snapshot only). Lock the toggle once invites are out — switching modes
+  // mid-survey would mix linked and unlinked responses and break the promise
+  // already shown to raters.
+  const anonOn = !!d.anonymous_feedback;
+  const anonLocked = !!d.invites_sent_at;
+  const anonPanel = `
+  <div class="card" style="margin-bottom:16px;border:1.5px solid ${anonOn?'var(--d-blue)':'var(--d-border)'};background:${anonOn?'var(--d-blue-light)':'var(--d-light)'};box-shadow:none;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:2px;">
+          Anonymous Feedback ${anonOn ? `<span style="color:var(--d-green);margin-left:6px;">● On</span>` : `<span style="color:var(--d-mid);margin-left:6px;">○ Off — responses are linked to raters</span>`}
+        </div>
+        <div style="font-size:11px;color:var(--d-mid);">
+          ${anonOn
+            ? 'Raters are told their answers are anonymous. Responses are stored with no link to the person — only their relationship group. Names/emails are still used for invites and reminders.'
+            : 'Responses are stored linked to each rater. Turn on BEFORE sending invites if the client wants anonymous feedback.'}
+          ${anonLocked ? '<br><b>Locked — invites have been sent.</b> The mode cannot change mid-survey.' : ''}
+        </div>
+      </div>
+      ${anonLocked ? '' : `<button class="dbtn ${anonOn?'dbtn-outline':'dbtn-primary'} dbtn-sm"
+        style="${anonOn?'color:var(--d-mid);border-color:var(--d-border);':''}"
+        onclick="toggleAnonymousFeedback(${anonOn})">
+        ${anonOn ? 'Turn Off (link responses)' : 'Turn On Anonymity'}
+      </button>`}
+    </div>
+  </div>`;
+
   // ── Interview settings panel ─────────────────────────────────────────────────
   const interviewPanel = `
   <div class="card" style="margin-bottom:16px;border:1.5px solid ${intEnabled?'var(--d-blue)':'var(--d-border)'};background:${intEnabled?'var(--d-blue-light)':'var(--d-light)'};box-shadow:none;">
@@ -5665,6 +5694,7 @@ function renderRatersTab() {
   ${raterListReady ? `<div class="dalert dalert-green" style="margin-bottom:12px;"><span class="dalert-icon">✅</span>
     <div><strong>${d.client_name} submitted their rater list on ${diagFormatDate(d.raters_finalized_at)}.</strong>
     ${nonSelf.length} rater${nonSelf.length!==1?'s':''} added. Review the list below and send invitations when ready.</div></div>` : ''}
+  ${anonPanel}
   ${interviewPanel}
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
     <div style="display:flex;gap:6px;flex-wrap:wrap;">${catBadges || '<span style="font-size:12px;color:var(--d-mid);">No raters added yet</span>'}</div>
@@ -5710,6 +5740,14 @@ function renderRatersTab() {
     </div>
     <div id="ar-msg" style="font-size:12px;color:var(--d-red2);margin-top:8px;"></div>
   </div>` : ''}`;
+}
+
+// ── Anonymous Feedback Control ───────────────────────────────────────────────
+async function toggleAnonymousFeedback(currentState) {
+  if (DIAG_SEL && DIAG_SEL.invites_sent_at) { alert('Invites have already been sent — the anonymity mode is locked for this diagnostic.'); return; }
+  if (currentState && !confirm('Turn anonymity OFF? Rater responses will be stored linked to each person\'s name. Only do this if the client explicitly wants named feedback.')) return;
+  await updateDiag({ anonymous_feedback: !currentState });
+  renderRatersTab();
 }
 
 // ── Interview Controls ────────────────────────────────────────────────────────

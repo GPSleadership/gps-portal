@@ -815,20 +815,42 @@ function buildRaterGroupData(responses, allRaters) {
   };
 
   for (const resp of responses) {
-    const meta = raterMetaMap.get(resp.rater_id);
-    if (!meta) continue;
-    const key = meta.is_self ? 'self' : normalizeRel(meta.relationship);
+    // Linked rows bucket via rater metadata; anonymous rows (rater_id NULL,
+    // hard-cut anonymity) bucket via the relationship snapshot stored on the
+    // response itself. Anonymous rows are never the self-assessment.
+    let key, rowIsSelf;
+    if (resp.rater_id != null) {
+      const meta = raterMetaMap.get(resp.rater_id);
+      if (!meta) continue;
+      rowIsSelf = !!meta.is_self;
+      key = rowIsSelf ? 'self' : normalizeRel(meta.relationship);
+    } else {
+      rowIsSelf = false;
+      key = normalizeRel(resp.rater_relationship);
+    }
     if (!key) continue;
-    buckets[key].raterIds.add(resp.rater_id);
-    if (!meta.is_self) buckets.all_others.raterIds.add(resp.rater_id);
+    if (resp.rater_id != null) {
+      buckets[key].raterIds.add(resp.rater_id);
+      if (!rowIsSelf) buckets.all_others.raterIds.add(resp.rater_id);
+    }
     if (resp.score != null && RATED.includes(resp.question_code)) {
       buckets[key].scores[resp.question_code].push(Number(resp.score));
-      if (!meta.is_self) buckets.all_others.scores[resp.question_code].push(Number(resp.score));
+      if (!rowIsSelf) buckets.all_others.scores[resp.question_code].push(Number(resp.score));
     }
     if (resp.text_response?.trim() && OPEN.includes(resp.question_code)) {
       buckets[key].verbatims[resp.question_code].push(resp.text_response.trim());
-      if (!meta.is_self) buckets.all_others.verbatims[resp.question_code].push(resp.text_response.trim());
+      if (!rowIsSelf) buckets.all_others.verbatims[resp.question_code].push(resp.text_response.trim());
     }
+  }
+
+  // Rater counts (n) come from the completed-raters list, not from response
+  // rows — anonymous rows carry no rater identity to count distinctly.
+  const completedCounts = { direct_report: 0, peer: 0, supervisor: 0, internal_partner: 0, self: 0, all_others: 0 };
+  for (const r of allRaters) {
+    const k = r.is_self ? 'self' : normalizeRel(r.relationship);
+    if (!k) continue;
+    completedCounts[k]++;
+    if (!r.is_self) completedCounts.all_others++;
   }
 
   const GROUP_LABELS = {
@@ -845,7 +867,7 @@ function buildRaterGroupData(responses, allRaters) {
     const pdAvg = avg(['C1','C2','C3','C4','C5','C6'].map(c => avgScores[c]).filter(s => s != null));
     result[key] = {
       label:           GROUP_LABELS[key],
-      n:               b.raterIds.size,
+      n:               Math.max(b.raterIds.size, completedCounts[key] || 0),
       avgScores,
       verbatims:       b.verbatims,
       trustAvg:        tAvg,
@@ -1168,11 +1190,17 @@ async function handleGenerateReport(req, res) {
     }
     const raterIds = allRaters.map(r => r.id);
 
-    const raterIdFilter = raterIds.map(id => `"${id}"`).join(',');
+    // Fetch ALL responses for the diagnostic — anonymous rows have rater_id NULL
+    // and would be dropped by a rater_id=in.(...) filter. Linked rows are still
+    // restricted to completed raters client-side.
+    const completedIdSet = new Set(raterIds);
     const respRes = await sb(
-      `/rest/v1/diagnostic_responses?rater_id=in.(${raterIdFilter})&diagnostic_id=eq.${diagnostic_id}&select=rater_id,question_code,score,text_response`
+      `/rest/v1/diagnostic_responses?diagnostic_id=eq.${diagnostic_id}&select=rater_id,question_code,score,text_response,rater_relationship`
     );
-    const responses = await respRes.json();
+    const allResponseRows = await respRes.json();
+    const responses = Array.isArray(allResponseRows)
+      ? allResponseRows.filter(r => r.rater_id === null || completedIdSet.has(r.rater_id))
+      : [];
     if (!Array.isArray(responses) || responses.length === 0) {
       return res.status(400).json({ error: 'No responses found for this diagnostic.' });
     }

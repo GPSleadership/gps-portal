@@ -105,7 +105,7 @@ export default async function handler(req, res) {
         // Only the fields the survey page needs — never expose the leader's private
         // notes or self-assessment. leader_token is returned ONLY for the leader's
         // own self-assessment (so the page can redirect back to the leader portal).
-        const cols = 'id,status,survey_closed_at,close_date,client_name,client_org,client_title,custom_g1_question,custom_g2_question,custom_g3_question'
+        const cols = 'id,status,survey_closed_at,close_date,client_name,client_org,client_title,custom_g1_question,custom_g2_question,custom_g3_question,anonymous_feedback'
           + (rater.is_self ? ',leader_token' : '');
         const dr = await sb(`/rest/v1/diagnostics?id=eq.${rater.diagnostic_id}&select=${cols}&limit=1`);
         const diags = dr.ok ? await dr.json() : [];
@@ -129,7 +129,7 @@ export default async function handler(req, res) {
         if (rater.completed_at) return res.status(200).json({ ok: false, already: true });
 
         // Re-verify the survey is still open at submit time (server-authoritative)
-        const dr = await sb(`/rest/v1/diagnostics?id=eq.${rater.diagnostic_id}&select=status,survey_closed_at&limit=1`);
+        const dr = await sb(`/rest/v1/diagnostics?id=eq.${rater.diagnostic_id}&select=status,survey_closed_at,anonymous_feedback&limit=1`);
         const diags = dr.ok ? await dr.json() : [];
         const diag = diags[0];
         if (!diag) return res.status(404).json({ error: 'Diagnostic not found' });
@@ -139,11 +139,22 @@ export default async function handler(req, res) {
         if (!isSelf && !stillOpen) return res.status(200).json({ ok: false, closed: true });
         if (isSelf && !selfValid)  return res.status(200).json({ ok: false, closed: true });
 
-        // Build response rows server-side, forcing the validated rater/diagnostic ids
+        // Build response rows server-side, forcing the validated rater/diagnostic ids.
+        // Anonymous diagnostics (hard cut): external raters' rows store
+        // rater_id = NULL plus a relationship snapshot — identity is never
+        // attached to answers. The leader's self-assessment always stays linked.
+        const anonymize = !!diag.anonymous_feedback && !isSelf;
         const responses = Array.isArray(body.responses) ? body.responses : [];
         const rows = responses
           .filter(a => a && a.question_code && ((a.score !== undefined && a.score !== null) || (a.text_response && a.text_response.length > 0)))
-          .map(a => ({ diagnostic_id: rater.diagnostic_id, rater_id: rater.id, question_code: a.question_code, score: a.score ?? null, text_response: a.text_response ?? null }));
+          .map(a => ({
+            diagnostic_id: rater.diagnostic_id,
+            rater_id: anonymize ? null : rater.id,
+            rater_relationship: rater.relationship || null,
+            question_code: a.question_code,
+            score: a.score ?? null,
+            text_response: a.text_response ?? null,
+          }));
         if (rows.length > 0) {
           const ir = await sb('/rest/v1/diagnostic_responses', 'POST', rows, { Prefer: 'return=minimal' });
           if (!ir.ok) { const d = await ir.json().catch(() => ({})); return res.status(500).json({ error: 'Could not save responses', detail: d }); }

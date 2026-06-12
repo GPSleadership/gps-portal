@@ -464,7 +464,9 @@ function renderWelcome() {
   const container = document.getElementById('survey-container');
   const selfNote = IS_SELF
     ? `<p style="font-size:13.5px;color:var(--dark);line-height:1.6;">You'll rate yourself on each item using a 1–5 scale, then answer several open-ended questions. The final section asks about succession — where you're going and who could succeed you. Your responses stay confidential and appear only in your copy of the report.</p>`
-    : `<p style="font-size:13.5px;color:var(--dark);line-height:1.6;">You'll rate <strong>${LEADER_FIRST}</strong> on each item using a 1–5 scale, then answer several open-ended questions. Your numeric scores will be averaged with other raters' feedback. Your written responses are used verbatim in the report but are not attributed to you individually.</p>`;
+    : (DIAGNOSTIC.anonymous_feedback
+      ? `<p style="font-size:13.5px;color:var(--dark);line-height:1.6;">You'll rate <strong>${LEADER_FIRST}</strong> on each item using a 1–5 scale, then answer several open-ended questions. <strong>Your responses are anonymous.</strong> Your name and email are used only to deliver this survey and its reminders. They are never attached to your answers. Scores are averaged across raters, and written responses appear in the report without any record of who wrote them.</p>`
+      : `<p style="font-size:13.5px;color:var(--dark);line-height:1.6;">You'll rate <strong>${LEADER_FIRST}</strong> on each item using a 1–5 scale, then answer several open-ended questions. Your numeric scores will be averaged with other raters' feedback. Your written responses are used verbatim in the report but are not attributed to you individually.</p>`);
 
   container.innerHTML = `
   <div class="screen active" id="screen-welcome">
@@ -803,7 +805,9 @@ async function submitSurvey() {
 
     const tyMsg = IS_SELF
       ? 'Your self-assessment is complete. Alex will now finalize your rater list and send survey invitations. You\'ll receive an email when they go out.'
-      : 'Your responses have been submitted. They are confidential and will be aggregated with other raters\' feedback before being shared with the leader. Your perspective matters — thank you.';
+      : (DIAGNOSTIC.anonymous_feedback
+        ? 'Your responses have been submitted anonymously. Your name was not attached to your answers, and they will be aggregated with other raters\' feedback. Your perspective matters. Thank you.'
+        : 'Your responses have been submitted. They are confidential and will be aggregated with other raters\' feedback before being shared with the leader. Your perspective matters — thank you.');
 
     document.getElementById('thankyou-msg').textContent = tyMsg;
     showState('screen-thankyou');
