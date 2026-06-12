@@ -22,6 +22,11 @@ alter table diagnostics
 alter table diagnostic_responses
   add column if not exists rater_relationship text;
 
+-- Anonymous rows store no rater link; the column must allow NULL.
+-- (Old code always supplies rater_id, so this relaxation changes nothing for it.)
+alter table diagnostic_responses
+  alter column rater_id drop not null;
+
 -- ROLLBACK
 -- alter table diagnostics drop column if exists anonymous_feedback;
 -- alter table diagnostic_responses drop column if exists rater_relationship;
