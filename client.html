@@ -2464,6 +2464,37 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON);
 
 const token = new URLSearchParams(window.location.search).get('token');
 
+// ── P1 #8: report uncaught browser errors to /api/log-error (capped at 5/page) ──
+(function () {
+  let errCount = 0;
+  function reportClientError(kind, message, source, line, col, stack) {
+    if (errCount >= 5) return;
+    errCount++;
+    try {
+      fetch('/api/log-error', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind,
+          page: location.pathname,
+          message: String(message || '').slice(0, 500),
+          source_url: String(source || '').slice(0, 300),
+          line_no: line || null,
+          col_no: col || null,
+          stack: String(stack || '').slice(0, 1500),
+          token_hint: (token || '').slice(0, 8) || null,
+        }),
+      }).catch(() => {});
+    } catch (_) {}
+  }
+  window.addEventListener('error', e =>
+    reportClientError('onerror', e.message, e.filename, e.lineno, e.colno, e.error && e.error.stack));
+  window.addEventListener('unhandledrejection', e => {
+    const r = e.reason || {};
+    reportClientError('unhandledrejection', r.message || String(e.reason), '', null, null, r.stack);
+  });
+})();
+
 // Phase 1: sensitive reads/writes go through the token-validated server endpoint
 // (service role key) instead of the public anon key. The server derives the
 // client from `token` and scopes every operation to that client. `db` (anon) is

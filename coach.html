@@ -1509,6 +1509,36 @@
 <div class="bottom-bar"></div>
 
 <script>
+// ── P1 #8: report uncaught browser errors to /api/log-error (capped at 5/page) ──
+(function () {
+  let errCount = 0;
+  function reportClientError(kind, message, source, line, col, stack) {
+    if (errCount >= 5) return;
+    errCount++;
+    try {
+      fetch('/api/log-error', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind,
+          page: location.pathname,
+          message: String(message || '').slice(0, 500),
+          source_url: String(source || '').slice(0, 300),
+          line_no: line || null,
+          col_no: col || null,
+          stack: String(stack || '').slice(0, 1500),
+        }),
+      }).catch(() => {});
+    } catch (_) {}
+  }
+  window.addEventListener('error', e =>
+    reportClientError('onerror', e.message, e.filename, e.lineno, e.colno, e.error && e.error.stack));
+  window.addEventListener('unhandledrejection', e => {
+    const r = e.reason || {};
+    reportClientError('unhandledrejection', r.message || String(e.reason), '', null, null, r.stack);
+  });
+})();
+
 // ─────────────────────────────────────────────
 // CONFIGURATION — same as client.html
 // ─────────────────────────────────────────────
