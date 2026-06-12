@@ -21,7 +21,8 @@ import crypto from 'node:crypto';
 const SUPABASE_URL      = process.env.SUPABASE_URL      || 'https://pbnkefuqpoztcxfagiod.supabase.co';
 // Phase 1: server-side functions use the SERVICE ROLE key (bypasses RLS) so they
 // keep working after the v26 anon-policy lockdown. Never expose this to the browser.
-const SUPABASE_KEY      = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_ANON || 'sb_publishable_nu9GXGeoqDXcxVocodQ4UA_ke7Yrzyw';
+const SUPABASE_KEY      = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_ANON;
+if (!SUPABASE_KEY) throw new Error('diagnostic.js: missing SUPABASE_SECRET_KEY — refusing to start with no service key');
 const RESEND_API_KEY    = process.env.RESEND_API_KEY;
 const RESEND_FROM       = process.env.RESEND_FROM_EMAIL   || 'noreply@portal.gpsleadership.org';
 const PORTAL_BASE       = process.env.PORTAL_BASE_URL     || 'https://portal.gpsleadership.org';

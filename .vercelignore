@@ -1,10 +1,38 @@
+# ── Non-deployed API helpers ────────────────────────────────
 api/test-survey.js
 api/run-reminders-now.js
-gps-executive-console.html
-gps-executive-console-deploy.html
-diagnostic-coach.html
-client-PRE-WIZARD-BACKUP-2026-06-01.html
+
+# ── Internal docs (architecture, prompts, audits — NEVER serve) ──
+# These describe how the system works and where the holes are.
+# Treat them as credentials, not content.
+*.md
+*.MD
+
+# ── Database migrations & data scripts (not served) ─────────
+*.sql
+*.SQL
+data-change-*.sql
+
+# ── Skills, build scripts, env templates ────────────────────
+*.skill
+scripts/
+proposal_build_template.js
+.env.example
 check.sh
 deploy.sh
 smoke-test.sh
 install-hooks.sh
+
+# ── Backup / demo / dev pages with NO route rewrite (pure exposure) ──
+client-DEMO.html
+client-PRE-WIZARD-BACKUP-2026-06-01.html
+onboarding-sandbox.html
+workshop-sandbox.html
+diagnostic-coach.html
+gps-executive-console.html
+gps-executive-console-deploy.html
+
+# NOTE: coach-emergency.html, diagnostic-sandbox.html, and workshop-poc.html
+# have intentional route rewrites in vercel.json and are LEFT deployed.
+# Decide separately whether /coach-emergency and /diagnostic-sandbox should
+# stay public — workshop-poc is a live client feature and must stay.

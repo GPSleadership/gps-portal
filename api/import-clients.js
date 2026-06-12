@@ -3,15 +3,33 @@
 // Uses the service role key to insert all records server-side.
 // Each client gets a unique token generated server-side.
 
+import crypto from 'crypto';
+
 const SUPABASE_URL    = process.env.SUPABASE_URL  || 'https://pbnkefuqpoztcxfagiod.supabase.co';
 const SUPABASE_SECRET = process.env.SUPABASE_SECRET_KEY;
+const COACH_SESSION_SECRET = process.env.COACH_SESSION_SECRET || '';
+
+// Same HMAC-signed coach session used by api/coach-data.js.
+function verifyCoachSession(token) {
+  if (!token || !COACH_SESSION_SECRET) return null;
+  const parts = String(token).split('.');
+  if (parts.length !== 2) return null;
+  const expected = Buffer.from(crypto.createHmac('sha256', COACH_SESSION_SECRET).update(parts[0]).digest())
+    .toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const a = Buffer.from(parts[1]), b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  let payload;
+  try { payload = JSON.parse(Buffer.from(parts[0].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString()); }
+  catch { return null; }
+  if (!payload || payload.role !== 'coach' || typeof payload.exp !== 'number' || payload.exp < Date.now()) return null;
+  return payload;
+}
 
 function generateToken() {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  const bytes = crypto.randomBytes(48);
   let token = '';
-  for (let i = 0; i < 48; i++) {
-    token += chars[Math.floor(Math.random() * chars.length)];
-  }
+  for (let i = 0; i < 48; i++) token += chars[bytes[i] % chars.length];
   return token;
 }
 
@@ -24,6 +42,11 @@ export default async function handler(req, res) {
 
   if (!SUPABASE_SECRET) {
     return res.status(500).json({ error: 'Server misconfigured — missing secret key' });
+  }
+
+  // Coach-only: this endpoint writes client records with the service-role key.
+  if (!verifyCoachSession(req.body && req.body.session)) {
+    return res.status(401).json({ error: 'Coach authentication required' });
   }
 
   const { clients } = req.body;
