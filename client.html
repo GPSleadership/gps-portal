@@ -3659,7 +3659,7 @@ function wizS3() {
       <div class="form-group">
         <label>What you\'re counting <span style="color:var(--red)">*</span></label>
         <div class="hint">Phrase it as "# of times I did [behavior] this week."</div>
-        <input type="text" id="wizM1Name" value="${wizEsc(m1.name)}" placeholder="e.g. # of times I asked for options before giving my view" />
+        <textarea id="wizM1Name" rows="2" placeholder="e.g. # of times I asked for options before giving my view" style="resize:vertical;">${wizEsc(m1.name)}</textarea>
         ${m1.name && wizPlan.hasDiag ? '<div class="wiz-prefilled">✦ Pre-filled from your diagnostic</div>' : (m1.name && wizPlan.aiPrefilled ? '<div class="wiz-prefilled">✦ Suggested based on your goal — edit as needed</div>' : '')}
       </div>
       <div class="form-row">
@@ -3790,7 +3790,7 @@ function wizShRow(s, i) {
         <option value="External Customer"        ${s.relationship==='External Customer'?'selected':''}>External Customer</option>
         <option value="Other"                    ${s.relationship==='Other'||s.relationship?.startsWith('Other:')?'selected':''}>Other</option>
       </select>
-      <input type="text" id="wizShOtherText${i}" value="${s.relationship?.startsWith('Other:') ? s.relationship.replace('Other: ','') : ''}" placeholder="Describe the relationship..." style="display:${s.relationship?.startsWith('Other:') ? 'block' : 'none'};width:100%;margin-top:8px;padding:10px 13px;border:1.5px solid var(--gray-300);border-radius:7px;font-size:14px;font-family:inherit;" />
+      <textarea id="wizShOtherText${i}" rows="2" placeholder="Describe the relationship..." style="display:${s.relationship?.startsWith('Other:') ? 'block' : 'none'};width:100%;margin-top:8px;padding:10px 13px;border:1.5px solid var(--gray-300);border-radius:7px;font-size:14px;font-family:inherit;resize:vertical;">${s.relationship?.startsWith('Other:') ? wizEsc(s.relationship.replace('Other: ','')) : ''}</textarea>
     </div>
     <div id="wizShReady${i}" style="font-size:11px;font-weight:700;color:var(--teal);margin-top:7px;min-height:14px;">${s.name && s.email ? '✓ Ready' : ''}</div>
   </div>`;
@@ -3854,12 +3854,12 @@ function wizS6() {
     <div class="wiz-reward-block">
       <div class="wiz-reward-hdr"><span class="wiz-reward-icon">🎯</span><span class="wiz-reward-title">30-Day Reward <span style="color:var(--red)">*</span></span></div>
       <div class="wiz-reward-hint">Something meaningful you\'ll give yourself if you show up at day 30 — on track against your 30-day goal.</div>
-      <input type="text" id="wizR30" value="${wizEsc(wizPlan.reward30)}" placeholder="e.g. A full weekend completely offline" style="width:100%;padding:11px 13px;border:1.5px solid var(--gray-300);border-radius:7px;font-size:14px;font-family:inherit;" />
+      <textarea id="wizR30" rows="2" placeholder="e.g. A full weekend completely offline" style="width:100%;padding:11px 13px;border:1.5px solid var(--gray-300);border-radius:7px;font-size:14px;font-family:inherit;resize:vertical;">${wizEsc(wizPlan.reward30)}</textarea>
     </div>
     <div class="wiz-reward-block">
       <div class="wiz-reward-hdr"><span class="wiz-reward-icon">🏆</span><span class="wiz-reward-title">90-Day Reward <span style="color:var(--red)">*</span></span></div>
       <div class="wiz-reward-hint">Something bigger that represents what closing this out means to you. The trip. The experience. The thing you\'ve been putting off.</div>
-      <input type="text" id="wizR90" value="${wizEsc(wizPlan.reward90)}" placeholder="e.g. Book the trip we\'ve been delaying for two years" style="width:100%;padding:11px 13px;border:1.5px solid var(--gray-300);border-radius:7px;font-size:14px;font-family:inherit;" />
+      <textarea id="wizR90" rows="2" placeholder="e.g. Book the trip we\'ve been delaying for two years" style="width:100%;padding:11px 13px;border:1.5px solid var(--gray-300);border-radius:7px;font-size:14px;font-family:inherit;resize:vertical;">${wizEsc(wizPlan.reward90)}</textarea>
     </div>
     <div class="card" style="background:var(--gray-100);box-shadow:none;border:1px solid var(--gray-200);">
       <div style="font-size:13px;color:var(--gray-600);line-height:1.6;"><strong>Why this matters:</strong> The rewards get anchored in the plan. Your coach references them. When week 8 is hard, you\'ll remember what you said you were working toward.</div>
