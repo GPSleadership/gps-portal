@@ -710,19 +710,73 @@ function renderPendingRaters() {
     groups[r.relationship].push(r);
   });
 
-  let html = `<div style="font-size:12px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;">${RATERS.length} rater${RATERS.length !== 1 ? 's' : ''} added</div>`;
+  const anyInterview = RATERS.some(r => r.will_interview);
+
+  let html = `<div style="font-size:12px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;">${RATERS.length} rater${RATERS.length !== 1 ? 's' : ''} added${anyInterview ? ' &nbsp;·&nbsp; <span style="color:#01949A;">💬 = selected for a 1:1 interview with Alex</span>' : ''}</div>`;
   Object.entries(groups).forEach(([rel, raters]) => {
-    html += `<div style="font-size:11px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">${rel} (${raters.length})</div>`;
+    html += `<div style="display:inline-block;font-size:11px;font-weight:800;color:#fff;background:${relColor(rel)};text-transform:uppercase;letter-spacing:.04em;padding:3px 10px;border-radius:10px;margin:14px 0 8px;">${esc(rel)} · ${raters.length}</div>`;
     raters.forEach(r => {
-      html += `<div class="rater-row">
-        <div style="flex:1;font-size:13px;font-weight:600;">${r.name}</div>
-        <div style="font-size:12px;color:var(--mid);">${r.email}</div>
+      html += `<div class="rater-row" id="rrow-${r.id}" style="border-left:3px solid ${relColor(r.relationship)};padding-left:10px;">
+        <div style="flex:1;font-size:13px;font-weight:600;">${esc(r.name)}${r.will_interview ? ' <span title="Selected for a 1:1 interview with Alex">💬</span>' : ''}</div>
+        <div style="font-size:12px;color:var(--mid);">${esc(r.email)}</div>
+        ${r.invited_at ? '<div style="font-size:11px;color:var(--mid);">Invited</div>' : `<button class="btn btn-ghost" style="font-size:12px;padding:4px 12px;" onclick="startEditRater('${r.id}')">Edit</button>`}
       </div>`;
     });
   });
 
   el.innerHTML = html;
   renderRaterSubmitSection();
+}
+
+// Standout colors per relationship group (GPS palette) so the groups read as groups.
+function relColor(rel) {
+  var r = String(rel || '').toLowerCase();
+  if (r.indexOf('superv') > -1 || r.indexOf('manager') > -1 || r.indexOf('owner') > -1) return '#004369'; // navy
+  if (r.indexOf('direct') > -1 || r.indexOf('skip') > -1) return '#01949A'; // teal
+  if (r.indexOf('peer') > -1) return '#6D28D9'; // purple
+  if (r.indexOf('board') > -1) return '#B45309'; // amber
+  return '#5a6b76'; // slate — Other / customers / stakeholders
+}
+
+// Inline edit of a rater (name / email / relationship), allowed until invites go out.
+function startEditRater(id) {
+  var r = RATERS.find(function(x){ return String(x.id) === String(id); });
+  var row = document.getElementById('rrow-' + id);
+  if (!r || !row) return;
+  var rels = ['Direct Report','Peer','Supervisor / Manager','Board Member','Internal Customer','External Customer','External Stakeholder','Other'];
+  var opts = rels.map(function(o){ return '<option'+(o===r.relationship?' selected':'')+'>'+o+'</option>'; }).join('');
+  // If the stored relationship isn't in the standard list (e.g. "Other: ..."), keep it as an extra option.
+  if (rels.indexOf(r.relationship) < 0 && r.relationship) opts = '<option selected>'+esc(r.relationship)+'</option>' + opts;
+  row.innerHTML =
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;width:100%;">'+
+      '<input id="edit-name-'+id+'" value="'+esc(r.name)+'" placeholder="Name" style="flex:1;min-width:120px;padding:7px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;">'+
+      '<input id="edit-email-'+id+'" value="'+esc(r.email)+'" placeholder="email@company.com" style="flex:1.4;min-width:160px;padding:7px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;">'+
+      '<select id="edit-rel-'+id+'" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;">'+opts+'</select>'+
+      '<button class="btn btn-primary" style="font-size:12px;padding:6px 14px;" onclick="saveEditRater(\''+id+'\')">Save</button>'+
+      '<button class="btn btn-ghost" style="font-size:12px;padding:6px 12px;" onclick="renderPendingRaters()">Cancel</button>'+
+    '</div>'+
+    '<div id="edit-msg-'+id+'" style="font-size:12px;color:var(--red);width:100%;margin-top:4px;"></div>';
+}
+
+async function saveEditRater(id) {
+  var name = (document.getElementById('edit-name-'+id)||{}).value || '';
+  var email = (document.getElementById('edit-email-'+id)||{}).value || '';
+  var rel = (document.getElementById('edit-rel-'+id)||{}).value || '';
+  var msg = document.getElementById('edit-msg-'+id);
+  name = name.trim(); email = email.trim();
+  if (!name || !email) { if(msg) msg.textContent = 'Name and email are both required.'; return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { if(msg) msg.textContent = 'Please enter a valid email address.'; return; }
+  if (msg) { msg.style.color = 'var(--mid)'; msg.textContent = 'Saving…'; }
+  try {
+    var resp = await diagPortal('leader-edit-rater', { rater_id: id, rater: { name: name, email: email, relationship: rel } });
+    if (resp && resp.rater) {
+      var i = RATERS.findIndex(function(x){ return String(x.id) === String(id); });
+      if (i > -1) RATERS[i] = Object.assign({}, RATERS[i], resp.rater);
+    }
+    renderPendingRaters();
+  } catch (e) {
+    if (msg) { msg.style.color = 'var(--red)'; msg.textContent = e.message || 'Could not save.'; }
+  }
 }
 
 function renderRaterSubmitSection() {
@@ -953,6 +1007,13 @@ function formatDate(str) {
   if (!str) return '';
   const d = new Date(str);
   return d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+}
+
+// HTML-escape for rater names/emails rendered into the roster list.
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[<>&"]/g, function(c){
+    return { '<':'&lt;', '>':'&gt;', '&':'&amp;', '"':'&quot;' }[c];
+  });
 }
 
 function isReportReleased() {

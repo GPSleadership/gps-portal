@@ -70,7 +70,7 @@ export default async function handler(req, res) {
         if (!diag) return res.status(401).json({ error: 'Invalid or expired link' });
         // touch last-used (fire and forget)
         sb(`/rest/v1/diagnostics?id=eq.${diag.id}`, 'PATCH', { leader_token_last_used_at: new Date().toISOString() }, { Prefer: 'return=minimal' }).catch(() => {});
-        const rr = await sb(`/rest/v1/diagnostic_raters?diagnostic_id=eq.${diag.id}&select=id,name,email,relationship,invited_at,completed_at,is_self,token&order=created_at.asc`);
+        const rr = await sb(`/rest/v1/diagnostic_raters?diagnostic_id=eq.${diag.id}&select=id,name,email,relationship,invited_at,completed_at,is_self,token,will_interview&order=created_at.asc`);
         const rrRows = rr.ok ? await rr.json() : [];
         // Only the leader's own self row carries a token (so they can self-assess).
         // Never hand the leader other raters' survey tokens.
@@ -86,6 +86,32 @@ export default async function handler(req, res) {
           diagnostic_id: diag.id, name: rt.name, email: rt.email, relationship: rt.relationship || null, is_self: false,
         }, { Prefer: 'return=representation' });
         if (!r.ok) { const d = await r.json().catch(() => ({})); return res.status(500).json({ error: 'Could not add rater', detail: d }); }
+        const rows = await r.json();
+        return res.status(200).json({ ok: true, rater: Array.isArray(rows) ? rows[0] : rows });
+      }
+      case 'leader-edit-rater': {
+        const diag = await diagByLeaderToken(token);
+        if (!diag) return res.status(401).json({ error: 'Invalid or expired link' });
+        // Only editable before invites go out for the whole diagnostic, and only
+        // for a rater that hasn't been individually invited yet. Scope strictly
+        // to this diagnostic's own raters so a token can't touch another's.
+        if (diag.invites_sent_at) return res.status(403).json({ error: 'Invitations have been sent — the rater list is locked.' });
+        const rid = body.rater_id;
+        const rt  = body.rater || {};
+        if (!rid) return res.status(400).json({ error: 'rater_id required' });
+        if (!rt.name || !rt.email) return res.status(400).json({ error: 'name and email required' });
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rt.email)) return res.status(400).json({ error: 'Please enter a valid email address.' });
+        // Verify the rater belongs to THIS diagnostic and isn't already invited.
+        const chk = await sb(`/rest/v1/diagnostic_raters?id=eq.${enc(rid)}&diagnostic_id=eq.${diag.id}&select=id,invited_at,is_self&limit=1`);
+        const chkRows = chk.ok ? await chk.json() : [];
+        const existing = chkRows[0];
+        if (!existing) return res.status(404).json({ error: 'Rater not found for this diagnostic' });
+        if (existing.is_self) return res.status(403).json({ error: 'The self-assessment row cannot be edited here.' });
+        if (existing.invited_at) return res.status(403).json({ error: 'That rater has already been invited.' });
+        const upd = { name: rt.name, email: rt.email };
+        if (rt.relationship) upd.relationship = rt.relationship;
+        const r = await sb(`/rest/v1/diagnostic_raters?id=eq.${enc(rid)}`, 'PATCH', upd, { Prefer: 'return=representation' });
+        if (!r.ok) { const d = await r.json().catch(() => ({})); return res.status(500).json({ error: 'Could not update rater', detail: d }); }
         const rows = await r.json();
         return res.status(200).json({ ok: true, rater: Array.isArray(rows) ? rows[0] : rows });
       }
