@@ -270,19 +270,26 @@ export default async function handler(req, res) {
       if (!goal90) return res.status(400).json({ error: 'goal90 required' });
       if (!(await getClientByToken(req.body.token))) return res.status(401).json({ error: 'Invalid or missing token' });
 
-      const prefillPrompt = `You are helping a leader build a 90-day leadership development plan. All suggestions must be written in FIRST PERSON using "I" — never "you" or "they".
+      const prefillPrompt = `You are helping a leader build a 90-day LEADERSHIP development plan. All suggestions must be written in FIRST PERSON using "I" — never "you" or "they".
 
 Focus pillar: ${pillar || 'not specified'}
 90-day goal: ${goal90}
 30-day goal: ${goal30 || '(not provided)'}
 
-Generate concrete, specific suggestions. Return ONLY valid JSON — no markdown, no explanation.
+STEP 1 — Scope check. This portal builds LEADERSHIP, management, team, and workplace/professional development plans ONLY. If the 90-day goal is a personal goal unrelated to leadership or work (for example: weight loss, fitness, diet, a hobby, personal finance, relationships outside work), it is OUT OF SCOPE. Do NOT invent leadership content for it.
 
+Return ONLY valid JSON — no markdown, no explanation.
+
+If the goal is OUT OF SCOPE, return exactly:
+{ "off_topic": true }
+
+Otherwise return:
 {
+  "off_topic": false,
   "behavior1": "First-person action statement, e.g. 'I will hold weekly 1:1s where I ask for solutions before offering mine'",
   "behavior2": "A second distinct first-person behavior, different domain from behavior1",
   "metric1Name": "Count-based metric: '# of times I [specific behavior] this week' — tied directly to behavior1",
-  "metric2Question": "A stakeholder perception question rated 1-10, e.g. 'On a scale of 1-10, to what degree does [Name] delegate decisions to the right level?'",
+  "metric2Question": "A stakeholder perception question answerable on a 1-5 agreement scale, e.g. 'My manager delegates decisions to the right level.'",
   "goal30": "First-person 30-day checkpoint starting with 'By day 30, I will have...' — a specific observable fact proving early progress. Use empty string if the provided 30-day goal is already solid."
 }`;
 

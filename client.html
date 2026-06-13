@@ -3290,7 +3290,8 @@ function initWizard(client) {
     stakeholders: (wizIsEdit ? [] : (p?.suggested?.stakeholders || []).map(s => ({ ...s, fromDiag: true }))),
     reward30:   wizIsEdit ? (client.reward_30_day || '') : '',
     reward90:   wizIsEdit ? (client.reward_90_day || '') : '',
-    startDate:  client.plan_start_date || today,
+    // Default to today; never prefill a past date (a stale stored date confuses on re-edit).
+    startDate:  (client.plan_start_date && client.plan_start_date >= today) ? client.plan_start_date : today,
     timezone:   client.timezone || 'America/New_York',
     hasDiag:    !!p,
     scores,
@@ -3360,44 +3361,69 @@ function wizGoal90Typed() {
   _wizGoal90Timer = setTimeout(wizGoal90TriggerPrefill, 1200);
 }
 
+// Auto path (debounced typing): only fills when the 30-day goal is still blank,
+// so it never silently overwrites something the leader already wrote.
 async function wizGoal90TriggerPrefill() {
+  const goal30El = document.getElementById('wizGoal30');
+  if (goal30El && goal30El.value.trim()) return;
+  return wizDoPrefill(false);
+}
+
+// Button path: always (re)generates, overwriting the 30-day goal + suggestions.
+async function wizGenerateSuggestions() {
+  return wizDoPrefill(true);
+}
+
+async function wizDoPrefill(force) {
   const goalEl   = document.getElementById('wizGoal90');
   const statusEl = document.getElementById('wizGoal90Status');
   const goal30El = document.getElementById('wizGoal30');
   const hint30El = document.getElementById('wizGoal30Hint');
+  const btn      = document.getElementById('wizGenBtn');
   if (!goalEl) return;
 
   const goal = goalEl.value.trim();
   const words = goal.split(/\s+/).filter(Boolean).length;
-  if (words < 8 || goal === _wizGoal90LastFired) return;
+  if (words < 8) {
+    if (force && statusEl) { statusEl.style.color = 'var(--red)'; statusEl.textContent = 'Write a fuller 90-day goal first (a sentence or two), then generate.'; }
+    return;
+  }
+  if (!force && goal === _wizGoal90LastFired) return;
   _wizGoal90LastFired = goal;
 
-  if (statusEl) statusEl.textContent = '✦ Generating suggestions…';
+  if (statusEl) { statusEl.style.color = 'var(--teal)'; statusEl.textContent = '✦ Generating suggestions…'; }
+  if (btn) { btn.disabled = true; btn.textContent = '✦ Generating…'; }
 
   try {
     const resp = await fetch('/api/ask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'prefill', token, goal90: goal, goal30: (goal30El?.value || '').trim(), pillar: wizPlan.pillar || '' })
+      body: JSON.stringify({ action: 'prefill', token, goal90: goal, goal30: force ? '' : (goal30El?.value || '').trim(), pillar: wizPlan.pillar || '' })
     });
     const data = await resp.json();
     const pf = data?.prefill || {};
 
-    // Fill 30-day goal directly in the DOM if the field is still blank
-    if (pf.goal30 && goal30El && !goal30El.value.trim()) {
+    // Off-topic / non-leadership goal: tell them plainly, don't invent content.
+    if (pf.off_topic) {
+      if (statusEl) { statusEl.style.color = 'var(--red)'; statusEl.textContent = 'This portal builds leadership and workplace plans. Please reframe your 90-day goal around a leadership, team, or management outcome, then generate again.'; }
+      return;
+    }
+
+    // Fill the 30-day goal: always on force, otherwise only if still blank.
+    if (pf.goal30 && goal30El && (force || !goal30El.value.trim())) {
       goal30El.value = pf.goal30;
       wizPlan.goal30 = pf.goal30;
       if (hint30El) hint30El.textContent = '✦ Suggested based on your goal — edit as needed';
     }
 
-    // Store the rest in wizPlan for later steps
-    if (pf.behavior1)       wizPlan.behavior1 = pf.behavior1;
-    if (pf.behavior2)       wizPlan.behavior2 = pf.behavior2;
-    if (pf.metric1Name)     wizPlan.metric1 = { ...(wizPlan.metric1||{}), name: pf.metric1Name };
-    if (pf.metric2Question) wizPlan.metric2 = { ...(wizPlan.metric2||{}), question: pf.metric2Question };
+    // Store the rest in wizPlan for later steps (force overwrites, auto fills).
+    if (pf.behavior1       && (force || !wizPlan.behavior1))            wizPlan.behavior1 = pf.behavior1;
+    if (pf.behavior2       && (force || !wizPlan.behavior2))            wizPlan.behavior2 = pf.behavior2;
+    if (pf.metric1Name     && (force || !(wizPlan.metric1||{}).name))   wizPlan.metric1 = { ...(wizPlan.metric1||{}), name: pf.metric1Name };
+    if (pf.metric2Question && (force || !(wizPlan.metric2||{}).question)) wizPlan.metric2 = { ...(wizPlan.metric2||{}), question: pf.metric2Question };
     wizPlan.aiPrefilled = true;
 
-    if (statusEl) statusEl.textContent = '';
+    if (statusEl) statusEl.textContent = force ? '✦ Updated below — review and edit the 30-day goal, behaviors, and metrics.' : '';
     // Fade out the intro notice once suggestions have landed
     const notice = document.getElementById('wizPrefillNotice');
     if (notice && (pf.goal30 || pf.behavior1)) {
@@ -3406,7 +3432,9 @@ async function wizGoal90TriggerPrefill() {
       setTimeout(() => { if (notice) notice.style.display = 'none'; }, 500);
     }
   } catch(e) {
-    if (statusEl) statusEl.textContent = '';
+    if (statusEl) { statusEl.style.color = 'var(--red)'; statusEl.textContent = 'Could not generate suggestions. Check your connection and try again.'; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '✦ Regenerate suggestions'; }
   }
 }
 
@@ -3586,8 +3614,7 @@ function wizS2() {
       <div id="wizPrefillNotice" style="display:flex;gap:11px;align-items:flex-start;background:#E8F7F7;border:1px solid #b2e0e1;border-radius:8px;padding:12px 14px;margin-bottom:18px;">
         <span style="font-size:16px;line-height:1;margin-top:1px;">✦</span>
         <div style="font-size:13px;color:#004369;line-height:1.6;">
-          <strong>We'll help you build this.</strong> Once your 90-day goal hits a few words, we'll suggest a 30-day goal, two behaviors, and both metrics.
-          Edit anything — it's a starting point, not a final answer.
+          <strong>We'll help you build this.</strong> Write your 90-day goal below, then click <strong>Generate suggestions</strong>. We'll draft a 30-day goal, two behaviors, and both metrics for you. Everything is editable, and you can regenerate any time you change your 90-day goal. It's a starting point, not a final answer.
         </div>
       </div>` : ''}
       <div class="form-group">
@@ -3595,7 +3622,9 @@ function wizS2() {
         <div class="hint">First person. Specific behavior change. Written as if day 90 has arrived.</div>
         <textarea id="wizGoal90" rows="3" oninput="wizGoal90Typed()">${wizEsc(wizPlan.goal90)}</textarea>
         ${hasPre && wizPlan.goal90 ? '<div class="wiz-prefilled">✦ Pre-filled from your diagnostic</div>' : ''}
-        <div id="wizGoal90Status" style="font-size:11px;color:var(--teal);font-weight:600;margin-top:5px;min-height:16px;"></div>
+        <div id="wizGoal90Status" style="font-size:12px;color:var(--teal);font-weight:600;margin-top:6px;min-height:16px;line-height:1.5;"></div>
+        ${!wizPlan.hasDiag ? `<button type="button" id="wizGenBtn" onclick="wizGenerateSuggestions()" style="margin-top:8px;background:var(--light-teal);color:#004369;border:1.5px solid #b2e0e1;border-radius:7px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">✦ Generate suggestions</button>
+        <div class="hint" style="margin-top:6px;">Edit your 90-day goal above, then click to draft (or redraft) the 30-day goal, behaviors, and metrics.</div>` : ''}
       </div>
       <div style="height:1px;background:var(--gray-200);margin:16px 0;"></div>
       <div class="form-group">
@@ -3699,7 +3728,12 @@ function wizS4() {
 
 // ── Step 5: Stakeholders ───────────────────────────────────────────────────
 function wizS5() {
-  const shs = wizPlan.stakeholders || [];
+  // Always back the first visible row with a real array entry, so a single
+  // filled-in stakeholder syncs and lets the leader continue (no phantom row).
+  if (!wizPlan.stakeholders || wizPlan.stakeholders.length === 0) {
+    wizPlan.stakeholders = [{ name:'', email:'', relationship:'Direct Report', fromDiag:false }];
+  }
+  const shs = wizPlan.stakeholders;
   return `
     <div class="card navy-top">
       <div class="wiz-step-badge">Step 5 of 7 — Your Stakeholders</div>
@@ -3708,10 +3742,11 @@ function wizS5() {
     </div>
     <div class="card">
       <div class="wiz-sh-list" id="wizShList">
-        ${shs.length > 0 ? shs.map((s,i) => wizShRow(s,i)).join('') : wizShRow({name:'',email:'',relationship:'Direct Report',fromDiag:false},0)}
+        ${shs.map((s,i) => wizShRow(s,i)).join('')}
       </div>
+      <div class="hint" style="margin:4px 0 10px;">Fill in Stakeholder 1 and press <strong>Continue</strong> — one is all you need. Add another only if you want more people to rate your progress (up to 5).</div>
       <button class="wiz-add-sh-btn" id="wizAddShBtn" onclick="wizAddStakeholder()" ${shs.length>=5?'disabled':''}>
-        + Add another stakeholder ${shs.length>=5?'(max 5 reached)':`(${5-Math.max(shs.length,1)} remaining)`}
+        + Add another stakeholder ${shs.length>=5?'(max 5 reached)':`(${5-shs.length} more allowed)`}
       </button>
       <div class="hint" style="margin-top:10px;line-height:1.8;">
         <strong>Direct Report</strong> = someone you manage day-to-day &nbsp;·&nbsp;
@@ -3737,11 +3772,11 @@ function wizShRow(s, i) {
     <div class="form-row" style="margin-bottom:10px;">
       <div class="form-group" style="margin-bottom:0;">
         <label style="font-size:12px;">Full Name <span style="color:var(--red)">*</span></label>
-        <input type="text" id="wizShName${i}" value="${wizEsc(s.name)}" placeholder="Full name" />
+        <input type="text" id="wizShName${i}" value="${wizEsc(s.name)}" placeholder="Full name" oninput="wizShRowCheck(${i})" />
       </div>
       <div class="form-group" style="margin-bottom:0;">
         <label style="font-size:12px;">Email <span style="color:var(--red)">*</span></label>
-        <input type="email" id="wizShEmail${i}" value="${wizEsc(s.email)}" placeholder="email@company.com" />
+        <input type="email" id="wizShEmail${i}" value="${wizEsc(s.email)}" placeholder="email@company.com" oninput="wizShRowCheck(${i})" />
       </div>
     </div>
     <div class="form-group" style="margin-bottom:0;">
@@ -3757,7 +3792,15 @@ function wizShRow(s, i) {
       </select>
       <input type="text" id="wizShOtherText${i}" value="${s.relationship?.startsWith('Other:') ? s.relationship.replace('Other: ','') : ''}" placeholder="Describe the relationship..." style="display:${s.relationship?.startsWith('Other:') ? 'block' : 'none'};width:100%;margin-top:8px;padding:10px 13px;border:1.5px solid var(--gray-300);border-radius:7px;font-size:14px;font-family:inherit;" />
     </div>
+    <div id="wizShReady${i}" style="font-size:11px;font-weight:700;color:var(--teal);margin-top:7px;min-height:14px;">${s.name && s.email ? '✓ Ready' : ''}</div>
   </div>`;
+}
+
+function wizShRowCheck(i) {
+  const n = document.getElementById('wizShName'+i);
+  const e = document.getElementById('wizShEmail'+i);
+  const r = document.getElementById('wizShReady'+i);
+  if (r) r.textContent = (n && n.value.trim() && e && e.value.trim()) ? '✓ Ready' : '';
 }
 
 function wizShOtherToggle(i) {
@@ -3782,22 +3825,22 @@ function wizRemoveStakeholder(i) {
   document.getElementById('wizStepBody').innerHTML = wizS5();
 }
 function wizSyncStakeholders() {
-  const shs = wizPlan.stakeholders || [];
-  shs.forEach((s,i) => {
+  // Read straight from the DOM by index so EVERY rendered row is captured —
+  // including the first row even when wizPlan.stakeholders started empty.
+  const out = [];
+  for (let i = 0; document.getElementById('wizShName'+i); i++) {
     const n = document.getElementById('wizShName'+i);
     const e = document.getElementById('wizShEmail'+i);
     const r = document.getElementById('wizShRel'+i);
-    if (n) s.name = n.value.trim();
-    if (e) s.email = e.value.trim();
-    if (r) {
-      if (r.value === 'Other') {
-        const ot = document.getElementById('wizShOtherText'+i);
-        s.relationship = ot && ot.value.trim() ? 'Other: ' + ot.value.trim() : 'Other';
-      } else {
-        s.relationship = r.value;
-      }
+    let rel = r ? r.value : 'Direct Report';
+    if (rel === 'Other') {
+      const ot = document.getElementById('wizShOtherText'+i);
+      rel = ot && ot.value.trim() ? 'Other: ' + ot.value.trim() : 'Other';
     }
-  });
+    const existing = (wizPlan.stakeholders || [])[i] || {};
+    out.push({ name: n ? n.value.trim() : '', email: e ? e.value.trim() : '', relationship: rel, fromDiag: !!existing.fromDiag });
+  }
+  if (out.length) wizPlan.stakeholders = out;
 }
 
 // ── Step 6: Rewards ────────────────────────────────────────────────────────
@@ -3924,8 +3967,10 @@ function wizValidate(step) {
   }
   if (step === 5) {
     wizSyncStakeholders();
-    const shs = wizPlan.stakeholders||[];
-    if (shs.length === 0) { wizShowError('Please add at least one stakeholder.'); return false; }
+    // Drop fully-empty rows so a blank "Add another" row never blocks Continue.
+    wizPlan.stakeholders = (wizPlan.stakeholders || []).filter(s => s.name || s.email);
+    const shs = wizPlan.stakeholders;
+    if (shs.length === 0) { wizShowError('Add at least one stakeholder — a name and an email.'); return false; }
     for (let i=0;i<shs.length;i++) {
       if (!shs[i].name)  { wizShowError(`Stakeholder ${i+1} is missing a name.`); return false; }
       if (!shs[i].email) { wizShowError(`Stakeholder ${i+1} is missing an email.`); return false; }

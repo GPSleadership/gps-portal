@@ -121,6 +121,11 @@ export default async function handler(req, res) {
       case 'update-client': {
         const updates = pickWritable(body.updates);
         if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'No writable fields' });
+        // Locking the plan always ends the edit window. allow_plan_edit is intentionally
+        // NOT client-writable (no privilege escalation), so the server clears it here when
+        // the client submits their plan — otherwise an unlocked client loops back into the
+        // wizard on reload instead of landing in their portal.
+        if (updates.plan_submitted_at) updates.allow_plan_edit = false;
         const r = await sb(`/rest/v1/clients?id=eq.${clientId}`, 'PATCH', updates, { Prefer: 'return=minimal' });
         if (!r.ok) { const detail = await r.json().catch(() => ({})); return res.status(500).json({ error: 'Update failed', detail }); }
         return res.status(200).json({ ok: true });
