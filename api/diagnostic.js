@@ -165,6 +165,8 @@ export default async function handler(req, res) {
 
   switch (action) {
     case 'send-invites':         return handleSendInvites(req, res);
+    case 'schedule-invites':     return handleScheduleInvites(req, res);
+    case 'send-scheduled':       return handleSendScheduled(req, res);
     case 'send-leader-link':     return handleSendLeaderLink(req, res);
     case 'generate-question':    return handleGenerateQuestion(req, res);
     case 'generate-g2-question': return handleGenerateG2Question(req, res);
@@ -182,7 +184,7 @@ export default async function handler(req, res) {
     case 'submit-external-feedback': return handleSubmitExternalFeedback(req, res);
     case 'reminders':            return handleReminders(req, res);
     default:
-      return res.status(400).json({ error: `Unknown action: "${action}". Valid: send-invites, send-leader-link, generate-question, generate-g2-question, generate-report, generate-team-report, finalize-report, sign-report-upload, generate-dr-content, request-external-feedback, feedback-context, submit-external-feedback, reminders` });
+      return res.status(400).json({ error: `Unknown action: "${action}". Valid: send-invites, schedule-invites, send-scheduled, send-leader-link, generate-question, generate-g2-question, generate-report, generate-team-report, finalize-report, sign-report-upload, generate-dr-content, request-external-feedback, feedback-context, submit-external-feedback, reminders` });
   }
 }
 
@@ -256,6 +258,91 @@ function buildInviteEmail({ raterName, leaderName, leaderTitle, leaderOrg, surve
   `;
 }
 
+// Reusable send core — shared by the manual send-invites action and the
+// scheduled (cron) send. Returns { httpStatus, payload } so callers can map to
+// HTTP or inspect the result. Idempotent at the rater level: only raters with
+// invited_at IS NULL are emailed, so a retry never double-sends. Sets
+// invites_sent_at (and clears any pending schedule) only when at least one email
+// actually went out.
+async function sendInvitesForDiagnostic(diagnostic_id) {
+  const diagRes = await sb(
+    `/rest/v1/diagnostics?id=eq.${diagnostic_id}&select=id,client_name,client_title,client_org,client_email,close_date,status,self_assessment_completed_at,interviews_enabled,interview_calendar_link&limit=1`
+  );
+  const diags = await diagRes.json();
+  if (!Array.isArray(diags) || diags.length === 0) return { httpStatus: 404, payload: { error: 'Diagnostic not found' } };
+  const diag = diags[0];
+
+  if (!diag.self_assessment_completed_at) {
+    return { httpStatus: 400, payload: { error: 'Self-assessment not complete. Leader must finish the self-assessment before invites can be sent.' } };
+  }
+
+  const ratersRes = await sb(
+    `/rest/v1/diagnostic_raters?diagnostic_id=eq.${diagnostic_id}&is_self=eq.false&invited_at=is.null&select=id,name,email,relationship,token,will_interview`
+  );
+  const raters = await ratersRes.json();
+
+  if (!Array.isArray(raters) || raters.length === 0) {
+    return { httpStatus: 200, payload: { message: 'No uninvited raters found — all raters may already have been invited.', sent: 0, skipped: 0, errors: [] } };
+  }
+
+  let sent = 0;
+  const errors = [];
+  const sentList = [];
+  const now = new Date();
+  const nowISO = now.toISOString();
+
+  // Close date = exactly 14 days from invite send (overrides any manual close_date)
+  const closeDate = new Date(now);
+  closeDate.setDate(closeDate.getDate() + 14);
+  const closeDateISO  = closeDate.toISOString().split('T')[0]; // YYYY-MM-DD
+  const closeDateDisp = closeDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+  for (const rater of raters) {
+    const surveyLink = `${PORTAL_BASE}/diagnostic-survey?token=${rater.token}`;
+    // Include calendar link in email only when this rater is marked for interview AND a link exists
+    const calendarLink = (diag.interviews_enabled && rater.will_interview && diag.interview_calendar_link)
+      ? diag.interview_calendar_link
+      : null;
+    const subject    = calendarLink
+      ? `Your input is requested — ${diag.client_name} leadership feedback + interview invite`
+      : `Your input is requested — ${diag.client_name} leadership feedback`;
+    const html       = buildInviteEmail({
+      raterName:   rater.name,
+      leaderName:  diag.client_name,
+      leaderTitle: diag.client_title,
+      leaderOrg:   diag.client_org,
+      surveyLink,
+      closeDate:   closeDateDisp,
+      calendarLink,
+    });
+
+    const inviteCc = [diag.client_email, 'team@gpsleadership.org'].filter(Boolean);
+    try {
+      await sendEmail({ to: rater.email, subject, html, emailType: 'diagnostic_invite', recipientName: rater.name, cc: inviteCc });
+      await sb(`/rest/v1/diagnostic_raters?id=eq.${rater.id}`, 'PATCH', { invited_at: nowISO }, { Prefer: 'return=minimal' });
+      sent++;
+      sentList.push({ name: rater.name, email: rater.email, interview: !!calendarLink });
+    } catch (err) {
+      errors.push({ name: rater.name, email: rater.email, error: err.message });
+    }
+  }
+
+  if (sent > 0) {
+    const updates = {
+      invites_sent_at: nowISO,
+      start_date:  nowISO.split('T')[0],   // survey opens today
+      close_date:  closeDateISO,            // closes 14 days from today
+      updated_at:  nowISO,
+      invites_scheduled_at: null,           // consume any pending schedule
+      invites_schedule_claimed_at: null,
+    };
+    if (diag.status !== 'survey_open') updates.status = 'survey_open';
+    await sb(`/rest/v1/diagnostics?id=eq.${diagnostic_id}`, 'PATCH', updates, { Prefer: 'return=minimal' });
+  }
+
+  return { httpStatus: 200, payload: { message: `Invites sent: ${sent} of ${raters.length}`, sent, sentList, errors } };
+}
+
 async function handleSendInvites(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -263,83 +350,117 @@ async function handleSendInvites(req, res) {
   if (!diagnostic_id) return res.status(400).json({ error: 'diagnostic_id is required' });
 
   try {
-    const diagRes = await sb(
-      `/rest/v1/diagnostics?id=eq.${diagnostic_id}&select=id,client_name,client_title,client_org,client_email,close_date,status,self_assessment_completed_at,interviews_enabled,interview_calendar_link&limit=1`
-    );
+    const r = await sendInvitesForDiagnostic(diagnostic_id);
+    return res.status(r.httpStatus).json(r.payload);
+  } catch (err) {
+    console.error('[diagnostic/send-invites] error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ACTION: schedule-invites  (coach session auth)
+// POST /api/diagnostic?action=schedule-invites
+// Body: { diagnostic_id, scheduled_at (ISO string | null to cancel), session }
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleScheduleInvites(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const { diagnostic_id, scheduled_at, session } = req.body || {};
+  if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
+  if (!diagnostic_id) return res.status(400).json({ error: 'diagnostic_id is required' });
+
+  try {
+    const diagRes = await sb(`/rest/v1/diagnostics?id=eq.${diagnostic_id}&select=id,self_assessment_completed_at,invites_sent_at&limit=1`);
     const diags = await diagRes.json();
     if (!Array.isArray(diags) || diags.length === 0) return res.status(404).json({ error: 'Diagnostic not found' });
     const diag = diags[0];
+    if (diag.invites_sent_at) return res.status(400).json({ error: 'Invites have already been sent for this diagnostic.' });
 
-    if (!diag.self_assessment_completed_at) {
-      return res.status(400).json({ error: 'Self-assessment not complete. Leader must finish the self-assessment before invites can be sent.' });
+    const nowISO = new Date().toISOString();
+
+    if (scheduled_at) {
+      if (!diag.self_assessment_completed_at) {
+        return res.status(400).json({ error: 'Self-assessment not complete. The leader must finish it before invites can be scheduled.' });
+      }
+      const when = new Date(scheduled_at);
+      if (isNaN(when.getTime())) return res.status(400).json({ error: 'Invalid date/time.' });
+      if (when.getTime() < Date.now() - 60 * 1000) return res.status(400).json({ error: 'That time is in the past. Pick a future date/time.' });
+      await sb(`/rest/v1/diagnostics?id=eq.${diagnostic_id}`, 'PATCH',
+        { invites_scheduled_at: when.toISOString(), invites_schedule_claimed_at: null, updated_at: nowISO },
+        { Prefer: 'return=minimal' });
+      return res.status(200).json({ ok: true, scheduled_at: when.toISOString() });
     }
 
-    const ratersRes = await sb(
-      `/rest/v1/diagnostic_raters?diagnostic_id=eq.${diagnostic_id}&is_self=eq.false&invited_at=is.null&select=id,name,email,relationship,token,will_interview`
+    // No scheduled_at => cancel any existing schedule.
+    await sb(`/rest/v1/diagnostics?id=eq.${diagnostic_id}`, 'PATCH',
+      { invites_scheduled_at: null, invites_schedule_claimed_at: null, updated_at: nowISO },
+      { Prefer: 'return=minimal' });
+    return res.status(200).json({ ok: true, scheduled_at: null });
+  } catch (err) {
+    console.error('[diagnostic/schedule-invites] error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ACTION: send-scheduled  (cron auth: x-vercel-cron / CRON_SECRET / coach session)
+// GET|POST /api/diagnostic?action=send-scheduled
+// Finds diagnostics whose scheduled time has passed and sends their invites once.
+// Claim column prevents overlapping runs from double-processing; the per-rater
+// invited_at guard prevents double emails even if a claim is released for retry.
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleSendScheduled(req, res) {
+  if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const isVercelCron    = req.headers['x-vercel-cron'] === '1';
+  const isManualTrigger = req.method === 'POST' && !!verifyCoachSession(req.body?.session);
+  const authHeader      = req.headers['authorization'] || '';
+  const hasSecret       = CRON_SECRET && authHeader === `Bearer ${CRON_SECRET}`;
+  if (!isVercelCron && !isManualTrigger && !hasSecret) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const nowISO = new Date().toISOString();
+  const log = { processed: [], skipped: [], errors: [] };
+
+  try {
+    const dueRes = await sb(
+      `/rest/v1/diagnostics?invites_scheduled_at=lte.${nowISO}&invites_sent_at=is.null&invites_schedule_claimed_at=is.null&select=id,client_name&order=invites_scheduled_at.asc&limit=50`
     );
-    const raters = await ratersRes.json();
+    const due = await dueRes.json() || [];
 
-    if (!Array.isArray(raters) || raters.length === 0) {
-      return res.status(200).json({ message: 'No uninvited raters found — all raters may already have been invited.', sent: 0, skipped: 0, errors: [] });
-    }
+    for (const d of due) {
+      // Atomic claim — only the run that flips claimed_at from null wins.
+      const claimRes = await sb(
+        `/rest/v1/diagnostics?id=eq.${d.id}&invites_schedule_claimed_at=is.null`, 'PATCH',
+        { invites_schedule_claimed_at: new Date().toISOString() },
+        { Prefer: 'return=representation' }
+      );
+      const claimed = await claimRes.json();
+      if (!Array.isArray(claimed) || claimed.length === 0) { log.skipped.push({ id: d.id, reason: 'already claimed' }); continue; }
 
-    let sent = 0;
-    const errors = [];
-    const sentList = [];
-    const now = new Date();
-    const nowISO = now.toISOString();
-
-    // Close date = exactly 14 days from invite send (overrides any manual close_date)
-    const closeDate = new Date(now);
-    closeDate.setDate(closeDate.getDate() + 14);
-    const closeDateISO  = closeDate.toISOString().split('T')[0]; // YYYY-MM-DD
-    const closeDateDisp = closeDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-
-    for (const rater of raters) {
-      const surveyLink = `${PORTAL_BASE}/diagnostic-survey?token=${rater.token}`;
-      // Include calendar link in email only when this rater is marked for interview AND a link exists
-      const calendarLink = (diag.interviews_enabled && rater.will_interview && diag.interview_calendar_link)
-        ? diag.interview_calendar_link
-        : null;
-      const subject    = calendarLink
-        ? `Your input is requested — ${diag.client_name} leadership feedback + interview invite`
-        : `Your input is requested — ${diag.client_name} leadership feedback`;
-      const html       = buildInviteEmail({
-        raterName:   rater.name,
-        leaderName:  diag.client_name,
-        leaderTitle: diag.client_title,
-        leaderOrg:   diag.client_org,
-        surveyLink,
-        closeDate:   closeDateDisp,
-        calendarLink,
-      });
-
-      const inviteCc = [diag.client_email, 'team@gpsleadership.org'].filter(Boolean);
       try {
-        await sendEmail({ to: rater.email, subject, html, emailType: 'diagnostic_invite', recipientName: rater.name, cc: inviteCc });
-        await sb(`/rest/v1/diagnostic_raters?id=eq.${rater.id}`, 'PATCH', { invited_at: nowISO }, { Prefer: 'return=minimal' });
-        sent++;
-        sentList.push({ name: rater.name, email: rater.email, interview: !!calendarLink });
+        const r = await sendInvitesForDiagnostic(d.id);
+        if (r.httpStatus === 200 && (r.payload.sent || 0) > 0) {
+          // Success: the core already set invites_sent_at and cleared the schedule + claim.
+          log.processed.push({ id: d.id, client: d.client_name, sent: r.payload.sent });
+        } else {
+          // Nothing sent (no uninvited raters, or a precondition failed). Release the
+          // claim so a corrected reschedule can run again; leave the schedule in place.
+          await sb(`/rest/v1/diagnostics?id=eq.${d.id}`, 'PATCH', { invites_schedule_claimed_at: null }, { Prefer: 'return=minimal' });
+          log.skipped.push({ id: d.id, reason: r.payload.error || r.payload.message || 'nothing to send' });
+        }
       } catch (err) {
-        errors.push({ name: rater.name, email: rater.email, error: err.message });
+        // Send threw: release the claim so the next run retries (per-rater invited_at
+        // guard means already-invited raters are never re-emailed).
+        await sb(`/rest/v1/diagnostics?id=eq.${d.id}`, 'PATCH', { invites_schedule_claimed_at: null }, { Prefer: 'return=minimal' });
+        log.errors.push({ id: d.id, error: err.message });
       }
     }
 
-    if (sent > 0) {
-      const updates = {
-        invites_sent_at: nowISO,
-        start_date:  nowISO.split('T')[0],   // survey opens today
-        close_date:  closeDateISO,            // closes 14 days from today
-        updated_at:  nowISO,
-      };
-      if (diag.status !== 'survey_open') updates.status = 'survey_open';
-      await sb(`/rest/v1/diagnostics?id=eq.${diagnostic_id}`, 'PATCH', updates, { Prefer: 'return=minimal' });
-    }
-
-    return res.status(200).json({ message: `Invites sent: ${sent} of ${raters.length}`, sent, sentList, errors });
-
+    return res.status(200).json({ ok: true, due: due.length, ...log });
   } catch (err) {
-    console.error('[diagnostic/send-invites] error:', err);
+    console.error('[diagnostic/send-scheduled] error:', err);
     return res.status(500).json({ error: err.message });
   }
 }

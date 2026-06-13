@@ -5405,7 +5405,11 @@ function renderDetailHeader() {
     actions.push(`<button class="dbtn dbtn-primary dbtn-sm" onclick="markSelfAssessmentPending()">Mark Self-Assessment Sent →</button>`);
   }
   if (d.status === 'self_assessment_complete' && DIAG_RATERS.filter(r=>!r.is_self).length > 0) {
-    actions.push(`<button class="dbtn dbtn-green dbtn-sm" onclick="openSendInvitesModal()">Send Rater Invites →</button>`);
+    if (!d.invites_sent_at && d.invites_scheduled_at) {
+      actions.push(`<span style="font-size:12px;color:var(--d-blue);font-weight:600;">🕒 Invites scheduled for ${diagFormatDateTime(d.invites_scheduled_at)}</span>`);
+    } else {
+      actions.push(`<button class="dbtn dbtn-green dbtn-sm" onclick="openSendInvitesModal()">Send Rater Invites →</button>`);
+    }
   }
   if (d.status === 'survey_open') {
     actions.push(`<button class="dbtn dbtn-outline dbtn-sm" onclick="closeSurveyNow()">Close Survey Early</button>`);
@@ -5630,7 +5634,8 @@ function renderRatersTab() {
   </tr>`;
   }).join('');
 
-  const canSendInvites    = d.status === 'self_assessment_complete' && nonSelf.length >= 3 && !d.invites_sent_at;
+  const invitesScheduled  = !d.invites_sent_at && !!d.invites_scheduled_at;
+  const canSendInvites    = d.status === 'self_assessment_complete' && nonSelf.length >= 3 && !d.invites_sent_at && !invitesScheduled;
   const invitesSent       = !!d.invites_sent_at;
   const raterListReady    = !!d.raters_finalized_at && !invitesSent;
   const rc = document.getElementById('raters-content');
@@ -5642,7 +5647,7 @@ function renderRatersTab() {
   // mid-survey would mix linked and unlinked responses and break the promise
   // already shown to raters.
   const anonOn = !!d.anonymous_feedback;
-  const anonLocked = !!d.invites_sent_at;
+  const anonLocked = !!d.invites_sent_at || invitesScheduled;
   const anonPanel = `
   <div class="card" style="margin-bottom:16px;border:1.5px solid ${anonOn?'var(--d-blue)':'var(--d-border)'};background:${anonOn?'var(--d-blue-light)':'var(--d-light)'};box-shadow:none;">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
@@ -5654,7 +5659,7 @@ function renderRatersTab() {
           ${anonOn
             ? 'Raters are told their answers are anonymous. Responses are stored with no link to the person — only their relationship group. Names/emails are still used for invites and reminders.'
             : 'Responses are stored linked to each rater. Turn on BEFORE sending invites if the client wants anonymous feedback.'}
-          ${anonLocked ? '<br><b>Locked — invites have been sent.</b> The mode cannot change mid-survey.' : ''}
+          ${anonLocked ? (invitesScheduled && !d.invites_sent_at ? '<br><b>Locked. Invites are scheduled to send.</b> Cancel the schedule to change the mode.' : '<br><b>Locked. Invites have been sent.</b> The mode cannot change mid-survey.') : ''}
         </div>
       </div>
       ${anonLocked ? '' : `<button class="dbtn ${anonOn?'dbtn-outline':'dbtn-primary'} dbtn-sm"
@@ -5720,6 +5725,8 @@ function renderRatersTab() {
     <div style="display:flex;gap:6px;flex-wrap:wrap;">${catBadges || '<span style="font-size:12px;color:var(--d-mid);">No raters added yet</span>'}</div>
     <div style="display:flex;gap:8px;">
       ${canSendInvites ? `<button class="dbtn dbtn-green dbtn-sm" onclick="openSendInvitesModal()">✉ Send ${nonSelf.length} Invitations →</button>` : ''}
+      ${invitesScheduled ? `<span style="font-size:12px;color:var(--d-blue);font-weight:600;">🕒 Auto-send scheduled for ${diagFormatDateTime(d.invites_scheduled_at)}</span>
+        <button class="dbtn dbtn-outline dbtn-sm" style="color:var(--d-red2);border-color:var(--d-red2);" onclick="cancelScheduledInvites()">Cancel</button>` : ''}
       ${invitesSent ? `<span style="font-size:12px;color:var(--d-green);">✓ Invites sent ${diagFormatDate(d.invites_sent_at)}</span>` : ''}
     </div>
   </div>
@@ -6316,6 +6323,10 @@ function _openSendInvitesConfirm() {
   const closeDate = new Date();
   closeDate.setDate(closeDate.getDate() + 14);
   const closeDateStr = closeDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  const pad = n => String(n).padStart(2, '0');
+  const fmtLocal = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const minLocal = fmtLocal(new Date(Date.now() + 5 * 60000));    // earliest: 5 min out
+  const defLocal = fmtLocal(new Date(Date.now() + 60 * 60000));   // default: 1 hour out
   document.getElementById('send-invites-body').innerHTML = `
     <p style="font-size:13px;margin-bottom:14px;">You are about to send survey invitations to <strong>${nonSelf.length} raters</strong> for <strong>${DIAG_SEL.client_name}</strong>.</p>
     <div class="dalert dalert-blue" style="margin-bottom:14px;"><span class="dalert-icon">📅</span>
@@ -6324,7 +6335,16 @@ function _openSendInvitesConfirm() {
     <div style="max-height:200px;overflow-y:auto;border:1px solid var(--d-border);border-radius:6px;padding:12px;">
       ${nonSelf.map(r => `<div style="font-size:13px;padding:4px 0;">${r.name} — <span style="color:var(--d-mid);">${r.email}</span></div>`).join('')}
     </div>
-    <p style="font-size:12px;color:var(--d-mid);margin-top:12px;">Each rater receives a unique survey link. This cannot be undone.</p>`;
+    <p style="font-size:12px;color:var(--d-mid);margin-top:12px;">Each rater receives a unique survey link. Use <strong>Send Invitations</strong> below to send now.</p>
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--d-border);">
+      <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:6px;">Or schedule the auto-send</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input type="datetime-local" id="invite-schedule-input" value="${defLocal}" min="${minLocal}"
+          style="font-size:13px;padding:6px 9px;border:1px solid var(--d-border);border-radius:6px;">
+        <button class="dbtn dbtn-outline dbtn-sm" onclick="scheduleSendInvites()">Schedule auto-send</button>
+      </div>
+      <div style="font-size:11px;color:var(--d-mid);margin-top:5px;">Invites auto-send within about 15 minutes of the time you pick. Scheduling locks the anonymity setting, the same as sending.</div>
+    </div>`;
   openDiagModal('send-invites-modal');
 }
 
@@ -6341,6 +6361,49 @@ async function confirmSendInvites() {
     alert('Invitations sent successfully.');
   } catch(e) {
     alert('Error sending invites: ' + e.message);
+  }
+}
+
+// Schedule the auto-send for a chosen date/time (server stores invites_scheduled_at;
+// a cron sends within ~15 min). Scheduling locks the anonymity toggle.
+async function scheduleSendInvites() {
+  const inp = document.getElementById('invite-schedule-input');
+  const val = inp && inp.value;
+  if (!val) { alert('Pick a date and time first.'); return; }
+  const when = new Date(val);
+  if (isNaN(when.getTime())) { alert('That date and time is not valid.'); return; }
+  if (when.getTime() < Date.now() - 60000) { alert('Pick a future date and time.'); return; }
+  closeDiagModal('send-invites-modal');
+  try {
+    const resp = await fetch('/api/diagnostic?action=schedule-invites', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ diagnostic_id: DIAG_SEL.id, scheduled_at: when.toISOString(), session: getCoachSessionToken() }),
+    });
+    const j = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(j.error || ('Request failed (' + resp.status + ')'));
+    if (DIAG_SEL) DIAG_SEL.invites_scheduled_at = when.toISOString();
+    ALL_DIAGS = ALL_DIAGS.map(x => x.id === DIAG_SEL.id ? DIAG_SEL : x);
+    await refreshSelected();
+    alert('Invitations scheduled for ' + when.toLocaleString() + '. They will auto-send within about 15 minutes of that time.');
+  } catch(e) {
+    alert('Error scheduling invites: ' + e.message);
+  }
+}
+
+async function cancelScheduledInvites() {
+  if (!confirm('Cancel the scheduled auto-send? You can reschedule or send manually afterward.')) return;
+  try {
+    const resp = await fetch('/api/diagnostic?action=schedule-invites', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ diagnostic_id: DIAG_SEL.id, scheduled_at: null, session: getCoachSessionToken() }),
+    });
+    const j = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(j.error || ('Request failed (' + resp.status + ')'));
+    if (DIAG_SEL) DIAG_SEL.invites_scheduled_at = null;
+    ALL_DIAGS = ALL_DIAGS.map(x => x.id === DIAG_SEL.id ? DIAG_SEL : x);
+    await refreshSelected();
+  } catch(e) {
+    alert('Error canceling schedule: ' + e.message);
   }
 }
 
@@ -7518,6 +7581,11 @@ function diagDaysUntil(dateStr) {
 function diagFormatDate(str) {
   if (!str) return '';
   return new Date(str).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+}
+
+function diagFormatDateTime(str) {
+  if (!str) return '';
+  return new Date(str).toLocaleString('en-US', { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' });
 }
 
 function diagStatusBadge(status) {
