@@ -4999,7 +4999,15 @@ async function diagLoadClients() {
       const lastCIDate  = latestCI?.submitted_at
         ? new Date(latestCI.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
         : null;
-      return { ...c, currentWeek, checkinStatus, lastCIDate };
+      // ── Stalled / "going quiet" signal (coach twin of the client finish line) ──
+      // Within the 13-week program but 2+ expected check-ins behind: either the last
+      // check-in was 2+ weeks ago, or a plan was submitted and no check-in has landed
+      // by week 2+. STALLED_WEEKS is the one knob to tune how quiet counts as quiet.
+      const STALLED_WEEKS = 2;
+      const lastCIWeek = latestCI ? latestCI.week_number : null;
+      const gapWeeks   = currentWeek == null ? 0 : (lastCIWeek != null ? (currentWeek - lastCIWeek) : currentWeek);
+      const stalled    = currentWeek != null && currentWeek <= 13 && gapWeeks >= STALLED_WEEKS;
+      return { ...c, currentWeek, checkinStatus, lastCIDate, lastCIWeek, gapWeeks, stalled };
     });
   } else {
     DIAG_COACHING_CLIENTS = [];
@@ -5049,9 +5057,13 @@ function renderDiagHome() {
     const s = DIAG_RATER_STATS[d.id];
     return s && s.total >= 4 && s.pct < 50 && d.close_date && diagDaysUntil(d.close_date) <= 6;
   });
-  const missingCIs   = DIAG_COACHING_CLIENTS.filter(c => c.checkinStatus === 'overdue');
+  // Stalled clients (gone quiet 2+ weeks) surface as their own stronger signal;
+  // exclude them from the gentler weekly missed-check-in flag so they aren't double-listed.
+  const stalledClients = DIAG_COACHING_CLIENTS.filter(c => c.stalled);
+  const stalledIds   = new Set(stalledClients.map(c => c.id));
+  const missingCIs   = DIAG_COACHING_CLIENTS.filter(c => c.checkinStatus === 'overdue' && !stalledIds.has(c.id));
   const reportsReviewReady = ALL_DIAGS.filter(d => d.report_generated_at && d.status === 'report_draft');
-  const attention    = closingUrgent.length + needReport.length + lowResponse.length + missingCIs.length + reportsReviewReady.length;
+  const attention    = closingUrgent.length + needReport.length + lowResponse.length + stalledClients.length + missingCIs.length + reportsReviewReady.length;
 
   // ── Needs Attention flags ────────────────────────────────────────────────────
   let flagsHtml = '';
@@ -5096,6 +5108,21 @@ function renderDiagHome() {
         <div style="margin-top:10px;"><button class="dbtn dbtn-outline dbtn-sm" onclick="showSection('diagnostics');openDiag('${d.id}')">View Diagnostic →</button></div>
       </div>
       <span class="dbadge ${d.tier==='pro'?'dbadge-pro':'dbadge-standard'}" style="flex-shrink:0;align-self:flex-start;">${d.tier==='pro'?'Pro':'Standard'}</span>
+    </div>`;
+  });
+
+  stalledClients.forEach(c => {
+    const gapTxt = c.lastCIWeek != null
+      ? `Last check-in was week ${c.lastCIWeek}, about ${c.gapWeeks} week${c.gapWeeks!==1?'s':''} ago.`
+      : `Plan submitted but no check-ins yet.`;
+    flagsHtml += `<div class="dflag dflag-amber">
+      <div style="font-size:22px;flex-shrink:0;margin-top:-2px;">📉</div>
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:700;color:var(--d-amber);">${c.name} has gone quiet</div>
+        <div style="font-size:12px;color:var(--d-mid);margin-top:3px;">${gapTxt} Week ${c.currentWeek} of 13. A quick nudge now keeps momentum before they drift.</div>
+        <div style="margin-top:10px;"><button class="dbtn dbtn-outline dbtn-sm" onclick="drNudgeClient('${c.id}','${(c.name||'').replace(/'/g,"\\'")}')">Send reminder</button></div>
+      </div>
+      <span class="dbadge dbadge-standard" style="flex-shrink:0;align-self:flex-start;">Coaching</span>
     </div>`;
   });
 
