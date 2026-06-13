@@ -167,6 +167,7 @@ export default async function handler(req, res) {
     case 'send-invites':         return handleSendInvites(req, res);
     case 'schedule-invites':     return handleScheduleInvites(req, res);
     case 'send-scheduled':       return handleSendScheduled(req, res);
+    case 'trial-sweep':          return handleTrialSweep(req, res);
     case 'send-leader-link':     return handleSendLeaderLink(req, res);
     case 'generate-question':    return handleGenerateQuestion(req, res);
     case 'generate-g2-question': return handleGenerateG2Question(req, res);
@@ -184,7 +185,7 @@ export default async function handler(req, res) {
     case 'submit-external-feedback': return handleSubmitExternalFeedback(req, res);
     case 'reminders':            return handleReminders(req, res);
     default:
-      return res.status(400).json({ error: `Unknown action: "${action}". Valid: send-invites, schedule-invites, send-scheduled, send-leader-link, generate-question, generate-g2-question, generate-report, generate-team-report, finalize-report, sign-report-upload, generate-dr-content, request-external-feedback, feedback-context, submit-external-feedback, reminders` });
+      return res.status(400).json({ error: `Unknown action: "${action}". Valid: send-invites, schedule-invites, send-scheduled, trial-sweep, send-leader-link, generate-question, generate-g2-question, generate-report, generate-team-report, finalize-report, sign-report-upload, generate-dr-content, request-external-feedback, feedback-context, submit-external-feedback, reminders` });
   }
 }
 
@@ -461,6 +462,99 @@ async function handleSendScheduled(req, res) {
     return res.status(200).json({ ok: true, due: due.length, ...log });
   } catch (err) {
     console.error('[diagnostic/send-scheduled] error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ACTION: trial-sweep  (cron auth: x-vercel-cron / CRON_SECRET / coach session)
+// GET|POST /api/diagnostic?action=trial-sweep
+// Identifies dormant workshop-guest (trial) accounts and, when armed/committed,
+// archives the ones past the 10-day window. SAFETY: report-only by default.
+// Live archiving happens ONLY when body.commit === true (a supervised manual run)
+// or, for the cron, when env TRIAL_SWEEP_ARMED === 'true'. The archive write is
+// double-guarded with the cohort filters so a real client can never be touched.
+// Cohort = is_workshop_participant AND in_coaching_program=false AND NOT archived
+// AND account_type='trial' AND NOT linked to any diagnostics row AND NOT activated
+// (activated = plan_submitted_at set AND >=1 check-in). Nudge emails are deferred.
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleTrialSweep(req, res) {
+  if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const isVercelCron    = req.headers['x-vercel-cron'] === '1';
+  const isManualTrigger = req.method === 'POST' && !!verifyCoachSession(req.body?.session);
+  const authHeader      = req.headers['authorization'] || '';
+  const hasSecret       = CRON_SECRET && authHeader === `Bearer ${CRON_SECRET}`;
+  if (!isVercelCron && !isManualTrigger && !hasSecret) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const commit  = req.body?.commit === true;
+  const armed   = process.env.TRIAL_SWEEP_ARMED === 'true';
+  const doArchive = commit || (isVercelCron && armed);
+
+  const ARCHIVE_DAY = 10;
+  const NUDGE_2_DAY = 8;
+  const NUDGE_1_DAY = 3;
+  const now = Date.now();
+
+  try {
+    // Cohort: trial workshop guests, not in coaching, not already archived.
+    const cohortRes = await sb(`/rest/v1/clients?is_workshop_participant=eq.true&in_coaching_program=eq.false&is_archived=eq.false&account_type=eq.trial&select=id,name,email,invited_at,created_at,plan_submitted_at&limit=2000`);
+    const cohort = await cohortRes.json() || [];
+
+    // Exclude any client linked to a diagnostics row (these are real clients).
+    const diagRes = await sb(`/rest/v1/diagnostics?client_id=not.is.null&select=client_id&limit=5000`);
+    const diagRows = await diagRes.json() || [];
+    const diagClientIds = new Set((Array.isArray(diagRows) ? diagRows : []).map(d => d.client_id));
+
+    // Activation requires >=1 check-in; fetch all check-in client_ids once.
+    const ckRes = await sb(`/rest/v1/checkins?select=client_id&limit=20000`);
+    const ckRows = await ckRes.json() || [];
+    const checkinClientIds = new Set((Array.isArray(ckRows) ? ckRows : []).map(c => c.client_id));
+
+    const buckets = { nudge_1: [], nudge_2: [], archive: [], activated: 0, diagnostic_excluded: 0 };
+    for (const c of cohort) {
+      if (diagClientIds.has(c.id)) { buckets.diagnostic_excluded++; continue; } // never touch a diagnostic client
+      const activated = !!c.plan_submitted_at && checkinClientIds.has(c.id);
+      if (activated) { buckets.activated++; continue; }
+      const base = c.invited_at || c.created_at;
+      const days = base ? Math.floor((now - new Date(base).getTime()) / 86400000) : 0;
+      const item = { id: c.id, name: c.name, email: c.email, days };
+      if (days >= ARCHIVE_DAY) buckets.archive.push(item);
+      else if (days >= NUDGE_2_DAY) buckets.nudge_2.push(item);
+      else if (days >= NUDGE_1_DAY) buckets.nudge_1.push(item);
+    }
+
+    let archived = 0;
+    if (doArchive && buckets.archive.length) {
+      const idList = buckets.archive.map(x => encodeURIComponent(x.id)).join(',');
+      // Double-guard: re-assert the cohort filters in the WHERE so the write can
+      // only ever land on trial / workshop-guest / not-in-coaching rows.
+      await sb(
+        `/rest/v1/clients?id=in.(${idList})&is_workshop_participant=eq.true&in_coaching_program=eq.false&account_type=eq.trial&is_archived=eq.false`,
+        'PATCH', { is_archived: true }, { Prefer: 'return=minimal' }
+      );
+      archived = buckets.archive.length;
+    }
+
+    return res.status(200).json({
+      ok: true,
+      mode: doArchive ? 'archive' : 'report',
+      armed, commit,
+      cohort_size: cohort.length,
+      counts: {
+        would_nudge_day3: buckets.nudge_1.length,
+        would_nudge_day8: buckets.nudge_2.length,
+        would_archive: buckets.archive.length,
+        activated: buckets.activated,
+        diagnostic_excluded: buckets.diagnostic_excluded,
+      },
+      would_archive: buckets.archive,
+      archived,
+    });
+  } catch (err) {
+    console.error('[diagnostic/trial-sweep] error:', err);
     return res.status(500).json({ error: err.message });
   }
 }

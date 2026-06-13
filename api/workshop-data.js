@@ -379,6 +379,8 @@ export default async function handler(req, res) {
               // Row org wins; otherwise inherit the engagement's org.
               name, email, title: raw.role || null, organization: rowOrg || workshopOrg,
               is_workshop_participant: true, in_coaching_program: false, is_active: true,
+              // Trial-account lifecycle: mark as a trial guest and start the day-clock.
+              account_type: 'trial', invited_at: new Date().toISOString(),
             }, { Prefer: 'return=representation' });
             const cr = await ins.json().catch(() => []);
             client = Array.isArray(cr) ? cr[0] : cr;

@@ -69,6 +69,10 @@
     {
       "path": "/api/diagnostic?action=send-scheduled",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/diagnostic?action=trial-sweep",
+      "schedule": "30 13 * * *"
     }
   ],
   "headers": [
