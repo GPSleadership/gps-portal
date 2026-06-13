@@ -710,10 +710,23 @@ function renderPendingRaters() {
     groups[r.relationship].push(r);
   });
 
+  // Fixed display order: Supervisor/Manager, Peer, Direct Report, then Board,
+  // Customers/Stakeholders, and everything else (Other) last.
+  const relRank = rel => {
+    const r = String(rel || '').toLowerCase();
+    if (r.indexOf('superv') > -1 || r.indexOf('manager') > -1 || r.indexOf('owner') > -1) return 0;
+    if (r.indexOf('peer') > -1) return 1;
+    if (r.indexOf('direct') > -1 || r.indexOf('skip') > -1) return 2;
+    if (r.indexOf('board') > -1) return 3;
+    if (r.indexOf('customer') > -1 || r.indexOf('stakeholder') > -1) return 4;
+    return 5;
+  };
+  const orderedGroups = Object.entries(groups).sort((a, b) => (relRank(a[0]) - relRank(b[0])) || a[0].localeCompare(b[0]));
+
   const anyInterview = RATERS.some(r => r.will_interview);
 
   let html = `<div style="font-size:12px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;">${RATERS.length} rater${RATERS.length !== 1 ? 's' : ''} added${anyInterview ? ' &nbsp;·&nbsp; <span style="color:#01949A;">💬 = selected for a 1:1 interview with Alex</span>' : ''}</div>`;
-  Object.entries(groups).forEach(([rel, raters]) => {
+  orderedGroups.forEach(([rel, raters]) => {
     html += `<div style="display:inline-block;font-size:11px;font-weight:800;color:#fff;background:${relColor(rel)};text-transform:uppercase;letter-spacing:.04em;padding:3px 10px;border-radius:10px;margin:14px 0 8px;">${esc(rel)} · ${raters.length}</div>`;
     raters.forEach(r => {
       html += `<div class="rater-row" id="rrow-${r.id}" style="border-left:3px solid ${relColor(r.relationship)};padding-left:10px;">
