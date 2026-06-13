@@ -1276,6 +1276,24 @@
   </div>
 </div>
 
+<!-- ══ PRE-SEND ROSTER REVIEW (email validation before invites) ══════════════ -->
+<div class="modal-overlay" id="roster-review-modal">
+  <div class="modal" style="max-width:620px;">
+    <div class="diag-modal-header">
+      <h3 id="roster-review-title">Review the roster before sending</h3>
+      <button class="dclose-btn" onclick="closeDiagModal('roster-review-modal')">✕</button>
+    </div>
+    <div class="diag-modal-body">
+      <div id="roster-review-intro" style="font-size:13px;color:var(--d-mid);margin-bottom:14px;"></div>
+      <div id="roster-review-body"></div>
+    </div>
+    <div class="diag-modal-footer">
+      <button class="dbtn dbtn-outline" onclick="closeDiagModal('roster-review-modal')">Cancel</button>
+      <button class="dbtn dbtn-green" id="roster-review-proceed">Send anyway &rarr;</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ DIAGNOSTIC CONFIRM MODAL (close survey / reopen step) ══════════════════ -->
 <div class="modal-overlay" id="diag-confirm-modal">
   <div class="modal" style="max-width:460px;border-top:none;border-radius:8px;padding:0;box-shadow:0 8px 40px rgba(0,0,0,.2);">
@@ -6072,7 +6090,228 @@ async function markSelfAssessmentPending() {
   await refreshSelected();
 }
 
+// ══ Pre-send roster email validation ════════════════════════════════════════
+// Scans a roster before invites go out and flags typo'd domains, near-duplicate
+// or transposed people, malformed addresses, and previously-bounced emails.
+// Client-side only: the roster (name/email/email_bounced) is already loaded for
+// both diagnostics and workshops. Blocks nothing, just forces eyes on the list.
+window.gpsEmailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+window.gpsFreeMailDomains = new Set(['gmail.com','googlemail.com','outlook.com','hotmail.com','live.com','yahoo.com','ymail.com','icloud.com','me.com','aol.com','proton.me','protonmail.com','msn.com']);
+
+window.gpsEsc = function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+
+window.gpsLev = function(a, b) {
+  a = a || ''; b = b || '';
+  const m = a.length, n = b.length;
+  if (!m) return n; if (!n) return m;
+  let prev = []; for (let j = 0; j <= n; j++) prev[j] = j;
+  for (let i = 1; i <= m; i++) {
+    let cur = [i];
+    for (let j = 1; j <= n; j++) {
+      const cost = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+    }
+    prev = cur;
+  }
+  return prev[n];
+};
+
+window.gpsNormName = function(s){ return String(s || '').trim().toLowerCase().replace(/\s+/g, ' '); };
+window.gpsDomainOf = function(e){ const mm = String(e || '').toLowerCase().match(/@(.+)$/); return mm ? mm[1] : ''; };
+
+// Returns [{ id, name, email, email_bounced, issues:[{type,severity,message,suggestion}] }]
+window.gpsScanRoster = function(people) {
+  people = (people || []).map(p => ({ id: p.id, name: p.name || '', email: String(p.email || '').trim(), email_bounced: !!p.email_bounced }));
+  const issues = {};
+  const add = (id, issue) => { (issues[id] = issues[id] || []).push(issue); };
+
+  // Dominant company domain among valid, non-freemail addresses.
+  const domCount = {};
+  people.forEach(p => {
+    if (!window.gpsEmailRe.test(p.email)) return;
+    const d = window.gpsDomainOf(p.email);
+    if (!d || window.gpsFreeMailDomains.has(d)) return;
+    domCount[d] = (domCount[d] || 0) + 1;
+  });
+  let dominant = '', dominantN = 0;
+  Object.keys(domCount).forEach(d => { if (domCount[d] > dominantN) { dominant = d; dominantN = domCount[d]; } });
+
+  const tldTypo = /\.(con|cmo|ocm|comm|cm|vom|xom|coma|orgg|ogr|nett|edi)$/;
+
+  people.forEach(p => {
+    if (!p.email) { add(p.id, { type:'format', severity:'high', message:'No email address. This person will not receive an invite.' }); return; }
+    if (!window.gpsEmailRe.test(p.email)) { add(p.id, { type:'format', severity:'high', message:'This does not look like a valid email address.' }); return; }
+    if (p.email_bounced) add(p.id, { type:'bounced', severity:'high', message:'This address bounced on a previous send. Confirm it is correct.' });
+    const d = window.gpsDomainOf(p.email);
+    if (tldTypo.test(d)) {
+      const fixed = d.replace(tldTypo, '.com');
+      add(p.id, { type:'domain_typo', severity:'high', message:'The domain ending looks misspelled (' + d + ').', suggestion: p.email.replace('@' + d, '@' + fixed) });
+    } else if (dominant && dominantN >= 2 && d && d !== dominant && !window.gpsFreeMailDomains.has(d)) {
+      const dist = window.gpsLev(d, dominant);
+      if (dist > 0 && dist <= 2 && Math.abs(d.length - dominant.length) <= 3) {
+        add(p.id, { type:'domain_typo', severity:'high', message:'Domain looks misspelled. Most of the roster uses ' + dominant + '.', suggestion: p.email.replace('@' + d, '@' + dominant) });
+      }
+    }
+  });
+
+  const localOf = e => { const at = e.indexOf('@'); return at > 0 ? e.slice(0, at) : e; };
+  const sortCh  = s => s.split('').sort().join('');
+  for (let i = 0; i < people.length; i++) {
+    for (let j = i + 1; j < people.length; j++) {
+      const a = people[i], b = people[j];
+      const ea = a.email.toLowerCase(), eb = b.email.toLowerCase();
+      const validBoth = window.gpsEmailRe.test(ea) && window.gpsEmailRe.test(eb);
+      if (ea && eb && ea === eb) {
+        add(a.id, { type:'duplicate', severity:'high', message:'Duplicate email. Same address as ' + (b.name || eb) + '.' });
+        add(b.id, { type:'duplicate', severity:'high', message:'Duplicate email. Same address as ' + (a.name || ea) + '.' });
+        continue;
+      }
+      let pairFlagged = false;
+      // Transposed email: same domain, local parts are anagrams (e.g. adrian / adrain).
+      if (validBoth) {
+        const la = localOf(ea), lb = localOf(eb);
+        if (la !== lb && window.gpsDomainOf(ea) === window.gpsDomainOf(eb) && la.length >= 4 && sortCh(la) === sortCh(lb)) {
+          add(a.id, { type:'near_dup', severity:'medium', message:'Looks like a transposed copy of ' + (b.name || eb) + ' (' + eb + ').' });
+          add(b.id, { type:'near_dup', severity:'medium', message:'Looks like a transposed copy of ' + (a.name || ea) + ' (' + ea + ').' });
+          pairFlagged = true;
+        }
+      }
+      // Name-based duplicate: same or very similar name, different email.
+      const nA = window.gpsNormName(a.name), nB = window.gpsNormName(b.name);
+      if (nA && nB && ea !== eb) {
+        const nl = window.gpsLev(nA, nB);
+        if (nl === 0) {
+          add(a.id, { type:'same_name', severity:'medium', message:'Same name as another person on the list, with a different email.' });
+          add(b.id, { type:'same_name', severity:'medium', message:'Same name as another person on the list, with a different email.' });
+        } else if (!pairFlagged && nl <= 2 && nA.length >= 4 && nB.length >= 4) {
+          add(a.id, { type:'near_dup', severity:'medium', message:'Very similar name to ' + (b.name || eb) + ', with a different email. Possible duplicate.' });
+          add(b.id, { type:'near_dup', severity:'medium', message:'Very similar name to ' + (a.name || ea) + ', with a different email. Possible duplicate.' });
+        }
+      }
+    }
+  }
+
+  return people.filter(p => issues[p.id]).map(p => {
+    const seen = {}; const list = [];
+    issues[p.id].forEach(it => { const k = it.type + '|' + it.message; if (!seen[k]) { seen[k] = 1; list.push(it); } });
+    return { id:p.id, name:p.name, email:p.email, email_bounced:p.email_bounced, issues:list };
+  }).sort((x, y) => (y.issues.some(i => i.severity === 'high') ? 1 : 0) - (x.issues.some(i => i.severity === 'high') ? 1 : 0));
+};
+
+// Gate: scan, then either proceed straight to send (clean) or open the review dialog.
+// opts: { label, people, getPeople, onFix(id,email), onRemove(id), onProceed }
+window.gpsPresendGate = function(opts) {
+  const flagged = window.gpsScanRoster(opts.people || (opts.getPeople ? opts.getPeople() : []));
+  if (!flagged.length) { opts.onProceed(); return; }
+  window.gpsOpenRosterReview(opts, flagged);
+};
+
+window.gpsOpenRosterReview = function(opts, flagged) {
+  const intro = document.getElementById('roster-review-intro');
+  const body  = document.getElementById('roster-review-body');
+  const proceed = document.getElementById('roster-review-proceed');
+  const total = (opts.people || (opts.getPeople ? opts.getPeople() : [])).length;
+  if (intro) intro.innerHTML = '<b>' + flagged.length + ' of ' + total + '</b> ' + (flagged.length === 1 ? 'address needs' : 'addresses need') + ' a look for ' + window.gpsEsc(opts.label || 'this engagement') + '. Nothing has been sent. Fix or remove anything wrong, or send anyway.';
+  if (proceed) proceed.textContent = 'Send anyway →';
+
+  body.innerHTML = flagged.map(function(p) {
+    const top = p.issues[0];
+    let sug = null; for (let k = 0; k < p.issues.length; k++) { if (p.issues[k].suggestion) { sug = p.issues[k]; break; } }
+    const rows = p.issues.map(function(it) {
+      const c = it.severity === 'high' ? 'var(--d-red2)' : 'var(--d-amber)';
+      const mk = it.severity === 'high' ? '⚠ ' : '• ';
+      return '<div style="font-size:12px;color:' + c + ';margin-top:6px;">' + mk + window.gpsEsc(it.message) + '</div>';
+    }).join('');
+    const fixSlot = '<div id="roster-fix-' + p.id + '" style="display:none;margin-top:8px;"></div>';
+    let sugHtml = '';
+    if (sug) {
+      const disp = window.gpsEsc(sug.suggestion);
+      const arg = String(sug.suggestion).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      sugHtml = '<div style="font-size:12px;margin-top:6px;">Suggested: <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;">' + disp + '</code> <button class="dbtn dbtn-green dbtn-sm" onclick="gpsReviewApply(\'' + p.id + '\',\'' + arg + '\')">Use this</button></div>';
+    }
+    const sev = top.severity === 'high' ? 'var(--d-red2)' : 'var(--d-amber)';
+    return '<div style="border:1px solid var(--d-border);border-left:3px solid ' + sev + ';border-radius:6px;padding:10px 12px;margin-bottom:10px;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">'
+      + '<div style="min-width:0;"><div style="font-weight:700;font-size:13px;">' + window.gpsEsc(p.name || '(no name)') + '</div>'
+      + '<div style="font-size:12px;color:var(--d-mid);word-break:break-all;">' + window.gpsEsc(p.email || '(no email)') + '</div></div>'
+      + '<div style="white-space:nowrap;"><button class="dbtn dbtn-outline dbtn-sm" onclick="gpsReviewFix(\'' + p.id + '\')">Fix</button> <button class="dbtn dbtn-outline dbtn-sm" style="color:var(--d-red2);border-color:var(--d-red2);" onclick="gpsReviewRemove(\'' + p.id + '\')">Remove</button></div>'
+      + '</div>' + rows + fixSlot + sugHtml + '</div>';
+  }).join('');
+
+  proceed.onclick = function(){ closeDiagModal('roster-review-modal'); opts.onProceed(); };
+  window._gpsReviewCtx = opts;
+  openDiagModal('roster-review-modal');
+};
+
+window.gpsReviewFix = function(id) {
+  const slot = document.getElementById('roster-fix-' + id); if (!slot) return;
+  const ctx = window._gpsReviewCtx || {};
+  const people = ctx.getPeople ? ctx.getPeople() : (ctx.people || []);
+  const person = people.find(p => String(p.id) === String(id));
+  const cur = person ? (person.email || '') : '';
+  slot.style.display = 'block';
+  slot.innerHTML = '<input id="roster-fix-input-' + id + '" type="email" value="' + window.gpsEsc(cur) + '" style="font-size:12px;padding:5px 8px;border:1px solid var(--d-border);border-radius:5px;width:60%;"> <button class="dbtn dbtn-green dbtn-sm" onclick="gpsReviewSaveInput(\'' + id + '\')">Save</button>';
+  const inp = document.getElementById('roster-fix-input-' + id); if (inp) inp.focus();
+};
+
+window.gpsReviewSaveInput = function(id) {
+  const inp = document.getElementById('roster-fix-input-' + id); if (!inp) return;
+  window.gpsReviewApply(id, inp.value.trim());
+};
+
+window.gpsReviewApply = async function(id, email) {
+  const ctx = window._gpsReviewCtx; if (!ctx) return;
+  if (!email || !window.gpsEmailRe.test(email)) { alert('That is not a valid email address.'); return; }
+  try { await ctx.onFix(id, email); } catch(e) { alert('Could not save: ' + (e.message || e)); return; }
+  window.gpsRescanReview();
+};
+
+window.gpsReviewRemove = async function(id) {
+  const ctx = window._gpsReviewCtx; if (!ctx) return;
+  if (!confirm('Remove this person from the roster? They will not be invited.')) return;
+  try { await ctx.onRemove(id); } catch(e) { alert('Could not remove: ' + (e.message || e)); return; }
+  window.gpsRescanReview();
+};
+
+window.gpsRescanReview = function() {
+  const ctx = window._gpsReviewCtx; if (!ctx) return;
+  const people = ctx.getPeople ? ctx.getPeople() : (ctx.people || []);
+  ctx.people = people;
+  const flagged = window.gpsScanRoster(people);
+  if (!flagged.length) {
+    const body = document.getElementById('roster-review-body');
+    const intro = document.getElementById('roster-review-intro');
+    if (intro) intro.innerHTML = 'All addresses look good now. You can send.';
+    if (body) body.innerHTML = '<div style="font-size:13px;color:var(--d-green);padding:8px 0;">✓ No issues remaining across ' + people.length + ' ' + (people.length === 1 ? 'person' : 'people') + '.</div>';
+    const proceed = document.getElementById('roster-review-proceed');
+    if (proceed) proceed.textContent = 'Send →';
+    return;
+  }
+  window.gpsOpenRosterReview(ctx, flagged);
+};
+
 function openSendInvitesModal() {
+  const toP = r => ({ id: r.id, name: r.name, email: r.email, email_bounced: r.email_bounced });
+  window.gpsPresendGate({
+    label: (DIAG_SEL && DIAG_SEL.client_name) || 'this leader',
+    people: DIAG_RATERS.filter(r => !r.is_self).map(toP),
+    getPeople: () => DIAG_RATERS.filter(r => !r.is_self).map(toP),
+    onFix: async (id, email) => {
+      await cdUpdate('diagnostic_raters', { email: email, email_bounced: false }, { eq: { id } });
+      const r = DIAG_RATERS.find(x => x.id === id);
+      if (r) { r.email = email; r.email_bounced = false; }
+      if (typeof renderRatersTab === 'function') renderRatersTab();
+    },
+    onRemove: async (id) => {
+      await cdDelete('diagnostic_raters', { eq: { id } });
+      DIAG_RATERS = DIAG_RATERS.filter(x => x.id !== id);
+      if (typeof renderRatersTab === 'function') renderRatersTab();
+    },
+    onProceed: _openSendInvitesConfirm,
+  });
+}
+
+function _openSendInvitesConfirm() {
   const nonSelf = DIAG_RATERS.filter(r => !r.is_self);
   const closeDate = new Date();
   closeDate.setDate(closeDate.getDate() + 14);
@@ -8402,11 +8641,25 @@ async function drSendSponsor(sponsorId){
       wsLoadRoster(); document.getElementById('wsUpload').disabled=false;
     }catch(e){ out.textContent=e.message; }
   }
+  function _wsPresendOpts(onProceed){
+    var toP=function(p){return {id:p.id,name:p.name,email:p.email,email_bounced:p.email_bounced};};
+    return {
+      label:(WS.cur&&(WS.cur.name||WS.cur.client_name))||'this workshop',
+      people:(WS.parts||[]).map(toP),
+      getPeople:function(){return (WS.parts||[]).map(toP);},
+      onFix:async function(id,email){ await cdUpdate('workshop_participants',{email:email,email_bounced:false},{eq:{id:id}}); var p=WS.parts.find(function(x){return x.id===id;}); if(p){p.email=email;p.email_bounced=false;} wsLoadRoster(); },
+      onRemove:async function(id){ await cdDelete('workshop_participants',{eq:{id:id}}); WS.parts=WS.parts.filter(function(x){return x.id!==id;}); wsLoadRoster(); },
+      onProceed:onProceed
+    };
+  }
   async function wsSendSurveyEmails(){
     var total=WS.parts.length;
     if(!total){ toast('Upload a roster first.'); return; }
+    window.gpsPresendGate(_wsPresendOpts(_wsDoSendSurveyEmails));
+  }
+  async function _wsDoSendSurveyEmails(){
     if(!confirm('Send survey emails to all not-yet-invited participants?')) return;
-    try{ var r=await wsData('send-survey-emails',{workshop_id:WS.cur.id}); toast('Sent '+r.sent+' emails ('+r.skipped+' skipped — already invited or no email).'); wsLoadRoster(); }catch(e){ toast(e.message); }
+    try{ var r=await wsData('send-survey-emails',{workshop_id:WS.cur.id}); toast('Sent '+r.sent+' emails ('+r.skipped+' skipped, already invited or no email).'); wsLoadRoster(); }catch(e){ toast(e.message); }
   }
   function wsRenderQR(){ var box=document.getElementById('wsQrBox'); if(!box) return; var ph=(WS.cur&&WS.cur.engagement_kind==='assessment')?'pre':((document.getElementById('wsQrPhase')||{}).value||'post'); var url=BASE+'/workshop-survey?room='+encodeURIComponent(WS.cur.room_survey_token||'')+'&phase='+ph; var lk=document.getElementById('wsQrLink'); if(lk) lk.textContent=url; box.innerHTML=''; if(typeof QRCode==='undefined'){ box.textContent='QR library loading…'; return; } new QRCode(box,{ text:url, width:184, height:184, colorDark:'#004369', colorLight:'#ffffff' }); }
   function wsDownloadQR(){ var box=document.getElementById('wsQrBox'); if(!box) return; var cv=box.querySelector('canvas'), img=box.querySelector('img'); var data=cv?cv.toDataURL('image/png'):(img?img.src:null); if(!data){ toast('Generate the QR first.'); return; } var a=document.createElement('a'); a.href=data; a.download='workshop-post-survey-qr.png'; document.body.appendChild(a); a.click(); a.remove(); }
@@ -8427,7 +8680,8 @@ async function drSendSponsor(sponsorId){
     };
   }
   async function wsUploadRoster(){ var out=document.getElementById('wsRosterOut'); var fileEl=document.getElementById('wsRosterXlsx'); if(fileEl&&fileEl.files&&fileEl.files[0]){ return wsUploadRosterFile(fileEl.files[0]); } var rows=parseCsv(document.getElementById('wsRosterCsv').value).map(_rosterMapRow).filter(function(r){return r.email&&r.name;}); if(!rows.length){ out.textContent='No valid rows found — paste rows with a Name and Email, or pick a file below.'; return; } out.textContent='Uploading '+rows.length+' people…'; document.getElementById('wsUpload').disabled=true; try{ var r=await wsData('upload-roster',{ workshop_id:WS.cur.id, rows:rows }); out.textContent='Done — '+r.created+' new profiles, '+r.linked+' linked, '+r.skipped+' skipped.'; wsOpen(WS.cur.id); }catch(e){ out.textContent=e.message; document.getElementById('wsUpload').disabled=false; } }
-  async function wsSendInvites(phase){ if(!confirm('Send '+phase+'-survey invites to all '+WS.parts.length+' participants?')) return; try{ var r=await wsData('send-invites',{ workshop_id:WS.cur.id, phase:phase }); toast('Sent '+r.sent+' of '+r.total+' '+phase+'-survey invites.'); wsOpen(WS.cur.id); }catch(e){ toast(e.message); } }
+  async function wsSendInvites(phase){ window.gpsPresendGate(_wsPresendOpts(function(){ _wsDoSendInvites(phase); })); }
+  async function _wsDoSendInvites(phase){ if(!confirm('Send '+phase+'-survey invites to all '+WS.parts.length+' participants?')) return; try{ var r=await wsData('send-invites',{ workshop_id:WS.cur.id, phase:phase }); toast('Sent '+r.sent+' of '+r.total+' '+phase+'-survey invites.'); wsOpen(WS.cur.id); }catch(e){ toast(e.message); } }
 
   // Anonymous-feedback toggle (hard cut, same model as diagnostics). Locked once
   // the pre-survey opens — switching mid-survey would mix linked and unlinked rows.
