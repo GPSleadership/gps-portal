@@ -1958,6 +1958,9 @@
     .plan-card .plan-detail { display: none; }
     .plan-card.expanded .plan-detail { display: block; }
     .plan-card.expanded .plan-collapsed-summary .plan-item { display: none; }
+    /* Collapsible stakeholder card: reference info, collapsed by default. */
+    .stakeholder-card .stakeholder-detail { display: none; }
+    .stakeholder-card.expanded .stakeholder-detail { display: block; }
     /* Compact progress: show only the two most recent rows on mobile. */
     .progress-card .progress-row.beyond-recent { display: none; }
     .progress-card.show-all .progress-row.beyond-recent { display: table-row; }
@@ -1966,8 +1969,10 @@
     body.checkin-focus .portal-sidebar { display: none !important; }
     body.checkin-focus .checkin-card { margin-top: 8px; }
   }
-  /* Desktop: collapsed-summary, plan toggle, and check-in back button never show. */
-  .plan-collapsed-summary, .plan-toggle-btn, .checkin-back-btn { display: none; }
+  /* Desktop: collapsed-summary, plan toggle, check-in back button, and the
+     stakeholder collapse controls never show — desktop stays as-is. */
+  .plan-collapsed-summary, .plan-toggle-btn, .checkin-back-btn,
+  .stakeholder-collapsed-summary, .stakeholder-toggle-btn { display: none; }
   @media (max-width: 767px) {
     .plan-collapsed-summary { display: block; }
     .plan-toggle-btn {
@@ -1979,6 +1984,11 @@
       font-weight: 700; font-size: 13px; cursor: pointer; font-family: inherit; margin-bottom: 8px;
     }
     body.checkin-focus .checkin-back-btn { display: inline-block; }
+    .stakeholder-collapsed-summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .stakeholder-toggle-btn {
+      display: inline-block; background: none; border: none; color: var(--teal);
+      font-weight: 700; font-size: 13px; cursor: pointer; font-family: inherit; padding: 0; white-space: nowrap;
+    }
   }
   .coach-card-name {
     font-family: 'Montserrat', sans-serif;
@@ -4320,6 +4330,14 @@ function togglePlanCard(btn) {
   if (!card) return;
   const expanded = card.classList.toggle('expanded');
   btn.textContent = expanded ? 'Hide full plan ▴' : 'Show full plan ▾';
+}
+
+// Collapsible stakeholder card (mobile): reference info, kept out of the way.
+function toggleStakeholderCard(btn) {
+  const card = btn.closest('.stakeholder-card');
+  if (!card) return;
+  const expanded = card.classList.toggle('expanded');
+  btn.innerHTML = expanded ? 'Hide &#9652;' : 'Show who &#9662;';
 }
 
 function renderPortal(client, checkins) {
@@ -7130,14 +7148,20 @@ function renderClientStakeholderCard(clientId, stakeholders) {
     }).join('');
 
     section.innerHTML = `
-      <div class="card" style="margin-top:16px;border-left:4px solid #2e7d32;">
+      <div class="card stakeholder-card" style="margin-top:16px;border-left:4px solid #2e7d32;">
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
           <div class="card-title" style="margin:0;">Your Stakeholders</div>
           <span style="background:#e8f5e9;color:#2e7d32;font-size:11px;font-weight:700;padding:3px 10px;border-radius:10px;">✓ Confirmed</span>
         </div>
-        <div class="card-subtitle" style="margin-bottom:14px;">Your coach will collect feedback from these people at three points in your 90-day program.</div>
-        ${rows}
-        <p style="font-size:12px;color:var(--gray-600);margin-top:12px;margin-bottom:0;">Need to make a change? Contact Alex at <a href="mailto:alex@gpsleadership.org" style="color:var(--teal);">alex@gpsleadership.org</a>.</p>
+        <div class="stakeholder-collapsed-summary">
+          <div style="font-size:13px;color:var(--gray-700);">${confirmed.length} ${confirmed.length===1?'person':'people'} will rate your progress at day 30 and day 90.</div>
+          <button class="stakeholder-toggle-btn" onclick="toggleStakeholderCard(this)">Show who &#9662;</button>
+        </div>
+        <div class="stakeholder-detail">
+          <div class="card-subtitle" style="margin-bottom:14px;">Your coach will collect feedback from these people at three points in your 90-day program.</div>
+          ${rows}
+          <p style="font-size:12px;color:var(--gray-600);margin-top:12px;margin-bottom:0;">Need to make a change? Contact Alex at <a href="mailto:alex@gpsleadership.org" style="color:var(--teal);">alex@gpsleadership.org</a>.</p>
+        </div>
       </div>`;
     return;
   }
