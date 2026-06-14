@@ -314,6 +314,16 @@ export default async function handler(req, res) {
 
   const client = clients[0];
 
+  // Org logo (matched by organization name) — shown co-branded in the portal header.
+  // Non-blocking: if this errors or the org has no logo, the portal renders without it.
+  if (client.organization) {
+    try {
+      const olr = await sbSecret(`/rest/v1/organizations?name=eq.${encodeURIComponent(client.organization)}&select=logo_url&limit=1`);
+      const orows = olr.ok ? await olr.json() : [];
+      if (orows[0] && orows[0].logo_url) client.org_logo_url = orows[0].logo_url;
+    } catch (_) { /* logo is optional */ }
+  }
+
   // Allow coaching clients, workshop sponsors, and workshop participants through.
   // The client portal renders the right view for each (a sponsor-only client lands
   // on their Workshops tab). Only true non-members are denied.

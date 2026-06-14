@@ -126,6 +126,9 @@ input:focus,select:focus{outline:none;border-color:var(--blue);}
     <div class="header-name" id="header-name">Executive Leadership Diagnostic</div>
     <div class="header-sub" id="header-sub">GPS Leadership Solutions</div>
   </div>
+  <div id="orgLogoWrap" style="display:none;margin-left:auto;padding-left:16px;border-left:1px solid rgba(255,255,255,0.2);">
+    <img id="orgLogoImg" src="" alt="" style="max-height:38px;max-width:130px;object-fit:contain;vertical-align:middle;border-radius:3px;background:rgba(255,255,255,0.95);padding:3px 6px;" />
+  </div>
 </div>
 
 <!-- ── LOADING ── -->
@@ -324,6 +327,12 @@ function renderPortal() {
   document.getElementById('header-name').textContent = d.client_name;
   document.getElementById('header-sub').textContent  =
     [d.client_title, d.client_org].filter(Boolean).join(' · ') || 'GPS Leadership Diagnostic';
+
+  // Org logo (matched by organization name server-side; optional)
+  if (d.org_logo_url) {
+    const lw = document.getElementById('orgLogoWrap'), li = document.getElementById('orgLogoImg');
+    if (lw && li) { li.src = d.org_logo_url; li.alt = (d.client_org || '') + ' logo'; lw.style.display = 'block'; }
+  }
 
   // Welcome
   const now = new Date();
@@ -578,6 +587,11 @@ function renderStatusCards() {
   const el  = document.getElementById('status-cards');
   let html  = '';
 
+  // Org logo chip co-branding the report card header (optional; matched by org name server-side)
+  const orgChip = DIAGNOSTIC.org_logo_url
+    ? `<img src="${DIAGNOSTIC.org_logo_url}" alt="${(DIAGNOSTIC.client_org || '').replace(/"/g, '&quot;')} logo" style="max-height:30px;max-width:96px;object-fit:contain;margin-right:12px;" />`
+    : '';
+
   if (s === 'survey_open') {
     const done  = RATERS.filter(r => r.completed_at).length;
     const total = RATERS.length;
@@ -619,7 +633,7 @@ function renderStatusCards() {
         <div style="display:flex;align-items:center;justify-content:space-between;">
           <div><div class="card-title">Your Diagnostic Report</div>
           <div class="card-sub">${DIAGNOSTIC.report_finalized_at ? 'Finalized ' + formatDate(DIAGNOSTIC.report_finalized_at) : 'Report ready'}</div></div>
-          <span class="badge badge-open">Ready</span>
+          <div style="display:flex;align-items:center;">${orgChip}<span class="badge badge-open">Ready</span></div>
         </div>
         <div style="margin-top:14px;">
           <a href="${DIAGNOSTIC.report_pdf_url}" target="_blank"
@@ -638,7 +652,7 @@ function renderStatusCards() {
         <div style="display:flex;align-items:center;justify-content:space-between;">
           <div><div class="card-title">Your Diagnostic Report</div>
           <div class="card-sub">Finalized — Alex will share this at your debrief</div></div>
-          <span class="badge badge-open">Ready</span>
+          <div style="display:flex;align-items:center;">${orgChip}<span class="badge badge-open">Ready</span></div>
         </div>
         <div style="margin-top:14px;font-size:13px;color:var(--mid);line-height:1.6;">
           Alex will walk you through your full report at your debrief session${DIAGNOSTIC.debrief_date ? ' on ' + formatDate(DIAGNOSTIC.debrief_date) : ''}.
@@ -652,7 +666,7 @@ function renderStatusCards() {
         <div style="display:flex;align-items:center;justify-content:space-between;">
           <div><div class="card-title">Your Diagnostic Report</div>
           <div class="card-sub">Available by end of day on ${releaseDate}</div></div>
-          <span class="badge" style="background:#f1f5f9;color:#64748b;">Upcoming</span>
+          <div style="display:flex;align-items:center;">${orgChip}<span class="badge" style="background:#f1f5f9;color:#64748b;">Upcoming</span></div>
         </div>
         <div style="margin-top:14px;font-size:13px;color:var(--mid);line-height:1.6;">
           Your report will be available by end of business day Eastern on ${releaseDate} — the evening before your session${DIAGNOSTIC.debrief_date ? ' on ' + formatDate(DIAGNOSTIC.debrief_date) : ''}.

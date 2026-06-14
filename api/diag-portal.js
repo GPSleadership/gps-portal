@@ -75,6 +75,14 @@ export default async function handler(req, res) {
         // Only the leader's own self row carries a token (so they can self-assess).
         // Never hand the leader other raters' survey tokens.
         const raters = rrRows.map(r => r.is_self ? r : { ...r, token: undefined });
+        // Org logo (matched by organization name) — shown in the leader portal header.
+        if (diag.client_org) {
+          try {
+            const olr = await sb(`/rest/v1/organizations?name=eq.${encodeURIComponent(diag.client_org)}&select=logo_url&limit=1`);
+            const orows = olr.ok ? await olr.json() : [];
+            if (orows[0] && orows[0].logo_url) diag.org_logo_url = orows[0].logo_url;
+          } catch (_) { /* logo is optional */ }
+        }
         return res.status(200).json({ ok: true, diagnostic: diag, raters });
       }
       case 'leader-add-rater': {
