@@ -1913,6 +1913,44 @@
     display: block;
   }
   .coach-card-body { padding: 20px; }
+
+  /* ── Mobile "My Plan" action-first elements (hidden on desktop) ── */
+  .mobile-only { display: none; }
+  .action-center {
+    background: #fff;
+    border: 1px solid var(--gray-300);
+    border-left: 4px solid var(--teal);
+    border-radius: 12px;
+    padding: 20px;
+    margin: 16px 0 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.05);
+  }
+  .ac-primary-btn {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--teal);
+    color: #fff;
+    border: none;
+    border-radius: 9px;
+    padding: 14px 16px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: center;
+  }
+  .ac-primary-btn:hover { background: #017e83; }
+  .coaching-teaser {
+    background: #fff;
+    border: 1px solid var(--gray-300);
+    border-radius: 12px;
+    padding: 18px;
+    margin-top: 18px;
+  }
+  @media (max-width: 767px) {
+    .mobile-only { display: block; }
+  }
   .coach-card-name {
     font-family: 'Montserrat', sans-serif;
     font-size: 16px;
@@ -4149,8 +4187,102 @@ function parseLocalDate(str) {
 // ─────────────────────────────────────────────
 // PORTAL — RETURNING CLIENT VIEW
 // ─────────────────────────────────────────────
+// ── Mobile "My Plan" status model ───────────────────────────────────────────
+// Derives a single status used to drive the action-first mobile layout.
+// Desktop rendering is unchanged; these only feed the mobile Action Center + cards.
+function getClientStatus(client) {
+  const now = new Date();
+  const ended = client.coaching_program_end_date && !isNaN(new Date(client.coaching_program_end_date)) && new Date(client.coaching_program_end_date) < now;
+  if (client.is_coaching_client && !ended) return 'coaching_client';
+  // Alumni: coaching explicitly ended, OR not currently coaching but had a locked
+  // plan whose ~13-week window is well past (heuristic, since there's no hard flag).
+  const windowPast = client.plan_submitted_at && client.plan_start_date &&
+    !isNaN(new Date(client.plan_start_date)) && (now - new Date(client.plan_start_date)) > 1000*60*60*24*100;
+  if (ended || (!client.is_coaching_client && client.plan_submitted_at && windowPast)) return 'alumni';
+  const hasDiagnostic = !!(window._clientHasDiagnostic || client.diagnostic_id || client.tp3_pillar);
+  if (hasDiagnostic && !client.is_workshop_participant) return 'diagnostic_only';
+  if (client.is_workshop_participant && !client.plan_submitted_at) return 'workshop_only';
+  if (hasDiagnostic) return 'diagnostic_only';
+  return client.plan_submitted_at ? 'coaching_client' : 'diagnostic_only';
+}
+
+function getStatusDescription(status) {
+  return {
+    coaching_client: 'in an active 1:1 coaching engagement',
+    diagnostic_only: 'a diagnostic client',
+    workshop_only:   'a workshop participant',
+    alumni:          'a GPS coaching alumnus',
+  }[status] || 'a GPS Leadership client';
+}
+
+// Action Center — the top card on mobile that answers "what should I do next?"
+function renderActionCenter(client, status, currentWeek, checkins) {
+  const first = client.preferred_name || (client.name || '').split(' ')[0] || 'there';
+  const done  = (checkins || []).length;
+  let title, body, btnLabel, btnAction, secondary = '';
+
+  if (status === 'coaching_client') {
+    title = 'This week in your 90-Day Leadership Impact Plan';
+    const sessionLine = client.next_session_at ? `<div style="font-size:12px;color:var(--gray-600);margin-top:6px;">Next session: ${wizEsc(new Date(client.next_session_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))}</div>` : '';
+    body = `Week ${currentWeek} of 13. ${done} check-in${done===1?'':'s'} logged so far.${sessionLine ? '' : ''}`;
+    btnLabel = "Complete this week's coaching check-in";
+    btnAction = 'openMobileCheckin()';
+    body += sessionLine;
+  } else if (status === 'diagnostic_only') {
+    title = 'Move forward from your diagnostic';
+    body = 'You completed your Executive Diagnostic. Let\'s turn that insight into action.';
+    btnLabel = 'Review your diagnostic and next steps';
+    btnAction = "showPortalTab('diagnostic')";
+    secondary = `<a onclick="openCoachModal()" style="display:inline-block;margin-top:10px;font-size:12px;color:var(--teal);font-weight:600;cursor:pointer;text-decoration:underline;">Curious about coaching? Learn more.</a>`;
+  } else if (status === 'workshop_only') {
+    title = 'Apply what you learned in your workshop';
+    body = 'Use your toolkit to put the ideas from your session into practice this week.';
+    btnLabel = 'Open your workshop toolkit';
+    btnAction = "showPortalTab('resources')";
+  } else { // alumni
+    title = 'Stay sharp on your leadership habits';
+    body = 'You still have full access to your 90-day plan and your leadership tools. Come back any time.';
+    btnLabel = 'Review your 90-day plan and tools';
+    btnAction = "showPortalTab('resources')";
+  }
+
+  return `
+  <div class="action-center mobile-only">
+    <div style="font-size:13px;color:var(--gray-600);">Welcome back, ${wizEsc(first)}.</div>
+    <div style="font-size:12px;color:var(--gray-500);margin:2px 0 14px;">You are currently: ${getStatusDescription(status)}.</div>
+    <div style="font-size:16px;font-weight:800;color:var(--navy,#004369);font-family:'Montserrat',sans-serif;">${title}</div>
+    <div style="font-size:13px;color:var(--gray-700);line-height:1.5;margin:6px 0 14px;">${body}</div>
+    <button class="ac-primary-btn" onclick="${btnAction}">${btnLabel}</button>
+    ${secondary}
+  </div>`;
+}
+
+// Non-coaching "About Alex & 1:1 coaching" teaser (mobile, above resources link).
+function renderCoachingTeaser() {
+  return `
+  <div class="coaching-teaser mobile-only">
+    <div style="font-size:14px;font-weight:800;color:var(--navy,#004369);font-family:'Montserrat',sans-serif;margin-bottom:6px;">About Alex &amp; 1:1 coaching</div>
+    <div style="font-size:13px;color:var(--gray-700);line-height:1.55;margin-bottom:12px;">Alex is an executive coach and organizational psychologist who helps senior leaders install simple leadership operating systems.</div>
+    <a class="ac-primary-btn" href="https://api.leadconnectorhq.com/widget/bookings/30-minute-coaching-discovery-call" target="_blank" rel="noopener noreferrer" style="text-decoration:none;display:inline-block;">Explore coaching with Alex</a>
+  </div>`;
+}
+
+// Mobile-only: focus the weekly check-in. Reuses the existing in-page form by
+// switching the portal into a check-in-only view and scrolling to it.
+function openMobileCheckin() {
+  document.body.classList.add('checkin-focus');
+  const form = document.querySelector('.checkin-card') || document.getElementById('checkinForm');
+  if (form) form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  else window.scrollTo({ top: 0 });
+}
+function closeMobileCheckin() {
+  document.body.classList.remove('checkin-focus');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 function renderPortal(client, checkins) {
   currentClient = client; // store for use in submitFormA
+  const mobileStatus = getClientStatus(client); // drives the mobile action-first layout
   const startDate  = parseLocalDate(client.plan_start_date);
   const today      = new Date();
   const daysDiff   = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
@@ -4208,6 +4340,7 @@ function renderPortal(client, checkins) {
   document.getElementById('mainContent').innerHTML = `
     <div class="portal-layout">
     <div class="portal-main">
+    ${renderActionCenter(client, mobileStatus, currentWeek, checkins)}
     ${finishLineHtml}
     ${alreadyCheckedInThisWeek && !isEngagementComplete ? `
       <div class="success-banner" style="margin-top:24px;">
@@ -4273,8 +4406,16 @@ function renderPortal(client, checkins) {
     <!-- HISTORY -->
     ${checkins.length > 0 ? renderHistory(checkins, client) : ''}
 
-    <!-- RESOURCES -->
+    <!-- RESOURCES (hidden on mobile via CSS; surfaced in the Resources tab) -->
     ${renderResources(client)}
+
+    <!-- Non-coaching coaching teaser (mobile, above the resources link) -->
+    ${mobileStatus !== 'coaching_client' ? renderCoachingTeaser() : ''}
+
+    <!-- Mobile link to the Resources tab (tools + full About Alex) -->
+    <div class="mobile-only" style="text-align:center;margin:18px 0 4px;">
+      <a onclick="showPortalTab('resources')" style="font-size:13px;color:var(--teal);font-weight:700;cursor:pointer;text-decoration:underline;">View leadership tools and about Alex &rarr;</a>
+    </div>
     </div><!-- /portal-main -->
 
     <aside class="portal-sidebar">
@@ -5578,7 +5719,7 @@ function renderResources(client) {
     : '';
 
   return `
-    <div class="card" style="margin-top:24px;">
+    <div class="card" id="resourcesSection" style="margin-top:24px;scroll-margin-top:72px;">
       <div class="card-title">Executive Leadership Toolkit</div>
       <div class="card-subtitle">Tools and resources from your GPS engagement.</div>
 
@@ -5885,6 +6026,12 @@ function showPortalTab(tab) {
   } else if (tab === 'workshop') {
     if (wsPanel) wsPanel.classList.add('active');
     if (tabWS)   tabWS.classList.add('active');
+  } else if (tab === 'resources') {
+    // Interim: tools live in the Resources section of the plan view. Show the plan
+    // and scroll to the toolkit + coach bio. (Dedicated Resources tab is a follow-on.)
+    mainContent.style.display = 'block';
+    if (tabPlan) tabPlan.classList.add('active');
+    setTimeout(function(){ const t = document.getElementById('resourcesSection'); if (t) t.scrollIntoView({ behavior:'smooth', block:'start' }); }, 60);
   } else {
     // Check terms consent before showing Q&A
     const needsTerms = !currentClient ||
