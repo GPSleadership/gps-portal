@@ -845,6 +845,7 @@
     </div>
     <div id="subnav-comms" class="section-subnav" style="display:none;">
       <div class="section-subtab active" id="sub-emails"    onclick="showSection('emails')">Email Log</div>
+      <div class="section-subtab"        id="sub-messages"  onclick="showSection('messages')">Client Messages <span id="msgNavBadge" style="display:none;background:#C0392B;color:#fff;border-radius:9px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:4px;">0</span></div>
       <div class="section-subtab"        id="sub-templates" onclick="showSection('templates')">Templates &amp; Automation</div>
     </div>
     <div id="subnav-settings" class="section-subnav" style="display:none;">
@@ -1034,6 +1035,25 @@
         <div id="installHelpBox" style="font-size:13px;color:var(--gray-600);">Loading…</div>
       </div>
     </div><!-- /section-security -->
+
+    <!-- ═══ CLIENT MESSAGES SECTION ═══ -->
+    <div id="section-messages" style="display:none;">
+      <div class="toolbar" style="margin-bottom:16px;">
+        <div class="toolbar-title">Client Messages</div>
+        <div class="toolbar-right">
+          <label style="font-size:12px;color:#5a6b76;margin-right:6px;"><input type="checkbox" id="msgNeedsReplyOnly" onchange="renderCoachInbox()" style="vertical-align:middle;" /> Needs reply only</label>
+          <button class="btn-secondary" onclick="loadCoachInbox()">↻ Refresh</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap;">
+        <div id="msgInboxList" style="flex:0 0 320px;max-width:100%;background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.06);max-height:72vh;overflow:auto;">
+          <div style="padding:24px;text-align:center;color:#5a6b76;font-size:13px;">Loading…</div>
+        </div>
+        <div id="msgThreadPane" style="flex:1;min-width:280px;background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.06);padding:18px;min-height:200px;">
+          <div style="color:#5a6b76;font-size:13px;text-align:center;padding:40px 0;">Select a conversation to view and reply.</div>
+        </div>
+      </div>
+    </div>
 
     <!-- ═══ EMAIL TEMPLATES SECTION ═══ -->
     <div id="section-templates" style="display:none;">
@@ -3635,15 +3655,101 @@ document.getElementById('addAdminModal').addEventListener('click', function(e) {
 let _currentSection = 'dashboard';
 
 // Refactored IA: 5 top-level groups, each mapping to one or more underlying sections.
-var GROUP_OF = { dashboard:'today', clients:'clients', diagnostics:'diagteams', decisionroom:'diagteams', emails:'comms', templates:'comms', admins:'settings', security:'settings', workshops:'workshops', organizations:'organizations' };
+var GROUP_OF = { dashboard:'today', clients:'clients', diagnostics:'diagteams', decisionroom:'diagteams', emails:'comms', messages:'comms', templates:'comms', admins:'settings', security:'settings', workshops:'workshops', organizations:'organizations' };
 var GROUP_DEFAULT = { today:'dashboard', clients:'clients', diagteams:'diagnostics', comms:'emails', settings:'admins', workshops:'workshops', organizations:'organizations' };
 function showGroup(group){ showSection(GROUP_DEFAULT[group] || 'dashboard'); }
+
+// ── Client Messages (Contact Your Coach — coach side) ───────────────────────
+var _coachInbox = [], _coachConvOpen = null;
+function msgTypeLabel(t){ return ({quick_question:'Quick question',prep_for_session:'Session prep',progress_update:'Update',win:'Win',logistics:'Logistics'})[t] || 'Message'; }
+function msgStatusLabel(s){ return ({open:'Open',waiting_on_client:'Waiting on client',closed:'Closed'})[s] || s; }
+function msgFmtTime(iso){ if(!iso) return ''; try { return new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); } catch(_) { return ''; } }
+async function refreshMsgBadge(){
+  try { var r = await coachData({ action:'coach-msg-inbox' }); _coachInbox = r.conversations || []; updateMsgBadge(); } catch(_){ /* badge is best-effort */ }
+}
+async function loadCoachInbox(){
+  var host = document.getElementById('msgInboxList'); if(!host) return;
+  host.innerHTML = '<div style="padding:24px;text-align:center;color:#5a6b76;font-size:13px;">Loading…</div>';
+  try { var r = await coachData({ action:'coach-msg-inbox' }); _coachInbox = r.conversations || []; }
+  catch(e){ host.innerHTML = '<div style="padding:20px;color:#dc2626;font-size:13px;">'+esc(e.message)+'</div>'; return; }
+  updateMsgBadge();
+  renderCoachInbox();
+}
+function updateMsgBadge(){
+  var n = _coachInbox.filter(function(c){ return c.needs_reply; }).length;
+  var b = document.getElementById('msgNavBadge'); if(!b) return;
+  b.textContent = n; b.style.display = n > 0 ? '' : 'none';
+}
+function renderCoachInbox(){
+  var host = document.getElementById('msgInboxList'); if(!host) return;
+  var needsOnly = document.getElementById('msgNeedsReplyOnly') && document.getElementById('msgNeedsReplyOnly').checked;
+  var list = _coachInbox.filter(function(c){ return needsOnly ? c.needs_reply : true; });
+  if(!list.length){ host.innerHTML = '<div style="padding:24px;text-align:center;color:#5a6b76;font-size:13px;">'+(needsOnly?'Nothing needs a reply right now.':'No client messages yet.')+'</div>'; return; }
+  host.innerHTML = list.map(function(c){
+    var active = c.id === _coachConvOpen;
+    var badges = '';
+    if(c.overdue) badges += '<span style="background:#C0392B;color:#fff;border-radius:5px;padding:1px 7px;font-size:10.5px;font-weight:700;margin-left:6px;">Overdue '+c.overdue_days+'d</span>';
+    else if(c.needs_reply) badges += '<span style="background:#E9A23B;color:#3a2a00;border-radius:5px;padding:1px 7px;font-size:10.5px;font-weight:700;margin-left:6px;">Needs reply</span>';
+    if(c.unread) badges += '<span style="background:#1A3D6E;color:#fff;border-radius:9px;padding:1px 7px;font-size:10.5px;font-weight:700;margin-left:6px;">'+c.unread+'</span>';
+    return '<div onclick="openCoachConversation(\''+c.id+'\')" style="padding:12px 14px;border-bottom:1px solid #eef1f2;cursor:pointer;'+(active?'background:#eef6f5;':'')+'">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;"><span style="font-weight:700;color:#004369;font-size:13px;">'+esc(c.client_name)+'</span>'+badges+'</div>'
+      + '<div style="font-size:11px;color:#8a97a0;margin-top:2px;">'+esc(c.organization||'')+(c.organization?' · ':'')+msgStatusLabel(c.status)+' · '+msgFmtTime(c.last_message_at)+'</div>'
+      + '<div style="font-size:12px;color:#5a6b76;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+(c.last_sender==='coach'?'You: ':'')+esc(c.last_preview||'')+'</div>'
+      + '</div>';
+  }).join('');
+}
+async function openCoachConversation(convId){
+  _coachConvOpen = convId;
+  renderCoachInbox();
+  var pane = document.getElementById('msgThreadPane'); if(!pane) return;
+  pane.innerHTML = '<div style="color:#5a6b76;font-size:13px;text-align:center;padding:40px 0;">Loading…</div>';
+  var conv = _coachInbox.find(function(c){ return c.id === convId; }) || {};
+  var messages = [];
+  try { var r = await coachData({ action:'coach-msg-thread', conversation_id: convId }); messages = r.messages || []; }
+  catch(e){ pane.innerHTML = '<div style="padding:20px;color:#dc2626;font-size:13px;">'+esc(e.message)+'</div>'; return; }
+  var thread = messages.map(function(m){
+    var mine = m.sender_role === 'coach';
+    var who = mine ? 'You' : esc(conv.client_name||'Client');
+    var bubble = mine ? 'background:#1A3D6E;color:#fff;margin-left:auto;border-bottom-right-radius:3px;' : 'background:#f1f4f6;color:#1a1a1a;margin-right:auto;border-bottom-left-radius:3px;';
+    var label = mine ? '' : msgTypeLabel(m.message_type)+' · ';
+    return '<div style="max-width:80%;padding:9px 13px;border-radius:11px;'+bubble+'font-size:13px;line-height:1.5;margin-bottom:3px;word-wrap:break-word;">'+esc(m.message_text||'').replace(/\n/g,'<br>')+'</div>'
+      + '<div style="font-size:10.5px;color:#8a97a0;margin:0 3px 11px;text-align:'+(mine?'right':'left')+';">'+who+' · '+label+msgFmtTime(m.created_at)+'</div>';
+  }).join('') || '<div style="color:#8a97a0;font-size:13px;text-align:center;padding:20px 0;">No messages.</div>';
+  pane.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;border-bottom:1px solid #eef1f2;padding-bottom:10px;margin-bottom:12px;">'
+    + '<div><span style="font-weight:800;color:#004369;font-size:15px;">'+esc(conv.client_name||'Client')+'</span> <span style="font-size:12px;color:#8a97a0;">'+esc(conv.organization||'')+'</span></div>'
+    + '<select id="msgStatusSel" onchange="setCoachConvStatus(\''+convId+'\', this.value)" style="padding:5px 8px;border:1px solid #dbe3e6;border-radius:6px;font-size:12px;">'
+      + ['open','waiting_on_client','closed'].map(function(s){ return '<option value="'+s+'"'+(conv.status===s?' selected':'')+'>'+msgStatusLabel(s)+'</option>'; }).join('')
+    + '</select></div>'
+    + '<div style="display:flex;flex-direction:column;max-height:46vh;overflow:auto;padding-right:4px;">'+thread+'</div>'
+    + '<div style="margin-top:14px;border-top:1px solid #eef1f2;padding-top:12px;">'
+      + '<textarea id="msgReplyText" rows="3" placeholder="Write your reply…" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #ccc;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;"></textarea>'
+      + '<div style="display:flex;justify-content:flex-end;margin-top:8px;"><button id="msgReplyBtn" onclick="sendCoachReply(\''+convId+'\')" style="background:#01949A;color:#fff;border:none;border-radius:7px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;">Send reply</button></div>'
+    + '</div>';
+}
+async function sendCoachReply(convId){
+  var ta = document.getElementById('msgReplyText'), btn = document.getElementById('msgReplyBtn');
+  var text = (ta.value||'').trim(); if(!text){ ta.focus(); return; }
+  btn.disabled = true; var orig = btn.textContent; btn.textContent = 'Sending…';
+  try {
+    await coachData({ action:'coach-msg-reply', conversation_id: convId, message_text: text });
+    await loadCoachInbox();
+    await openCoachConversation(convId);
+  } catch(e){
+    btn.disabled = false; btn.textContent = orig;
+    alert('Could not send reply: ' + e.message);
+  }
+}
+async function setCoachConvStatus(convId, status){
+  try { await coachData({ action:'coach-msg-status', conversation_id: convId, status: status }); await loadCoachInbox(); }
+  catch(e){ alert('Could not update status: ' + e.message); }
+}
 
 function showSection(name, skipHooks) {
   _currentSection = name;
   try { localStorage.setItem('gps_coach_section', name); } catch (_) {}
   // Toggle the underlying content sections.
-  ['dashboard', 'clients', 'emails', 'templates', 'admins', 'security', 'diagnostics', 'decisionroom', 'workshops', 'organizations'].forEach(s => {
+  ['dashboard', 'clients', 'emails', 'messages', 'templates', 'admins', 'security', 'diagnostics', 'decisionroom', 'workshops', 'organizations'].forEach(s => {
     var sec = document.getElementById('section-' + s);
     if (sec) sec.style.display = s === name ? 'block' : 'none';
   });
@@ -3669,9 +3775,10 @@ function showSection(name, skipHooks) {
   if (name === 'decisionroom') drRender();
   if (name === 'workshops')   wsRender();
   if (name === 'emails')      loadEmailLog();
+  if (name === 'messages')    loadCoachInbox();
   if (name === 'admins')      loadAdminAccounts();
   if (name === 'templates')   loadEmailTemplates();
-  if (name === 'dashboard')   renderDiagHome();
+  if (name === 'dashboard')   { renderDiagHome(); refreshMsgBadge(); }
   if (name === 'diagnostics') { diagBoot(); renderDiagTable(); }
   if (name === 'organizations') renderOrganizations();
 }

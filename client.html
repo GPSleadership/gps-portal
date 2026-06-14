@@ -783,6 +783,15 @@
     }
     #resultsPanel.active { display: block; }
 
+    /* ── Contact Your Coach Panel ── */
+    #coachPanel { display: none; background: var(--light-sand); min-height: calc(100vh - 140px); padding-bottom: 60px; }
+    #coachPanel.active { display: block; }
+    .ptab-coach.active { border-bottom-color: #2EA887; }
+    .cmsg { max-width: 78%; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.5; margin-bottom: 4px; word-wrap: break-word; }
+    .cmsg-client { background: #1A3D6E; color: #fff; border-bottom-right-radius: 3px; margin-left: auto; }
+    .cmsg-coach { background: #fff; color: #1a1a1a; border: 1px solid #e2e2e2; border-bottom-left-radius: 3px; margin-right: auto; }
+    .cmsg-meta { font-size: 11px; color: #888; margin: 0 4px 12px; }
+
     /* ── Diagnostic Panel ── */
     
 /* ── Weekly Leadership Prompt Modal ── */
@@ -2319,6 +2328,7 @@
   <button class="ptab ptab-dr" id="tabDR" onclick="showPortalTab('decisionroom')" style="display:none;">Decision Room</button>
   <button class="ptab ptab-ws" id="tabWorkshop" onclick="showPortalTab('workshop')" style="display:none;">My Workshops</button>
   <button class="ptab ptab-ask" id="tabAsk" onclick="showPortalTab('ask')" style="display:none;">Ask Alex</button>
+  <button class="ptab ptab-coach" id="tabCoach" onclick="showPortalTab('coach')" style="display:none;">Contact Your Coach</button>
   <button class="ptab ptab-resources mobile-only" id="tabResources" onclick="showPortalTab('resources')">Resources</button>
 </div>
 
@@ -2492,6 +2502,36 @@
   </div>
 </div>
 
+<!-- ── CONTACT YOUR COACH PANEL ── -->
+<div id="coachPanel">
+  <div style="max-width:760px;margin:0 auto;padding:24px 18px 0;">
+    <h2 style="font-size:20px;color:var(--navy,#1A3D6E);margin:0 0 4px;">Contact Your Coach</h2>
+    <p style="font-size:13px;color:#666;margin:0 0 18px;line-height:1.5;">
+      Use this space to send questions or updates between sessions. I respond within one business day.
+      For emergencies or urgent safety issues, use your company channels, not this portal.
+    </p>
+    <div id="coachThread" style="background:#fff;border:1px solid #e2e2e2;border-radius:12px;padding:16px;min-height:160px;display:flex;flex-direction:column;">
+      <div style="margin:auto;color:#999;font-size:13px;">Loading…</div>
+    </div>
+    <div id="coachAck" style="display:none;margin-top:10px;font-size:13px;color:#0F6E56;background:#E1F5EE;border-radius:8px;padding:10px 14px;"></div>
+    <div style="margin-top:14px;background:#fff;border:1px solid #e2e2e2;border-radius:12px;padding:14px;">
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+        <label style="font-size:13px;color:#555;">Type</label>
+        <select id="coachMsgType" style="flex:0 0 auto;padding:7px 10px;border:1px solid #ccc;border-radius:6px;font-size:13px;">
+          <option value="quick_question">Quick question</option>
+          <option value="prep_for_session">Session prep</option>
+          <option value="progress_update">Update</option>
+          <option value="win">Win</option>
+        </select>
+      </div>
+      <textarea id="coachMsgText" rows="3" placeholder="Write your message…" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #ccc;border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;"></textarea>
+      <div style="display:flex;justify-content:flex-end;margin-top:10px;">
+        <button id="coachSendBtn" onclick="sendCoachMessage()" style="background:#1A3D6E;color:#fff;border:none;border-radius:8px;padding:10px 22px;font-size:14px;font-weight:700;cursor:pointer;">Send to your coach</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ── DIAGNOSTIC PANEL ── -->
 <div id="diagPanel">
   <div class="diag-inner" id="diag-content">
@@ -2608,6 +2648,66 @@ async function portalData(action, payload = {}) {
   return json;
 }
 let currentClient    = null; // set when portal loads — used by submitFormA
+
+// ─────────────────────────────────────────────
+// CONTACT YOUR COACH — client-side messaging thread
+// ─────────────────────────────────────────────
+function coachMsgTypeLabel(t) {
+  return ({ quick_question: 'Quick question', prep_for_session: 'Session prep', progress_update: 'Update', win: 'Win', logistics: 'Logistics' })[t] || 'Message';
+}
+function coachFmtTime(iso) {
+  if (!iso) return '';
+  try { return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+  catch (_) { return ''; }
+}
+async function loadCoachThread() {
+  const thread = document.getElementById('coachThread');
+  if (!thread) return;
+  thread.innerHTML = '<div style="margin:auto;color:#999;font-size:13px;">Loading…</div>';
+  let data;
+  try { data = await portalData('coach-thread-get'); }
+  catch (e) { thread.innerHTML = '<div style="margin:auto;color:#b00;font-size:13px;">Could not load messages. Please try again.</div>'; return; }
+  if (!data.eligible) {
+    thread.innerHTML = '<div style="margin:auto;color:#999;font-size:13px;text-align:center;">Direct messaging is available for active coaching clients.</div>';
+    return;
+  }
+  renderCoachThread(data.messages || []);
+}
+function renderCoachThread(messages) {
+  const thread = document.getElementById('coachThread');
+  if (!thread) return;
+  if (!messages.length) {
+    thread.innerHTML = '<div style="margin:auto;color:#999;font-size:13px;text-align:center;">No messages yet. Send your coach a question or update below.</div>';
+    return;
+  }
+  thread.innerHTML = messages.map(function (m) {
+    const mine = m.sender_role === 'client';
+    const who  = mine ? 'You' : 'Alex';
+    const body = escHtmlResults(m.message_text || '').replace(/\n/g, '<br>');
+    return '<div class="cmsg ' + (mine ? 'cmsg-client' : 'cmsg-coach') + '">' + body + '</div>'
+      + '<div class="cmsg-meta" style="text-align:' + (mine ? 'right' : 'left') + ';">' + who + ' · ' + coachMsgTypeLabel(m.message_type) + ' · ' + coachFmtTime(m.created_at) + '</div>';
+  }).join('');
+  thread.scrollTop = thread.scrollHeight;
+}
+async function sendCoachMessage() {
+  const btn = document.getElementById('coachSendBtn');
+  const ta  = document.getElementById('coachMsgText');
+  const sel = document.getElementById('coachMsgType');
+  const ack = document.getElementById('coachAck');
+  const text = (ta.value || '').trim();
+  if (!text) { ta.focus(); return; }
+  btn.disabled = true; const orig = btn.textContent; btn.textContent = 'Sending…';
+  try {
+    await portalData('coach-message-send', { message_text: text, message_type: sel.value });
+    ta.value = '';
+    if (ack) { ack.textContent = 'Got it — Alex usually replies within one business day.'; ack.style.color = '#0F6E56'; ack.style.background = '#E1F5EE'; ack.style.display = 'block'; }
+    await loadCoachThread();
+  } catch (e) {
+    if (ack) { ack.textContent = 'Message could not be sent. Please try again.'; ack.style.color = '#b00'; ack.style.background = '#fdecec'; ack.style.display = 'block'; }
+  } finally {
+    btn.disabled = false; btn.textContent = orig;
+  }
+}
 
 // ─────────────────────────────────────────────
 // ACTIVITY TRACKING — keeps last_active_at current for auto-archive logic
@@ -3275,6 +3375,12 @@ async function loadClient() {
       if (myWorkshops.length > 0) {
         document.getElementById('tabWorkshop').style.display = '';
         renderWorkshopTab(myWorkshops);
+      }
+
+      // Contact Your Coach is available to active coaching clients only.
+      if (client.is_coaching_client) {
+        const tc = document.getElementById('tabCoach');
+        if (tc) tc.style.display = '';
       }
 
       // Store survey data globally for Results tab
@@ -6099,11 +6205,15 @@ function showPortalTab(tab) {
   const tabWS         = document.getElementById('tabWorkshop');
   const resPanel      = document.getElementById('resourcesPanel');
   const tabRes        = document.getElementById('tabResources');
+  const coachPanel    = document.getElementById('coachPanel');
+  const tabCoach      = document.getElementById('tabCoach');
 
   // Reset all panels
   mainContent.style.display = 'none';
   if (resPanel) resPanel.style.display = 'none';
   if (tabRes)   tabRes.classList.remove('active');
+  if (coachPanel) coachPanel.classList.remove('active');
+  if (tabCoach)   tabCoach.classList.remove('active');
   document.body.classList.remove('checkin-focus');
   qaPanel.classList.remove('active');
   if (resultsPanel) resultsPanel.classList.remove('active');
@@ -6137,6 +6247,11 @@ function showPortalTab(tab) {
   } else if (tab === 'resources') {
     if (resPanel) { resPanel.style.display = 'block'; const rc = document.getElementById('resources-content'); if (rc) rc.innerHTML = renderResourcesPage(currentClient); }
     if (tabRes) tabRes.classList.add('active');
+    window.scrollTo({ top: 0 });
+  } else if (tab === 'coach') {
+    if (coachPanel) coachPanel.classList.add('active');
+    if (tabCoach)   tabCoach.classList.add('active');
+    loadCoachThread();
     window.scrollTo({ top: 0 });
   } else {
     // Check terms consent before showing Q&A
