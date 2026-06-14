@@ -28,6 +28,8 @@ const RESEND_FROM       = process.env.RESEND_FROM_EMAIL   || 'noreply@portal.gps
 const PORTAL_BASE       = process.env.PORTAL_BASE_URL     || 'https://portal.gpsleadership.org';
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const COACH_EMAIL       = process.env.COACH_ALERT_EMAIL   || 'alex@gpsleadership.org';
+// Replies should reach a human (deliverability + legitimacy signal). Override with RESEND_REPLY_TO.
+const REPLY_TO          = process.env.RESEND_REPLY_TO     || COACH_EMAIL;
 const CRON_SECRET       = process.env.CRON_SECRET;
 const COACH_SESSION_SECRET = process.env.COACH_SESSION_SECRET || '';
 
@@ -132,9 +134,32 @@ async function logEmail({ recipientEmail, recipientName, emailType, subject, sta
 }
 
 // ── Send email via Resend ────────────────────────────────────────────────────
-async function sendEmail({ to, subject, html, emailType, recipientName, cc }) {
+// Derive a readable plaintext version from the HTML so every send is multipart.
+// HTML-only email is a spam signal; a real text/plain part improves inbox placement.
+function htmlToText(html) {
+  if (!html) return '';
+  return String(html)
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, '$2 ($1)')
+    .replace(/<\s*(br|\/p|\/div|\/li|\/h[1-6]|\/tr)\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>').replace(/&quot;/gi, '"').replace(/&#39;|&rsquo;|&apos;/gi, "'")
+    .replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
+
+async function sendEmail({ to, subject, html, text, emailType, recipientName, cc }) {
   if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY not configured');
-  const payload = { from: `Alex Tremble – GPS Leadership <${RESEND_FROM}>`, to: [to], subject, html };
+  const payload = {
+    from: `Alex Tremble – GPS Leadership <${RESEND_FROM}>`,
+    to: [to],
+    subject,
+    html,
+    text: text || htmlToText(html),   // multipart: text/plain alongside HTML
+    reply_to: REPLY_TO,               // replies reach a human, not a black hole
+  };
   if (cc && cc.length > 0) payload.cc = cc;
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
