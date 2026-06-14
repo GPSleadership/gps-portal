@@ -1950,6 +1950,35 @@
   }
   @media (max-width: 767px) {
     .mobile-only { display: block; }
+    .ptab.mobile-only { display: inline-flex; }
+    /* Toolkit + coach bio live in the Resources tab on mobile, not in My Plan. */
+    #resourcesSection { display: none; }
+    .portal-sidebar { display: none; }
+    /* Collapsible plan: hide detail until expanded. */
+    .plan-card .plan-detail { display: none; }
+    .plan-card.expanded .plan-detail { display: block; }
+    .plan-card.expanded .plan-collapsed-summary .plan-item { display: none; }
+    /* Compact progress: show only the two most recent rows on mobile. */
+    .progress-card .progress-row.beyond-recent { display: none; }
+    .progress-card.show-all .progress-row.beyond-recent { display: table-row; }
+    /* Full-screen check-in focus mode. */
+    body.checkin-focus .portal-main > *:not(.checkin-card),
+    body.checkin-focus .portal-sidebar { display: none !important; }
+    body.checkin-focus .checkin-card { margin-top: 8px; }
+  }
+  /* Desktop: collapsed-summary, plan toggle, and check-in back button never show. */
+  .plan-collapsed-summary, .plan-toggle-btn, .checkin-back-btn { display: none; }
+  @media (max-width: 767px) {
+    .plan-collapsed-summary { display: block; }
+    .plan-toggle-btn {
+      display: inline-block; margin-top: 10px; background: none; border: none;
+      color: var(--teal); font-weight: 700; font-size: 13px; cursor: pointer; font-family: inherit; padding: 0;
+    }
+    .checkin-back-btn {
+      display: none; background: none; border: none; color: var(--teal);
+      font-weight: 700; font-size: 13px; cursor: pointer; font-family: inherit; margin-bottom: 8px;
+    }
+    body.checkin-focus .checkin-back-btn { display: inline-block; }
   }
   .coach-card-name {
     font-family: 'Montserrat', sans-serif;
@@ -2273,6 +2302,7 @@
   <button class="ptab ptab-dr" id="tabDR" onclick="showPortalTab('decisionroom')" style="display:none;">Decision Room</button>
   <button class="ptab ptab-ws" id="tabWorkshop" onclick="showPortalTab('workshop')" style="display:none;">My Workshops</button>
   <button class="ptab ptab-ask" id="tabAsk" onclick="showPortalTab('ask')" style="display:none;">Ask Alex</button>
+  <button class="ptab ptab-resources mobile-only" id="tabResources" onclick="showPortalTab('resources')">Resources</button>
 </div>
 
 <!-- ── WEEKLY LEADERSHIP PROMPT MODAL ── -->
@@ -2468,6 +2498,10 @@
       <h3>Loading workshops…</h3>
     </div>
   </div>
+</div>
+
+<div id="resourcesPanel" style="display:none;">
+  <div class="results-inner" id="resources-content"></div>
 </div>
 
 <div class="bottom-bar"></div>
@@ -4280,6 +4314,14 @@ function closeMobileCheckin() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// Collapsible plan card (mobile): toggle the .expanded state + button label.
+function togglePlanCard(btn) {
+  const card = btn.closest('.plan-card');
+  if (!card) return;
+  const expanded = card.classList.toggle('expanded');
+  btn.textContent = expanded ? 'Hide full plan ▴' : 'Show full plan ▾';
+}
+
 function renderPortal(client, checkins) {
   currentClient = client; // store for use in submitFormA
   const mobileStatus = getClientStatus(client); // drives the mobile action-first layout
@@ -4352,10 +4394,18 @@ function renderPortal(client, checkins) {
       </div>` : ''}
 
     <!-- PLAN SUMMARY -->
-    <div class="card" style="margin-top:${alreadyCheckedInThisWeek && !isEngagementComplete ? '0' : '24px'};">
+    <div class="card plan-card" style="margin-top:${alreadyCheckedInThisWeek && !isEngagementComplete ? '0' : '24px'};">
       <div class="card-title">${displayName}'s Plan</div>
       <div class="card-subtitle">Your 90-day anchor — come back to this when you need to remember why you're doing this.</div>
 
+      <!-- Mobile collapsed summary: the headline outcomes + expand toggle -->
+      <div class="plan-collapsed-summary">
+        <div class="plan-item full-width"><label>90-Day Goal</label><div class="value">${client.goal_statement || '—'}</div></div>
+        ${client.goal_30_day ? `<div class="plan-item full-width" style="border-left:3px solid var(--teal);margin-top:8px;"><label>30-Day Goal</label><div class="value">${client.goal_30_day}</div></div>` : ''}
+        <button class="plan-toggle-btn" onclick="togglePlanCard(this)">Show full plan ▾</button>
+      </div>
+
+      <div class="plan-detail">
       <div style="margin-bottom:14px;">
         <span class="pillar-badge ${pillarClass}">${pillarLabel}</span>
       </div>
@@ -4389,6 +4439,7 @@ function renderPortal(client, checkins) {
           <span>Target: ${target}</span>
         </div>
       </div>
+      </div><!-- /plan-detail -->
     </div>
 
     <!-- STAKEHOLDER CARD — filled in by renderClientStakeholderCard() after render -->
@@ -4571,7 +4622,8 @@ function renderCheckinForm(client, checkins, currentWeek) {
   const weekDeadline = fmt(weekEndDate);
 
   return `
-    <div class="card red-top" id="checkinCard">
+    <div class="card red-top checkin-card" id="checkinCard">
+      <button type="button" class="checkin-back-btn" onclick="closeMobileCheckin()">&larr; Back to My Plan</button>
       <div class="card-title">Week ${currentWeek} Check-In</div>
       <div class="card-subtitle">Under 3 minutes. Fill this out before or right after your coaching call.</div>
 
@@ -4973,14 +5025,14 @@ function renderWeekTimeline(client, checkins, currentWeek) {
 }
 
 function renderHistory(checkins, client) {
-  const rows = [...checkins].reverse().map(c => {
+  const rows = [...checkins].reverse().map((c, idx) => {
     const completionClass = c.completion_status === 'Yes' ? 'completion-yes'
       : c.completion_status === 'Partially' ? 'completion-part'
       : c.completion_status === 'No' ? 'completion-no' : '';
 
     const date = c.submitted_at ? new Date(c.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
 
-    return `<tr>
+    return `<tr class="progress-row${idx >= 2 ? ' beyond-recent' : ''}">
       <td style="font-weight:700;color:var(--navy);">Wk ${c.week_number}</td>
       <td>${date}</td>
       <td style="font-weight:700;">${c.metric_value ?? '—'}</td>
@@ -4990,7 +5042,7 @@ function renderHistory(checkins, client) {
   }).join('');
 
   return `
-    <div class="card sand-top">
+    <div class="card sand-top progress-card">
       <div class="card-title">My Progress</div>
       <div class="card-subtitle">${checkins.length} check-in${checkins.length !== 1 ? 's' : ''} completed</div>
       <div style="overflow-x:auto;">
@@ -5007,8 +5059,17 @@ function renderHistory(checkins, client) {
           <tbody>${rows}</tbody>
         </table>
       </div>
+      ${checkins.length > 2 ? `<a class="mobile-only progress-toggle" onclick="toggleProgress(this)" style="margin-top:10px;font-size:13px;color:var(--teal);font-weight:700;cursor:pointer;text-decoration:underline;">View full progress history</a>` : ''}
     </div>
   `;
+}
+
+// Compact progress on mobile: reveal all rows on tap.
+function toggleProgress(link) {
+  const card = link.closest('.progress-card');
+  if (!card) return;
+  const showAll = card.classList.toggle('show-all');
+  link.textContent = showAll ? 'Show less' : 'View full progress history';
 }
 
 
@@ -5702,6 +5763,15 @@ function escHtmlResults(t) {
 // ─────────────────────────────────────────────
 // RESOURCES SECTION
 // ─────────────────────────────────────────────
+// Resources tab content (mobile): the toolkit + the full coach bio in one place.
+function renderResourcesPage(client) {
+  if (!client) return '<div class="card" style="margin:16px;">Loading…</div>';
+  return `<div style="padding:16px;max-width:760px;margin:0 auto;">
+    ${renderResources(client)}
+    ${renderMeetYourCoach(client)}
+  </div>`;
+}
+
 function renderResources(client) {
   // Build diagnostic button separately so conditional logic works cleanly
   const diagBtn = client.diagnostic_report_url
@@ -5994,9 +6064,14 @@ function showPortalTab(tab) {
   const tabDR         = document.getElementById('tabDR');
   const wsPanel       = document.getElementById('workshopPanel');
   const tabWS         = document.getElementById('tabWorkshop');
+  const resPanel      = document.getElementById('resourcesPanel');
+  const tabRes        = document.getElementById('tabResources');
 
   // Reset all panels
   mainContent.style.display = 'none';
+  if (resPanel) resPanel.style.display = 'none';
+  if (tabRes)   tabRes.classList.remove('active');
+  document.body.classList.remove('checkin-focus');
   qaPanel.classList.remove('active');
   if (resultsPanel) resultsPanel.classList.remove('active');
   if (diagPanel)    diagPanel.classList.remove('active');
@@ -6027,11 +6102,9 @@ function showPortalTab(tab) {
     if (wsPanel) wsPanel.classList.add('active');
     if (tabWS)   tabWS.classList.add('active');
   } else if (tab === 'resources') {
-    // Interim: tools live in the Resources section of the plan view. Show the plan
-    // and scroll to the toolkit + coach bio. (Dedicated Resources tab is a follow-on.)
-    mainContent.style.display = 'block';
-    if (tabPlan) tabPlan.classList.add('active');
-    setTimeout(function(){ const t = document.getElementById('resourcesSection'); if (t) t.scrollIntoView({ behavior:'smooth', block:'start' }); }, 60);
+    if (resPanel) { resPanel.style.display = 'block'; const rc = document.getElementById('resources-content'); if (rc) rc.innerHTML = renderResourcesPage(currentClient); }
+    if (tabRes) tabRes.classList.add('active');
+    window.scrollTo({ top: 0 });
   } else {
     // Check terms consent before showing Q&A
     const needsTerms = !currentClient ||
