@@ -18,6 +18,23 @@ import crypto from 'node:crypto';
 const SUPABASE_URL         = process.env.SUPABASE_URL || 'https://pbnkefuqpoztcxfagiod.supabase.co';
 const SUPABASE_SECRET      = process.env.SUPABASE_SECRET_KEY;
 const COACH_SESSION_SECRET = process.env.COACH_SESSION_SECRET || '';
+const PORTAL_BASE          = process.env.PORTAL_BASE_URL || 'https://portal.gpsleadership.org';
+const RESEND_API_KEY       = process.env.RESEND_API_KEY || '';
+const RESEND_FROM          = process.env.RESEND_FROM_EMAIL || 'noreply@portal.gpsleadership.org';
+
+// Business days elapsed since an ISO timestamp (skips Sat/Sun; holidays not
+// handled yet). Used to flag coach replies that are past the one-business-day
+// promise. Shared idea reused by the nurture feature later.
+function businessDaysSince(fromIso) {
+  if (!fromIso) return 0;
+  const from = new Date(fromIso);
+  if (isNaN(from)) return 0;
+  const cur = new Date(from); cur.setHours(0, 0, 0, 0);
+  const end = new Date();     end.setHours(0, 0, 0, 0);
+  let count = 0;
+  while (cur < end) { cur.setDate(cur.getDate() + 1); const d = cur.getDay(); if (d !== 0 && d !== 6) count++; }
+  return count;
+}
 
 // ── Coach session verification (same HMAC scheme as get-client.js) ──────────
 function verifyCoachSession(token) {
@@ -220,6 +237,97 @@ export default async function handler(req, res) {
       });
       if (!er.ok) return res.status(500).json({ error: 'Password was set but the email failed to send. Try again.' });
       return res.status(200).json({ ok: true, sent_to: acct.email });
+    }
+
+    // ── Contact Your Coach: inbox list (conversations + needs-reply/overdue) ──
+    if (action === 'coach-msg-inbox') {
+      const cr = await sb('/rest/v1/coach_conversations?select=id,client_id,status,last_message_at&order=last_message_at.desc.nullslast');
+      const convs = cr.ok ? await cr.json() : [];
+      if (!convs.length) return res.status(200).json({ ok: true, conversations: [] });
+      const cids = [...new Set(convs.map(c => c.client_id))];
+      const clr = await sb(`/rest/v1/clients?id=in.(${cids.map(encodeURIComponent).join(',')})&select=id,name,email,organization`);
+      const clients = clr.ok ? await clr.json() : [];
+      const cmap = {}; clients.forEach(c => { cmap[c.id] = c; });
+      const convIds = convs.map(c => c.id);
+      const mr = await sb(`/rest/v1/coach_messages?conversation_id=in.(${convIds.map(encodeURIComponent).join(',')})&select=conversation_id,sender_role,read_by_coach,message_text,created_at&order=created_at.asc`);
+      const msgs = mr.ok ? await mr.json() : [];
+      const byConv = {}; msgs.forEach(m => { (byConv[m.conversation_id] = byConv[m.conversation_id] || []).push(m); });
+      const conversations = convs.map(c => {
+        const list = byConv[c.id] || [];
+        const last = list[list.length - 1] || null;
+        const unread = list.filter(m => m.sender_role === 'client' && !m.read_by_coach).length;
+        const needsReply = !!(last && last.sender_role === 'client');     // waiting on coach
+        const overdueDays = (needsReply && last) ? businessDaysSince(last.created_at) : 0;
+        const cl = cmap[c.client_id] || {};
+        return {
+          id: c.id, client_id: c.client_id, client_name: cl.name || '(unknown)',
+          organization: cl.organization || '', status: c.status, last_message_at: c.last_message_at,
+          last_preview: last ? String(last.message_text || '').slice(0, 140) : '',
+          last_sender: last ? last.sender_role : null,
+          unread, needs_reply: needsReply, overdue: needsReply && overdueDays >= 1, overdue_days: overdueDays,
+        };
+      });
+      return res.status(200).json({ ok: true, conversations });
+    }
+
+    // ── Contact Your Coach: full thread + mark client messages read ───────────
+    if (action === 'coach-msg-thread') {
+      const cid = body.conversation_id;
+      if (!cid) return res.status(400).json({ error: 'conversation_id required' });
+      const mr = await sb(`/rest/v1/coach_messages?conversation_id=eq.${encodeURIComponent(cid)}&select=id,sender_role,message_type,message_text,created_at,read_by_coach,read_by_client&order=created_at.asc`);
+      const messages = mr.ok ? await mr.json() : [];
+      await sb(`/rest/v1/coach_messages?conversation_id=eq.${encodeURIComponent(cid)}&sender_role=eq.client&read_by_coach=eq.false`, 'PATCH', { read_by_coach: true }, { Prefer: 'return=minimal' }).catch(() => {});
+      return res.status(200).json({ ok: true, messages });
+    }
+
+    // ── Contact Your Coach: coach reply (owner only) ──────────────────────────
+    if (action === 'coach-msg-reply') {
+      if (!isOwner) return res.status(403).json({ error: 'Replying is owner-only for now.' });
+      const cid  = body.conversation_id;
+      const text = (body.message_text || '').toString().trim();
+      if (!cid || !text) return res.status(400).json({ error: 'conversation_id and message_text required' });
+      if (text.length > 5000) return res.status(400).json({ error: 'Message is too long (5000 character max).' });
+      const cr = await sb(`/rest/v1/coach_conversations?id=eq.${encodeURIComponent(cid)}&select=id,client_id&limit=1`);
+      const conv = (cr.ok ? await cr.json() : [])[0];
+      if (!conv) return res.status(404).json({ error: 'Conversation not found' });
+      const now = new Date().toISOString();
+      const ins = await sb('/rest/v1/coach_messages', 'POST', {
+        conversation_id: cid, client_id: conv.client_id, sender_role: 'coach',
+        message_type: 'progress_update', message_text: text, read_by_coach: true, read_by_client: false, created_at: now,
+      }, { Prefer: 'return=minimal' });
+      if (!ins.ok) { const d = await ins.json().catch(() => ({})); return res.status(500).json({ error: 'Could not send reply', detail: d }); }
+      const newStatus = ['open', 'waiting_on_client', 'closed'].includes(body.status) ? body.status : 'waiting_on_client';
+      await sb(`/rest/v1/coach_conversations?id=eq.${encodeURIComponent(cid)}`, 'PATCH', { status: newStatus, last_message_at: now, updated_at: now }, { Prefer: 'return=minimal' });
+      // Best-effort email to the client (non-blocking).
+      try {
+        const clr = await sb(`/rest/v1/clients?id=eq.${encodeURIComponent(conv.client_id)}&select=name,email,token&limit=1`);
+        const cl = (clr.ok ? await clr.json() : [])[0];
+        if (cl && cl.email && RESEND_API_KEY) {
+          const first = (cl.name || 'there').split(' ')[0];
+          const url = `${PORTAL_BASE}/client?token=${encodeURIComponent(cl.token || '')}`;
+          await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              from: `Alex Tremble - GPS Leadership <${RESEND_FROM}>`,
+              to: [cl.email],
+              reply_to: 'alex@gpsleadership.org',
+              subject: 'You have a new message from Alex',
+              html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1a1a1a;"><p>Hi ${first},</p><p>You have a new message from Alex in your GPS coaching portal.</p><p style="margin:22px 0;"><a href="${url}" style="background:#1A3D6E;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:700;">Open your portal</a></p><p style="font-size:13px;color:#666;">Or copy this link: <a href="${url}" style="color:#1A3D6E;">${url}</a></p><p style="font-size:13px;color:#666;">- GPS Leadership Solutions</p></div>`,
+            }),
+          }).catch(() => {});
+        }
+      } catch (_) { /* notification is best-effort */ }
+      return res.status(200).json({ ok: true });
+    }
+
+    // ── Contact Your Coach: change conversation status (owner only) ───────────
+    if (action === 'coach-msg-status') {
+      if (!isOwner) return ownerOnly();
+      const cid = body.conversation_id, st = body.status;
+      if (!cid || !['open', 'waiting_on_client', 'closed'].includes(st)) return res.status(400).json({ error: 'valid conversation_id and status required' });
+      await sb(`/rest/v1/coach_conversations?id=eq.${encodeURIComponent(cid)}`, 'PATCH', { status: st, updated_at: new Date().toISOString() }, { Prefer: 'return=minimal' });
+      return res.status(200).json({ ok: true });
     }
 
     // ── Generic allowlisted query proxy ─────────────────────────────────────

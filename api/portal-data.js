@@ -56,6 +56,15 @@ async function findClientByToken(token) {
   return Array.isArray(rows) && rows[0] ? rows[0] : null;
 }
 
+// Single source of truth for "is this an active coaching client" — derived from
+// the existing booleans (no separate status column that can drift). Mirrors the
+// gate in get-client.js. Messaging is available only to coaching clients.
+function isCoachingClient(c) {
+  return !!(c && (c.in_coaching_program || c.coaching_sessions_enabled || c.is_active_coaching));
+}
+
+const COACH_MSG_TYPES = new Set(['quick_question', 'prep_for_session', 'progress_update', 'win']);
+
 // Confirm a diagnostic belongs to this client before any rater/diagnostic write.
 async function diagnosticOwnedBy(diagnosticId, clientId) {
   if (!diagnosticId) return false;
@@ -157,6 +166,54 @@ export default async function handler(req, res) {
         const r = await sb(`/rest/v1/ask_alex_log?client_id=eq.${clientId}&select=id,asked_at,question_text,response_text&order=asked_at.desc&limit=7`);
         if (!r.ok) return res.status(500).json({ error: 'Could not load history' });
         return res.status(200).json({ ok: true, history: await r.json() });
+      }
+
+      // ── Contact Your Coach: read the client's own thread ────────────────────
+      // Eligibility is enforced SERVER-side: non-coaching clients get eligible:false
+      // and never see message rows. Scoped strictly to this client's conversation.
+      case 'coach-thread-get': {
+        if (!isCoachingClient(client)) return res.status(200).json({ ok: true, eligible: false });
+        const cr = await sb(`/rest/v1/coach_conversations?client_id=eq.${clientId}&select=id,status,last_message_at&order=last_message_at.desc.nullslast&limit=1`);
+        const convs = cr.ok ? await cr.json() : [];
+        const conv = convs[0] || null;
+        if (!conv) return res.status(200).json({ ok: true, eligible: true, conversation: null, messages: [] });
+        const mr = await sb(`/rest/v1/coach_messages?conversation_id=eq.${conv.id}&select=id,sender_role,message_type,message_text,created_at,read_by_client&order=created_at.asc`);
+        const messages = mr.ok ? await mr.json() : [];
+        // Mark coach replies as read by the client now that they're being viewed.
+        await sb(`/rest/v1/coach_messages?conversation_id=eq.${conv.id}&sender_role=eq.coach&read_by_client=eq.false`, 'PATCH', { read_by_client: true }, { Prefer: 'return=minimal' }).catch(() => {});
+        return res.status(200).json({ ok: true, eligible: true, conversation: conv, messages });
+      }
+
+      // ── Contact Your Coach: client sends a message ──────────────────────────
+      case 'coach-message-send': {
+        if (!isCoachingClient(client)) return res.status(403).json({ error: 'Messaging is available to active coaching clients only.' });
+        const text = (body.message_text || '').toString().trim();
+        if (!text) return res.status(400).json({ error: 'Message text is required.' });
+        if (text.length > 5000) return res.status(400).json({ error: 'Message is too long (5000 character max).' });
+        const msgType = COACH_MSG_TYPES.has(body.message_type) ? body.message_type : 'quick_question';
+        const now = new Date().toISOString();
+
+        // Reuse the client's latest conversation (reopen if it was closed) so the
+        // thread stays continuous; create one only if none exists.
+        const cr = await sb(`/rest/v1/coach_conversations?client_id=eq.${clientId}&select=id&order=last_message_at.desc.nullslast&limit=1`);
+        const convs = cr.ok ? await cr.json() : [];
+        let convId = convs[0] && convs[0].id;
+        if (convId) {
+          await sb(`/rest/v1/coach_conversations?id=eq.${convId}`, 'PATCH', { status: 'open', last_message_at: now, updated_at: now }, { Prefer: 'return=minimal' });
+        } else {
+          const ins = await sb('/rest/v1/coach_conversations', 'POST', { client_id: clientId, status: 'open', last_message_at: now }, { Prefer: 'return=representation' });
+          if (!ins.ok) { const d = await ins.json().catch(() => ({})); return res.status(500).json({ error: 'Could not start conversation', detail: d }); }
+          const rows = await ins.json();
+          convId = (Array.isArray(rows) ? rows[0] : rows).id;
+        }
+
+        const mr = await sb('/rest/v1/coach_messages', 'POST', {
+          conversation_id: convId, client_id: clientId, sender_role: 'client',
+          message_type: msgType, message_text: text, read_by_coach: false, read_by_client: true, created_at: now,
+        }, { Prefer: 'return=representation' });
+        if (!mr.ok) { const d = await mr.json().catch(() => ({})); return res.status(500).json({ error: 'Could not send message', detail: d }); }
+        const saved = await mr.json();
+        return res.status(200).json({ ok: true, message: Array.isArray(saved) ? saved[0] : saved });
       }
 
       case 'get-stakeholders': {
