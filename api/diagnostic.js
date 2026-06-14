@@ -1609,9 +1609,26 @@ Write the complete 14-Day Executive Leadership Diagnostic Report for ${diag.clie
 // Body: { diagnostic_id }
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function buildReportReadyEmail({ clientName, leaderTitle, leaderOrg, portalUrl }) {
+function buildReportReadyEmail({ clientName, leaderTitle, leaderOrg, portalUrl, debriefDate, debriefTime }) {
   const firstName = (clientName || '').split(' ')[0] || 'there';
   const orgLine   = [leaderTitle, leaderOrg].filter(Boolean).join(' — ');
+
+  // Pre-debrief framing: when the debrief date is set, state date (+ time) and
+  // ask the leader to review the report in-portal beforehand.
+  let whenLine = '';
+  if (debriefDate) {
+    const d = new Date(String(debriefDate) + 'T12:00:00');
+    if (!isNaN(d.getTime())) {
+      whenLine = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      if (debriefTime) whenLine += ' at ' + debriefTime;
+    }
+  }
+  const debriefSection = whenLine
+    ? `<div style="margin:24px 0;background:#f0f4ff;border:1.5px solid #1A3D6E;border-radius:8px;padding:16px 20px;">
+         <div style="font-size:14px;font-weight:700;color:#1A3D6E;margin-bottom:4px;">📅 Your debrief session</div>
+         <p style="margin:0;font-size:14px;color:#333;">We'll walk through your results together on <strong>${whenLine}</strong>. Please review your report in the portal beforehand so we can spend our time on what matters most: building your 90-day plan.</p>
+       </div>`
+    : `<p style="margin-top:24px;">We'll use your next session to walk through the findings and build your action plan.</p>`;
 
   return `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
@@ -1630,7 +1647,7 @@ function buildReportReadyEmail({ clientName, leaderTitle, leaderOrg, portalUrl }
           </a>
         </div>
         <p style="font-size:13px;color:#666;">Or copy this link: <a href="${portalUrl}" style="color:#1A3D6E;">${portalUrl}</a></p>
-        <p style="margin-top:24px;">We'll use your next session to walk through the findings and build your action plan.</p>
+        ${debriefSection}
         <p>– Alex Tremble<br /><span style="color:#666;font-size:13px;">GPS Leadership Solutions</span></p>
         <div style="margin-top:32px;padding-top:20px;border-top:1px solid #eee;font-size:11px;color:#999;">
           You're receiving this because a GPS Leadership diagnostic was completed on your behalf.
@@ -1687,6 +1704,8 @@ async function handleFinalizeReport(req, res) {
       leaderTitle: client.title || null,
       leaderOrg:   client.organization || null,
       portalUrl,
+      debriefDate: diag.debrief_date || null,
+      debriefTime: diag.debrief_time || null,
     });
 
     let emailId = null;

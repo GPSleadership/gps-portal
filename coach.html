@@ -5576,15 +5576,19 @@ function renderOverviewTab() {
       </div>
 
       <div style="margin-bottom:14px;padding-top:14px;border-top:1px solid var(--d-border);">
-        <div style="font-size:11px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Debrief Session Date</div>
+        <div style="font-size:11px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Debrief Session Date &amp; Time</div>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
           <input type="date" id="debrief-date-field"
             style="width:auto;padding:7px 10px;border:1.5px solid var(--d-border);border-radius:6px;font-size:13px;"
             value="${d.debrief_date || ''}"
             onchange="saveDebriefDate(this.value)">
+          <input type="text" id="debrief-time-field" placeholder="e.g. 2:00 PM ET"
+            style="width:140px;padding:7px 10px;border:1.5px solid var(--d-border);border-radius:6px;font-size:13px;"
+            value="${(d.debrief_time || '').replace(/"/g,'&quot;')}"
+            onchange="saveDebriefTime(this.value)">
           ${d.report_release_at ? `<span style="font-size:12px;color:var(--d-mid);">Report releases to leader: ${diagFormatDate(d.report_release_at)} at COB Eastern</span>` : ''}
         </div>
-        <div class="dhint">Sets when the leader can view their report (released automatically at end of business day Eastern the day before).</div>
+        <div class="dhint">Date and time appear in the pre-debrief email sent when you finalize the report. Report auto-releases to the leader at COB Eastern the day before.</div>
       </div>
 
       <div style="padding-top:14px;border-top:1px solid var(--d-border);">
@@ -6608,7 +6612,7 @@ async function generateReportOverride() {
 // ── Report preview + three-layer finalize gate ───────────────────────────
 
 async function openReportPreview() {
-  const d = DIAG_SELECTED;
+  const d = DIAG_SEL;
   if (!d) return;
 
   // Reset modal state
@@ -6683,14 +6687,17 @@ function toggleFinalizeBtn() {
 }
 
 async function confirmAndFinalize() {
-  const d = DIAG_SELECTED;
+  const d = DIAG_SEL;
   if (!d) return;
   const checkEl = document.getElementById('rp-review-check');
   if (!checkEl.checked) { alert('Please confirm you have reviewed the report first.'); return; }
 
   const clientLabel = [d.client_name, d.client_org].filter(Boolean).join(' at ');
   const emailLine   = d.client_email ? `\n\nEmail will go to: ${d.client_email}` : '';
-  if (!confirm(`Send report to ${clientLabel}?${emailLine}\n\nThis cannot be undone.`)) return;
+  const debriefNote = d.debrief_date
+    ? `\nDebrief in the email: ${diagFormatDate(d.debrief_date)}${d.debrief_time ? ' at ' + d.debrief_time : ' (no time set)'}`
+    : `\nNo debrief date is set, so the email will not include a session date/time. Set it in the Report tab first if you want it included.`;
+  if (!confirm(`Send report to ${clientLabel}?${emailLine}${debriefNote}\n\nThis cannot be undone.`)) return;
 
   const sendBtn = document.getElementById('rp-send-btn');
   sendBtn.disabled = true;
@@ -6867,6 +6874,11 @@ async function saveDebriefDate(dateStr) {
   )).toISOString();
   await updateDiag({ debrief_date: dateStr, report_release_at: releaseAt });
   await refreshSelected();
+}
+
+async function saveDebriefTime(timeStr) {
+  await updateDiag({ debrief_time: (timeStr || '').trim() || null });
+  // No re-render needed; value persists for the pre-debrief email on finalize.
 }
 
 async function saveIntakeNotes(val) {
