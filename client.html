@@ -1565,7 +1565,11 @@
     .qa-fadein { animation: qa-fadeUp 0.3s ease forwards; }
     @keyframes qa-fadeUp { from{opacity:0;transform:translateY(10px);} to{opacity:1;transform:translateY(0);} }
     @media (max-width: 768px) {
-      #portalTabNav { padding: 0 16px; }
+      /* Let all tabs (incl. Ask Alex + Resources) be reachable by horizontal swipe
+         instead of overflowing off the right edge of the phone. */
+      #portalTabNav { padding: 0 12px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      #portalTabNav::-webkit-scrollbar { height: 0; }
+      .ptab { flex: 0 0 auto; white-space: nowrap; padding: 14px 14px; }
       .qa-main { padding: 24px 16px 120px; }
       .qa-input-inner { padding: 0 16px; }
       .qa-card, .qa-crisis-card { padding: 18px 16px; }
@@ -5784,7 +5788,14 @@ function escHtmlResults(t) {
 // Resources tab content (mobile): the toolkit + the full coach bio in one place.
 function renderResourcesPage(client) {
   if (!client) return '<div class="card" style="margin:16px;">Loading…</div>';
+  const askCard = client.ask_alex_enabled ? `
+    <div class="card" style="margin:0 0 16px;border-left:4px solid var(--teal);">
+      <div class="card-title">Ask Alex</div>
+      <div class="card-subtitle" style="margin-bottom:12px;">On-demand leadership guidance between your sessions.</div>
+      <button class="ac-primary-btn" onclick="showPortalTab('ask')">Open Ask Alex</button>
+    </div>` : '';
   return `<div style="padding:16px;max-width:760px;margin:0 auto;">
+    ${askCard}
     ${renderResources(client)}
     ${renderMeetYourCoach(client)}
   </div>`;
