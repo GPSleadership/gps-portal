@@ -175,6 +175,32 @@ async function sendEmail({ to, subject, html, text, emailType, recipientName, cc
   return result.id;
 }
 
+// ── Editable email templates ────────────────────────────────────────────────
+// Send copy is editable under Communication → Email Templates. Each diagnostic
+// send tries its APPROVED template (subject + body paragraphs); if none is
+// approved, it falls back to the built-in copy below — so nothing changes until a
+// template is reviewed and approved. Body text uses {{variable}} placeholders and
+// blank-line-separated paragraphs; the surrounding branded shell + buttons stay.
+const _diagTplCache = {};
+async function getApprovedTemplate(templateKey) {
+  if (_diagTplCache[templateKey] !== undefined) return _diagTplCache[templateKey];
+  let tpl = null;
+  try {
+    const r = await sb(`/rest/v1/email_templates?template_key=eq.${encodeURIComponent(templateKey)}&is_approved=eq.true&select=subject,body_text&limit=1`);
+    if (r.ok) { const d = await r.json(); tpl = (Array.isArray(d) && d[0]) ? d[0] : null; }
+  } catch (_) { tpl = null; }
+  _diagTplCache[templateKey] = tpl;
+  return tpl;
+}
+function fillTemplate(text, vars) {
+  return String(text == null ? '' : text).replace(/\{\{\s*([a-z0-9_]+)\s*\}\}/gi, (_, k) => (vars && vars[k] != null) ? String(vars[k]) : '');
+}
+// Plain-text template body (blank-line or single-newline separated) → HTML <p> paragraphs.
+function tplBodyToHtml(text) {
+  return String(text || '').split(/\n{2,}|\n/).map(l => l.trim()).filter(Boolean)
+    .map(l => `<p style="margin:0 0 14px;">${l}</p>`).join('');
+}
+
 // ── Main handler ─────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {
@@ -221,11 +247,27 @@ export default async function handler(req, res) {
 // Body: { diagnostic_id }
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function buildInviteEmail({ raterName, leaderName, leaderTitle, leaderOrg, surveyLink, closeDate, calendarLink }) {
+function buildInviteEmail({ raterName, leaderName, leaderTitle, leaderOrg, surveyLink, closeDate, calendarLink, bodyHtml }) {
   const firstName  = (raterName || '').split(' ')[0] || 'there';
   const leaderFull = [leaderName, leaderTitle, leaderOrg].filter(Boolean).join(' — ');
   // closeDate is already a formatted string (e.g. "June 12, 2026") — use directly
   const closeFmt = closeDate || 'the survey deadline';
+
+  // Editable copy region — from the approved template when present, else the
+  // built-in default. The survey button + interview section below stay structural.
+  const defaultBody = `<p>Hi ${firstName},</p>
+        <p>I'm asking for your honest feedback as part of a leadership development process for:</p>
+        <div style="background:#f5f7fa;border-left:4px solid #1A3D6E;padding:14px 18px;border-radius:0 6px 6px 0;margin:16px 0;">
+          <strong>${leaderFull}</strong>
+        </div>
+        <p>The survey takes approximately 15–20 minutes to complete. Your responses help build a clear, honest picture of leadership strengths and development areas.</p>
+        <p><strong>A few things to know:</strong></p>
+        <ul style="margin:0 0 16px 0;padding-left:20px;">
+          <li>Your responses are kept confidential — individual answers are never shared with the leader.</li>
+          <li>Please complete it by <strong>${closeFmt}</strong>.</li>
+          <li>Honest, specific feedback is the most useful. Don't overthink it.</li>
+        </ul>`;
+  const bodyContent = bodyHtml || defaultBody;
 
   // Optional interview booking section (appended when calendarLink is provided)
   const interviewSection = calendarLink ? `
@@ -253,18 +295,7 @@ function buildInviteEmail({ raterName, leaderName, leaderTitle, leaderOrg, surve
         <div style="color:#ffffff;font-size:20px;font-weight:700;">Leadership Feedback Request</div>
       </div>
       <div style="background:#ffffff;padding:28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
-        <p>Hi ${firstName},</p>
-        <p>I'm asking for your honest feedback as part of a leadership development process for:</p>
-        <div style="background:#f5f7fa;border-left:4px solid #1A3D6E;padding:14px 18px;border-radius:0 6px 6px 0;margin:16px 0;">
-          <strong>${leaderFull}</strong>
-        </div>
-        <p>The survey takes approximately 15–20 minutes to complete. Your responses help build a clear, honest picture of leadership strengths and development areas.</p>
-        <p><strong>A few things to know:</strong></p>
-        <ul style="margin:0 0 16px 0;padding-left:20px;">
-          <li>Your responses are kept confidential — individual answers are never shared with the leader.</li>
-          <li>Please complete it by <strong>${closeFmt}</strong>.</li>
-          <li>Honest, specific feedback is the most useful. Don't overthink it.</li>
-        </ul>
+        ${bodyContent}
         <div style="margin:28px 0;text-align:center;">
           <a href="${surveyLink}"
              style="background:#1A3D6E;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;display:inline-block;letter-spacing:0.3px;">
@@ -323,15 +354,31 @@ async function sendInvitesForDiagnostic(diagnostic_id) {
   const closeDateISO  = closeDate.toISOString().split('T')[0]; // YYYY-MM-DD
   const closeDateDisp = closeDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
+  // Editable invite template (Communication → Email Templates); loaded once, filled per rater.
+  const inviteTpl = await getApprovedTemplate('diagnostic_invite');
+
   for (const rater of raters) {
     const surveyLink = `${PORTAL_BASE}/diagnostic-survey?token=${rater.token}`;
     // Include calendar link in email only when this rater is marked for interview AND a link exists
     const calendarLink = (diag.interviews_enabled && rater.will_interview && diag.interview_calendar_link)
       ? diag.interview_calendar_link
       : null;
-    const subject    = calendarLink
+    let subject    = calendarLink
       ? `Your input is requested — ${diag.client_name} leadership feedback + interview invite`
       : `Your input is requested — ${diag.client_name} leadership feedback`;
+    let bodyHtml = null;
+    if (inviteTpl) {
+      const vars = {
+        first_name:  (rater.name || '').split(' ')[0] || 'there',
+        rater_name:  rater.name || '',
+        leader_name: diag.client_name || '',
+        leader_full: [diag.client_name, diag.client_title, diag.client_org].filter(Boolean).join(' — '),
+        close_date:  closeDateDisp,
+        survey_link: surveyLink,
+      };
+      if (inviteTpl.subject)   subject  = fillTemplate(inviteTpl.subject, vars) || subject;
+      if (inviteTpl.body_text) bodyHtml = tplBodyToHtml(fillTemplate(inviteTpl.body_text, vars));
+    }
     const html       = buildInviteEmail({
       raterName:   rater.name,
       leaderName:  diag.client_name,
@@ -340,6 +387,7 @@ async function sendInvitesForDiagnostic(diagnostic_id) {
       surveyLink,
       closeDate:   closeDateDisp,
       calendarLink,
+      bodyHtml,
     });
 
     const inviteCc = [diag.client_email, 'team@gpsleadership.org'].filter(Boolean);
@@ -1609,9 +1657,16 @@ Write the complete 14-Day Executive Leadership Diagnostic Report for ${diag.clie
 // Body: { diagnostic_id }
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function buildReportReadyEmail({ clientName, leaderTitle, leaderOrg, portalUrl, debriefDate, debriefTime }) {
+function buildReportReadyEmail({ clientName, leaderTitle, leaderOrg, portalUrl, debriefDate, debriefTime, bodyHtml }) {
   const firstName = (clientName || '').split(' ')[0] || 'there';
   const orgLine   = [leaderTitle, leaderOrg].filter(Boolean).join(' — ');
+
+  // Editable paragraph region — comes from the approved template when present,
+  // otherwise the built-in default below (so the email is unchanged until edited).
+  const defaultBody = `<p>Hi ${firstName},</p>
+        <p>Your GPS Leadership Diagnostic report has been finalized${orgLine ? ` for <strong>${orgLine}</strong>` : ''}.</p>
+        <p>Your results — including your TP3™ breakdown, rater feedback themes, and 90-day priorities — are now available in your portal.</p>`;
+  const bodyContent = bodyHtml || defaultBody;
 
   // Pre-debrief framing: when the debrief date is set, state date (+ time) and
   // ask the leader to review the report in-portal beforehand.
@@ -1637,9 +1692,7 @@ function buildReportReadyEmail({ clientName, leaderTitle, leaderOrg, portalUrl, 
         <div style="color:#ffffff;font-size:20px;font-weight:700;">Your Leadership Report Is Ready</div>
       </div>
       <div style="background:#ffffff;padding:28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
-        <p>Hi ${firstName},</p>
-        <p>Your GPS Leadership Diagnostic report has been finalized${orgLine ? ` for <strong>${orgLine}</strong>` : ''}.</p>
-        <p>Your results — including your TP3™ breakdown, rater feedback themes, and 90-day priorities — are now available in your portal.</p>
+        ${bodyContent}
         <div style="margin:28px 0;text-align:center;">
           <a href="${portalUrl}"
              style="background:#1A3D6E;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;display:inline-block;letter-spacing:0.3px;">
@@ -1699,6 +1752,17 @@ async function handleFinalizeReport(req, res) {
     const portalUrl = `${PORTAL_BASE}/client?token=${client.token}`;
 
     // 5. Send email to client
+    // Editable template (Communication → Email Templates). Falls back to built-in copy.
+    const firstName = (client.name || '').split(' ')[0] || 'there';
+    let subject = 'Your GPS Leadership Report Is Ready';
+    let bodyHtml = null;
+    const tpl = await getApprovedTemplate('diagnostic_report_ready');
+    if (tpl) {
+      const vars = { first_name: firstName, leader_name: client.name || '', org: client.organization || '', title: client.title || '', portal_url: portalUrl };
+      if (tpl.subject)   subject  = fillTemplate(tpl.subject, vars) || subject;
+      if (tpl.body_text) bodyHtml = tplBodyToHtml(fillTemplate(tpl.body_text, vars));
+    }
+
     const emailHtml = buildReportReadyEmail({
       clientName:  client.name,
       leaderTitle: client.title || null,
@@ -1706,13 +1770,14 @@ async function handleFinalizeReport(req, res) {
       portalUrl,
       debriefDate: diag.debrief_date || null,
       debriefTime: diag.debrief_time || null,
+      bodyHtml,
     });
 
     let emailId = null;
     try {
       emailId = await sendEmail({
         to:            client.email,
-        subject:       'Your GPS Leadership Report Is Ready',
+        subject,
         html:          emailHtml,
         emailType:     'report_ready',
         recipientName: client.name,
@@ -1749,7 +1814,7 @@ function daysFromNow(dateStr) {
   return daysBetween(new Date(), new Date(dateStr + 'T12:00:00'));
 }
 
-function buildReminderEmail({ raterName, leaderName, surveyLink, closeDate, isSecond }) {
+function buildReminderEmail({ raterName, leaderName, surveyLink, closeDate, isSecond, bodyHtml, subjectOverride }) {
   const firstName = (raterName || '').split(' ')[0] || 'there';
   const closeFmt  = closeDate
     ? new Date(closeDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
@@ -1758,8 +1823,15 @@ function buildReminderEmail({ raterName, leaderName, surveyLink, closeDate, isSe
     ? `<p><strong>The survey closes ${closeFmt}.</strong> This is your last reminder.</p>`
     : `<p>The survey closes on <strong>${closeFmt}</strong> — there's still time.</p>`;
 
+  const defaultBody = `
+          <p>Hi ${firstName},</p>
+          <p>A quick follow-up — you haven't yet completed the feedback survey for <strong>${leaderName}</strong>.</p>
+          ${urgency}
+          <p>It takes 15–20 minutes. Your responses are confidential — individual answers are never shared.</p>`;
+  const bodyContent = bodyHtml || defaultBody;
+
   return {
-    subject: isSecond ? `Last reminder — ${leaderName} leadership feedback` : `Quick reminder — ${leaderName} leadership feedback`,
+    subject: subjectOverride || (isSecond ? `Last reminder — ${leaderName} leadership feedback` : `Quick reminder — ${leaderName} leadership feedback`),
     html: `
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
         <div style="background:#1A3D6E;padding:20px 28px;border-radius:8px 8px 0 0;">
@@ -1767,10 +1839,7 @@ function buildReminderEmail({ raterName, leaderName, surveyLink, closeDate, isSe
           <div style="color:#ffffff;font-size:20px;font-weight:700;">${isSecond ? 'Final Reminder — ' : ''}Leadership Feedback Request</div>
         </div>
         <div style="background:#ffffff;padding:28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
-          <p>Hi ${firstName},</p>
-          <p>A quick follow-up — you haven't yet completed the feedback survey for <strong>${leaderName}</strong>.</p>
-          ${urgency}
-          <p>It takes 15–20 minutes. Your responses are confidential — individual answers are never shared.</p>
+          ${bodyContent}
           <div style="margin:28px 0;text-align:center;">
             <a href="${surveyLink}" style="background:#1A3D6E;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;display:inline-block;">Complete the Survey →</a>
           </div>
@@ -2464,6 +2533,10 @@ async function handleReminders(req, res) {
     const openDiagsRes = await sb(`/rest/v1/diagnostics?status=eq.survey_open&select=id,client_name,client_email,close_date`);
     const openDiags    = await openDiagsRes.json() || [];
 
+    // Editable templates (only used when coach has approved them; otherwise hardcoded copy stands)
+    const r1Tpl = await getApprovedTemplate('diagnostic_reminder_1');
+    const r2Tpl = await getApprovedTemplate('diagnostic_reminder_2');
+
     for (const diag of openDiags) {
       const ratersRes = await sb(
         `/rest/v1/diagnostic_raters?diagnostic_id=eq.${diag.id}&is_self=eq.false&completed_at=is.null&invited_at=not.is.null&select=id,name,email,token,invited_at,reminder_1_sent_at,reminder_2_sent_at,email_bounced`
@@ -2477,8 +2550,19 @@ async function handleReminders(req, res) {
 
         const reminderCc = [diag.client_email, 'team@gpsleadership.org'].filter(Boolean);
 
+        const closeFmt = diag.close_date
+          ? new Date(diag.close_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+          : 'soon';
+        const firstName = (rater.name || '').split(' ')[0] || 'there';
+
         if (daysSinceInvite >= 2 && !rater.reminder_1_sent_at) {
-          const email = buildReminderEmail({ raterName: rater.name, leaderName: diag.client_name, surveyLink, closeDate: diag.close_date, isSecond: false });
+          let bodyHtml = null, subjectOverride = null;
+          if (r1Tpl) {
+            const vars = { first_name: firstName, rater_name: rater.name, leader_name: diag.client_name, close_date: closeFmt, survey_link: surveyLink };
+            if (r1Tpl.subject) subjectOverride = fillTemplate(r1Tpl.subject, vars) || null;
+            if (r1Tpl.body_text) bodyHtml = tplBodyToHtml(fillTemplate(r1Tpl.body_text, vars));
+          }
+          const email = buildReminderEmail({ raterName: rater.name, leaderName: diag.client_name, surveyLink, closeDate: diag.close_date, isSecond: false, bodyHtml, subjectOverride });
           try {
             await sendEmail({ to: rater.email, ...email, emailType: 'diagnostic_reminder_1', recipientName: rater.name, cc: reminderCc });
             await sb(`/rest/v1/diagnostic_raters?id=eq.${rater.id}`, 'PATCH', { reminder_1_sent_at: now.toISOString() }, { Prefer: 'return=minimal' });
@@ -2490,7 +2574,13 @@ async function handleReminders(req, res) {
         }
 
         if (daysSinceInvite >= 5 && rater.reminder_1_sent_at && !rater.reminder_2_sent_at) {
-          const email = buildReminderEmail({ raterName: rater.name, leaderName: diag.client_name, surveyLink, closeDate: diag.close_date, isSecond: true });
+          let bodyHtml = null, subjectOverride = null;
+          if (r2Tpl) {
+            const vars = { first_name: firstName, rater_name: rater.name, leader_name: diag.client_name, close_date: closeFmt, survey_link: surveyLink };
+            if (r2Tpl.subject) subjectOverride = fillTemplate(r2Tpl.subject, vars) || null;
+            if (r2Tpl.body_text) bodyHtml = tplBodyToHtml(fillTemplate(r2Tpl.body_text, vars));
+          }
+          const email = buildReminderEmail({ raterName: rater.name, leaderName: diag.client_name, surveyLink, closeDate: diag.close_date, isSecond: true, bodyHtml, subjectOverride });
           try {
             await sendEmail({ to: rater.email, ...email, emailType: 'diagnostic_reminder_2', recipientName: rater.name, cc: reminderCc });
             await sb(`/rest/v1/diagnostic_raters?id=eq.${rater.id}`, 'PATCH', { reminder_2_sent_at: now.toISOString() }, { Prefer: 'return=minimal' });

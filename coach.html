@@ -3747,11 +3747,14 @@ function gsInvalidate(){ _gsCache = null; }
 // ─────────────────────────────────────────────
 var _emailTemplates = null, _tplSelected = null;
 function tplGroup(t){
-  var s = ((t.template_key||'') + ' ' + (t.label||'')).toLowerCase();
+  var key = (t.template_key || '').toLowerCase();
+  var s   = (key + ' ' + (t.label || '')).toLowerCase();
+  // Prefix-based first so each flow stays distinct (14-Day Diagnostic vs ongoing Stakeholder Surveys).
+  if (key.indexOf('diagnostic_') === 0 || /\b360\b|rater/.test(s)) return '14-Day Diagnostic';
+  if (key.indexOf('survey_') === 0) return 'Stakeholder Surveys';
   if (/workshop/.test(s)) return 'Workshops';
-  if (/diag|rater|survey|360|debrief|report/.test(s)) return 'Diagnostics';
   if (/alert|bounce|error|system|admin/.test(s)) return 'System Alerts';
-  if (/remind|check.?in|sprint|welcome|coach|plan|closeout|testimonial|referral/.test(s)) return 'Coaching Sprint';
+  if (/remind|check.?in|sprint|welcome|coach|plan|closeout|testimonial|referral|debrief|report/.test(s)) return 'Coaching Sprint';
   return 'Other';
 }
 async function loadEmailTemplates() {
@@ -3771,7 +3774,7 @@ async function loadEmailTemplates() {
   _emailTemplates = data;
 
   // Group templates by flow for the left sidebar.
-  const order = ['Coaching Sprint', 'Diagnostics', 'Workshops', 'System Alerts', 'Other'];
+  const order = ['14-Day Diagnostic', 'Stakeholder Surveys', 'Coaching Sprint', 'Workshops', 'System Alerts', 'Other'];
   const groups = {};
   data.forEach(t => { const g = tplGroup(t); (groups[g] = groups[g] || []).push(t); });
   let sidebar = '';
