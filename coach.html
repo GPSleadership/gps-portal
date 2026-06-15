@@ -6521,9 +6521,18 @@ async function confirmSendInvites() {
       body: JSON.stringify({ diagnostic_id: DIAG_SEL.id }),
     });
     if (!resp.ok) throw new Error(await resp.text());
+    const data = await resp.json().catch(() => ({}));
     await updateDiag({ status: 'survey_open', invites_sent_at: new Date().toISOString() });
     await refreshSelected();
-    alert('Invitations sent successfully.');
+    const sent = (typeof data.sent === 'number') ? data.sent : null;
+    const errs = Array.isArray(data.errors) ? data.errors : [];
+    if (errs.length) {
+      alert('Sent ' + (sent != null ? sent : '?') + ' invitation(s), but ' + errs.length + ' failed:\n' +
+        errs.map(function(e){ return '• ' + (e.name || e.email || 'unknown') + ': ' + (e.error || 'error'); }).join('\n') +
+        '\n\nFix the issue and click Send again — already-invited raters are skipped automatically.');
+    } else {
+      alert('Invitations sent successfully' + (sent != null ? (' (' + sent + ' rater' + (sent !== 1 ? 's' : '') + ').') : '.'));
+    }
   } catch(e) {
     alert('Error sending invites: ' + e.message);
   }
