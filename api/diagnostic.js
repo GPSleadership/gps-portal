@@ -348,9 +348,9 @@ async function sendInvitesForDiagnostic(diagnostic_id) {
   const now = new Date();
   const nowISO = now.toISOString();
 
-  // Close date = exactly 14 days from invite send (overrides any manual close_date)
+  // Close date = exactly 7 days from invite send (overrides any manual close_date)
   const closeDate = new Date(now);
-  closeDate.setDate(closeDate.getDate() + 14);
+  closeDate.setDate(closeDate.getDate() + 7);
   const closeDateISO  = closeDate.toISOString().split('T')[0]; // YYYY-MM-DD
   const closeDateDisp = closeDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
@@ -408,7 +408,7 @@ async function sendInvitesForDiagnostic(diagnostic_id) {
     const updates = {
       invites_sent_at: nowISO,
       start_date:  nowISO.split('T')[0],   // survey opens today
-      close_date:  closeDateISO,            // closes 14 days from today
+      close_date:  closeDateISO,            // closes 7 days from today
       updated_at:  nowISO,
       invites_scheduled_at: null,           // consume any pending schedule
       invites_schedule_claimed_at: null,

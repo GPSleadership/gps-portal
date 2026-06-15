@@ -6486,7 +6486,7 @@ function openSendInvitesModal() {
 function _openSendInvitesConfirm() {
   const nonSelf = DIAG_RATERS.filter(r => !r.is_self);
   const closeDate = new Date();
-  closeDate.setDate(closeDate.getDate() + 14);
+  closeDate.setDate(closeDate.getDate() + 7);
   const closeDateStr = closeDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   const pad = n => String(n).padStart(2, '0');
   const fmtLocal = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -6495,7 +6495,7 @@ function _openSendInvitesConfirm() {
   document.getElementById('send-invites-body').innerHTML = `
     <p style="font-size:13px;margin-bottom:14px;">You are about to send survey invitations to <strong>${nonSelf.length} raters</strong> for <strong>${DIAG_SEL.client_name}</strong>.</p>
     <div class="dalert dalert-blue" style="margin-bottom:14px;"><span class="dalert-icon">📅</span>
-      <div>Survey window opens <strong>today</strong> and closes automatically on <strong>${closeDateStr}</strong> (14 days).</div>
+      <div>Survey window opens <strong>today</strong> and closes automatically on <strong>${closeDateStr}</strong> (7 days).</div>
     </div>
     <div style="max-height:200px;overflow-y:auto;border:1px solid var(--d-border);border-radius:6px;padding:12px;">
       ${nonSelf.map(r => `<div style="font-size:13px;padding:4px 0;">${r.name} — <span style="color:var(--d-mid);">${r.email}</span></div>`).join('')}
