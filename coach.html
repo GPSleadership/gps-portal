@@ -2504,7 +2504,7 @@ function renderProfileSection(section, client, checkins) {
               ${d.close_date ? ' · Closes ' + diagFormatDate(d.close_date) : ''}
             </div>
           </div>
-          <button onclick="closeClientProfile();diagBoot().then(()=>openDiag('${d.id}'))"
+          <button onclick="closeClientProfile();showSection('diagnostics');diagBoot().then(()=>openDiag('${d.id}'))"
             style="font-size:12px;padding:6px 14px;border:1px solid var(--teal);color:var(--teal);background:none;border-radius:6px;cursor:pointer;font-weight:700;white-space:nowrap;">
             Open →
           </button>
