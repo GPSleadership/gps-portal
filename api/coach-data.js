@@ -330,6 +330,44 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
+    // ── Diagnostic Nurture admin (owner only) ────────────────────────────────
+    // Lists nurture-active leaders + leaders eligible to enroll (report delivered,
+    // not coaching, not archived, not unsubscribed). Enroll/pause/skip/stop are
+    // deliberate coach actions — no auto-enrolment, so the first run is reviewable.
+    if (action === 'nurture-list') {
+      if (!isOwner) return ownerOnly();
+      const dr = await sb(`/rest/v1/diagnostics?select=id,client_name,client_org,client_email,client_id,status,report_finalized_at,nurture_active,nurture_emails_sent,nurture_next_at,nurture_last_sent_at,nurture_opened_count,nurture_last_clicked_at,nurture_unsubscribed&order=created_at.desc&limit=500`);
+      const diags = dr.ok ? await dr.json() : [];
+      const cids = [...new Set(diags.map(d => d.client_id).filter(Boolean))];
+      let cmap = {};
+      if (cids.length) {
+        const cr = await sb(`/rest/v1/clients?id=in.(${cids.map(encodeURIComponent).join(',')})&select=id,in_coaching_program,coaching_sessions_enabled,is_active_coaching,engagement_type,is_archived`);
+        (cr.ok ? await cr.json() : []).forEach(c => { cmap[c.id] = c; });
+      }
+      const coachingOf = (d) => { const c = cmap[d.client_id]; return !!(c && (c.in_coaching_program || c.coaching_sessions_enabled || c.is_active_coaching || c.engagement_type === 'diagnostic_plus_coaching')); };
+      const archivedOf = (d) => { const c = cmap[d.client_id]; return !!(c && c.is_archived); };
+      const reportDone = (d) => !!d.report_finalized_at || ['report_final', 'debrief_complete', 'plan_active'].includes(d.status);
+      const active = [], eligible = [];
+      diags.forEach(d => {
+        if (d.nurture_active) { active.push(d); return; }
+        if (!d.nurture_unsubscribed && reportDone(d) && !coachingOf(d) && !archivedOf(d)) eligible.push(d);
+      });
+      return res.status(200).json({ ok: true, active, eligible });
+    }
+    if (action === 'nurture-toggle' || action === 'nurture-skip' || action === 'nurture-stop') {
+      if (!isOwner) return ownerOnly();
+      const id = body.diagnostic_id;
+      if (!id) return res.status(400).json({ error: 'diagnostic_id required' });
+      const now = new Date().toISOString();
+      let patch;
+      if (action === 'nurture-stop') patch = { nurture_active: false, nurture_next_at: null };
+      else if (action === 'nurture-skip') patch = { nurture_next_at: now };
+      else patch = body.active ? { nurture_active: true, nurture_unsubscribed: false, nurture_next_at: now } : { nurture_active: false };
+      const r = await sb(`/rest/v1/diagnostics?id=eq.${encodeURIComponent(id)}`, 'PATCH', patch, { Prefer: 'return=minimal' });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); return res.status(500).json({ error: 'Update failed', detail: d }); }
+      return res.status(200).json({ ok: true });
+    }
+
     // ── Generic allowlisted query proxy ─────────────────────────────────────
     const op    = body.op;
     const table = body.table;

@@ -63,7 +63,29 @@ function isCoachingClient(c) {
   return !!(c && (c.in_coaching_program || c.coaching_sessions_enabled || c.is_active_coaching || c.engagement_type === 'diagnostic_plus_coaching'));
 }
 
-const COACH_MSG_TYPES = new Set(['quick_question', 'prep_for_session', 'progress_update', 'win']);
+const COACH_MSG_TYPES = new Set(['quick_question', 'prep_for_session', 'progress_update', 'win', 'reschedule']);
+
+// Reschedule requests ping the team + coach immediately (not just the inbox flag),
+// so a time change never sits unseen. Best-effort; never blocks the message send.
+const RESEND_API_KEY  = process.env.RESEND_API_KEY;
+const RESEND_FROM     = process.env.RESEND_FROM_EMAIL || 'noreply@portal.gpsleadership.org';
+const PORTAL_BASE_URL = process.env.PORTAL_BASE_URL || 'https://portal.gpsleadership.org';
+const RESCHEDULE_PING_TO = ['team@gpsleadership.org', 'alex@gpsleadership.org'];
+async function sendReschedulePing(clientName, messageText) {
+  if (!RESEND_API_KEY) return;
+  const safe = String(messageText || '').replace(/</g, '&lt;');
+  await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: `GPS Portal <${RESEND_FROM}>`,
+      to: RESCHEDULE_PING_TO,
+      reply_to: 'alex@gpsleadership.org',
+      subject: `Reschedule requested: ${clientName || 'a client'}`,
+      html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:20px;color:#1a1a1a;"><p><strong>${(clientName || 'A client')}</strong> requested to reschedule a session via the portal.</p><p style="background:#f5f7fa;border-left:3px solid #1A3D6E;padding:10px 14px;border-radius:0 6px 6px 0;">${safe || '(no note)'}</p><p>Open the coach portal to reply and confirm a new time: <a href="${PORTAL_BASE_URL}/coach">${PORTAL_BASE_URL}/coach</a></p><p style="font-size:12px;color:#888;">If they used the reschedule link in their GHL booking confirmation, the calendar may already be updated. Confirm and remove the old slot if needed.</p></div>`,
+    }),
+  }).catch(() => {});
+}
 
 // Confirm a diagnostic belongs to this client before any rater/diagnostic write.
 async function diagnosticOwnedBy(diagnosticId, clientId) {
@@ -213,6 +235,8 @@ export default async function handler(req, res) {
         }, { Prefer: 'return=representation' });
         if (!mr.ok) { const d = await mr.json().catch(() => ({})); return res.status(500).json({ error: 'Could not send message', detail: d }); }
         const saved = await mr.json();
+        // Reschedule requests get an immediate email ping to the team + coach.
+        if (msgType === 'reschedule') await sendReschedulePing(client.name, text);
         return res.status(200).json({ ok: true, message: Array.isArray(saved) ? saved[0] : saved });
       }
 

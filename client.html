@@ -2517,12 +2517,16 @@
     <div style="margin-top:14px;background:#fff;border:1px solid #e2e2e2;border-radius:12px;padding:14px;">
       <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
         <label style="font-size:13px;color:#555;">Type</label>
-        <select id="coachMsgType" style="flex:0 0 auto;padding:7px 10px;border:1px solid #ccc;border-radius:6px;font-size:13px;">
+        <select id="coachMsgType" onchange="onCoachTypeChange()" style="flex:0 0 auto;padding:7px 10px;border:1px solid #ccc;border-radius:6px;font-size:13px;">
           <option value="quick_question">Quick question</option>
           <option value="prep_for_session">Session prep</option>
           <option value="progress_update">Update</option>
           <option value="win">Win</option>
+          <option value="reschedule">Reschedule a session</option>
         </select>
+      </div>
+      <div id="coachRescheduleHelp" style="display:none;font-size:13px;color:#1A3D6E;background:#eef4fb;border-radius:8px;padding:10px 14px;margin-bottom:10px;line-height:1.5;">
+        Fastest way to reschedule: use the <strong>Reschedule</strong> link in your original booking confirmation or calendar invite — it moves your session automatically. Then add your preferred times below and Alex's team will confirm.
       </div>
       <textarea id="coachMsgText" rows="3" placeholder="Write your message…" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #ccc;border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;"></textarea>
       <div style="display:flex;justify-content:flex-end;margin-top:10px;">
@@ -2653,7 +2657,63 @@ let currentClient    = null; // set when portal loads — used by submitFormA
 // CONTACT YOUR COACH — client-side messaging thread
 // ─────────────────────────────────────────────
 function coachMsgTypeLabel(t) {
-  return ({ quick_question: 'Quick question', prep_for_session: 'Session prep', progress_update: 'Update', win: 'Win', logistics: 'Logistics' })[t] || 'Message';
+  return ({ quick_question: 'Quick question', prep_for_session: 'Session prep', progress_update: 'Update', win: 'Win', reschedule: 'Reschedule', logistics: 'Logistics' })[t] || 'Message';
+}
+function onCoachTypeChange() {
+  var sel = document.getElementById('coachMsgType'), help = document.getElementById('coachRescheduleHelp');
+  if (sel && help) help.style.display = (sel.value === 'reschedule') ? 'block' : 'none';
+}
+
+// ─────────────────────────────────────────────
+// VISIBILITY & TIER ENGINE — single source of truth for portal tab/section
+// visibility. Pure resolver (mirrors visibility-engine.js); applied via
+// applyPortalVisibility() so async loaders (diagnostic, sponsor) flow through it.
+// ─────────────────────────────────────────────
+function resolvePortalVisibility(input){
+  var i=input||{};
+  var isCoaching=!!(i.in_coaching_program||i.coaching_sessions_enabled||i.is_active_coaching||i.engagement_type==='diagnostic_plus_coaching');
+  var state;
+  if(i.is_archived)state='archived';
+  else if(i.portal_locked)state='locked';
+  else if(isCoaching)state='active';
+  else if(i.portal_first_active_at){var ms=Date.parse(i.current_date)-Date.parse(i.portal_first_active_at);var days=Math.floor(ms/86400000);if(days>90)state='complimentary_expired';else if(days>=85)state='complimentary_warning';else state='active';}
+  else state='active';
+  var activeOrWarn=(state==='active'||state==='complimentary_warning');
+  var ended=(state==='complimentary_expired'||state==='locked'||state==='archived');
+  var myPlan=(!ended&&(i.has_90_day_plan||isCoaching||activeOrWarn))?'visible':'hidden';
+  var myResults=(activeOrWarn&&(i.has_90_day_plan||(i.has_diagnostic&&i.has_progress_history)))?'visible':'hidden';
+  var myDiagnostic=(activeOrWarn&&i.has_diagnostic)?'visible':'hidden';
+  var decisionRoom=(activeOrWarn&&i.is_sponsor)?'visible':'hidden';
+  var myWorkshops=(activeOrWarn&&i.is_workshop_participant)?'visible':'hidden';
+  var askAlexVisible=(activeOrWarn&&i.ask_alex_enabled);
+  var askAlex=askAlexVisible?'visible':'hidden';
+  var askState=askAlexVisible?'enabled':'disabled',contextLevel,capHint;
+  if(!askAlexVisible){contextLevel='global_only';capHint=null;}
+  else if(isCoaching&&i.has_90_day_plan){contextLevel='+plan_and_progress';capHint=20;}
+  else if(i.has_diagnostic&&!isCoaching){contextLevel='+diagnostic';capHint=10;}
+  else{contextLevel='global_only';capHint=5;}
+  var weeklyCheckIns=(activeOrWarn&&i.has_90_day_plan)?'visible':'hidden';
+  var coachingAttendance=(state==='active'&&isCoaching&&i.coaching_sessions_enabled)?'visible':'hidden';
+  var toolkit=(activeOrWarn&&myPlan==='visible')?'visible':'hidden';
+  var meetYourCoach=(state==='active'&&isCoaching)?'visible':'hidden';
+  var exploreUpsell=(activeOrWarn&&!isCoaching)?'visible':'hidden';
+  var countdownBanner=(state==='complimentary_warning')?'visible':'hidden';
+  var accessEnded=ended?'visible':'hidden';
+  var contactCoach;
+  if(state==='active'&&isCoaching)contactCoach='full';
+  else if(!isCoaching&&activeOrWarn)contactCoach='locked';
+  else contactCoach='hidden';
+  if(ended){myPlan=myResults=myDiagnostic=decisionRoom=myWorkshops=askAlex='hidden';askState='disabled';contextLevel='global_only';capHint=null;weeklyCheckIns=coachingAttendance=toolkit=meetYourCoach=exploreUpsell=countdownBanner='hidden';contactCoach='hidden';accessEnded='visible';}
+  return{portal_state:state,tabs:{my_plan:myPlan,my_results:myResults,my_diagnostic:myDiagnostic,decision_room:decisionRoom,my_workshops:myWorkshops,ask_alex:askAlex},sections:{weekly_check_ins:weeklyCheckIns,coaching_attendance_stat:coachingAttendance,executive_leadership_toolkit:toolkit,meet_your_coach_card:meetYourCoach,explore_coaching_upsell_card:exploreUpsell,complimentary_countdown_banner:countdownBanner,access_ended_screen:accessEnded},ask_alex_config:{state:askState,context_level:contextLevel,daily_cap_hint:capHint},contact_coach_mode:contactCoach};
+}
+function applyPortalVisibility(){
+  if(!window._vizInput) return null;
+  var viz=resolvePortalVisibility(window._vizInput);
+  window._portalViz=viz;
+  var map={tabPlan:'my_plan',tabResults:'my_results',tabDiag:'my_diagnostic',tabDR:'decision_room',tabWorkshop:'my_workshops',tabAsk:'ask_alex'};
+  Object.keys(map).forEach(function(id){var el=document.getElementById(id);if(el)el.style.display=(viz.tabs[map[id]]==='visible')?'':'none';});
+  var tc=document.getElementById('tabCoach');if(tc)tc.style.display=(viz.contact_coach_mode==='full')?'':'none';
+  return viz;
 }
 function coachFmtTime(iso) {
   if (!iso) return '';
@@ -2891,9 +2951,10 @@ async function loadClientDiagnostic() {
       CLIENT_DIAG_REPORT = resp.report || null;
     }
 
-    // Show the Diagnostic tab
-    const tabDiag = document.getElementById('tabDiag');
-    if (tabDiag) tabDiag.style.display = '';
+    // Show the Diagnostic tab (through the visibility engine so it respects portal state)
+    window._clientHasDiagnostic = true;
+    if (window._vizInput) { window._vizInput.has_diagnostic = true; applyPortalVisibility(); }
+    else { const tabDiag = document.getElementById('tabDiag'); if (tabDiag) tabDiag.style.display = ''; }
     updateReportReadyBanner('plan'); // default tab on load
     checkQaNudge(); // weekly leadership prompt for weeks 1–3
 
@@ -2916,8 +2977,8 @@ async function loadMySponsor() {
     const resp = await portalData('get-my-sponsor', {});
     if (resp && resp.ok && resp.sponsor && resp.sponsor.token) {
       MY_SPONSOR_TOKEN = resp.sponsor.token;
-      const tabDR = document.getElementById('tabDR');
-      if (tabDR) tabDR.style.display = '';
+      if (window._vizInput) { window._vizInput.is_sponsor = true; applyPortalVisibility(); }
+      else { const tabDR = document.getElementById('tabDR'); if (tabDR) tabDR.style.display = ''; }
     }
   } catch (e) { /* non-fatal */ }
 }
@@ -3365,23 +3426,28 @@ async function loadClient() {
       // Always show tab nav once plan is submitted
       document.getElementById('portalTabNav').style.display = 'flex';
 
-      // Show Ask Alex tab only if explicitly enabled for this client
-      if (client.ask_alex_enabled === true) {
-        document.getElementById('tabAsk').style.display = '';
-        qaInitUI(); // initialize Q&A input listeners
-      }
-
-      // Show Workshops tab if this client is a sponsor on any workshops
-      if (myWorkshops.length > 0) {
-        document.getElementById('tabWorkshop').style.display = '';
-        renderWorkshopTab(myWorkshops);
-      }
-
-      // Contact Your Coach is available to active coaching clients only.
-      if (client.is_coaching_client) {
-        const tc = document.getElementById('tabCoach');
-        if (tc) tc.style.display = '';
-      }
+      // Visibility & Tier Engine: one resolver decides every tab + the Contact
+      // Coach gate. Async loaders (diagnostic, sponsor) update this input and
+      // re-apply, so the engine stays the single source of truth.
+      window._vizInput = {
+        in_coaching_program: client.in_coaching_program, coaching_sessions_enabled: client.coaching_sessions_enabled,
+        is_active_coaching: client.is_active_coaching, engagement_type: client.engagement_type || null,
+        has_diagnostic: !!(client.diagnostic_id || client.tp3_pillar || window._clientHasDiagnostic),
+        has_progress_history: !!((checkins && checkins.length) || (surveyData && surveyData.length)),
+        has_90_day_plan: !!client.plan_submitted_at,
+        is_sponsor: client.is_sponsor === true,
+        is_workshop_participant: (myWorkshops.length > 0 || client.is_workshop_participant === true),
+        ask_alex_enabled: client.ask_alex_enabled === true,
+        portal_locked: client.portal_locked === true,
+        is_active: client.is_active !== false,
+        is_archived: client.is_archived === true,
+        portal_first_active_at: client.portal_first_active_at || null,
+        current_date: new Date().toISOString(),
+      };
+      // Initialize content for conditionally-shown tabs (display handled by the engine).
+      if (client.ask_alex_enabled === true) qaInitUI();
+      if (myWorkshops.length > 0) renderWorkshopTab(myWorkshops);
+      applyPortalVisibility();
 
       // Store survey data globally for Results tab
       clientSurveyData = surveyData || [];

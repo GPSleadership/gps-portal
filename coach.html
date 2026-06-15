@@ -846,6 +846,7 @@
     <div id="subnav-comms" class="section-subnav" style="display:none;">
       <div class="section-subtab active" id="sub-emails"    onclick="showSection('emails')">Email Log</div>
       <div class="section-subtab"        id="sub-messages"  onclick="showSection('messages')">Client Messages <span id="msgNavBadge" style="display:none;background:#C0392B;color:#fff;border-radius:9px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:4px;">0</span></div>
+      <div class="section-subtab"        id="sub-nurture"   onclick="showSection('nurture')">Diagnostic Nurture</div>
       <div class="section-subtab"        id="sub-templates" onclick="showSection('templates')">Templates &amp; Automation</div>
     </div>
     <div id="subnav-settings" class="section-subnav" style="display:none;">
@@ -1052,6 +1053,23 @@
         <div id="msgThreadPane" style="flex:1;min-width:280px;background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.06);padding:18px;min-height:200px;">
           <div style="color:#5a6b76;font-size:13px;text-align:center;padding:40px 0;">Select a conversation to view and reply.</div>
         </div>
+      </div>
+    </div>
+
+    <!-- ═══ DIAGNOSTIC NURTURE SECTION ═══ -->
+    <div id="section-nurture" style="display:none;">
+      <div class="toolbar" style="margin-bottom:8px;">
+        <div class="toolbar-title">Diagnostic Nurture</div>
+        <div class="toolbar-right">
+          <button class="btn-secondary" onclick="nurtureDryRun()">Preview next send (dry run)</button>
+          <button class="btn-secondary" onclick="loadNurtureAdmin()">↻ Refresh</button>
+        </div>
+      </div>
+      <div style="font-size:12px;color:#5a6b76;margin-bottom:16px;max-width:760px;line-height:1.5;">
+        Bi-weekly follow-up for leaders who completed a diagnostic but are not in coaching. Enrolment is manual and reviewable — nothing sends until you enroll a leader and the daily sweep runs. A leader is dropped automatically the moment they become a coaching client. Clicks are the real "warming up" signal.
+      </div>
+      <div id="nurtureContent">
+        <div style="padding:24px;text-align:center;color:#5a6b76;font-size:13px;">Loading…</div>
       </div>
     </div>
 
@@ -3655,13 +3673,13 @@ document.getElementById('addAdminModal').addEventListener('click', function(e) {
 let _currentSection = 'dashboard';
 
 // Refactored IA: 5 top-level groups, each mapping to one or more underlying sections.
-var GROUP_OF = { dashboard:'today', clients:'clients', diagnostics:'diagteams', decisionroom:'diagteams', emails:'comms', messages:'comms', templates:'comms', admins:'settings', security:'settings', workshops:'workshops', organizations:'organizations' };
+var GROUP_OF = { dashboard:'today', clients:'clients', diagnostics:'diagteams', decisionroom:'diagteams', emails:'comms', messages:'comms', nurture:'comms', templates:'comms', admins:'settings', security:'settings', workshops:'workshops', organizations:'organizations' };
 var GROUP_DEFAULT = { today:'dashboard', clients:'clients', diagteams:'diagnostics', comms:'emails', settings:'admins', workshops:'workshops', organizations:'organizations' };
 function showGroup(group){ showSection(GROUP_DEFAULT[group] || 'dashboard'); }
 
 // ── Client Messages (Contact Your Coach — coach side) ───────────────────────
 var _coachInbox = [], _coachConvOpen = null;
-function msgTypeLabel(t){ return ({quick_question:'Quick question',prep_for_session:'Session prep',progress_update:'Update',win:'Win',logistics:'Logistics'})[t] || 'Message'; }
+function msgTypeLabel(t){ return ({quick_question:'Quick question',prep_for_session:'Session prep',progress_update:'Update',win:'Win',reschedule:'Reschedule',logistics:'Logistics'})[t] || 'Message'; }
 function msgStatusLabel(s){ return ({open:'Open',waiting_on_client:'Waiting on client',closed:'Closed'})[s] || s; }
 function msgFmtTime(iso){ if(!iso) return ''; try { return new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); } catch(_) { return ''; } }
 async function refreshMsgBadge(){
@@ -3767,11 +3785,71 @@ async function setCoachConvStatus(convId, status){
   catch(e){ alert('Could not update status: ' + e.message); }
 }
 
+// ── Diagnostic Nurture admin ────────────────────────────────────────────────
+var _nurture = { active: [], eligible: [] };
+function nurtFmt(iso){ if(!iso) return '—'; try { return new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric'}); } catch(_){ return '—'; } }
+var _nbtn = 'padding:5px 11px;border:1px solid #dbe3e6;background:#fff;border-radius:6px;font-size:12px;cursor:pointer;color:#004369;font-weight:600;';
+async function loadNurtureAdmin(){
+  var host=document.getElementById('nurtureContent'); if(!host) return;
+  host.innerHTML='<div style="padding:24px;text-align:center;color:#5a6b76;font-size:13px;">Loading…</div>';
+  try { var r=await coachData({action:'nurture-list'}); _nurture={active:r.active||[],eligible:r.eligible||[]}; }
+  catch(e){ host.innerHTML='<div style="padding:20px;color:#dc2626;font-size:13px;">'+esc(e.message)+' (Note: requires the v64 migration to be applied.)</div>'; return; }
+  renderNurtureAdmin();
+}
+function renderNurtureAdmin(){
+  var host=document.getElementById('nurtureContent'); if(!host) return;
+  var a=_nurture.active, e=_nurture.eligible;
+  var activeRows = a.length ? a.map(function(d){
+    var warming = d.nurture_last_clicked_at ? ' <span style="background:#E1F5EE;color:#0F6E56;border-radius:5px;padding:1px 7px;font-size:11px;font-weight:700;">Clicked '+nurtFmt(d.nurture_last_clicked_at)+'</span>' : '';
+    return '<tr style="border-top:1px solid #dbe3e6;">'
+      +'<td style="padding:9px;font-weight:700;color:#004369;">'+esc(d.client_name||'')+'<div style="font-size:11px;color:#8a97a0;font-weight:400;">'+esc(d.client_org||'')+'</div></td>'
+      +'<td style="padding:9px;text-align:center;">'+(d.nurture_emails_sent||0)+' / 5</td>'
+      +'<td style="padding:9px;">'+nurtFmt(d.nurture_next_at)+'</td>'
+      +'<td style="padding:9px;">'+(d.nurture_opened_count||0)+' opens'+warming+'</td>'
+      +'<td style="padding:9px;text-align:right;white-space:nowrap;">'
+        +'<button onclick="nurtureAct(\'nurture-skip\',\''+d.id+'\')" style="'+_nbtn+'">Send next now</button> '
+        +'<button onclick="nurtureAct(\'nurture-stop\',\''+d.id+'\')" style="'+_nbtn+'color:#a32d2d;">Stop</button>'
+      +'</td></tr>';
+  }).join('') : '<tr><td colspan="5" style="padding:20px;text-align:center;color:#5a6b76;">No active nurtures.</td></tr>';
+  var eligRows = e.length ? e.map(function(d){
+    return '<tr style="border-top:1px solid #dbe3e6;">'
+      +'<td style="padding:9px;font-weight:700;color:#004369;">'+esc(d.client_name||'')+'<div style="font-size:11px;color:#8a97a0;font-weight:400;">'+esc(d.client_org||'')+'</div></td>'
+      +'<td style="padding:9px;color:#5a6b76;">'+esc(d.client_email||'')+'</td>'
+      +'<td style="padding:9px;text-align:right;"><button onclick="nurtureEnroll(\''+d.id+'\')" style="'+_nbtn+'background:#01949A;color:#fff;border-color:#01949A;">Enroll</button></td>'
+    +'</tr>';
+  }).join('') : '<tr><td colspan="3" style="padding:20px;text-align:center;color:#5a6b76;">No leaders eligible to enroll right now.</td></tr>';
+  host.innerHTML =
+    '<div style="background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.06);overflow:hidden;margin-bottom:22px;">'
+    +'<div style="padding:12px 16px;font-weight:800;color:#004369;border-bottom:1px solid #eef1f2;">Active ('+a.length+')</div>'
+    +'<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#F7F4EE;text-align:left;color:#5a6b76;font-size:11px;text-transform:uppercase;letter-spacing:.4px;"><th style="padding:9px;">Leader</th><th style="padding:9px;text-align:center;">Touches</th><th style="padding:9px;">Next</th><th style="padding:9px;">Engagement</th><th style="padding:9px;"></th></tr></thead><tbody>'+activeRows+'</tbody></table></div>'
+    +'<div style="background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.06);overflow:hidden;">'
+    +'<div style="padding:12px 16px;font-weight:800;color:#004369;border-bottom:1px solid #eef1f2;">Eligible to enroll ('+e.length+')</div>'
+    +'<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#F7F4EE;text-align:left;color:#5a6b76;font-size:11px;text-transform:uppercase;letter-spacing:.4px;"><th style="padding:9px;">Leader</th><th style="padding:9px;">Email</th><th style="padding:9px;"></th></tr></thead><tbody>'+eligRows+'</tbody></table></div>';
+}
+async function nurtureAct(action,id){
+  try { await coachData({action:action, diagnostic_id:id}); await loadNurtureAdmin(); }
+  catch(e){ alert('Action failed: '+e.message); }
+}
+async function nurtureEnroll(id){
+  if(!confirm('Enroll this leader in the nurture sequence? They get the first email on the next daily sweep — preview it first with a dry run. They are dropped automatically if they become a coaching client.')) return;
+  try { await coachData({action:'nurture-toggle', diagnostic_id:id, active:true}); await loadNurtureAdmin(); }
+  catch(e){ alert('Enroll failed: '+e.message); }
+}
+async function nurtureDryRun(){
+  try {
+    var resp = await fetch('/api/diagnostic?action=nurture-sweep&dry_run=1',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session:getCoachSessionToken(), dry_run:true})});
+    var data = await resp.json();
+    if(!resp.ok) throw new Error(data.error||'Failed');
+    var lines = (data.sent||[]).map(function(s){return '• '+s.name+' — touch '+s.touch+': "'+(s.subject||'')+'"';});
+    alert('Dry run — would send '+(data.sent||[]).length+' email(s) right now:\n\n'+(lines.length?lines.join('\n'):'(none due)')+'\n\nNothing was sent.');
+  } catch(e){ alert('Dry run failed: '+e.message+'\n(Requires the v64 migration to be applied.)'); }
+}
+
 function showSection(name, skipHooks) {
   _currentSection = name;
   try { localStorage.setItem('gps_coach_section', name); } catch (_) {}
   // Toggle the underlying content sections.
-  ['dashboard', 'clients', 'emails', 'messages', 'templates', 'admins', 'security', 'diagnostics', 'decisionroom', 'workshops', 'organizations'].forEach(s => {
+  ['dashboard', 'clients', 'emails', 'messages', 'nurture', 'templates', 'admins', 'security', 'diagnostics', 'decisionroom', 'workshops', 'organizations'].forEach(s => {
     var sec = document.getElementById('section-' + s);
     if (sec) sec.style.display = s === name ? 'block' : 'none';
   });
@@ -3798,6 +3876,7 @@ function showSection(name, skipHooks) {
   if (name === 'workshops')   wsRender();
   if (name === 'emails')      loadEmailLog();
   if (name === 'messages')    loadCoachInbox();
+  if (name === 'nurture')     loadNurtureAdmin();
   if (name === 'admins')      loadAdminAccounts();
   if (name === 'templates')   loadEmailTemplates();
   if (name === 'dashboard')   { renderDiagHome(); refreshMsgBadge(); }

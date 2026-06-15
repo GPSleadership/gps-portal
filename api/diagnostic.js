@@ -235,6 +235,10 @@ export default async function handler(req, res) {
     case 'feedback-context':     return handleFeedbackContext(req, res);
     case 'submit-external-feedback': return handleSubmitExternalFeedback(req, res);
     case 'reminders':            return handleReminders(req, res);
+    case 'nurture-sweep':        return handleNurtureSweep(req, res);
+    case 'nurture-unsubscribe':  return handleNurtureUnsubscribe(req, res);
+    case 'nurture-click':        return handleNurtureClick(req, res);
+    case 'nurture-open':         return handleNurtureOpen(req, res);
     default:
       return res.status(400).json({ error: `Unknown action: "${action}". Valid: send-invites, schedule-invites, send-scheduled, trial-sweep, send-leader-link, generate-question, generate-g2-question, generate-report, generate-team-report, finalize-report, sign-report-upload, generate-dr-content, request-external-feedback, feedback-context, submit-external-feedback, reminders` });
   }
@@ -3251,4 +3255,172 @@ async function handleGenerateTeamReport(req, res) {
     console.error('[diagnostic/generate-team-report] error:', err);
     return res.status(500).json({ error: err.message });
   }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DIAGNOSTIC NURTURE — bi-weekly, finite, fatigue-aware sequence for diagnostic-only
+// leaders (NEVER raters). Portal/Resend is the single sender. Nothing sends unless a
+// leader is nurture_active AND still diagnostic-only (re-checked each run). Build is
+// inert until migration v64 is applied and the cron is wired in vercel.json.
+// ═══════════════════════════════════════════════════════════════════════════════
+const NURTURE_MAX_TOUCHES   = 5;     // cap: ~10 weeks of touches, then wind down
+const NURTURE_INTERVAL_DAYS = 14;
+
+// Default copy per touch (placeholders — Alex replaces via editable templates).
+// Kept deliberately plain so an un-reviewed send is never embarrassing.
+function nurtureDefaultBody(touch, firstName) {
+  const hi = `<p>Hi ${firstName || 'there'},</p>`;
+  const sign = `<p>- Alex Tremble<br/><span style="color:#666;font-size:13px;">GPS Leadership Solutions</span></p>`;
+  const bodies = {
+    1: `${hi}<p>Your diagnostic surfaced a clear picture of where your leadership leverage is. The leaders who get the most from it pick one thing and run a 7-day test. What is the single change you would test first?</p>${sign}`,
+    2: `${hi}<p>A quick idea from the field: the fastest way to free up your calendar is to hand one recurring decision to a direct report this week, with a clear guardrail. Small move, real time back.</p>${sign}`,
+    3: `${hi}<p>Most execution gaps are trust gaps in disguise. If a project keeps stalling, it is worth asking who does not yet trust the plan, the owner, or the timeline.</p>${sign}`,
+    4: `${hi}<p>Meetings are where leverage leaks. One rule that helps: every recurring meeting needs a decision it exists to make. If it has none, it becomes an email.</p>${sign}`,
+    5: `${hi}<p>It has been a few weeks since your diagnostic. If you want a structured way to act on it, the 14-Day Executive Leadership Diagnostic debrief and a focused coaching sprint are the usual next step. Reply and I will send details.</p>${sign}`,
+  };
+  return bodies[touch] || bodies[5];
+}
+
+function buildNurtureEmail({ firstName, bodyHtml, ctaUrl, ctaLabel, unsubUrl, pixelUrl }) {
+  const body = bodyHtml || nurtureDefaultBody(1, firstName);
+  const cta = ctaUrl ? `
+        <div style="margin:24px 0;text-align:center;">
+          <a href="${ctaUrl}" style="background:#1A3D6E;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:700;display:inline-block;">${ctaLabel || 'Take a look'}</a>
+        </div>` : '';
+  return `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
+      <div style="background:#1A3D6E;padding:18px 28px;border-radius:8px 8px 0 0;">
+        <div style="color:#C09A2A;font-size:11px;text-transform:uppercase;letter-spacing:1px;">GPS Leadership Solutions</div>
+      </div>
+      <div style="background:#ffffff;padding:26px 28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
+        ${body}
+        ${cta}
+        <div style="margin-top:28px;padding-top:16px;border-top:1px solid #eee;font-size:11px;color:#999;">
+          You are receiving this because you completed a GPS Leadership diagnostic.
+          <a href="${unsubUrl}" style="color:#999;text-decoration:underline;">Unsubscribe from these emails</a>.
+        </div>
+      </div>
+      ${pixelUrl ? `<img src="${pixelUrl}" width="1" height="1" alt="" style="display:none;" />` : ''}
+    </div>`;
+}
+
+// Cron: GET|POST /api/diagnostic?action=nurture-sweep  (add ?dry_run=1 to preview)
+async function handleNurtureSweep(req, res) {
+  if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const isVercelCron    = req.headers['x-vercel-cron'] === '1';
+  const isManualTrigger = req.method === 'POST' && !!verifyCoachSession(req.body?.session);
+  const hasSecret       = CRON_SECRET && (req.headers['authorization'] || '') === `Bearer ${CRON_SECRET}`;
+  if (!isVercelCron && !isManualTrigger && !hasSecret) return res.status(401).json({ error: 'Unauthorized' });
+
+  const dryRun = req.query?.dry_run === '1' || req.body?.dry_run === true;
+  const now    = new Date();
+  const log    = { dry_run: dryRun, sent: [], skipped: [], stopped: [], errors: [] };
+
+  try {
+    const dueRes = await sb(`/rest/v1/diagnostics?nurture_active=eq.true&nurture_unsubscribed=eq.false&nurture_next_at=lte.${encodeURIComponent(now.toISOString())}&select=id,client_name,client_org,client_email,client_id,leader_token,nurture_emails_sent&order=nurture_next_at.asc&limit=100`);
+    const due = dueRes.ok ? await dueRes.json() : [];
+
+    for (const d of due) {
+      const sentSoFar = d.nurture_emails_sent || 0;
+      // Sequence complete -> wind down.
+      if (sentSoFar >= NURTURE_MAX_TOUCHES) {
+        if (!dryRun) await sb(`/rest/v1/diagnostics?id=eq.${d.id}`, 'PATCH', { nurture_active: false, nurture_next_at: null }, { Prefer: 'return=minimal' });
+        log.stopped.push({ name: d.client_name, reason: 'sequence complete' });
+        continue;
+      }
+      // Re-verify still diagnostic-only: a converted/archived leader is dropped.
+      if (d.client_id) {
+        const cr = await sb(`/rest/v1/clients?id=eq.${encodeURIComponent(d.client_id)}&select=in_coaching_program,coaching_sessions_enabled,is_active_coaching,engagement_type,is_archived&limit=1`);
+        const c = (cr.ok ? await cr.json() : [])[0];
+        const nowCoaching = c && (c.in_coaching_program || c.coaching_sessions_enabled || c.is_active_coaching || c.engagement_type === 'diagnostic_plus_coaching');
+        if (nowCoaching || (c && c.is_archived)) {
+          if (!dryRun) await sb(`/rest/v1/diagnostics?id=eq.${d.id}`, 'PATCH', { nurture_active: false, nurture_next_at: null }, { Prefer: 'return=minimal' });
+          log.stopped.push({ name: d.client_name, reason: nowCoaching ? 'converted to coaching' : 'archived' });
+          continue;
+        }
+      }
+      if (!d.client_email) { log.errors.push({ name: d.client_name, error: 'no email on file' }); continue; }
+
+      const touch     = sentSoFar + 1;
+      const firstName = (d.client_name || '').split(' ')[0] || 'there';
+      const tpl       = await getApprovedTemplate(`diagnostic_nurture_${touch}`);
+      let bodyHtml = null, subject = `A quick leadership note (${touch}/${NURTURE_MAX_TOUCHES})`;
+      if (tpl) {
+        const vars = { first_name: firstName, leader_name: d.client_name || '', org: d.client_org || '' };
+        if (tpl.subject)   subject  = fillTemplate(tpl.subject, vars) || subject;
+        if (tpl.body_text) bodyHtml = tplBodyToHtml(fillTemplate(tpl.body_text, vars));
+      }
+      if (!bodyHtml) bodyHtml = nurtureDefaultBody(touch, firstName);
+
+      const tok      = encodeURIComponent(d.leader_token || '');
+      const unsubUrl = `${PORTAL_BASE}/api/diagnostic?action=nurture-unsubscribe&token=${tok}`;
+      const pixelUrl = `${PORTAL_BASE}/api/diagnostic?action=nurture-open&token=${tok}`;
+      const ctaUrl   = `${PORTAL_BASE}/api/diagnostic?action=nurture-click&token=${tok}&to=${encodeURIComponent(PORTAL_BASE + '/diagnostic-leader?token=' + (d.leader_token || ''))}`;
+      const html     = buildNurtureEmail({ firstName, bodyHtml, ctaUrl, ctaLabel: 'Revisit your diagnostic', unsubUrl, pixelUrl });
+
+      if (dryRun) { log.sent.push({ name: d.client_name, email: d.client_email, touch, subject, would_send: true }); continue; }
+
+      try {
+        await sendEmail({ to: d.client_email, subject, html, emailType: 'diagnostic_nurture', recipientName: d.client_name });
+        const next = touch < NURTURE_MAX_TOUCHES ? new Date(now.getTime() + NURTURE_INTERVAL_DAYS * 86400000).toISOString() : null;
+        await sb(`/rest/v1/diagnostics?id=eq.${d.id}`, 'PATCH', {
+          nurture_emails_sent: touch,
+          nurture_last_sent_at: now.toISOString(),
+          nurture_next_at: next,
+          nurture_active: touch < NURTURE_MAX_TOUCHES,
+        }, { Prefer: 'return=minimal' });
+        log.sent.push({ name: d.client_name, email: d.client_email, touch });
+      } catch (err) {
+        log.errors.push({ name: d.client_name, touch, error: err.message });
+      }
+    }
+    return res.status(200).json({ ok: true, ...log });
+  } catch (err) {
+    return res.status(500).json({ error: err.message, ...log });
+  }
+}
+
+// Public GET: leader clicks unsubscribe in a nurture email.
+async function handleNurtureUnsubscribe(req, res) {
+  const token = req.query?.token;
+  const page = (msg) => `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><div style="font-family:Arial,sans-serif;max-width:520px;margin:60px auto;padding:0 20px;color:#1a1a1a;text-align:center;"><div style="color:#C09A2A;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">GPS Leadership Solutions</div><h2 style="color:#1A3D6E;">${msg}</h2></div>`;
+  if (!token) return res.status(400).send(page('Invalid unsubscribe link.'));
+  try {
+    const r = await sb(`/rest/v1/diagnostics?leader_token=eq.${encodeURIComponent(token)}`, 'PATCH', { nurture_unsubscribed: true, nurture_active: false, nurture_next_at: null }, { Prefer: 'return=minimal' });
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.status(r.ok ? 200 : 500).send(page(r.ok ? "You're unsubscribed. You won't receive further emails of this kind." : 'Something went wrong. Please email alex@gpsleadership.org.'));
+  } catch (_) {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.status(500).send(page('Something went wrong. Please email alex@gpsleadership.org.'));
+  }
+}
+
+// Public GET: tracked CTA click -> stamp signal -> redirect (open-redirect-safe).
+async function handleNurtureClick(req, res) {
+  const token = req.query?.token;
+  let to = req.query?.to || PORTAL_BASE;
+  // Only ever redirect within the portal origin — never to an arbitrary URL.
+  if (typeof to !== 'string' || to.indexOf(PORTAL_BASE) !== 0) to = PORTAL_BASE;
+  if (token) {
+    try { await sb(`/rest/v1/diagnostics?leader_token=eq.${encodeURIComponent(token)}`, 'PATCH', { nurture_last_clicked_at: new Date().toISOString() }, { Prefer: 'return=minimal' }); } catch (_) {}
+  }
+  res.writeHead(302, { Location: to });
+  return res.end();
+}
+
+// Public GET: 1x1 open pixel -> soft signal (opens are inflated by Apple MPP).
+async function handleNurtureOpen(req, res) {
+  const token = req.query?.token;
+  if (token) {
+    try {
+      const r = await sb(`/rest/v1/diagnostics?leader_token=eq.${encodeURIComponent(token)}&select=nurture_opened_count&limit=1`);
+      const row = (r.ok ? await r.json() : [])[0];
+      if (row) await sb(`/rest/v1/diagnostics?leader_token=eq.${encodeURIComponent(token)}`, 'PATCH', { nurture_opened_count: (row.nurture_opened_count || 0) + 1, nurture_last_opened_at: new Date().toISOString() }, { Prefer: 'return=minimal' });
+    } catch (_) {}
+  }
+  const gif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+  res.setHeader('Content-Type', 'image/gif');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  return res.status(200).send(gif);
 }
