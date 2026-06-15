@@ -192,7 +192,7 @@
     if(isA){ var hs=document.getElementById('headerSub'); if(hs) hs.textContent='TP3 Organizational Assessment'; document.title='GPS TP3 Organizational Assessment'; }
     // Org logo (v40) — show next to GPS logo when available
     if(w.org_logo_url){ var lw=document.getElementById('orgLogoWrap'), li=document.getElementById('orgLogoImg'); if(lw&&li){ li.src=w.org_logo_url; li.alt=(w.org||'')+ ' logo'; lw.style.display='block'; } }
-    document.getElementById('headerWho').textContent = ''; // sponsor name not returned; keep clean
+    document.getElementById('headerWho').textContent = (d.sponsor && d.sponsor.name) ? d.sponsor.name : '';
     var part=s.participation||{pre:{rate:0},post:{rate:0},total:0};
     var html='';
     html+='<div class="page-title">'+esc(w.title)+'</div><div class="page-sub">'+esc(w.org||'')+(isA?'':(w.workshop_date?' · Workshop '+fmtDate(w.workshop_date):''))+(w.debrief_date?' · Debrief '+fmtDate(w.debrief_date):'')+'</div>';
@@ -254,6 +254,23 @@
         html+='<li class="'+m.state+'"><span class="dot2"></span><div><div class="lbl">'+esc(m.label)+(m.state==='current'?'<span class="tl-now">Now</span>':'')+'</div>'+(meta?'<div class="meta">'+esc(meta)+'</div>':'')+'</div></li>';
       });
       html+='</ul><div class="tl-note">'+esc(note)+'</div></div>';
+    }
+
+    // Roster — WHO is on the assessment + participation status. Names/roles only;
+    // never individual responses or scores, so response anonymity is preserved.
+    if(d.roster && d.roster.length){
+      var rc=d.rosterCounts||{total:d.roster.length,invited:0,completed:0};
+      var rrows=d.roster.map(function(p){
+        var status = p.completed
+          ? '<span style="color:#2e7d32;font-weight:600">Completed</span>'
+          : (p.invited ? '<span style="color:#e65100;font-weight:600">Invited</span>' : '<span style="color:#94a3b8">Not invited yet</span>');
+        return '<tr><td style="padding:7px 10px;font-weight:600;color:var(--navy-dark)">'+esc(p.name||'—')+'</td>'
+          +'<td style="padding:7px 10px;color:var(--gray-600)">'+esc(p.role||'')+(p.department?' · '+esc(p.department):'')+'</td>'
+          +'<td style="padding:7px 10px;text-align:right">'+status+'</td></tr>';
+      }).join('');
+      html+='<div class="card"><div class="card-title" style="margin-bottom:6px"><span class="dot"></span>Who’s on this assessment</div>'
+        +'<div style="font-size:13px;color:var(--gray-600);margin-bottom:10px">'+rc.completed+' of '+rc.total+' completed · '+rc.invited+' invited. Names only — individual responses stay anonymous.</div>'
+        +'<table style="width:100%;border-collapse:collapse;font-size:13px"><tbody>'+rrows+'</tbody></table></div>';
     }
 
     view.innerHTML=html;

@@ -8803,8 +8803,12 @@ async function drSendSponsor(sponsorId){
         var linkBtn=portalLink
           ?'<button onclick="navigator.clipboard.writeText(\''+portalLink+'\').then(function(){toast(\'Portal link copied.\');})" style="background:none;border:1px solid #dbe3e6;border-radius:5px;padding:3px 9px;font-size:11px;font-weight:700;color:#004369;cursor:pointer;">Copy portal link</button>'
           :'<span style="font-size:11px;color:#9ca3af;">No portal token</span>';
+        var dashLink=s.dashboardLink||'';
+        var dashBtn=dashLink
+          ?'<button onclick="navigator.clipboard.writeText(\''+dashLink+'\').then(function(){toast(\'Assessment link copied.\');})" style="background:#01949A;border:1px solid #01949A;border-radius:5px;padding:3px 9px;font-size:11px;font-weight:700;color:#fff;cursor:pointer;">Copy assessment link</button>'
+          :'';
         var viewBtn=s.client_id?'<button onclick="showSection(\'clients\');openClientProfile(\''+s.client_id+'\')" style="background:none;border:1px solid #dbe3e6;border-radius:5px;padding:3px 9px;font-size:11px;font-weight:700;color:#004369;cursor:pointer;">View profile</button>':'';
-        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f3f4f6;gap:8px;flex-wrap:wrap;"><div><div style="font-weight:700;font-size:13px;">'+esc(s.name||s.email)+'</div><div style="font-size:11px;color:#5a6b76;">'+esc(s.email)+(s.title?' · '+esc(s.title):'')+'</div></div><div style="display:flex;align-items:center;gap:6px;">'+viewBtn+linkBtn+'<button onclick="wsRemoveSponsor(\''+wid+'\',\''+s.client_id+'\')" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:12px;font-weight:700;padding:4px 8px;">Remove</button></div></div>';
+        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f3f4f6;gap:8px;flex-wrap:wrap;"><div><div style="font-weight:700;font-size:13px;">'+esc(s.name||s.email)+'</div><div style="font-size:11px;color:#5a6b76;">'+esc(s.email)+(s.title?' · '+esc(s.title):'')+'</div></div><div style="display:flex;align-items:center;gap:6px;">'+viewBtn+dashBtn+linkBtn+'<button onclick="wsRemoveSponsor(\''+wid+'\',\''+s.client_id+'\')" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:12px;font-weight:700;padding:4px 8px;">Remove</button></div></div>';
       }).join(''):'<div style="color:#5a6b76;font-size:13px;padding:8px 0;">No sponsors added yet.</div>';
       sp.querySelector('#wsSponsorList').innerHTML=rows;
     }catch(e){ sp.querySelector('#wsSponsorList').innerHTML='<div style="color:#dc2626;font-size:13px;">'+esc(e.message)+'</div>'; }

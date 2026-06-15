@@ -165,9 +165,25 @@ export default async function handler(req, res) {
 
   const token = (req.body || {}).token;
   try {
-    const w = await sbOne(`/rest/v1/workshops?sponsor_token=eq.${enc(token)}&select=*&limit=1`);
+    // Resolve the workshop from EITHER a per-sponsor access token (workshop_sponsors —
+    // each sponsor gets their own revocable link) OR the legacy single sponsor_token
+    // on the workshop itself. Per-sponsor takes precedence.
+    let w = null, sponsorRow = null;
+    sponsorRow = await sbOne(`/rest/v1/workshop_sponsors?access_token=eq.${enc(token)}&select=*&limit=1`);
+    if (sponsorRow) {
+      w = await sbOne(`/rest/v1/workshops?id=eq.${enc(sponsorRow.workshop_id)}&select=*&limit=1`);
+    } else {
+      w = await sbOne(`/rest/v1/workshops?sponsor_token=eq.${enc(token)}&select=*&limit=1`);
+    }
     if (!w) return res.status(401).json({ error: 'Invalid or expired link' });
     sb(`/rest/v1/workshops?id=eq.${w.id}`, 'PATCH', { token_last_used_at: new Date().toISOString() }, { Prefer: 'return=minimal' }).catch(() => {});
+
+    // Who is viewing (per-sponsor link only) — name/title for a personal greeting.
+    let sponsorMeta = null;
+    if (sponsorRow) {
+      const sc = await sbOne(`/rest/v1/clients?id=eq.${enc(sponsorRow.client_id)}&select=name&limit=1`);
+      sponsorMeta = { name: sc?.name || '', title: sponsorRow.sponsor_title || '', role: sponsorRow.role || 'sponsor' };
+    }
 
     // Look up org logo (v40) — null-safe, non-fatal
     let orgLogoUrl = null;
@@ -197,9 +213,21 @@ export default async function handler(req, res) {
     // are withheld until summary_approved.
     const approved = !!w.summary_approved;
 
+    // Roster — WHO is on the assessment + participation status, names/emails only.
+    // Never individual responses or scores, so response anonymity is preserved
+    // while the sponsor can review/confirm who is scheduled to take it.
+    const rparts = await sbGet(`/rest/v1/workshop_participants?workshop_id=eq.${enc(w.id)}&select=client_id,role,department,pre_status,invited_at&order=created_at.asc`);
+    const roster = await Promise.all(rparts.map(async p => {
+      const c = await sbOne(`/rest/v1/clients?id=eq.${enc(p.client_id)}&select=name,email&limit=1`);
+      return { name: c?.name || '', email: c?.email || '', role: p.role || '', department: p.department || '', invited: !!p.invited_at, completed: p.pre_status === 'complete' };
+    }));
+    const rosterCounts = { total: roster.length, invited: roster.filter(r => r.invited).length, completed: roster.filter(r => r.completed).length };
+
     return res.status(200).json({
       ok: true,
       finalizing: !approved,
+      roster,
+      rosterCounts,
       workshop: {
         title: w.title, org: w.client_org_name, org_logo_url: orgLogoUrl,
         workshop_date: w.workshop_date, debrief_date: w.debrief_date,

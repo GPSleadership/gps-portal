@@ -1132,16 +1132,24 @@ export default async function handler(req, res) {
       case 'get-workshop-sponsors': {
         const wid = body.workshop_id;
         if (!wid) return res.status(400).json({ error: 'workshop_id required' });
-        const links = await sbGet(`/rest/v1/workshop_sponsors?workshop_id=eq.${enc(wid)}&select=id,client_id,added_at,sponsor_title&order=added_at.asc`);
+        const links = await sbGet(`/rest/v1/workshop_sponsors?workshop_id=eq.${enc(wid)}&select=id,client_id,added_at,sponsor_title,access_token&order=added_at.asc`);
         const cmapSp = await clientsMapByIds(links.map(l => l.client_id), 'name,email,title,token');
-        const sponsors = links.map(l => {
+        const PORTAL = process.env.PORTAL_BASE_URL || 'https://portal.gpsleadership.org';
+        const sponsors = await Promise.all(links.map(async l => {
           const c = cmapSp.get(l.client_id);
-          // Build portal link server-side; never send raw token to the browser.
-          const PORTAL = process.env.PORTAL_BASE_URL || 'https://portal.gpsleadership.org';
           const portalLink = c?.token ? `${PORTAL}/client.html?token=${encodeURIComponent(c.token)}` : null;
+          // Per-sponsor assessment dashboard link. Backfill a token for any older row
+          // that never got one, so every sponsor has a working, revocable link.
+          let tok = l.access_token;
+          if (!tok) {
+            tok = crypto.randomUUID().replace(/-/g, '');
+            await sb(`/rest/v1/workshop_sponsors?id=eq.${enc(l.id)}`, 'PATCH', { access_token: tok }, { Prefer: 'return=minimal' });
+          }
+          const dashboardLink = `${PORTAL}/workshop-room?token=${encodeURIComponent(tok)}`;
           // Prefer the junction-level sponsor title (per-workshop) over the shared clients.title.
-          return { ...l, name: c?.name || '', email: c?.email || '', title: l.sponsor_title || c?.title || '', portalLink };
-        });
+          // Never echo the raw token back as its own field — it lives only inside the link.
+          return { id: l.id, client_id: l.client_id, added_at: l.added_at, name: c?.name || '', email: c?.email || '', title: l.sponsor_title || c?.title || '', portalLink, dashboardLink };
+        }));
         return res.status(200).json({ ok: true, sponsors });
       }
 
@@ -1173,7 +1181,7 @@ export default async function handler(req, res) {
         // Insert into junction (ignore duplicate). The sponsor's title lives on the junction,
         // not on the (possibly shared) clients row.
         await sb('/rest/v1/workshop_sponsors', 'POST',
-          { workshop_id: wid, client_id: client.id, sponsor_title: title },
+          { workshop_id: wid, client_id: client.id, sponsor_title: title, access_token: crypto.randomUUID().replace(/-/g, '') },
           { Prefer: 'resolution=ignore,return=minimal' });
         // Keep the single-field pointer in sync so the Overview + sponsor dashboard never go blank.
         const w0 = await sbOne(`/rest/v1/workshops?id=eq.${enc(wid)}&select=sponsor_client_id&limit=1`);
