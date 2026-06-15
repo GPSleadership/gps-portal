@@ -31,6 +31,9 @@ workshop-sandbox.html
 diagnostic-coach.html
 gps-executive-console.html
 gps-executive-console-deploy.html
+gps-ea-console.html
+control.html
+_SANDBOX_new-features.html
 
 # NOTE: coach-emergency.html, diagnostic-sandbox.html, and workshop-poc.html
 # have intentional route rewrites in vercel.json and are LEFT deployed.
