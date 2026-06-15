@@ -155,6 +155,44 @@ async function buildMemberReport(m, confidential) {
   return report;
 }
 
+// Status-only row for a 'progress' POC. Returns NAME + role + where this person
+// is in the process (diagnostic + assessment) — and NOTHING that reveals results:
+// no scoreboard, no report_json content, no coach_summary, no selfVsRaters.
+async function buildMemberStatus(m) {
+  const row = { id: m.id, client_id: m.client_id, role: m.role, status_only: true, name: null };
+  // Identity is not confidential (scores are); fall back to the client record.
+  let name = (m.report_json && m.report_json.name) || null;
+  if (!name) {
+    try {
+      const cr = await sbGet(`/rest/v1/clients?id=eq.${enc(m.client_id)}&select=name&limit=1`);
+      if (cr && cr[0] && cr[0].name) name = cr[0].name;
+    } catch (_) { /* falls back to role */ }
+  }
+  row.name = name;
+
+  // Where the leader is in their diagnostic (stage + how many raters are loaded).
+  let diagnostic = null;
+  try {
+    const dr = await sbGet(`/rest/v1/diagnostics?client_id=eq.${enc(m.client_id)}&is_archived=eq.false&select=id,status&order=created_at.desc&limit=1`);
+    if (dr && dr[0]) {
+      let ratersTotal = 0;
+      try { const rt = await sbGet(`/rest/v1/diagnostic_raters?diagnostic_id=eq.${enc(dr[0].id)}&select=id`); ratersTotal = (rt || []).length; } catch (_) { /* count optional */ }
+      diagnostic = { status: dr[0].status || 'setup', raters_total: ratersTotal };
+    }
+  } catch (_) { /* no diagnostic */ }
+  row.diagnostic = diagnostic;
+
+  // Where the leader is in the team assessment (invited yet + pre-survey status).
+  let assessment = null;
+  try {
+    const wp = await sbGet(`/rest/v1/workshop_participants?client_id=eq.${enc(m.client_id)}&select=pre_status,invited_at&order=created_at.desc&limit=1`);
+    if (wp && wp[0]) assessment = { invited: !!wp[0].invited_at, pre_status: wp[0].pre_status || 'pending' };
+  } catch (_) { /* not in an assessment */ }
+  row.assessment = assessment;
+
+  return row;
+}
+
 // The leader's real 90-day plan → focus card (goal, behaviors, their tracked
 // metric, and the stakeholder rating of the worked behavior from the scoreboard).
 async function buildPlanFocus(clientId, scoreboard) {
@@ -297,6 +335,10 @@ export default async function handler(req, res) {
       }
 
       const isPrivate = link.confidentiality_mode === 'private';
+      // 'progress' = a coordinating POC who may see ONLY where each leader is in
+      // the process (diagnostic + assessment), never another leader's results.
+      const isProgress = link.confidentiality_mode === 'progress';
+      const ownClientId = sponsor.linked_client_id || null;
       const supervises = Array.isArray(link.supervises_client_ids) ? link.supervises_client_ids
                        : (link.supervises_client_ids ? JSON.parse(link.supervises_client_ids) : []);
 
@@ -315,16 +357,28 @@ export default async function handler(req, res) {
       }
 
       // ── assemble (already-scoped) ─────────────────────────────────────────
+      // A 'progress' sponsor (coordinating POC) sees only WHERE each leader is in
+      // the process — never another leader's scores, summary, succession, or 360.
+      // They DO see their OWN full report, matched by the sponsor's linked client id.
       const memberReports = [];
-      for (const m of members) memberReports.push(await buildMemberReport(m, isPrivate));
+      for (const m of members) {
+        if (isProgress) {
+          if (ownClientId && m.client_id === ownClientId) memberReports.push(await buildMemberReport(m, false));
+          else memberReports.push(await buildMemberStatus(m));
+        } else {
+          memberReports.push(await buildMemberReport(m, isPrivate));
+        }
+      }
 
+      // Results-level content (recommendations, signals, written team report) is
+      // never assembled for a progress POC — they only get process status.
       // Omit the coach-only internal tags (gps_support_type, source_section) from the sponsor payload.
-      const recsRaw = await sbGet(`/rest/v1/recommendations?team_id=eq.${enc(teamId)}&status=eq.approved&visible_to_client=eq.true&select=short_title,description,owner,timeframe,category,target_band,quick_start_today,quick_start_week,updated_at&order=updated_at.desc`);
-      const signalsRaw = await sbGet(`/rest/v1/external_signals?team_id=eq.${enc(teamId)}&visible_to_client=eq.true&select=*&order=date_observed.desc`);
+      const recsRaw = isProgress ? [] : await sbGet(`/rest/v1/recommendations?team_id=eq.${enc(teamId)}&status=eq.approved&visible_to_client=eq.true&select=short_title,description,owner,timeframe,category,target_band,quick_start_today,quick_start_week,updated_at&order=updated_at.desc`);
+      const signalsRaw = isProgress ? [] : await sbGet(`/rest/v1/external_signals?team_id=eq.${enc(teamId)}&visible_to_client=eq.true&select=*&order=date_observed.desc`);
 
       // Written team report — the sponsor sees the coach-uploaded branded PDF,
       // never the draft text. Only when published (sponsor_visible) AND a PDF exists.
-      const trRaw = await sbGet(`/rest/v1/diagnostic_team_reports?team_id=eq.${enc(teamId)}&sponsor_visible=eq.true&report_pdf_url=not.is.null&select=report_pdf_url,generated_at&order=generated_at.desc&limit=1`);
+      const trRaw = isProgress ? null : await sbGet(`/rest/v1/diagnostic_team_reports?team_id=eq.${enc(teamId)}&sponsor_visible=eq.true&report_pdf_url=not.is.null&select=report_pdf_url,generated_at&order=generated_at.desc&limit=1`);
       const teamReport = (trRaw && trRaw[0]) ? { report_pdf_url: trRaw[0].report_pdf_url, generated_at: trRaw[0].generated_at } : null;
 
       return res.status(200).json({
@@ -332,14 +386,15 @@ export default async function handler(req, res) {
         sponsor: { name: sponsor.name },
         confidentiality: link.confidentiality_mode,
         show_succession: link.show_succession_to_sponsor !== false,
-        team: {
+        team: Object.assign({
           id: team.id, name: team.name, client_org_name: team.client_org_name, team_type: team.team_type,
           org_logo_url: orgLogo,
           primary_sponsor: sponsor.name,
+        }, isProgress ? {} : {
           quick_read: team.quick_read, summary: team.summary, last_updated: team.last_updated,
           snapshot: team.snapshot, themes: team.themes,
           start_stop_continue: team.start_stop_continue, intent_impact: team.intent_impact,
-        },
+        }),
         members: memberReports,
         recommendations: recsRaw,
         signals: signalsRaw,

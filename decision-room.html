@@ -257,6 +257,7 @@ function computeStatus(m){
 /* ───────── TEAM VIEW ───────── */
 function renderTeam(){
   var t=DATA.team, members=DATA.members||[];
+  if(DATA.confidentiality==='progress'){ return renderProgress(members); }
   var html='';
   if(DATA.confidentiality==='private'){
     html += '<div class="conf-banner"><b>Confidential engagement.</b> Each leader\'s individual diagnostic scores (self vs raters) stay private to them and are not shown here. Everything else — the 90-day plan, stakeholder progress, and engagement — is shared.</div>';
@@ -282,6 +283,34 @@ function renderTeam(){
   html += renderRecs(DATA.recommendations||[]);
   html += renderSignals(DATA.signals||[]);
   html += renderTeamReport(DATA.team_report);
+  document.getElementById('view').innerHTML = html;
+}
+
+/* ───────── PROGRESS / POC VIEW ─────────
+   A coordinating POC sees ONLY where each leader is in the process (diagnostic +
+   assessment) and their own full report. No other leader's results are sent by
+   the server in this mode, so there is nothing here that could leak them. */
+function fmtStage(s){ if(!s) return '—'; return String(s).replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();}); }
+function renderProgress(members){
+  var own = members.filter(function(m){ return !m.status_only; });
+  var rows = (members||[]).map(function(m){
+    var name = m.name || (m.report_json&&m.report_json.name) || m.role || 'Leader';
+    var diag = m.diagnostic
+      ? (fmtStage(m.diagnostic.status) + (m.diagnostic.raters_total!=null ? ' · '+m.diagnostic.raters_total+' rater'+(m.diagnostic.raters_total===1?'':'s')+' loaded' : ''))
+      : 'Not started';
+    var asmt = m.assessment ? (m.assessment.invited ? fmtStage(m.assessment.pre_status) : 'Not invited yet') : '—';
+    var mine = m.status_only ? '' : ' <span class="badge b-sub">You</span>';
+    return '<div class="doc-row"><div class="doc-icon">'+esc(initials(name))+'</div>'
+      +'<div class="doc-info"><div class="doc-title">'+esc(name)+mine+'</div><div class="doc-meta">'+esc(m.role||'')+'</div></div>'
+      +'<div class="roster-chips"><span class="badge b-draft">Diagnostic: '+esc(diag)+'</span>'
+      +'<span class="badge b-draft">Assessment: '+esc(asmt)+'</span></div></div>';
+  }).join('');
+  var html = '<div class="conf-banner"><b>Coordinator view.</b> You can see where each leader is in the process — their diagnostic and the team assessment — plus your own full report. Individual results for other leaders stay private to them.</div>';
+  html += '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Process Status</div><span class="section-note">Where each leader is — no individual results</span></div>'+(rows||'<div class="empty">No team members yet.</div>')+'</div>';
+  if(own.length){
+    html += '<div class="card-head" style="margin-top:20px;"><div class="card-title"><span class="dot"></span>Your report</div></div>';
+    html += memberReportHtml(own[0]);
+  }
   document.getElementById('view').innerHTML = html;
 }
 
