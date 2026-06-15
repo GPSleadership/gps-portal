@@ -444,7 +444,7 @@ async function init() {
 
   // Custom questions G2/G3 can each be rated 1-5 (default) or open-ended;
   // the type comes from the diagnostic record set by the coach.
-  QUESTIONS.forEach(q => {
+  QUESTION_BANK.forEach(q => {
     if (q.code === 'G2' && DIAGNOSTIC.custom_g2_type === 'open') q.type = 'open';
     if (q.code === 'G3' && DIAGNOSTIC.custom_g3_type === 'open') q.type = 'open';
   });
