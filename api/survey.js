@@ -243,13 +243,13 @@ async function handleSend(req, res) {
     const authOk = !!verifyCoachSession(req.body.session) || await verifyPassword(password);
     if (!authOk) return res.status(401).json({ error: 'Not authorized' });
 
-    const clientRes = await sbFetch(`/rest/v1/clients?id=eq.${client_id}&select=id,name,email,behavior_1,start_behavior,current_sprint_number`);
+    const clientRes = await sbFetch(`/rest/v1/clients?id=eq.${client_id}&select=id,name,email,behavior_1,start_behavior,current_sprint_number,observable_measure`);
     if (!clientRes.ok) return res.status(500).json({ error: 'Failed to load client' });
     const clients = await clientRes.json();
     if (!clients || clients.length === 0) return res.status(404).json({ error: 'Client not found' });
     const client = clients[0];
 
-    const priorityBehavior = (client.behavior_1 || client.start_behavior || '').trim();
+    const priorityBehavior = (client.observable_measure || client.behavior_1 || client.start_behavior || '').trim();
     if (!priorityBehavior) {
       return res.status(400).json({ error: 'This client has no priority behavior on file. Have them complete their 90-day plan before sending surveys.' });
     }
@@ -343,11 +343,11 @@ async function handleResend(req, res) {
     if (!authOk) return res.status(401).json({ error: 'Not authorized' });
 
     // Load client
-    const clientRes = await sbFetch(`/rest/v1/clients?id=eq.${client_id}&select=id,name,email,behavior_1,start_behavior,current_sprint_number`);
+    const clientRes = await sbFetch(`/rest/v1/clients?id=eq.${client_id}&select=id,name,email,behavior_1,start_behavior,current_sprint_number,observable_measure`);
     const clients = clientRes.ok ? await clientRes.json() : [];
     if (!clients.length) return res.status(404).json({ error: 'Client not found' });
     const client = clients[0];
-    const priorityBehavior = (client.behavior_1 || client.start_behavior || '').trim();
+    const priorityBehavior = (client.observable_measure || client.behavior_1 || client.start_behavior || '').trim();
     if (!priorityBehavior) return res.status(400).json({ error: 'No priority behavior on file for this client' });
     const sprintNumber = client.current_sprint_number || 1;
 

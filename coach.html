@@ -4676,6 +4676,7 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
   const sendBtnLabel    = baselineSent ? '✓ Baseline Sent' : '▶ Send Baseline Survey';
 
   el.innerHTML = `
+    <div id="obs-measure-${clientId}" style="margin-bottom:14px;"></div>
     <div style="margin-bottom:12px;">${badgeHtml}</div>
     <div id="sh-list-${clientId}">${listHtml}</div>
     <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
@@ -4692,6 +4693,35 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
     ${addFormHtml}
     ${scoreboardHtml}
   `;
+  loadObservableMeasure(clientId);
+}
+
+// The observable outcome stakeholders actually rate. Stored on the client; survey
+// send uses it ahead of Behavior 1. Editable any time before a survey goes out.
+async function loadObservableMeasure(clientId){
+  const box=document.getElementById('obs-measure-'+clientId); if(!box) return;
+  let c={};
+  try{ const rows=await cdSelect('clients',{eq:{id:clientId},select:'observable_measure,behavior_1,start_behavior',limit:1}); c=rows[0]||{}; }catch(_){ }
+  const beh=(c.behavior_1||c.start_behavior||'').trim();
+  const cur=(c.observable_measure||'').trim();
+  box.innerHTML = `
+    <div style="border:1px solid var(--gray-200);border-radius:8px;padding:14px 16px;background:#fbfdfc;">
+      <div style="font-weight:700;color:var(--navy);font-size:13px;margin-bottom:4px;">What stakeholders rate — observable outcome</div>
+      <div style="font-size:12px;color:var(--gray-600);line-height:1.5;margin-bottom:8px;">Phrase it as something others can <strong>see</strong>, present tense — e.g., &ldquo;runs meetings that end with clear decisions and owners&rdquo; or &ldquo;follows up on commitments without being chased.&rdquo; This is the exact statement stakeholders score. Leave blank to fall back to Behavior 1.</div>
+      ${beh?`<div style="font-size:12px;color:var(--gray-600);margin-bottom:8px;">Behavior 1 (fallback): <em>${escHtml(beh)}</em></div>`:''}
+      <textarea id="obs-input-${clientId}" rows="2" placeholder="${beh?escHtml(beh):'e.g., runs decisions to closure in meetings'}" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit;">${escHtml(cur)}</textarea>
+      <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+        <button onclick="saveObservableMeasure('${clientId}',this)" style="font-size:12px;background:var(--teal);color:#fff;border:none;border-radius:6px;padding:7px 16px;font-weight:700;cursor:pointer;">Save</button>
+        <span id="obs-out-${clientId}" style="font-size:12px;color:var(--gray-600);"></span>
+      </div>
+    </div>`;
+}
+async function saveObservableMeasure(clientId,btn){
+  const inp=document.getElementById('obs-input-'+clientId); const out=document.getElementById('obs-out-'+clientId);
+  if(!inp) return; const val=inp.value.trim();
+  if(out){ out.style.color='var(--gray-600)'; out.textContent='Saving…'; }
+  try{ await cdUpdate('clients',{observable_measure:val||null},{eq:{id:clientId}}); if(out){ out.style.color='var(--green)'; out.textContent='Saved.'; } }
+  catch(e){ if(out){ out.style.color='var(--red)'; out.textContent=(e&&e.message)||'Could not save.'; } }
 }
 
 async function saveStakeholder(clientId, btn) {
