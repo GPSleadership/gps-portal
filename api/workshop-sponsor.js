@@ -185,6 +185,50 @@ export default async function handler(req, res) {
       sponsorMeta = { name: sc?.name || '', title: sponsorRow.sponsor_title || '', role: sponsorRow.role || 'sponsor' };
     }
 
+    // ── Sponsor roster edits — add a person / edit a person (logistics only) ──
+    // Allowed only while the roster is unlocked; editing locks per-person once invited.
+    const act = (req.body || {}).action;
+    if (act === 'add-participant' || act === 'update-participant') {
+      if (w.roster_locked) return res.status(403).json({ error: 'The participant list is locked. Please contact your GPS coach to make changes.' });
+      const b = req.body || {};
+      const validEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+      if (act === 'add-participant') {
+        const name = (b.name || '').trim();
+        const email = (b.email || '').trim().toLowerCase();
+        const role = (b.role || '').trim() || null;
+        const dept = (b.department || '').trim() || null;
+        if (!name || !email || !validEmail(email)) return res.status(400).json({ error: 'A name and a valid email are required.' });
+        let client = await sbOne(`/rest/v1/clients?email=eq.${enc(email)}&select=id&limit=1`);
+        if (!client) {
+          const ins = await sb('/rest/v1/clients', 'POST', { name, email, title: role, organization: w.client_org_name || null, is_workshop_participant: true, in_coaching_program: false, is_active: true }, { Prefer: 'return=representation' });
+          const cr = await ins.json().catch(() => []); client = Array.isArray(cr) ? cr[0] : cr;
+          if (!client?.id) return res.status(500).json({ error: 'Could not add this person.' });
+        }
+        let tok = ''; const ch = 'abcdefghijklmnopqrstuvwxyz0123456789'; for (let i = 0; i < 48; i++) tok += ch[Math.floor(Math.random() * ch.length)];
+        await sb('/rest/v1/workshop_participants?on_conflict=workshop_id,client_id', 'POST', { workshop_id: w.id, client_id: client.id, role, department: dept, participant_token: tok }, { Prefer: 'resolution=merge-duplicates,return=minimal' });
+        await sb(`/rest/v1/workshops?id=eq.${enc(w.id)}`, 'PATCH', { roster_uploaded_at: new Date().toISOString() }, { Prefer: 'return=minimal' });
+        return res.status(200).json({ ok: true });
+      }
+      // update-participant — scoped to THIS workshop
+      const pid = (b.participant_id || '').trim();
+      if (!pid) return res.status(400).json({ error: 'participant_id required' });
+      const p = await sbOne(`/rest/v1/workshop_participants?id=eq.${enc(pid)}&workshop_id=eq.${enc(w.id)}&select=id,client_id,invited_at&limit=1`);
+      if (!p) return res.status(404).json({ error: 'Person not found on this assessment.' });
+      if (p.invited_at) return res.status(403).json({ error: 'This person has already been invited, so their details are locked.' });
+      const name = (b.name || '').trim();
+      const email = (b.email || '').trim().toLowerCase();
+      const role = (b.role || '').trim() || null;
+      const dept = (b.department || '').trim() || null;
+      if (name || email) {
+        const patch = {};
+        if (name) patch.name = name;
+        if (email) { if (!validEmail(email)) return res.status(400).json({ error: 'That email doesn’t look valid.' }); patch.email = email; }
+        await sb(`/rest/v1/clients?id=eq.${enc(p.client_id)}`, 'PATCH', patch, { Prefer: 'return=minimal' });
+      }
+      await sb(`/rest/v1/workshop_participants?id=eq.${enc(pid)}`, 'PATCH', { role, department: dept }, { Prefer: 'return=minimal' });
+      return res.status(200).json({ ok: true });
+    }
+
     // Look up org logo (v40) — null-safe, non-fatal
     let orgLogoUrl = null;
     if (w.organization_id) {
@@ -216,10 +260,10 @@ export default async function handler(req, res) {
     // Roster — WHO is on the assessment + participation status, names/emails only.
     // Never individual responses or scores, so response anonymity is preserved
     // while the sponsor can review/confirm who is scheduled to take it.
-    const rparts = await sbGet(`/rest/v1/workshop_participants?workshop_id=eq.${enc(w.id)}&select=client_id,role,department,pre_status,invited_at&order=created_at.asc`);
+    const rparts = await sbGet(`/rest/v1/workshop_participants?workshop_id=eq.${enc(w.id)}&select=id,client_id,role,department,pre_status,invited_at&order=created_at.asc`);
     const roster = await Promise.all(rparts.map(async p => {
       const c = await sbOne(`/rest/v1/clients?id=eq.${enc(p.client_id)}&select=name,email&limit=1`);
-      return { name: c?.name || '', email: c?.email || '', role: p.role || '', department: p.department || '', invited: !!p.invited_at, completed: p.pre_status === 'complete' };
+      return { id: p.id, name: c?.name || '', email: c?.email || '', role: p.role || '', department: p.department || '', invited: !!p.invited_at, completed: p.pre_status === 'complete' };
     }));
     const rosterCounts = { total: roster.length, invited: roster.filter(r => r.invited).length, completed: roster.filter(r => r.completed).length };
 
@@ -233,6 +277,7 @@ export default async function handler(req, res) {
         workshop_date: w.workshop_date, debrief_date: w.debrief_date,
         industry: w.industry, audience_level: w.audience_level, status: w.status,
         kind: w.engagement_kind || 'workshop',
+        roster_locked: !!w.roster_locked,
       },
       exec_summary: {
         participation: agg.participation, nps: agg.nps, npsAvg: agg.npsAvg, tp3: agg.tp3,

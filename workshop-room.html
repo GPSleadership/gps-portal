@@ -104,6 +104,9 @@
 (function(){
   var TOKEN = new URLSearchParams(location.search).get('token') || '';
   var view = document.getElementById('view');
+  var LAST = null;
+  function postAction(payload){ return fetch('/api/workshop-sponsor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({token:TOKEN},payload))}).then(function(r){ return r.json().then(function(j){ if(!r.ok||!j.ok) throw new Error(j.error||'Failed'); return j; }); }); }
+  function reload(){ view.innerHTML='<div class="loading"><div class="spinner"></div>Loading…</div>'; fetch('/api/workshop-sponsor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:TOKEN})}).then(function(r){ return r.json(); }).then(render).catch(function(e){ view.innerHTML='<div class="card"><div class="empty">'+esc(e.message)+'</div></div>'; }); }
   function esc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function fmtDate(d){ if(!d) return ''; var s=String(d).slice(0,10).split('-'); if(s.length<3) return String(d); var m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return m[parseInt(s[1],10)-1]+' '+parseInt(s[2],10)+', '+s[0]; }
 
@@ -186,6 +189,7 @@
       +rows+qual+'</div>';
   }
   function render(d){
+    LAST=d;
     if(!d||!d.ok){ view.innerHTML='<div class="card"><div class="empty">'+esc(d&&d.error||'Link not recognized.')+'</div></div>'; return; }
     var w=d.workshop, s=d.exec_summary||{}, rec=d.recommendation&&d.recommendation.primary;
     var isA=(w.kind==='assessment');
@@ -260,23 +264,65 @@
     // never individual responses or scores, so response anonymity is preserved.
     if(d.roster && d.roster.length){
       var rc=d.rosterCounts||{total:d.roster.length,invited:0,completed:0};
+      var locked=!!w.roster_locked;
       var rrows=d.roster.map(function(p){
         var status = p.completed
           ? '<span style="color:#2e7d32;font-weight:600">Completed</span>'
           : (p.invited ? '<span style="color:#e65100;font-weight:600">Invited</span>' : '<span style="color:#94a3b8">Not invited yet</span>');
-        return '<tr><td style="padding:7px 10px;font-weight:600;color:var(--navy-dark)">'+esc(p.name||'—')+'</td>'
+        var editable = !locked && !p.invited && !p.completed;
+        var editCell = editable ? '<button onclick="wrEdit(\''+p.id+'\')" style="background:none;border:1px solid #cbd5e1;border-radius:5px;padding:3px 9px;font-size:11px;font-weight:700;color:var(--navy);cursor:pointer">Edit</button>' : '';
+        return '<tr id="wrRow_'+p.id+'"><td style="padding:7px 10px;font-weight:600;color:var(--navy-dark)">'+esc(p.name||'—')+'</td>'
           +'<td style="padding:7px 10px;color:var(--gray-600)">'+esc(p.role||'')+(p.department?' · '+esc(p.department):'')+'</td>'
-          +'<td style="padding:7px 10px;text-align:right">'+status+'</td></tr>';
+          +'<td style="padding:7px 10px;color:var(--gray-600)">'+esc(p.email||'')+'</td>'
+          +'<td style="padding:7px 10px;text-align:right">'+status+'</td>'
+          +'<td style="padding:7px 10px;text-align:right">'+editCell+'</td></tr>';
       }).join('');
+      var addForm = locked
+        ? '<div style="font-size:12px;color:var(--gray-600);margin-top:10px">The participant list is locked. Contact your GPS coach to make changes.</div>'
+        : '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+          +'<input id="wrAddName" placeholder="Name" style="flex:1;min-width:120px;padding:7px 9px;border:1.5px solid #dbe3e6;border-radius:6px;font-size:13px">'
+          +'<input id="wrAddTitle" placeholder="Title" style="flex:1;min-width:110px;padding:7px 9px;border:1.5px solid #dbe3e6;border-radius:6px;font-size:13px">'
+          +'<input id="wrAddEmail" placeholder="Email" style="flex:1;min-width:150px;padding:7px 9px;border:1.5px solid #dbe3e6;border-radius:6px;font-size:13px">'
+          +'<button onclick="wrAdd()" style="background:var(--navy);color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer">Add person</button>'
+          +'<span id="wrAddMsg" style="font-size:12px;color:var(--gray-600)"></span></div>';
       html+='<div class="card"><div class="card-title" style="margin-bottom:6px"><span class="dot"></span>Who’s on this assessment</div>'
-        +'<div style="font-size:13px;color:var(--gray-600);margin-bottom:10px">'+rc.completed+' of '+rc.total+' completed · '+rc.invited+' invited. Names only — individual responses stay anonymous.</div>'
-        +'<table style="width:100%;border-collapse:collapse;font-size:13px"><tbody>'+rrows+'</tbody></table></div>';
+        +'<div style="font-size:13px;color:var(--gray-600);margin-bottom:10px">'+rc.completed+' of '+rc.total+' completed · '+rc.invited+' invited. Names only — individual responses stay anonymous. You can add or edit anyone until the survey goes out.</div>'
+        +'<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="text-align:left;color:var(--gray-600);font-size:11px;text-transform:uppercase"><th style="padding:6px 10px">Name</th><th style="padding:6px 10px">Title</th><th style="padding:6px 10px">Email</th><th style="padding:6px 10px;text-align:right">Status</th><th></th></tr></thead><tbody>'+rrows+'</tbody></table>'
+        +addForm+'</div>';
     }
 
     view.innerHTML=html;
     var pdf=document.getElementById('dlPdf'); if(pdf) pdf.onclick=function(){ window.print(); };
     var cp=document.getElementById('cpEmail'); if(cp) cp.onclick=function(){ copyEmail(w,s,rec); };
   }
+  window.reload=reload;
+  window.wrEdit=function(id){
+    var row=document.getElementById('wrRow_'+id); if(!row) return;
+    var p=((LAST&&LAST.roster)||[]).filter(function(x){return String(x.id)===String(id);})[0]||{};
+    function inp(eid,val,ph){ return '<input id="'+eid+'" value="'+esc(val||'').replace(/"/g,'&quot;')+'" placeholder="'+ph+'" style="width:100%;padding:5px 7px;border:1.5px solid #dbe3e6;border-radius:5px;font-size:12px">'; }
+    row.innerHTML='<td style="padding:5px 10px">'+inp('wrN_'+id,p.name,'Name')+'</td>'
+      +'<td style="padding:5px 10px">'+inp('wrR_'+id,p.role,'Title')+'</td>'
+      +'<td style="padding:5px 10px">'+inp('wrE_'+id,p.email,'Email')+'</td>'
+      +'<td colspan="2" style="padding:5px 10px;text-align:right;white-space:nowrap">'
+      +'<button onclick="wrSave(\''+id+'\')" style="background:#01949A;color:#fff;border:none;border-radius:5px;padding:4px 11px;font-size:12px;font-weight:700;cursor:pointer">Save</button> '
+      +'<button onclick="reload()" style="background:none;border:1px solid #cbd5e1;border-radius:5px;padding:4px 11px;font-size:12px;cursor:pointer">Cancel</button></td>';
+  };
+  window.wrSave=function(id){
+    var name=(document.getElementById('wrN_'+id).value||'').trim();
+    var email=(document.getElementById('wrE_'+id).value||'').trim();
+    var role=(document.getElementById('wrR_'+id).value||'').trim();
+    if(!name||!email){ alert('Name and email are required.'); return; }
+    postAction({action:'update-participant',participant_id:id,name:name,email:email,role:role}).then(reload).catch(function(e){ alert(e.message); });
+  };
+  window.wrAdd=function(){
+    var name=(document.getElementById('wrAddName').value||'').trim();
+    var email=(document.getElementById('wrAddEmail').value||'').trim();
+    var role=(document.getElementById('wrAddTitle').value||'').trim();
+    var msg=document.getElementById('wrAddMsg');
+    if(!name||!email){ if(msg){ msg.style.color='#b45309'; msg.textContent='Name and email required.'; } return; }
+    if(msg){ msg.style.color='#5a6b76'; msg.textContent='Adding…'; }
+    postAction({action:'add-participant',name:name,email:email,role:role}).then(reload).catch(function(e){ if(msg){ msg.style.color='#DB1F48'; msg.textContent=e.message; } });
+  };
   function copyEmail(w,s,rec){
     var L=[w.title+' — '+(w.kind==='assessment'?'assessment':'workshop')+' summary','','WHAT HAPPENED'];
     var p=s.participation||{}; L.push('Participation: '+((p.pre&&p.pre.rate)||0)+'% pre, '+((p.post&&p.post.rate)||0)+'% post · NPS '+(s.nps!=null?s.nps:'n/a'));

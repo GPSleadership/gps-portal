@@ -70,11 +70,35 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true, created, linked, skipped });
   }
 
+  // ── Edit one participant (name/email/title/dept) — logistics only ──────────
+  // Allowed only while the roster is unlocked AND that person hasn't been invited.
+  if (action === 'update-participant') {
+    if (w.roster_locked) return res.status(403).json({ error: 'The participant list is locked. Please contact your GPS coach to make changes.' });
+    const pid = (body.participant_id || '').trim();
+    if (!pid) return res.status(400).json({ error: 'participant_id required' });
+    // Scope: the participant must belong to THIS workshop (token-scoped).
+    const p = await sbOne(`/rest/v1/workshop_participants?id=eq.${enc(pid)}&workshop_id=eq.${enc(w.id)}&select=id,client_id,invited_at&limit=1`);
+    if (!p) return res.status(404).json({ error: 'Person not found on this assessment.' });
+    if (p.invited_at) return res.status(403).json({ error: 'This person has already been invited, so their details are locked.' });
+    const name = (body.name || '').trim();
+    const email = (body.email || '').trim().toLowerCase();
+    const role = (body.role || '').trim() || null;
+    const dept = (body.department || '').trim() || null;
+    if (name || email) {
+      const patch = {};
+      if (name) patch.name = name;
+      if (email) { if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'That email doesn’t look valid.' }); patch.email = email; }
+      await sb(`/rest/v1/clients?id=eq.${enc(p.client_id)}`, 'PATCH', patch, { Prefer: 'return=minimal' });
+    }
+    await sb(`/rest/v1/workshop_participants?id=eq.${enc(pid)}`, 'PATCH', { role, department: dept }, { Prefer: 'return=minimal' });
+    return res.status(200).json({ ok: true });
+  }
+
   // ── Default: progress-only payload (no scores anywhere) ───────────────────
-  const parts = await sbGet(`/rest/v1/workshop_participants?workshop_id=eq.${enc(w.id)}&select=client_id,pre_status,invited_at&order=created_at.asc`);
+  const parts = await sbGet(`/rest/v1/workshop_participants?workshop_id=eq.${enc(w.id)}&select=id,client_id,role,department,pre_status,invited_at&order=created_at.asc`);
   const participants = await Promise.all(parts.map(async p => {
     const c = await sbOne(`/rest/v1/clients?id=eq.${enc(p.client_id)}&select=name,email&limit=1`);
-    return { name: c?.name || '', email: c?.email || '', completed: p.pre_status === 'complete', invited: !!p.invited_at };
+    return { id: p.id, name: c?.name || '', email: c?.email || '', role: p.role || '', department: p.department || '', completed: p.pre_status === 'complete', invited: !!p.invited_at };
   }));
   const total = participants.length;
   const completed = participants.filter(p => p.completed).length;

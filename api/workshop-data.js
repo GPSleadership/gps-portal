@@ -1234,6 +1234,28 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true });
       }
 
+      // Edit one participant: name/email live on the shared client record; role +
+      // department live on the participant link. Used by the coach roster (and,
+      // token-scoped, by the sponsor/POC pages).
+      case 'update-participant': {
+        const pid = body.participant_id;
+        if (!pid) return res.status(400).json({ error: 'participant_id required' });
+        const name  = (body.name  || '').trim();
+        const email = (body.email || '').trim().toLowerCase();
+        const role  = (body.role  || '').trim() || null;
+        const dept  = (body.department || '').trim() || null;
+        const p = await sbOne(`/rest/v1/workshop_participants?id=eq.${enc(pid)}&select=client_id&limit=1`);
+        if (!p) return res.status(404).json({ error: 'Participant not found' });
+        if (name || email) {
+          const patch = {};
+          if (name)  patch.name  = name;
+          if (email) patch.email = email;
+          await sb(`/rest/v1/clients?id=eq.${enc(p.client_id)}`, 'PATCH', patch, { Prefer: 'return=minimal' });
+        }
+        await sb(`/rest/v1/workshop_participants?id=eq.${enc(pid)}`, 'PATCH', { role, department: dept }, { Prefer: 'return=minimal' });
+        return res.status(200).json({ ok: true });
+      }
+
       // Store roster file URL after upload (coach sets after upload to Supabase Storage)
       case 'set-roster-file': {
         const wid = body.workshop_id;
