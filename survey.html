@@ -336,12 +336,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!token) { show('errorState'); return; }
 
   try {
-    const tRes = await sbFetch(`/rest/v1/survey_tokens?token=eq.${encodeURIComponent(token)}&select=*`, 'GET');
+    // Validate the token through the service-key endpoint. The old browser
+    // anon-key read of survey_tokens is dead under the v26 RLS lockdown (anon
+    // has no policy on that table), which is what was erroring for stakeholders.
+    const tRes = await fetch('/api/survey?action=get', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ token }),
+    });
     if (!tRes.ok) { show('errorState'); return; }
-    const tokens = await tRes.json();
-    if (!tokens || tokens.length === 0) { show('errorState'); return; }
+    const data = await tRes.json();
+    if (!data || !data.token) { show('errorState'); return; }
 
-    tokenData = tokens[0];
+    tokenData = data.token;
     if (tokenData.is_used) { show('alreadyDoneState'); return; }
     if (tokenData.expires_at && new Date(tokenData.expires_at) < new Date()) { show('errorState'); return; }
 

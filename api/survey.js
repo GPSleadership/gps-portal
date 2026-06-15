@@ -46,12 +46,31 @@ export default async function handler(req, res) {
   const action = req.query?.action || req.body?.action;
 
   switch (action) {
+    case 'get':    return handleGet(req, res);
     case 'send':   return handleSend(req, res);
     case 'resend': return handleResend(req, res);
     case 'submit': return handleSubmit(req, res);
     default:
-      return res.status(400).json({ error: `Unknown action: "${action}". Valid: send, resend, submit` });
+      return res.status(400).json({ error: `Unknown action: "${action}". Valid: get, send, resend, submit` });
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ACTION: get — validate a stakeholder survey token and return its survey context.
+// Replaces the dead browser anon-key lookup (anon can't read survey_tokens under
+// the v26 RLS lockdown). Service key bypasses RLS; only the matching token row is
+// returned, so a caller can't enumerate or read anyone else's data.
+// POST /api/survey?action=get  { token }
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleGet(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  const token = (req.body && req.body.token) || req.query?.token;
+  if (!token) return res.status(400).json({ error: 'Missing token' });
+  const r = await sbFetch(`/rest/v1/survey_tokens?token=eq.${encodeURIComponent(token)}&select=*&limit=1`);
+  if (!r.ok) return res.status(500).json({ error: 'Could not validate survey link' });
+  const rows = await r.json();
+  if (!Array.isArray(rows) || rows.length === 0) return res.status(404).json({ error: 'Survey link not recognized' });
+  return res.status(200).json({ ok: true, token: rows[0] });
 }
 
 
