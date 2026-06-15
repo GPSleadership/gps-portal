@@ -265,29 +265,42 @@
     if(d.roster && d.roster.length){
       var rc=d.rosterCounts||{total:d.roster.length,invited:0,completed:0};
       var locked=!!w.roster_locked;
+      var narrow=(window.innerWidth||document.documentElement.clientWidth||9999)<=600;
       var rrows=d.roster.map(function(p){
         var status = p.completed
           ? '<span style="color:#2e7d32;font-weight:600">Completed</span>'
           : (p.invited ? '<span style="color:#e65100;font-weight:600">Invited</span>' : '<span style="color:#94a3b8">Not invited yet</span>');
         var editable = !locked && !p.invited && !p.completed;
-        var editCell = editable ? '<button onclick="wrEdit(\''+p.id+'\')" style="background:none;border:1px solid #cbd5e1;border-radius:5px;padding:3px 9px;font-size:11px;font-weight:700;color:var(--navy);cursor:pointer">Edit</button>' : '';
+        var editCell = editable ? '<button onclick="wrEdit(\''+p.id+'\')" style="background:none;border:1px solid #cbd5e1;border-radius:5px;padding:4px 11px;font-size:12px;font-weight:700;color:var(--navy);cursor:pointer">Edit</button>' : '';
+        if(narrow){
+          // Phone: just Name + Email + Edit. Tap Edit to reveal all fields.
+          return '<tr id="wrRow_'+p.id+'"><td style="padding:9px 10px;font-weight:600;color:var(--navy-dark)">'+esc(p.name||'—')
+            +'<div style="font-weight:400;color:var(--gray-600);font-size:12px;margin-top:2px">'+esc(p.email||'')+'</div></td>'
+            +'<td style="padding:9px 10px;text-align:right;vertical-align:top">'+editCell+'</td></tr>';
+        }
         return '<tr id="wrRow_'+p.id+'"><td style="padding:7px 10px;font-weight:600;color:var(--navy-dark)">'+esc(p.name||'—')+'</td>'
           +'<td style="padding:7px 10px;color:var(--gray-600)">'+esc(p.role||'')+(p.department?' · '+esc(p.department):'')+'</td>'
           +'<td style="padding:7px 10px;color:var(--gray-600)">'+esc(p.email||'')+'</td>'
           +'<td style="padding:7px 10px;text-align:right">'+status+'</td>'
           +'<td style="padding:7px 10px;text-align:right">'+editCell+'</td></tr>';
       }).join('');
+      var thead = narrow
+        ? '<thead><tr style="text-align:left;color:var(--gray-600);font-size:11px;text-transform:uppercase"><th style="padding:6px 10px">Name &amp; email</th><th></th></tr></thead>'
+        : '<thead><tr style="text-align:left;color:var(--gray-600);font-size:11px;text-transform:uppercase"><th style="padding:6px 10px">Name</th><th style="padding:6px 10px">Title</th><th style="padding:6px 10px">Email</th><th style="padding:6px 10px;text-align:right">Status</th><th></th></tr></thead>';
+      var addInp='padding:9px 10px;border:1.5px solid #dbe3e6;border-radius:6px;font-size:14px;box-sizing:border-box;';
       var addForm = locked
         ? '<div style="font-size:12px;color:var(--gray-600);margin-top:10px">The participant list is locked. Contact your GPS coach to make changes.</div>'
-        : '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
-          +'<input id="wrAddName" placeholder="Name" style="flex:1;min-width:120px;padding:7px 9px;border:1.5px solid #dbe3e6;border-radius:6px;font-size:13px">'
-          +'<input id="wrAddTitle" placeholder="Title" style="flex:1;min-width:110px;padding:7px 9px;border:1.5px solid #dbe3e6;border-radius:6px;font-size:13px">'
-          +'<input id="wrAddEmail" placeholder="Email" style="flex:1;min-width:150px;padding:7px 9px;border:1.5px solid #dbe3e6;border-radius:6px;font-size:13px">'
-          +'<button onclick="wrAdd()" style="background:var(--navy);color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer">Add person</button>'
-          +'<span id="wrAddMsg" style="font-size:12px;color:var(--gray-600)"></span></div>';
+        : '<div style="margin-top:14px;border-top:1px solid #eef2f1;padding-top:12px"><div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px">Add someone</div>'
+          +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+          +'<input id="wrAddName" placeholder="Name" style="flex:1;min-width:120px;'+addInp+'">'
+          +'<input id="wrAddTitle" placeholder="Title" style="flex:1;min-width:110px;'+addInp+'">'
+          +'<input id="wrAddDept" placeholder="Department" style="flex:1;min-width:120px;'+addInp+'">'
+          +'<input id="wrAddEmail" placeholder="Email" style="flex:1;min-width:150px;'+addInp+'">'
+          +'<button onclick="wrAdd()" style="background:var(--navy);color:#fff;border:none;border-radius:6px;padding:9px 18px;font-size:14px;font-weight:700;cursor:pointer">Add person</button>'
+          +'<span id="wrAddMsg" style="font-size:12px;color:var(--gray-600)"></span></div></div>';
       html+='<div class="card"><div class="card-title" style="margin-bottom:6px"><span class="dot"></span>Who’s on this assessment</div>'
         +'<div style="font-size:13px;color:var(--gray-600);margin-bottom:10px">'+rc.completed+' of '+rc.total+' completed · '+rc.invited+' invited. Names only — individual responses stay anonymous. You can add or edit anyone until the survey goes out.</div>'
-        +'<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="text-align:left;color:var(--gray-600);font-size:11px;text-transform:uppercase"><th style="padding:6px 10px">Name</th><th style="padding:6px 10px">Title</th><th style="padding:6px 10px">Email</th><th style="padding:6px 10px;text-align:right">Status</th><th></th></tr></thead><tbody>'+rrows+'</tbody></table>'
+        +'<table style="width:100%;border-collapse:collapse;font-size:13px">'+thead+'<tbody>'+rrows+'</tbody></table>'
         +addForm+'</div>';
     }
 
@@ -299,29 +312,33 @@
   window.wrEdit=function(id){
     var row=document.getElementById('wrRow_'+id); if(!row) return;
     var p=((LAST&&LAST.roster)||[]).filter(function(x){return String(x.id)===String(id);})[0]||{};
-    function inp(eid,val,ph){ return '<input id="'+eid+'" value="'+esc(val||'').replace(/"/g,'&quot;')+'" placeholder="'+ph+'" style="width:100%;padding:5px 7px;border:1.5px solid #dbe3e6;border-radius:5px;font-size:12px">'; }
-    row.innerHTML='<td style="padding:5px 10px">'+inp('wrN_'+id,p.name,'Name')+'</td>'
-      +'<td style="padding:5px 10px">'+inp('wrR_'+id,p.role,'Title')+'</td>'
-      +'<td style="padding:5px 10px">'+inp('wrE_'+id,p.email,'Email')+'</td>'
-      +'<td colspan="2" style="padding:5px 10px;text-align:right;white-space:nowrap">'
-      +'<button onclick="wrSave(\''+id+'\')" style="background:#01949A;color:#fff;border:none;border-radius:5px;padding:4px 11px;font-size:12px;font-weight:700;cursor:pointer">Save</button> '
-      +'<button onclick="reload()" style="background:none;border:1px solid #cbd5e1;border-radius:5px;padding:4px 11px;font-size:12px;cursor:pointer">Cancel</button></td>';
+    function field(eid,lbl,val,ph){ return '<div style="margin-bottom:9px"><label style="display:block;font-size:11px;color:var(--gray-600);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:3px">'+lbl+'</label><input id="'+eid+'" value="'+esc(val||'').replace(/"/g,'&quot;')+'" placeholder="'+ph+'" style="width:100%;box-sizing:border-box;padding:9px 11px;border:1.5px solid #dbe3e6;border-radius:6px;font-size:14px"></div>'; }
+    // One full-width editing cell — works the same on phone and desktop. Any field is editable.
+    row.innerHTML='<td colspan="6" style="padding:12px 10px;background:#f6faf9">'
+      +field('wrN_'+id,'Name',p.name,'Name')
+      +field('wrR_'+id,'Title',p.role,'Title')
+      +field('wrD_'+id,'Department',p.department,'Department')
+      +field('wrE_'+id,'Email',p.email,'Email')
+      +'<div style="display:flex;gap:8px;margin-top:2px"><button onclick="wrSave(\''+id+'\')" style="background:#01949A;color:#fff;border:none;border-radius:6px;padding:9px 18px;font-size:14px;font-weight:700;cursor:pointer">Save</button>'
+      +'<button onclick="reload()" style="background:none;border:1px solid #cbd5e1;border-radius:6px;padding:9px 18px;font-size:14px;cursor:pointer">Cancel</button></div></td>';
   };
   window.wrSave=function(id){
     var name=(document.getElementById('wrN_'+id).value||'').trim();
     var email=(document.getElementById('wrE_'+id).value||'').trim();
     var role=(document.getElementById('wrR_'+id).value||'').trim();
+    var dept=(document.getElementById('wrD_'+id).value||'').trim();
     if(!name||!email){ alert('Name and email are required.'); return; }
-    postAction({action:'update-participant',participant_id:id,name:name,email:email,role:role}).then(reload).catch(function(e){ alert(e.message); });
+    postAction({action:'update-participant',participant_id:id,name:name,email:email,role:role,department:dept}).then(reload).catch(function(e){ alert(e.message); });
   };
   window.wrAdd=function(){
     var name=(document.getElementById('wrAddName').value||'').trim();
     var email=(document.getElementById('wrAddEmail').value||'').trim();
     var role=(document.getElementById('wrAddTitle').value||'').trim();
+    var deptEl=document.getElementById('wrAddDept'); var dept=deptEl?(deptEl.value||'').trim():'';
     var msg=document.getElementById('wrAddMsg');
     if(!name||!email){ if(msg){ msg.style.color='#b45309'; msg.textContent='Name and email required.'; } return; }
     if(msg){ msg.style.color='#5a6b76'; msg.textContent='Adding…'; }
-    postAction({action:'add-participant',name:name,email:email,role:role}).then(reload).catch(function(e){ if(msg){ msg.style.color='#DB1F48'; msg.textContent=e.message; } });
+    postAction({action:'add-participant',name:name,email:email,role:role,department:dept}).then(reload).catch(function(e){ if(msg){ msg.style.color='#DB1F48'; msg.textContent=e.message; } });
   };
   function copyEmail(w,s,rec){
     var L=[w.title+' — '+(w.kind==='assessment'?'assessment':'workshop')+' summary','','WHAT HAPPENED'];

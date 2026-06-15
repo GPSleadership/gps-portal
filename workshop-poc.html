@@ -102,11 +102,16 @@ function render(){
   var pct = c.total ? Math.round((c.completed/c.total)*100) : 0;
 
   var canEdit = !w.roster_locked;
+  var narrow=(window.innerWidth||document.documentElement.clientWidth||9999)<=600;
   var rows = ps.length ? ps.map(function(p){
     var editable = canEdit && !p.invited && !p.completed;
-    var editBtn = editable ? '<button onclick="pocEdit(\''+p.id+'\')" style="background:none;border:1px solid #cbd5e1;border-radius:5px;padding:4px 10px;font-size:12px;font-weight:700;color:#004369;cursor:pointer;">Edit</button>' : '';
+    var editBtn = editable ? '<button onclick="pocEdit(\''+p.id+'\')" style="background:none;border:1px solid #cbd5e1;border-radius:5px;padding:4px 11px;font-size:12px;font-weight:700;color:#004369;cursor:pointer;">Edit</button>' : '';
+    if(narrow){
+      return '<tr id="pocRow_'+p.id+'"><td style="font-weight:600;color:#1a2730;">'+esc(p.name||'—')+'<div class="muted" style="font-weight:400;font-size:12px;margin-top:2px;">'+esc(p.email||'')+'</div></td><td style="text-align:right;vertical-align:top;">'+editBtn+'</td></tr>';
+    }
     return '<tr id="pocRow_'+p.id+'"><td style="font-weight:600;color:#1a2730;">'+esc(p.name||'—')+'</td><td class="muted">'+esc(p.role||'—')+'</td><td class="muted">'+esc(p.email||'')+'</td><td>'+(p.completed?'<span class="pill pill-done">Completed</span>':'<span class="pill pill-wait">'+(p.invited?'Invited':'Not started')+'</span>')+'</td><td style="white-space:nowrap;">'+editBtn+'</td></tr>';
   }).join('') : '<tr><td colspan="5" class="muted" style="text-align:center;padding:22px;">No participants added yet.</td></tr>';
+  var pocThead = narrow ? '<thead><tr><th>Name &amp; email</th><th></th></tr></thead>' : '<thead><tr><th>Name</th><th>Title</th><th>Email</th><th>Status</th><th></th></tr></thead>';
 
   var lockNote = w.roster_locked ? '<div class="lock">The participant list is locked. Contact your GPS coach to make changes.</div>' : '';
   var uploadCard = w.roster_locked ? '' :
@@ -134,7 +139,7 @@ function render(){
     +'<div class="muted" style="margin-top:6px;text-align:right;">'+pct+'% complete</div>'
     +'</div>'
     +'<div class="card"><div class="title-row"><div class="h2">Participants</div></div>'+lockNote
-    +'<div style="overflow-x:auto;"><table><thead><tr><th>Name</th><th>Title</th><th>Email</th><th>Status</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+    +'<div style="overflow-x:auto;"><table>'+pocThead+'<tbody>'+rows+'</tbody></table></div>'
     +'<div class="muted" style="margin-top:8px;">You can see who has completed the survey — not their individual answers or scores. Results are shared with your leadership separately.</div>'
     +'</div>'
     + uploadCard;
@@ -143,17 +148,18 @@ function render(){
 function pocEdit(id){
   var p=(DATA.participants||[]).find(function(x){return String(x.id)===String(id);}); if(!p) return;
   var row=document.getElementById('pocRow_'+id); if(!row) return;
-  function inp(eid,val,ph){ return '<input id="'+eid+'" value="'+esc(val||'').replace(/"/g,'&quot;')+'" placeholder="'+ph+'" style="width:100%;padding:6px 8px;border:1.5px solid #dbe3e6;border-radius:6px;font-size:13px;">'; }
-  var bs='border-radius:6px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;';
-  row.innerHTML='<td>'+inp('pocN_'+id,p.name,'Name')+'</td><td>'+inp('pocR_'+id,p.role,'Title')+'</td><td>'+inp('pocE_'+id,p.email,'Email')+'</td>'
-    +'<td colspan="2" style="white-space:nowrap;"><button onclick="pocEditSave(\''+id+'\')" style="'+bs+'background:#01949A;border:1px solid #01949A;color:#fff;">Save</button> <button onclick="load()" style="'+bs+'background:none;border:1px solid #cbd5e1;color:#555;">Cancel</button></td>';
+  function field(eid,lbl,val,ph){ return '<div style="margin-bottom:9px"><label style="display:block;font-size:11px;color:#5a6b76;font-weight:700;text-transform:uppercase;margin-bottom:3px;">'+lbl+'</label><input id="'+eid+'" value="'+esc(val||'').replace(/"/g,'&quot;')+'" placeholder="'+ph+'" style="width:100%;box-sizing:border-box;padding:9px 11px;border:1.5px solid #dbe3e6;border-radius:6px;font-size:14px;"></div>'; }
+  var bs='border-radius:6px;padding:9px 18px;font-size:14px;font-weight:700;cursor:pointer;';
+  row.innerHTML='<td colspan="5" style="background:#f6faf9;padding:12px;">'+field('pocN_'+id,'Name',p.name,'Name')+field('pocR_'+id,'Title',p.role,'Title')+field('pocD_'+id,'Department',p.department,'Department')+field('pocE_'+id,'Email',p.email,'Email')
+    +'<div style="display:flex;gap:8px;"><button onclick="pocEditSave(\''+id+'\')" style="'+bs+'background:#01949A;border:1px solid #01949A;color:#fff;">Save</button><button onclick="load()" style="'+bs+'background:none;border:1px solid #cbd5e1;color:#555;">Cancel</button></div></td>';
 }
 function pocEditSave(id){
   var name=(document.getElementById('pocN_'+id).value||'').trim();
   var email=(document.getElementById('pocE_'+id).value||'').trim();
   var role=(document.getElementById('pocR_'+id).value||'').trim();
+  var dept=(document.getElementById('pocD_'+id).value||'').trim();
   if(!name||!email){ alert('Name and email are required.'); return; }
-  api('update-participant',{participant_id:id,name:name,email:email,role:role}).then(function(){ load(); }).catch(function(e){ alert((e&&e.message)||'Could not save.'); });
+  api('update-participant',{participant_id:id,name:name,email:email,role:role,department:dept}).then(function(){ load(); }).catch(function(e){ alert((e&&e.message)||'Could not save.'); });
 }
 function _map(o){
   function pick(keys){ for(var k in o){ var kn=String(k).toLowerCase().trim(); if(keys.indexOf(kn)>-1) return String(o[k]==null?'':o[k]).trim(); } return ''; }
