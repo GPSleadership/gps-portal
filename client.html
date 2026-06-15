@@ -5337,7 +5337,9 @@ function renderWorkshopTab(workshops) {
     if (!locked) {
       var lastUpload = uploadedAt
         ? '<div style="color:#6b7280;font-size:12px;margin-top:6px;">Last upload: ' + uploadedAt + '</div>'
-        : '<div style="color:#9ca3af;font-size:12px;margin-top:6px;">No roster uploaded yet.</div>';
+        : (w.participant_count > 0
+          ? '<div style="color:#6b7280;font-size:12px;margin-top:6px;">' + w.participant_count + ' people are on the roster. Upload a file to replace it.</div>'
+          : '<div style="color:#9ca3af;font-size:12px;margin-top:6px;">No roster uploaded yet.</div>');
       var rosterHeading = (w.participant_count > 0)
         ? 'Update your team'
         : 'Step 1 — Add your team';
@@ -7854,7 +7856,10 @@ By clicking "I Agree and Continue," you confirm that you have read and understoo
     card.style.display='block';
   }
   function maybeShow(){
-    bumpOpens();
+    var n=bumpOpens();
+    // Don't nag every visit: show on the 1st open, then only every 7th. The explicit
+    // "Not now" (12 opens) / "Save it" (180 opens) snoozes still apply on top of this.
+    if (!(n===1 || n%7===0)) return;
     var hasToken = /[?&]token=/.test(location.search) || (function(){ try{ return !!localStorage.getItem('gps_client_token'); }catch(_){ return false; } })();
     if (hasToken) setTimeout(render, 2500);
   }

@@ -418,15 +418,18 @@ function renderRoster(members){
     var st=computeStatus(m);
     var name = (m.report_json&&m.report_json.name) || m.coach_name || ('Leader '+(i+1));
     name = m.name || name;
-    var pills=''; if(m.is_coaching_client) pills+='<span class="badge b-sub">Coaching</span>'; else pills+='<span class="badge b-sub">Diagnostic only</span>';
+    var pills='';
+    pills += m.is_coaching_client ? '<span class="badge b-sub">Coaching + Diagnostic</span>' : '<span class="badge b-sub">Diagnostic</span>';
     if(m.is_coaching_client && m.engagement && m.engagement.checkinRate!=null && m.engagement.checkinRate<0.6) pills+='<span class="badge b-sub b-sub-warn">Low engagement</span>';
+    // Only show a score band once a real score exists — no "No score yet" noise when we are already showing the stage.
+    var scoreChip = (st.key!=='pending') ? '<span class="badge status-chip '+st.cls+'">'+st.label+'</span>' : '';
+    var stageChip = (m.pipeline&&m.pipeline.current_label) ? '<span class="badge b-draft" title="Where this leader is in the process">Stage: '+esc(m.pipeline.current_label)+'</span>' : '';
     return '<div class="doc-row"><div class="doc-icon">'+esc(initials(name))+'</div>'
       +'<div class="doc-info"><div class="doc-title">'+esc(name)+'</div><div class="doc-meta">'+esc(m.role||'')+'</div></div>'
-      +'<div class="roster-chips"><span class="badge status-chip '+st.cls+'">'+st.label+'</span>'+pills
-      +(m.pipeline&&m.pipeline.current_label?'<span class="badge b-draft">'+esc(m.pipeline.current_label)+'</span>':'')
+      +'<div class="roster-chips">'+stageChip+pills+scoreChip
       +'<button class="btn-sm" onclick="viewMember('+members.indexOf(m)+')">View report</button></div></div>';
   }).join('');
-  return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Leadership Team</div><span class="section-note">Sorted by status · open a leader for their report</span></div>'+(rows||'<div class="empty">No team members.</div>')+'</div>';
+  return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Leadership Team</div><span class="section-note">Each leader’s current stage is shown · open a leader for their report</span></div>'+(rows||'<div class="empty">No team members.</div>')+'</div>';
 }
 
 function renderTeamSuccession(members){
@@ -640,12 +643,21 @@ init();
   if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js').catch(function(){}); }
   var deferredPrompt = null;
   window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); deferredPrompt = e; });
-  var DK = 'gps_install_dismissed';
-  window.gpsInstallDismiss = function(){ try{ localStorage.setItem(DK, String(Date.now())); }catch(_){ } var el=document.getElementById('gpsInstall'); if(el) el.style.display='none'; };
+  // Snooze by OPEN COUNT (matches the client portal): "Not now" hides it for ~12
+  // visits, "Save it" for ~180. Shown on the 1st open then every 7th (see maybeShow).
+  var OPENS='gps_install_opens', SNZ='gps_install_snooze_until';
+  function opensCount(){ try{ return parseInt(localStorage.getItem(OPENS)||'0',10)||0; }catch(_){ return 0; } }
+  function bumpOpens(){ try{ var n=opensCount()+1; localStorage.setItem(OPENS,String(n)); return n; }catch(_){ return 0; } }
+  function snoozed(){ try{ var u=parseInt(localStorage.getItem(SNZ)||'0',10)||0; return opensCount() < u; }catch(_){ return false; } }
+  function setSnooze(n){ try{ localStorage.setItem(SNZ, String(opensCount()+n)); }catch(_){ } }
+  function hideBanner(){ var el=document.getElementById('gpsInstall'); if(el) el.style.display='none'; }
+  window.gpsInstallNotNow = function(){ setSnooze(12); hideBanner(); };
+  window.gpsInstallSaved  = function(){ setSnooze(180); hideBanner(); };
+  window.gpsInstallDismiss = window.gpsInstallNotNow;
   function standalone(){ return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true; }
   function iOS(){ return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream; }
   function android(){ return /Android/.test(navigator.userAgent); }
-  function dismissed(){ try{ var t=parseInt(localStorage.getItem(DK)||'0',10); return t && (Date.now()-t) < 1209600000; }catch(_){ return false; } }
+  function dismissed(){ return snoozed(); }
   function qr(container){
     var wrap=document.createElement('div'); wrap.style.cssText='margin-top:8px;display:flex;gap:12px;align-items:center;';
     var box=document.createElement('div');
@@ -663,11 +675,7 @@ init();
       msg.textContent='Add it to your home screen for one-tap access:';
       act.innerHTML='<div style="font-size:13px;color:#333;line-height:1.6;">Tap the <b>Share</b> button (bottom of Safari, top right of Chrome), then choose <b>“Add to Home Screen.”</b></div>';
     } else if (deferredPrompt) {
-      msg.textContent='Install it as an app for one-tap access:';
-      var b=document.createElement('button'); b.textContent='Add to my home screen';
-      b.style.cssText='background:#004369;color:#fff;border:none;border-radius:8px;padding:12px 18px;font-size:14px;font-weight:700;cursor:pointer;width:100%;';
-      b.onclick=function(){ deferredPrompt.prompt(); deferredPrompt.userChoice.finally(function(){ deferredPrompt=null; window.gpsInstallDismiss(); }); };
-      act.appendChild(b);
+      msg.textContent='Install it as an app for one-tap access.';
     } else if (android()) {
       msg.textContent='Add it to your home screen:';
       act.innerHTML='<div style="font-size:13px;color:#333;line-height:1.6;">Tap the <b>⋮</b> menu in Chrome, then <b>“Add to Home screen.”</b></div>';
@@ -676,9 +684,21 @@ init();
       act.innerHTML='<div style="font-size:13px;color:#333;line-height:1.6;margin-bottom:4px;">Bookmark this page (Ctrl/Cmd+D), or use the install icon in your browser’s address bar.</div>';
       qr(act);
     }
+    // Always offer a clear yes + a "Not now" that snoozes — consistent with the client portal.
+    var row=document.createElement('div'); row.style.cssText='display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;';
+    var yes=document.createElement('button');
+    yes.style.cssText='background:#004369;color:#fff;border:none;border-radius:8px;padding:11px 20px;font-size:14px;font-weight:700;cursor:pointer;flex:1;min-width:130px;';
+    if (deferredPrompt){ yes.textContent='Add to my home screen'; yes.onclick=function(){ deferredPrompt.prompt(); deferredPrompt.userChoice.finally(function(){ deferredPrompt=null; window.gpsInstallSaved(); }); }; }
+    else { yes.textContent='Save it'; yes.onclick=function(){ window.gpsInstallSaved(); }; }
+    var no=document.createElement('button'); no.textContent='Not now';
+    no.style.cssText='background:#fff;color:#555;border:1.5px solid #cbd5e1;border-radius:8px;padding:11px 20px;font-size:14px;font-weight:600;cursor:pointer;flex:0 0 auto;';
+    no.onclick=function(){ window.gpsInstallNotNow(); };
+    row.appendChild(yes); row.appendChild(no); act.appendChild(row);
     card.style.display='block';
   }
   function maybeShow(){
+    var n=bumpOpens();
+    if (!(n===1 || n%7===0)) return;   // 1st open, then every 7th — never every visit
     var hasToken = /[?&]token=/.test(location.search) || (function(){ try{ return !!localStorage.getItem('gps_sponsor_token'); }catch(_){ return false; } })();
     if (hasToken) setTimeout(render, 2500);
   }

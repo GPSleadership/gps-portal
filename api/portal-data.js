@@ -352,7 +352,7 @@ export default async function handler(req, res) {
         // Look up workshop_sponsors rows for this client
         const enc = encodeURIComponent;
         const links = await (async () => {
-          const r = await sb(`/rest/v1/workshop_sponsors?client_id=eq.${enc(clientId)}&select=workshop_id,added_at`);
+          const r = await sb(`/rest/v1/workshop_sponsors?client_id=eq.${enc(clientId)}&select=workshop_id,added_at,access_token`);
           if (!r.ok) return [];
           return (await r.json().catch(() => [])) || [];
         })();
@@ -379,7 +379,9 @@ export default async function handler(req, res) {
           // The sponsor's own status dashboard link, built server-side. The raw token
           // is not surfaced as its own field — only the ready-to-open URL.
           const PORTAL = process.env.PORTAL_BASE_URL || 'https://portal.gpsleadership.org';
-          const dashboard_url = w.sponsor_token ? `${PORTAL}/workshop-room?token=${encodeURIComponent(w.sponsor_token)}` : null;
+          // Prefer the sponsor's OWN per-sponsor token; fall back to the workshop's shared one.
+          const dashTok = l.access_token || w.sponsor_token;
+          const dashboard_url = dashTok ? `${PORTAL}/workshop-room?token=${encodeURIComponent(dashTok)}` : null;
           const { sponsor_token, ...wSafe } = w;
           return {
             ...wSafe,
