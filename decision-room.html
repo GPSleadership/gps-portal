@@ -291,19 +291,41 @@ function renderTeam(){
    assessment) and their own full report. No other leader's results are sent by
    the server in this mode, so there is nothing here that could leak them. */
 function fmtStage(s){ if(!s) return '—'; return String(s).replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();}); }
+/* Shared process-pipeline render — used in the POC view, the sponsor roster, and
+   each member report. Stage + date only (no nudge flag). */
+function renderPipeline(pl){
+  if(!pl||!pl.stages||!pl.stages.length) return '';
+  var items = pl.stages.map(function(s){
+    var done=s.done, cur=(s.key===pl.current_key && !done);
+    var mark = done?'✓':(cur?'●':'○');
+    var color = done?'#1a7f4b':(cur?'#b45309':'#9ca3af');
+    var txtcol = (done||cur)?'#1f2937':'#6b7280';
+    var when = s.date?fmtDate(s.date):'';
+    var note = s.note?' · '+esc(s.note):'';
+    return '<div style="display:flex;align-items:center;gap:8px;padding:2px 0;font-size:13px;color:'+txtcol+';font-weight:'+(cur?'600':'400')+'">'
+      +'<span style="color:'+color+';width:14px;display:inline-block;text-align:center">'+mark+'</span>'
+      +'<span style="flex:1">'+esc(s.label)+note+'</span>'
+      +(when?'<span style="color:#6b7280;font-size:12px;white-space:nowrap">'+esc(when)+'</span>':'')+'</div>';
+  }).join('');
+  return '<div style="margin-top:8px;border-left:2px solid #e5e7eb;padding-left:10px">'+items+'</div>';
+}
+function pipelineCard(m){
+  if(!m||!m.pipeline) return '';
+  return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Process</div>'
+    +'<span class="section-note">Currently: '+esc(m.pipeline.current_label||'')+'</span></div>'+renderPipeline(m.pipeline)+'</div>';
+}
 function renderProgress(members){
   var own = members.filter(function(m){ return !m.status_only; });
   var rows = (members||[]).map(function(m){
     var name = m.name || (m.report_json&&m.report_json.name) || m.role || 'Leader';
-    var diag = m.diagnostic
-      ? (fmtStage(m.diagnostic.status) + (m.diagnostic.raters_total!=null ? ' · '+m.diagnostic.raters_total+' rater'+(m.diagnostic.raters_total===1?'':'s')+' loaded' : ''))
-      : 'Not started';
-    var asmt = m.assessment ? (m.assessment.invited ? fmtStage(m.assessment.pre_status) : 'Not invited yet') : '—';
     var mine = m.status_only ? '' : ' <span class="badge b-sub">You</span>';
-    return '<div class="doc-row"><div class="doc-icon">'+esc(initials(name))+'</div>'
-      +'<div class="doc-info"><div class="doc-title">'+esc(name)+mine+'</div><div class="doc-meta">'+esc(m.role||'')+'</div></div>'
-      +'<div class="roster-chips"><span class="badge b-draft">Diagnostic: '+esc(diag)+'</span>'
-      +'<span class="badge b-draft">Assessment: '+esc(asmt)+'</span></div></div>';
+    var asmt = m.assessment ? (m.assessment.invited ? ('Assessment: '+fmtStage(m.assessment.pre_status)) : 'Assessment: not invited yet') : '';
+    var cur = (m.pipeline && m.pipeline.current_label) ? '<span class="badge b-draft">'+esc(m.pipeline.current_label)+'</span>' : '';
+    return '<div class="doc-row" style="align-items:flex-start"><div class="doc-icon">'+esc(initials(name))+'</div>'
+      +'<div class="doc-info" style="flex:1"><div class="doc-title">'+esc(name)+mine+' '+cur+'</div>'
+      +'<div class="doc-meta">'+esc(m.role||'')+(asmt?' · '+esc(asmt):'')+'</div>'
+      + (m.pipeline ? renderPipeline(m.pipeline) : '<div class="empty">No diagnostic set up yet.</div>')
+      +'</div></div>';
   }).join('');
   var html = '<div class="conf-banner"><b>Coordinator view.</b> You can see where each leader is in the process — their diagnostic and the team assessment — plus your own full report. Individual results for other leaders stay private to them.</div>';
   html += '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Process Status</div><span class="section-note">Where each leader is — no individual results</span></div>'+(rows||'<div class="empty">No team members yet.</div>')+'</div>';
@@ -401,6 +423,7 @@ function renderRoster(members){
     return '<div class="doc-row"><div class="doc-icon">'+esc(initials(name))+'</div>'
       +'<div class="doc-info"><div class="doc-title">'+esc(name)+'</div><div class="doc-meta">'+esc(m.role||'')+'</div></div>'
       +'<div class="roster-chips"><span class="badge status-chip '+st.cls+'">'+st.label+'</span>'+pills
+      +(m.pipeline&&m.pipeline.current_label?'<span class="badge b-draft">'+esc(m.pipeline.current_label)+'</span>':'')
       +'<button class="btn-sm" onclick="viewMember('+members.indexOf(m)+')">View report</button></div></div>';
   }).join('');
   return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Leadership Team</div><span class="section-note">Sorted by status · open a leader for their report</span></div>'+(rows||'<div class="empty">No team members.</div>')+'</div>';
@@ -484,6 +507,7 @@ function memberReportHtml(m){
   var out = '<div class="card"><div class="ind-header"><div class="ind-avatar">'+esc(initials(name))+'</div><div><div class="ind-name">'+esc(name)+'</div>'
     + '<div class="ind-role">'+esc(m.role||'')+' &middot; '+esc(t.client_org_name||t.name)+' '+engBadge+'</div></div></div>'+(sLine?'<div class="ind-summary">'+esc(sLine)+'</div>':'')+'</div>';
   out += attentionBanner(m, first);
+  out += pipelineCard(m);
   out += progressCard(m);
   // Confidential 360 detail only if the endpoint included it (omitted server-side in private mode)
   if(m.selfVsRaters) out += selfVsRatersCard(m.selfVsRaters);

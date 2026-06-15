@@ -5710,6 +5710,24 @@ function renderOverviewTab() {
       </div>
 
       <div style="margin-bottom:14px;padding-top:14px;border-top:1px solid var(--d-border);">
+        <div style="font-size:11px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Kickoff Meeting Date &amp; Time</div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <input type="date" id="kickoff-date-field"
+            style="width:auto;padding:7px 10px;border:1.5px solid var(--d-border);border-radius:6px;font-size:13px;"
+            value="${d.kickoff_date || ''}"
+            onchange="saveKickoffDate(this.value)">
+          <input type="text" id="kickoff-time-field" placeholder="e.g. 10:00 AM ET"
+            style="width:140px;padding:7px 10px;border:1.5px solid var(--d-border);border-radius:6px;font-size:13px;"
+            value="${(d.kickoff_time || '').replace(/"/g,'&quot;')}"
+            onchange="saveKickoffTime(this.value)">
+          ${d.kickoff_completed_at
+            ? `<span style="font-size:12px;color:var(--d-green);">✓ Held ${diagFormatDate(d.kickoff_completed_at)}</span>`
+            : (d.kickoff_date ? `<button class="dbtn dbtn-sm" onclick="markKickoffHeld()">Mark held</button>` : '')}
+        </div>
+        <div class="dhint">The first milestone in the process. Appears on the sponsor and POC progress view so they can see where each leader is.</div>
+      </div>
+
+      <div style="margin-bottom:14px;padding-top:14px;border-top:1px solid var(--d-border);">
         <div style="font-size:11px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Debrief Session Date &amp; Time</div>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
           <input type="date" id="debrief-date-field"
@@ -7022,6 +7040,18 @@ async function saveDebriefDate(dateStr) {
 async function saveDebriefTime(timeStr) {
   await updateDiag({ debrief_time: (timeStr || '').trim() || null });
   // No re-render needed; value persists for the pre-debrief email on finalize.
+}
+
+async function saveKickoffDate(dateStr) {
+  await updateDiag({ kickoff_date: dateStr || null });
+  await refreshSelected();
+}
+async function saveKickoffTime(timeStr) {
+  await updateDiag({ kickoff_time: (timeStr || '').trim() || null });
+}
+async function markKickoffHeld() {
+  await updateDiag({ kickoff_completed_at: new Date().toISOString() });
+  await refreshSelected();
 }
 
 async function saveIntakeNotes(val) {

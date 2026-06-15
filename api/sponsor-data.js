@@ -139,6 +139,8 @@ async function buildMemberReport(m, confidential) {
   // 90-day stakeholder scoreboard + engagement (post-diagnostic — always shown)
   report.scoreboard = await buildScoreboard(m.client_id);
   report.engagement = await buildEngagement(m.client_id);
+  // Process pipeline — where this leader is in the diagnostic (shown to sponsors too).
+  report.pipeline = await buildPipeline(m.client_id);
 
   // The leader's REAL 90-day focus: the goal + metric they actually chose in their
   // own portal. Pulled live from the plan so the sponsor sees what the leader sees,
@@ -170,17 +172,8 @@ async function buildMemberStatus(m) {
   }
   row.name = name;
 
-  // Where the leader is in their diagnostic (stage + how many raters are loaded).
-  let diagnostic = null;
-  try {
-    const dr = await sbGet(`/rest/v1/diagnostics?client_id=eq.${enc(m.client_id)}&is_archived=eq.false&select=id,status&order=created_at.desc&limit=1`);
-    if (dr && dr[0]) {
-      let ratersTotal = 0;
-      try { const rt = await sbGet(`/rest/v1/diagnostic_raters?diagnostic_id=eq.${enc(dr[0].id)}&select=id`); ratersTotal = (rt || []).length; } catch (_) { /* count optional */ }
-      diagnostic = { status: dr[0].status || 'setup', raters_total: ratersTotal };
-    }
-  } catch (_) { /* no diagnostic */ }
-  row.diagnostic = diagnostic;
+  // Where the leader is in their diagnostic process (full 7-stage pipeline).
+  row.pipeline = await buildPipeline(m.client_id);
 
   // Where the leader is in the team assessment (invited yet + pre-survey status).
   let assessment = null;
@@ -191,6 +184,39 @@ async function buildMemberStatus(m) {
   row.assessment = assessment;
 
   return row;
+}
+
+// One leader's process pipeline — derived entirely from milestones already tracked
+// on the diagnostic plus the kickoff date. Each stage carries a date + done flag,
+// and current_label is the first not-yet-done stage. Reveals NO results — only
+// where the person is and when each milestone happened/is scheduled.
+async function buildPipeline(clientId) {
+  let d = null;
+  try {
+    const r = await sbGet(`/rest/v1/diagnostics?client_id=eq.${enc(clientId)}&is_archived=eq.false&select=id,status,kickoff_date,kickoff_completed_at,invites_sent_at,invites_scheduled_at,all_raters_complete_at,survey_closed_at,close_date,report_finalized_at,report_release_at,report_generated_at,debrief_date,debrief_completed_at,plan_locked_at,plan_status&order=created_at.desc&limit=1`);
+    d = r && r[0];
+  } catch (_) { /* no diagnostic */ }
+  if (!d) return null;
+
+  let ratersTotal = 0;
+  try { const rt = await sbGet(`/rest/v1/diagnostic_raters?diagnostic_id=eq.${enc(d.id)}&select=id`); ratersTotal = (rt || []).length; } catch (_) { /* count optional */ }
+
+  const ps = String(d.plan_status || '');
+  const planActive = !!d.plan_locked_at || ['active', 'in_progress', 'locked'].includes(ps);
+  const planComplete = ['complete', 'completed', 'closed', 'done'].includes(ps);
+
+  const stages = [
+    { key: 'kickoff',  label: 'Kickoff',             date: d.kickoff_date || null,                                                    done: !!d.kickoff_completed_at },
+    { key: 'survey',   label: 'Survey sent',         date: d.invites_sent_at || d.invites_scheduled_at || null,                       done: !!d.invites_sent_at },
+    { key: 'collect',  label: 'Collecting responses', date: d.all_raters_complete_at || d.survey_closed_at || d.close_date || null,    done: !!(d.all_raters_complete_at || d.survey_closed_at), note: ratersTotal ? (ratersTotal + ' rater' + (ratersTotal === 1 ? '' : 's') + ' loaded') : null },
+    { key: 'report',   label: 'Report ready',        date: d.report_finalized_at || d.report_release_at || d.report_generated_at || null, done: !!(d.report_finalized_at || d.report_release_at) },
+    { key: 'debrief',  label: 'Debrief',             date: d.debrief_date || null,                                                    done: !!d.debrief_completed_at },
+    { key: 'plan',     label: '90-day plan active',  date: d.plan_locked_at || null,                                                  done: planActive || planComplete },
+    { key: 'complete', label: '90-day complete',     date: null,                                                                      done: planComplete },
+  ];
+
+  const current = stages.find(s => !s.done);
+  return { stages, current_key: current ? current.key : 'complete', current_label: current ? current.label : '90-day complete' };
 }
 
 // The leader's real 90-day plan → focus card (goal, behaviors, their tracked
