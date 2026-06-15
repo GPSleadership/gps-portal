@@ -323,7 +323,7 @@ function buildInviteEmail({ raterName, leaderName, leaderTitle, leaderOrg, surve
 // actually went out.
 async function sendInvitesForDiagnostic(diagnostic_id) {
   const diagRes = await sb(
-    `/rest/v1/diagnostics?id=eq.${diagnostic_id}&select=id,client_name,client_title,client_org,client_email,close_date,status,self_assessment_completed_at,interviews_enabled,interview_calendar_link&limit=1`
+    `/rest/v1/diagnostics?id=eq.${diagnostic_id}&select=id,client_name,client_title,client_org,client_email,close_date,status,self_assessment_completed_at,interviews_enabled,interview_calendar_link,anonymous_feedback&limit=1`
   );
   const diags = await diagRes.json();
   if (!Array.isArray(diags) || diags.length === 0) return { httpStatus: 404, payload: { error: 'Diagnostic not found' } };
@@ -390,7 +390,10 @@ async function sendInvitesForDiagnostic(diagnostic_id) {
       bodyHtml,
     });
 
-    const inviteCc = [diag.client_email, 'team@gpsleadership.org'].filter(Boolean);
+    // On an anonymous diagnostic, never CC the leader — doing so reveals the full
+    // rater roster to them and shows raters their leader is copied, breaking the
+    // anonymity promise. Internal team@ still gets a copy either way.
+    const inviteCc = (diag.anonymous_feedback ? [] : [diag.client_email]).concat('team@gpsleadership.org').filter(Boolean);
     try {
       await sendEmail({ to: rater.email, subject, html, emailType: 'diagnostic_invite', recipientName: rater.name, cc: inviteCc });
       await sb(`/rest/v1/diagnostic_raters?id=eq.${rater.id}`, 'PATCH', { invited_at: nowISO }, { Prefer: 'return=minimal' });
@@ -2530,7 +2533,7 @@ async function handleReminders(req, res) {
 
   try {
     // ── Section 1: Rater Reminders (R1 + R2) ────────────────────────────────
-    const openDiagsRes = await sb(`/rest/v1/diagnostics?status=eq.survey_open&select=id,client_name,client_email,close_date`);
+    const openDiagsRes = await sb(`/rest/v1/diagnostics?status=eq.survey_open&select=id,client_name,client_email,close_date,anonymous_feedback`);
     const openDiags    = await openDiagsRes.json() || [];
 
     // Editable templates (only used when coach has approved them; otherwise hardcoded copy stands)
@@ -2548,7 +2551,7 @@ async function handleReminders(req, res) {
         const daysSinceInvite = daysBetween(new Date(rater.invited_at), now);
         const surveyLink = `${PORTAL_BASE}/diagnostic-survey?token=${rater.token}`;
 
-        const reminderCc = [diag.client_email, 'team@gpsleadership.org'].filter(Boolean);
+        const reminderCc = (diag.anonymous_feedback ? [] : [diag.client_email]).concat('team@gpsleadership.org').filter(Boolean);
 
         const closeFmt = diag.close_date
           ? new Date(diag.close_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
