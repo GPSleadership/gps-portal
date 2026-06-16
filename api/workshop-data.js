@@ -408,7 +408,7 @@ export default async function handler(req, res) {
           // Link to workshop (idempotent on workshop_id+client_id).
           const link = await sb('/rest/v1/workshop_participants?on_conflict=workshop_id,client_id', 'POST', {
             workshop_id: workshopId, client_id: client.id,
-            role: raw.role || null, location: raw.location || null, department: raw.department || null,
+            role: raw.role || null, location: raw.location || null, department: raw.department || null, grade: raw.grade || null,
           }, { Prefer: 'resolution=merge-duplicates,return=minimal' });
           if (link.ok) linked++; else skipped++;
         }

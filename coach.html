@@ -8938,13 +8938,14 @@ async function drSendSponsor(sponsorId){
       '<textarea id="wsRosterCsv" placeholder="name,email,role,location,department" style="width:100%;min-height:80px;border:1.5px solid #dbe3e6;border-radius:7px;padding:10px;font-family:monospace;font-size:13px;margin-bottom:8px;"></textarea>'+
       '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><label style="font-size:12px;font-weight:700;color:#5a6b76;">Or upload a file (XLSX or CSV):</label><input type="file" id="wsRosterXlsx" accept=".xlsx,.xls,.csv" style="font-size:13px;flex:1;"></div>'+
       '<div style="margin-top:10px;">'+btn('wsUpload','Upload roster')+'</div><div id="wsRosterOut" style="font-size:13px;margin-top:8px;color:#5a6b76;"></div>')+
-    card('<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;" id="wsRosterHdr"><div style="font-weight:800;color:#004369;">Participants ('+WS.parts.length+')</div><div>'+btn('wsSendPre',(isA?'Send survey emails (not-sent)':'Send pre-survey'))+(isA?'':btn('wsSendPost','Send post-survey (email)','ghost'))+'</div></div><div id="wsRosterTable"><div style="color:#5a6b76;font-size:13px;">Loading roster…</div></div>');
+    card('<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;" id="wsRosterHdr"><div style="font-weight:800;color:#004369;">Participants ('+WS.parts.length+')</div><div>'+btn('wsSendPre',(isA?'Send survey emails (not-sent)':'Send pre-survey'))+(isA?'':btn('wsSendPost','Send post-survey (email)','ghost'))+btn('wsSendWelcomeAll','✉ Welcome all to portal','ghost')+'</div></div><div id="wsRosterTable"><div style="color:#5a6b76;font-size:13px;">Loading roster…</div></div>');
     var qrGen=document.getElementById('wsQrGen'); if(qrGen){ wsRenderQR(); qrGen.onclick=wsRenderQR; var qrDl=document.getElementById('wsQrDl'); if(qrDl) qrDl.onclick=wsDownloadQR; }
     document.getElementById('wsUpload').onclick=wsUploadRoster;
     var tplBtn=document.getElementById('wsRosterTpl'); if(tplBtn) tplBtn.onclick=function(e){ e.preventDefault(); download('GPS_Roster_Template.csv','Name,Email,Title,Department,Location\r\nJane Doe,jane.doe@company.com,Director of Operations,Operations,Dallas\r\n'); };
     var xlsxIn=document.getElementById('wsRosterXlsx');
     if(xlsxIn) xlsxIn.onchange=function(){ if(this.files&&this.files[0]) wsUploadRosterFile(this.files[0]); };
     document.getElementById('wsSendPre').onclick=function(){ wsSendSurveyEmails(); };
+    var swa=document.getElementById('wsSendWelcomeAll'); if(swa) swa.onclick=wsSendAllWelcome;
     var spb=document.getElementById('wsSendPost'); if(spb) spb.onclick=function(){ wsSendInvites('post'); };
     var lockBtn=document.getElementById('wsLockRoster');
     if(lockBtn) lockBtn.onclick=async function(){
@@ -9063,6 +9064,27 @@ async function drSendSponsor(sponsorId){
       onProceed:onProceed
     };
   }
+  async function wsSendAllWelcome(){
+    var parts=WS.parts||[];
+    if(!parts.length){ toast('Upload a roster first.'); return; }
+    if(!confirm('Send the portal welcome email to everyone on this roster who has an email on file? ('+parts.length+' on the roster)')) return;
+    var btn=document.getElementById('wsSendWelcomeAll'); if(btn){ btn.disabled=true; btn.textContent='Sending…'; }
+    var ok=0, fail=0, noemail=0;
+    for(var i=0;i<parts.length;i++){
+      try{
+        var rows=await cdSelect('clients',{eq:{id:parts[i].client_id},select:'id,name,email,token',limit:1});
+        var c=rows&&rows[0];
+        if(!c||!c.email){ noemail++; continue; }
+        var portalURL=(typeof PORTAL_BASE_URL!=='undefined'?PORTAL_BASE_URL:location.origin)+'?token='+c.token;
+        var r=await fetch('/api/notify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'welcome_email',clientEmail:c.email,clientName:c.name,portalURL:portalURL})});
+        if(!r.ok) throw 0;
+        await cdUpdate('clients',{welcome_sent_at:new Date().toISOString()},{eq:{id:c.id}});
+        ok++;
+      }catch(e){ fail++; }
+    }
+    if(btn){ btn.disabled=false; btn.textContent='✉ Welcome all to portal'; }
+    toast('Welcome email sent to '+ok+' participant'+(ok===1?'':'s')+(noemail?(' · '+noemail+' had no email'):'')+(fail?(' · '+fail+' failed'):'')+'.');
+  }
   async function wsSendSurveyEmails(){
     var total=WS.parts.length;
     if(!total){ toast('Upload a roster first.'); return; }
@@ -9112,7 +9134,8 @@ async function drSendSponsor(sponsorId){
       email: _rosterPick(o,['email','email address','email addresses','emails','e-mail','e-mail address','e mail','emailaddress','email_address','work email']).toLowerCase(),
       role: _rosterPick(o,['role','title','job title','jobtitle','position','rater type','rater relationship','relationship']),
       department: _rosterPick(o,['department','department/area','department / area','dept','area','division','team','department/division','office','office/division/branch','division/branch']),
-      location: _rosterPick(o,['location','site','region','city','branch'])
+      location: _rosterPick(o,['location','site','region','city','branch']),
+      grade: _rosterPick(o,['grade','gs','gs grade','gs-grade','grade level','level','pay grade','paygrade','series/grade'])
     };
   }
   async function wsUploadRoster(){ var out=document.getElementById('wsRosterOut'); var fileEl=document.getElementById('wsRosterXlsx'); if(fileEl&&fileEl.files&&fileEl.files[0]){ return wsUploadRosterFile(fileEl.files[0]); } var aoa=document.getElementById('wsRosterCsv').value.split(/\r?\n/).filter(function(l){return l.trim();}).map(splitCsvLine); var rows=_rosterRowsFromAOA(aoa).map(_rosterMapRow).filter(function(r){return r.email&&r.name;}); if(!rows.length){ out.textContent='No valid rows found — paste rows with a Name and Email, or pick a file below.'; return; } out.textContent='Uploading '+rows.length+' people…'; document.getElementById('wsUpload').disabled=true; try{ var r=await wsData('upload-roster',{ workshop_id:WS.cur.id, rows:rows }); out.textContent='Done — '+r.created+' new profiles, '+r.linked+' linked, '+r.skipped+' skipped.'; wsOpen(WS.cur.id); }catch(e){ out.textContent=e.message; document.getElementById('wsUpload').disabled=false; } }
