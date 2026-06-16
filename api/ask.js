@@ -290,7 +290,8 @@ Otherwise return:
   "behavior2": "A second distinct first-person behavior, different domain from behavior1",
   "metric1Name": "Count-based metric: '# of times I [specific behavior] this week' — tied directly to behavior1",
   "metric2Question": "A stakeholder perception question answerable on a 1-5 agreement scale, e.g. 'My manager delegates decisions to the right level.'",
-  "goal30": "First-person 30-day checkpoint starting with 'By day 30, I will have...' — a specific observable fact proving early progress. Use empty string if the provided 30-day goal is already solid."
+  "goal30": "First-person 30-day checkpoint starting with 'By day 30, I will have...' — a specific observable fact proving early progress. Use empty string if the provided 30-day goal is already solid.",
+  "observableMeasure": "A SHORT observable outcome OTHERS can see, written to complete the sentence 'how consistently does this leader ___'. Present tense, NO 'I', tied to behavior1. e.g. 'run meetings that end with clear decisions and owners' or 'follow up on commitments without being chased'. This is what stakeholders will rate."
 }`;
 
       const prefillResp = await fetch('https://api.anthropic.com/v1/messages', {

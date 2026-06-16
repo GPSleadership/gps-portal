@@ -3624,6 +3624,7 @@ async function wizDoPrefill(force) {
     if (pf.behavior2       && (force || !wizPlan.behavior2))            wizPlan.behavior2 = pf.behavior2;
     if (pf.metric1Name     && (force || !(wizPlan.metric1||{}).name))   wizPlan.metric1 = { ...(wizPlan.metric1||{}), name: pf.metric1Name };
     if (pf.metric2Question && (force || !(wizPlan.metric2||{}).question)) wizPlan.metric2 = { ...(wizPlan.metric2||{}), question: pf.metric2Question };
+    if (pf.observableMeasure && (force || !wizPlan.observableMeasure)) wizPlan.observableMeasure = pf.observableMeasure;
     wizPlan.aiPrefilled = true;
 
     if (statusEl) statusEl.textContent = force ? '✦ Updated below — review and edit the 30-day goal, behaviors, and metrics.' : '';
@@ -4230,6 +4231,7 @@ async function wizLockIn() {
     behavior_1:        p.behavior1,
     behavior_2:        p.behavior2 || null,
     start_behavior:    p.behavior1,  // legacy sync
+    ...(p.observableMeasure ? { observable_measure: p.observableMeasure } : {}),  // what stakeholders rate (AI-prefilled; coach can edit). Omit when empty so re-editing never wipes a coach-set value.
 
     metric_1_name:     p.metric1.name,
     metric_1_baseline: p.metric1.baseline,
