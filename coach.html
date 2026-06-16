@@ -8937,10 +8937,12 @@ async function drSendSponsor(sponsorId){
     card('<div style="font-weight:800;margin-bottom:8px;color:#004369;">Upload roster</div><div style="font-size:13px;color:#5a6b76;margin-bottom:8px;">Paste CSV <strong>or</strong> upload an XLSX. <strong>Required:</strong> a <em>Name</em> column and an <em>Email</em> column. Optional: Title/Role, Department, Location. Header names are auto-detected — "Email Address", "Title", "Department/Area", "First Name"+"Last Name", etc. all work. <a href="#" id="wsRosterTpl" style="color:#01949A;font-weight:700;">Download template ↓</a></div>'+
       '<textarea id="wsRosterCsv" placeholder="name,email,role,location,department" style="width:100%;min-height:80px;border:1.5px solid #dbe3e6;border-radius:7px;padding:10px;font-family:monospace;font-size:13px;margin-bottom:8px;"></textarea>'+
       '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><label style="font-size:12px;font-weight:700;color:#5a6b76;">Or upload a file (XLSX or CSV):</label><input type="file" id="wsRosterXlsx" accept=".xlsx,.xls,.csv" style="font-size:13px;flex:1;"></div>'+
-      '<div style="margin-top:10px;">'+btn('wsUpload','Upload roster')+'</div><div id="wsRosterOut" style="font-size:13px;margin-top:8px;color:#5a6b76;"></div>')+
+      '<div style="margin-top:10px;">'+btn('wsUpload','Upload roster')+'</div><div id="wsRosterOut" style="font-size:13px;margin-top:8px;color:#5a6b76;"></div>'+
+      '<div style="margin-top:16px;padding-top:14px;border-top:1px solid #eef1f2;"><div style="font-weight:800;margin-bottom:6px;color:#004369;">Add one participant</div><div style="font-size:12px;color:#5a6b76;margin-bottom:8px;">For a single person (e.g. a late add or walk-in). Name and email required.</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"><input id="wsAddName" placeholder="Full name" style="flex:1;min-width:140px;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;"><input id="wsAddEmail" placeholder="Email" style="flex:1;min-width:160px;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;"><input id="wsAddRole" placeholder="Title / role (optional)" style="flex:1;min-width:160px;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;">'+btn('wsAddOne','+ Add participant')+'</div><div id="wsAddOut" style="font-size:13px;margin-top:8px;color:#5a6b76;"></div></div>')+
     card('<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;" id="wsRosterHdr"><div style="font-weight:800;color:#004369;">Participants ('+WS.parts.length+')</div><div>'+btn('wsSendPre',(isA?'Send survey emails (not-sent)':'Send pre-survey'))+(isA?'':btn('wsSendPost','Send post-survey (email)','ghost'))+btn('wsSendWelcomeAll','✉ Welcome selected to portal','ghost')+'</div></div><div id="wsRosterTable"><div style="color:#5a6b76;font-size:13px;">Loading roster…</div></div>');
     var qrGen=document.getElementById('wsQrGen'); if(qrGen){ wsRenderQR(); qrGen.onclick=wsRenderQR; var qrDl=document.getElementById('wsQrDl'); if(qrDl) qrDl.onclick=wsDownloadQR; }
     document.getElementById('wsUpload').onclick=wsUploadRoster;
+    var addOneBtn=document.getElementById('wsAddOne'); if(addOneBtn) addOneBtn.onclick=wsAddOneParticipant;
     var tplBtn=document.getElementById('wsRosterTpl'); if(tplBtn) tplBtn.onclick=function(e){ e.preventDefault(); download('GPS_Roster_Template.csv','Name,Email,Title,Department,Location\r\nJane Doe,jane.doe@company.com,Director of Operations,Operations,Dallas\r\n'); };
     var xlsxIn=document.getElementById('wsRosterXlsx');
     if(xlsxIn) xlsxIn.onchange=function(){ if(this.files&&this.files[0]) wsUploadRosterFile(this.files[0]); };
@@ -9032,6 +9034,24 @@ async function drSendSponsor(sponsorId){
       catch(e){ this.disabled=false; this.textContent='Save'; toast(e.message); }
     };
     document.getElementById('wsEdCancel_'+pt.id).onclick=function(){ wsLoadRoster(); };
+  }
+  async function wsAddOneParticipant(){
+    var out=document.getElementById('wsAddOut');
+    var name=(document.getElementById('wsAddName').value||'').trim();
+    var email=(document.getElementById('wsAddEmail').value||'').trim();
+    var role=(document.getElementById('wsAddRole').value||'').trim();
+    if(!name||!email){ out.style.color='#dc2626'; out.textContent='Name and email are both required.'; return; }
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ out.style.color='#dc2626'; out.textContent='That email doesn’t look valid.'; return; }
+    var b=document.getElementById('wsAddOne'); if(b){ b.disabled=true; b.textContent='Adding…'; }
+    out.style.color='#5a6b76'; out.textContent='Adding '+name+'…';
+    try{
+      var result=await wsData('upload-roster',{workshop_id:WS.cur.id,rows:[{name:name,email:email,role:role}]});
+      document.getElementById('wsAddName').value=''; document.getElementById('wsAddEmail').value=''; document.getElementById('wsAddRole').value='';
+      out.style.color='#2e7d32'; out.textContent=(result&&result.created?'Added '+name+'.':(result&&result.skipped?name+' is already on the roster.':'Added '+name+'.'));
+      WS.parts=await cdSelect('workshop_participants',{eq:{workshop_id:WS.cur.id},order:{col:'created_at',asc:true}});
+      wsLoadRoster();
+    }catch(e){ out.style.color='#dc2626'; out.textContent=e.message; }
+    if(b){ b.disabled=false; b.textContent='+ Add participant'; }
   }
   async function wsUploadRosterFile(f){
     if(!f) return;
