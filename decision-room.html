@@ -291,6 +291,15 @@ function renderTeam(){
    assessment) and their own full report. No other leader's results are sent by
    the server in this mode, so there is nothing here that could leak them. */
 function fmtStage(s){ if(!s) return '—'; return String(s).replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();}); }
+// Prominent kickoff + debrief dates line for the sponsor/POC. Pulled from the pipeline
+// stages; shows TBD for a date not set yet. Omitted entirely if neither is set.
+function meetingDates(pl){
+  if(!pl||!pl.stages) return '';
+  var k=(pl.stages.filter(function(s){return s.key==='kickoff';})[0]||{}).date;
+  var d=(pl.stages.filter(function(s){return s.key==='debrief';})[0]||{}).date;
+  if(!k && !d) return '';
+  return '<div style="font-size:12px;color:#475569;margin-top:3px">📅 Kickoff: <strong>'+(k?esc(fmtDate(k)):'TBD')+'</strong> &nbsp;·&nbsp; Debrief: <strong>'+(d?esc(fmtDate(d)):'TBD')+'</strong></div>';
+}
 /* Shared process-pipeline render — used in the POC view, the sponsor roster, and
    each member report. Stage + date only (no nudge flag). */
 function renderPipeline(pl){
@@ -323,7 +332,7 @@ function renderProgress(members){
     var cur = (m.pipeline && m.pipeline.current_label) ? '<span class="badge b-draft">'+esc(m.pipeline.current_label)+'</span>' : '';
     return '<div class="doc-row" style="align-items:flex-start"><div class="doc-icon">'+esc(initials(name))+'</div>'
       +'<div class="doc-info" style="flex:1"><div class="doc-title">'+esc(name)+mine+' '+cur+'</div>'
-      +'<div class="doc-meta">'+esc(m.role||'')+(asmt?' · '+esc(asmt):'')+'</div>'
+      +'<div class="doc-meta">'+esc(m.role||'')+(asmt?' · '+esc(asmt):'')+'</div>'+meetingDates(m.pipeline)
       + (m.pipeline ? renderPipeline(m.pipeline) : '<div class="empty">No diagnostic set up yet.</div>')
       +'</div></div>';
   }).join('');
@@ -425,7 +434,7 @@ function renderRoster(members){
     var scoreChip = (st.key!=='pending') ? '<span class="badge status-chip '+st.cls+'">'+st.label+'</span>' : '';
     var stageChip = (m.pipeline&&m.pipeline.current_label) ? '<span class="badge b-draft" title="Where this leader is in the process">Stage: '+esc(m.pipeline.current_label)+'</span>' : '';
     return '<div class="doc-row"><div class="doc-icon">'+esc(initials(name))+'</div>'
-      +'<div class="doc-info"><div class="doc-title">'+esc(name)+'</div><div class="doc-meta">'+esc(m.role||'')+'</div></div>'
+      +'<div class="doc-info"><div class="doc-title">'+esc(name)+'</div><div class="doc-meta">'+esc(m.role||'')+'</div>'+meetingDates(m.pipeline)+'</div>'
       +'<div class="roster-chips">'+stageChip+pills+scoreChip
       +'<button class="btn-sm" onclick="viewMember('+members.indexOf(m)+')">View report</button></div></div>';
   }).join('');
