@@ -8938,7 +8938,7 @@ async function drSendSponsor(sponsorId){
       '<textarea id="wsRosterCsv" placeholder="name,email,role,location,department" style="width:100%;min-height:80px;border:1.5px solid #dbe3e6;border-radius:7px;padding:10px;font-family:monospace;font-size:13px;margin-bottom:8px;"></textarea>'+
       '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><label style="font-size:12px;font-weight:700;color:#5a6b76;">Or upload a file (XLSX or CSV):</label><input type="file" id="wsRosterXlsx" accept=".xlsx,.xls,.csv" style="font-size:13px;flex:1;"></div>'+
       '<div style="margin-top:10px;">'+btn('wsUpload','Upload roster')+'</div><div id="wsRosterOut" style="font-size:13px;margin-top:8px;color:#5a6b76;"></div>')+
-    card('<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;" id="wsRosterHdr"><div style="font-weight:800;color:#004369;">Participants ('+WS.parts.length+')</div><div>'+btn('wsSendPre',(isA?'Send survey emails (not-sent)':'Send pre-survey'))+(isA?'':btn('wsSendPost','Send post-survey (email)','ghost'))+btn('wsSendWelcomeAll','✉ Welcome all to portal','ghost')+'</div></div><div id="wsRosterTable"><div style="color:#5a6b76;font-size:13px;">Loading roster…</div></div>');
+    card('<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;" id="wsRosterHdr"><div style="font-weight:800;color:#004369;">Participants ('+WS.parts.length+')</div><div>'+btn('wsSendPre',(isA?'Send survey emails (not-sent)':'Send pre-survey'))+(isA?'':btn('wsSendPost','Send post-survey (email)','ghost'))+btn('wsSendWelcomeAll','✉ Welcome selected to portal','ghost')+'</div></div><div id="wsRosterTable"><div style="color:#5a6b76;font-size:13px;">Loading roster…</div></div>');
     var qrGen=document.getElementById('wsQrGen'); if(qrGen){ wsRenderQR(); qrGen.onclick=wsRenderQR; var qrDl=document.getElementById('wsQrDl'); if(qrDl) qrDl.onclick=wsDownloadQR; }
     document.getElementById('wsUpload').onclick=wsUploadRoster;
     var tplBtn=document.getElementById('wsRosterTpl'); if(tplBtn) tplBtn.onclick=function(e){ e.preventDefault(); download('GPS_Roster_Template.csv','Name,Email,Title,Department,Location\r\nJane Doe,jane.doe@company.com,Director of Operations,Operations,Dallas\r\n'); };
@@ -8988,9 +8988,10 @@ async function drSendSponsor(sponsorId){
           : (pt.organization ? esc(pt.organization) : '<span style="color:#9aa7ad;">—</span>');
         var orgCell='<td style="padding:8px 10px;font-size:12px;color:'+(pt.tied_to_org?'#2e7d32':'#5a6b76')+';">'+orgTxt+'</td>';
         var tieBtn = wsOrg ? btn('wsTie_'+pt.id, pt.tied_to_org?'Untie':'Tie to org', 'ghost') : '';
-        return '<tr id="wsRow_'+pt.id+'" style="border-top:1px solid #dbe3e6;"><td style="padding:8px 10px;">'+esc(pt.name||'—')+'</td><td style="padding:8px 10px;font-size:12px;color:#5a6b76;">'+esc(pt.email||'—')+'</td><td style="padding:8px 10px;font-size:12px;">'+esc(pt.role||'—')+'</td>'+orgCell+'<td style="padding:8px 10px;">'+pill(pt.display_status)+'</td><td style="padding:8px 10px;white-space:nowrap;">'+btn('wsEdPart_'+pt.id,'Edit','ghost')+resend+tieBtn+btn('wsRmPart_'+pt.id,'Remove','danger')+'</td></tr>';
+        var welCb='<td style="padding:8px 10px;text-align:center;"><input type="checkbox" class="wsWelCb" data-cid="'+esc(pt.client_id||'')+'" data-email="'+esc(pt.email||'').replace(/"/g,'&quot;')+'" data-name="'+esc(pt.name||'').replace(/"/g,'&quot;')+'"'+(pt.email?' checked':'')+(pt.email?'':' disabled title="No email on file"')+'></td>';
+        return '<tr id="wsRow_'+pt.id+'" style="border-top:1px solid #dbe3e6;">'+welCb+'<td style="padding:8px 10px;">'+esc(pt.name||'—')+'</td><td style="padding:8px 10px;font-size:12px;color:#5a6b76;">'+esc(pt.email||'—')+'</td><td style="padding:8px 10px;font-size:12px;">'+esc(pt.role||'—')+'</td>'+orgCell+'<td style="padding:8px 10px;">'+pill(pt.display_status)+'</td><td style="padding:8px 10px;white-space:nowrap;">'+btn('wsEdPart_'+pt.id,'Edit','ghost')+resend+tieBtn+btn('wsRmPart_'+pt.id,'Remove','danger')+'</td></tr>';
       }).join('');
-      tbl.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#F7F4EE;text-align:left;color:#5a6b76;font-size:11px;text-transform:uppercase;"><th style="padding:8px 10px;">Name</th><th style="padding:8px 10px;">Email</th><th style="padding:8px 10px;">Role</th><th style="padding:8px 10px;">Organization</th><th style="padding:8px 10px;">Status</th><th style="padding:8px 10px;"></th></tr></thead><tbody>'+rows+'</tbody></table>';
+      tbl.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#F7F4EE;text-align:left;color:#5a6b76;font-size:11px;text-transform:uppercase;"><th style="padding:8px 10px;text-align:center;"><input type="checkbox" id="wsWelAll" checked title="Select / deselect everyone for the welcome send"></th><th style="padding:8px 10px;">Name</th><th style="padding:8px 10px;">Email</th><th style="padding:8px 10px;">Role</th><th style="padding:8px 10px;">Organization</th><th style="padding:8px 10px;">Status</th><th style="padding:8px 10px;"></th></tr></thead><tbody>'+rows+'</tbody></table>';
       parts.forEach(function(pt){
         var rb=document.getElementById('wsResend_'+pt.id);
         if(rb) rb.onclick=async function(){ this.disabled=true; this.textContent='Sending…'; try{ var r2=await wsData('resend-survey-email',{participant_id:pt.id}); this.textContent=r2.ok?'Sent':'Error'; setTimeout(function(){ wsLoadRoster(); },1500); }catch(e){ this.textContent='Error'; toast(e.message); } };
@@ -9007,6 +9008,8 @@ async function drSendSponsor(sponsorId){
         var eb=document.getElementById('wsEdPart_'+pt.id);
         if(eb) eb.onclick=function(){ wsEditPart(pt); };
       });
+      var welAll=document.getElementById('wsWelAll');
+      if(welAll) welAll.onclick=function(){ var on=this.checked; Array.prototype.forEach.call(document.querySelectorAll('.wsWelCb'),function(cb){ if(!cb.disabled) cb.checked=on; }); };
     }catch(e){ tbl.innerHTML='<div style="color:#dc2626;">'+esc(e.message)+'</div>'; }
   }
   // Inline edit of one participant's name / email / title / department.
@@ -9067,23 +9070,30 @@ async function drSendSponsor(sponsorId){
   async function wsSendAllWelcome(){
     var parts=WS.parts||[];
     if(!parts.length){ toast('Upload a roster first.'); return; }
-    if(!confirm('Send the portal welcome email to everyone on this roster who has an email on file? ('+parts.length+' on the roster)')) return;
+    // Only the CHECKED participants get welcomed (uncheck no-shows).
+    var checked=Array.prototype.filter.call(document.querySelectorAll('.wsWelCb'),function(cb){ return cb.checked && !cb.disabled && cb.getAttribute('data-cid'); });
+    if(!checked.length){ toast('Select at least one attendee to welcome (use the checkboxes).'); return; }
+    var org=(WS.cur.client_org_name||'').trim();
+    var govRe=/govern|federal\b|\bstate\b|municipal|public sector|county|\bcity of\b|\bSES\b|\bGS-?\d/i;
+    var isGov=govRe.test((WS.cur.industry||'')+' '+org);
+    if(!confirm('Send the workshop portal-access email to the '+checked.length+' selected attendee'+(checked.length===1?'':'s')+'?\n\nThey will get temporary (trial) access — anyone you unchecked will NOT.')) return;
     var btn=document.getElementById('wsSendWelcomeAll'); if(btn){ btn.disabled=true; btn.textContent='Sending…'; }
     var ok=0, fail=0, noemail=0;
-    for(var i=0;i<parts.length;i++){
+    for(var i=0;i<checked.length;i++){
       try{
-        var rows=await cdSelect('clients',{eq:{id:parts[i].client_id},select:'id,name,email,token',limit:1});
+        var cid=checked[i].getAttribute('data-cid');
+        var rows=await cdSelect('clients',{eq:{id:cid},select:'id,name,email,token',limit:1});
         var c=rows&&rows[0];
         if(!c||!c.email){ noemail++; continue; }
         var portalURL=(typeof PORTAL_BASE_URL!=='undefined'?PORTAL_BASE_URL:location.origin)+'?token='+c.token;
-        var r=await fetch('/api/notify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'welcome_email',clientEmail:c.email,clientName:c.name,portalURL:portalURL})});
+        var r=await fetch('/api/notify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'workshop_welcome',clientEmail:c.email,clientName:c.name,portalURL:portalURL,organization:org,isGov:isGov,clientId:c.id})});
         if(!r.ok) throw 0;
         await cdUpdate('clients',{welcome_sent_at:new Date().toISOString()},{eq:{id:c.id}});
         ok++;
       }catch(e){ fail++; }
     }
-    if(btn){ btn.disabled=false; btn.textContent='✉ Welcome all to portal'; }
-    toast('Welcome email sent to '+ok+' participant'+(ok===1?'':'s')+(noemail?(' · '+noemail+' had no email'):'')+(fail?(' · '+fail+' failed'):'')+'.');
+    if(btn){ btn.disabled=false; btn.textContent='✉ Welcome selected to portal'; }
+    toast('Workshop welcome sent to '+ok+' attendee'+(ok===1?'':'s')+(noemail?(' · '+noemail+' had no email'):'')+(fail?(' · '+fail+' failed'):'')+'.');
   }
   async function wsSendSurveyEmails(){
     var total=WS.parts.length;

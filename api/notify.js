@@ -472,6 +472,93 @@ export default async function handler(req, res) {
     }
   }
 
+  // ─── WORKSHOP WELCOME (temporary trial access for workshop attendees) ─────────
+  // Editable in Communication → Email Templates (key: workshop_welcome). Falls back
+  // to the approved copy below if no approved template exists. Sector-aware tier line.
+  else if (body.type === 'workshop_welcome') {
+    const { clientEmail, clientName, portalURL, organization } = body;
+    if (!clientEmail) return res.status(400).json({ error: 'No client email provided.' });
+
+    const firstName  = (clientName || '').split(' ')[0] || 'there';
+    const org        = organization || 'your organization';
+    const isGov      = body.isGov === true;
+    const tierPhrase = isGov
+      ? 'the SES and senior government executives'
+      : 'the CEOs and senior leaders in our coaching practice';
+
+    const DEFAULT_SUBJECT = 'A thank-you from today — your temporary access to the GPS Executive Leadership Impact Portal';
+    const DEFAULT_BODY = [
+      'Hi {{first_name}},',
+      "Thank you for showing up so fully in today's session. You were engaged, and that tells me you're someone who actually wants to grow — not just attend.",
+      'Because of the relationship we have with {{organization}}, I want to extend something we don’t hand out widely: temporary access to our Executive Leadership Impact Portal — the same portal we normally reserve for {{tier_phrase}}.',
+      "You already know I'm focused on action, not theory — so here's the deal:",
+      'You get 90 days of access to take the one thing you most want to improve from today and actually move it: pick the goal, set a metric, and track real progress.',
+      'But the access is earned. If you don’t log in and complete at least one weekly check-in within your first 10 days, your access closes. Not as a penalty — because growth only happens when you take action, and this is my way of making sure you take the first one.',
+      '{{portal_button}}',
+      'Setup takes 10–15 minutes, then about 5 minutes a week. Your link is unique to you — please don’t share it. Lost it? Email team@gpsleadership.org.'
+    ].join('\n\n');
+
+    // Load the editable, approved template (fallback to built-in copy).
+    let tplSubject = DEFAULT_SUBJECT, tplBody = DEFAULT_BODY;
+    try {
+      if (SUPABASE_SECRET) {
+        const tr = await fetch(`${SUPABASE_URL}/rest/v1/email_templates?template_key=eq.workshop_welcome&is_approved=eq.true&select=subject,body_text&limit=1`,
+          { headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}` } });
+        const rows = await tr.json();
+        if (Array.isArray(rows) && rows[0]) {
+          if (rows[0].subject)   tplSubject = rows[0].subject;
+          if (rows[0].body_text) tplBody    = rows[0].body_text;
+        }
+      }
+    } catch (_) { /* fall back to built-in copy */ }
+
+    const ctaBtn = `<div style="text-align:center;margin:28px 0;"><a href="${portalURL}" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;">Open My Portal →</a></div>`;
+    const fill = (s) => (s || '')
+      .replace(/\{\{\s*first_name\s*\}\}/gi, firstName)
+      .replace(/\{\{\s*organization\s*\}\}/gi, org)
+      .replace(/\{\{\s*tier_phrase\s*\}\}/gi, tierPhrase);
+
+    subject = fill(tplSubject);
+    let bodyFilled = fill(tplBody);
+    const hasBtnMarker = /\{\{\s*portal_button\s*\}\}/i.test(bodyFilled);
+    bodyFilled = bodyFilled.replace(/\{\{\s*portal_button\s*\}\}/gi, ' BTN ');
+    const blocks = bodyFilled.split(/\n\s*\n/).map(p => {
+      if (p.indexOf(' BTN ') > -1) return ctaBtn;
+      return `<p>${p.replace(/\n/g, '<br/>')}</p>`;
+    }).join('\n');
+    const bodyHtml = blocks + (hasBtnMarker ? '' : ctaBtn);
+
+    html = `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
+        <div style="background:#004369;padding:20px 28px;border-radius:8px 8px 0 0;">
+          <div style="color:#E5DDC8;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">GPS Leadership Solutions</div>
+          <div style="color:#ffffff;font-size:20px;font-weight:700;">Your Temporary Portal Access</div>
+        </div>
+        <div style="background:#ffffff;padding:28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
+          ${bodyHtml}
+          <div style="margin-top:32px;padding-top:20px;border-top:1px solid #eee;">
+            <p style="margin:0;font-size:14px;font-weight:700;color:#004369;">Alex D. Tremble</p>
+            <p style="margin:4px 0;font-size:13px;color:#555;">Founder &amp; CEO, GPS Leadership Solutions</p>
+            <p style="margin:4px 0;font-size:13px;"><a href="https://www.GPSLeadership.org" style="color:#004369;text-decoration:none;">www.GPSLeadership.org</a></p>
+          </div>
+          <div style="margin-top:20px;padding-top:16px;border-top:1px solid #eee;font-size:11px;color:#999;">
+            You're receiving this because you attended a GPS Leadership workshop and were granted temporary portal access. Questions? Reply to this email or reach out to <a href="mailto:team@gpsleadership.org" style="color:#999;">team@gpsleadership.org</a>.
+          </div>
+        </div>
+      </div>`;
+
+    try {
+      const { ok, result } = await sendAndLog({
+        from: `Alex Tremble – GPS Leadership <${RESEND_FROM}>`, to: [clientEmail], subject, html,
+        emailType: 'workshop_welcome', clientId: body.clientId, recipientName: body.clientName,
+      });
+      if (!ok) return res.status(500).json({ error: 'Email send failed', detail: result });
+      return res.status(200).json({ success: true, sent_to: clientEmail });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   // ─── WELCOME REMINDER SEQUENCE ───────────────────────────────────────────────
   // Sent to clients who haven't completed Form B (plan setup).
   // Types: welcome_reminder_1 (day 2) | welcome_reminder_2 (day 4) | welcome_reminder_3 (day 6 + archive)
