@@ -2031,10 +2031,15 @@ function renderClients() {
     return;
   }
 
-  document.getElementById('clientList').innerHTML = filtered.map(client => {
+  const cardsHtml = filtered.map(client => {
     const clientCheckins = allCheckins.filter(c => c.client_id === client.id).sort((a,b) => a.week_number - b.week_number);
     return renderClientCard(client, clientCheckins);
   }).join('');
+  const allSel = filtered.length > 0 && filtered.every(c => cleanupSelected.has(c.id));
+  const selectAllBar = cleanupMode
+    ? `<label style="display:flex;align-items:center;gap:10px;padding:11px 14px;margin-bottom:10px;background:#eef6f9;border:1px solid #cfe3ea;border-radius:8px;cursor:pointer;font-weight:700;color:var(--navy);"><input type="checkbox" ${allSel ? 'checked' : ''} onclick="selectAllVisibleForCleanup()" style="width:18px;height:18px;cursor:pointer;"> ${allSel ? 'Deselect all' : 'Select all'} ${filtered.length} shown</label>`
+    : '';
+  document.getElementById('clientList').innerHTML = selectAllBar + cardsHtml;
 }
 
 function renderClientCard(client, checkins) {
