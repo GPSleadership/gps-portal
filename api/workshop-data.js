@@ -628,11 +628,11 @@ export default async function handler(req, res) {
       case 'org-logo-upload': {
         const id = body.org_id;
         if (!id) return res.status(400).json({ error: 'org_id required' });
-        const match = (body.logo_data_url || '').match(/^data:([a-zA-Z/]+);base64,(.+)$/);
-        if (!match) return res.status(400).json({ error: 'Invalid image data — use a PNG or JPG.' });
+        const match = (body.logo_data_url || '').match(/^data:([a-zA-Z0-9/+.\-]+);base64,(.+)$/);
+        if (!match) return res.status(400).json({ error: 'Invalid image data — use a PNG, JPG, or SVG.' });
         const mime = match[1];
         const buf  = Buffer.from(match[2], 'base64');
-        const ext  = mime.includes('png') ? 'png' : 'jpg';
+        const ext  = mime.includes('svg') ? 'svg' : mime.includes('png') ? 'png' : 'jpg';
         const path = `org-logos/${id}.${ext}`;
         const up = await fetch(`${SUPABASE_URL}/storage/v1/object/org-assets/${path}`, {
           method: 'POST',
@@ -676,11 +676,11 @@ export default async function handler(req, res) {
         // 2. Handle logo upload (base64 data URL → Supabase Storage)
         if (body.logo_data_url && orgId) {
           try {
-            const match = body.logo_data_url.match(/^data:([a-zA-Z/]+);base64,(.+)$/);
+            const match = body.logo_data_url.match(/^data:([a-zA-Z0-9/+.\-]+);base64,(.+)$/);
             if (match) {
               const mime = match[1];
               const buf  = Buffer.from(match[2], 'base64');
-              const ext  = mime.includes('png') ? 'png' : 'jpg';
+              const ext  = mime.includes('svg') ? 'svg' : mime.includes('png') ? 'png' : 'jpg';
               const path = `org-logos/${orgId}.${ext}`;
               const up = await fetch(`${SUPABASE_URL}/storage/v1/object/org-assets/${path}`, {
                 method: 'POST',
