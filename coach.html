@@ -823,6 +823,7 @@
     <div class="section-nav" style="position:relative;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
       <div class="section-tab active" id="grp-today"     onclick="showGroup('today')">Today</div>
       <div class="section-tab"        id="grp-clients"   onclick="showGroup('clients')">Clients</div>
+      <div class="section-tab"        id="grp-insights"  onclick="showGroup('insights')">Insights</div>
       <div class="section-tab"        id="grp-diagteams" onclick="showGroup('diagteams')">Diagnostics &amp; Teams</div>
       <div class="section-tab"        id="grp-comms"     onclick="showGroup('comms')">Communication</div>
       <div class="section-tab"        id="grp-workshops" onclick="showGroup('workshops')">Workshops &amp; Assessments</div>
@@ -851,6 +852,11 @@
     <div id="subnav-settings" class="section-subnav" style="display:none;">
       <div class="section-subtab active" id="sub-admins"   onclick="showSection('admins')">Admin Accounts</div>
       <div class="section-subtab"        id="sub-security" onclick="showSection('security')">Account &amp; Security</div>
+    </div>
+
+    <!-- ═══ COACH INSIGHTS SECTION ═══ -->
+    <div id="section-insights" class="diag-scope" style="display:none;">
+      <div id="insightsHost"><div style="padding:30px;text-align:center;color:#5a6b76;">Loading insights…</div></div>
     </div>
 
     <!-- ═══ DASHBOARD SECTION ═══ -->
@@ -3746,8 +3752,8 @@ document.getElementById('addAdminModal').addEventListener('click', function(e) {
 let _currentSection = 'dashboard';
 
 // Refactored IA: 5 top-level groups, each mapping to one or more underlying sections.
-var GROUP_OF = { dashboard:'today', clients:'clients', diagnostics:'diagteams', decisionroom:'diagteams', emails:'comms', messages:'comms', templates:'comms', admins:'settings', security:'settings', workshops:'workshops', organizations:'organizations' };
-var GROUP_DEFAULT = { today:'dashboard', clients:'clients', diagteams:'diagnostics', comms:'emails', settings:'admins', workshops:'workshops', organizations:'organizations' };
+var GROUP_OF = { dashboard:'today', clients:'clients', insights:'insights', diagnostics:'diagteams', decisionroom:'diagteams', emails:'comms', messages:'comms', templates:'comms', admins:'settings', security:'settings', workshops:'workshops', organizations:'organizations' };
+var GROUP_DEFAULT = { today:'dashboard', clients:'clients', insights:'insights', diagteams:'diagnostics', comms:'emails', settings:'admins', workshops:'workshops', organizations:'organizations' };
 function showGroup(group){ showSection(GROUP_DEFAULT[group] || 'dashboard'); }
 
 // ── Client Messages (Contact Your Coach — coach side) ───────────────────────
@@ -3862,13 +3868,13 @@ function showSection(name, skipHooks) {
   _currentSection = name;
   try { localStorage.setItem('gps_coach_section', name); } catch (_) {}
   // Toggle the underlying content sections.
-  ['dashboard', 'clients', 'emails', 'messages', 'templates', 'admins', 'security', 'diagnostics', 'decisionroom', 'workshops', 'organizations'].forEach(s => {
+  ['dashboard', 'clients', 'insights', 'emails', 'messages', 'templates', 'admins', 'security', 'diagnostics', 'decisionroom', 'workshops', 'organizations'].forEach(s => {
     var sec = document.getElementById('section-' + s);
     if (sec) sec.style.display = s === name ? 'block' : 'none';
   });
   // Light up the parent group tab.
   var grp = GROUP_OF[name] || 'today';
-  ['today', 'clients', 'diagteams', 'comms', 'settings', 'workshops', 'organizations'].forEach(g => {
+  ['today', 'clients', 'insights', 'diagteams', 'comms', 'settings', 'workshops', 'organizations'].forEach(g => {
     var t = document.getElementById('grp-' + g);
     if (t) t.classList.toggle('active', g === grp);
   });
@@ -3894,6 +3900,214 @@ function showSection(name, skipHooks) {
   if (name === 'dashboard')   { renderDiagHome(); refreshMsgBadge(); }
   if (name === 'diagnostics') { diagBoot(); renderDiagTable(); }
   if (name === 'organizations') renderOrganizations();
+  if (name === 'insights')    renderCoachInsights();
+}
+
+// ── Coach Insights (read-only portfolio + client health) ───────────────────
+// Core v1. Real data: engagement, risk, progress(from metrics/recency), renewals,
+// check-in streaks, Ask Alex usage, diagnostic completion. PENDING (no data yet):
+// session attendance, true MRR/ARR targets, 12-week trend chart, full funnel.
+function ciDays(d){ if(!d) return null; var t=new Date(d).getTime(); if(isNaN(t)) return null; return Math.floor((Date.now()-t)/86400000); }
+function ciColor(s){ return s>=80?'#2e7d32':s>=50?'#f9a825':'#DB1F48'; }
+function ciTileColor(v,g,y){ return v>=g?'#2e7d32':v>=y?'#f9a825':'#DB1F48'; }
+function ciPill(s){ return '<span style="display:inline-block;min-width:32px;text-align:center;background:'+ciColor(s)+';color:#fff;border-radius:10px;padding:2px 8px;font-weight:800;font-size:12px;">'+Math.round(s)+'</span>'; }
+
+function ciClientModel(c){
+  var ck = allCheckins.filter(k => k.client_id === c.id);
+  var ckDaysList = ck.map(k => ciDays(k.submitted_at)).filter(x => x != null);
+  var lastCkDays = ckDaysList.length ? Math.min.apply(null, ckDaysList) : null;
+  var recent8 = ckDaysList.filter(x => x <= 56).length;
+  var recent4 = ckDaysList.filter(x => x <= 28).length;
+  var completion8 = Math.min(recent8, 8) / 8 * 100;
+  var completion4 = Math.min(recent4, 4) / 4 * 100;
+  var la = ciDays(c.last_active_at);
+  var portal = la == null ? 10 : la <= 7 ? 100 : la <= 14 ? 70 : la <= 30 ? 40 : 10;
+  var engagement = completion8 * 0.5 + portal * 0.5;
+
+  var progress = null, progressPending = false;
+  var base = c.metric_baseline, tgt = c.metric_target, cur = c.metric_current;
+  if (base != null && tgt != null && cur != null && String(base) !== '' && String(tgt) !== '' && String(cur) !== '') {
+    base = +base; tgt = +tgt; cur = +cur;
+    if (tgt !== base) { var pct = (cur - base) / (tgt - base); progress = pct >= 0.66 ? 100 : pct >= 0.33 ? 70 : pct > 0 ? 40 : 10; }
+    else progress = 70;
+  } else if (c.plan_submitted_at || c.updated_at) {
+    var pu = ciDays(c.updated_at || c.plan_submitted_at);
+    progress = pu == null ? null : (pu <= 14 ? 70 : pu <= 30 ? 40 : 10);
+    if (progress == null) progressPending = true;
+  } else { progressPending = true; }
+
+  var aa = ciDays(c.ask_alex_last_used_at);
+  var risk = 100;
+  if (lastCkDays == null || lastCkDays > 21) risk -= 20;
+  if (aa == null || aa > 30) risk -= 10;
+  if (risk < 0) risk = 0;
+
+  var subs = [engagement, risk];
+  if (!progressPending && progress != null) subs.push(progress);
+  var health = subs.reduce(function(a,b){return a+b;}, 0) / subs.length;
+
+  var end = c.coaching_program_end_date;
+  var endDays = end ? Math.floor((new Date(end).getTime() - Date.now()) / 86400000) : null;
+
+  var start = c.coaching_program_start_date;
+  var week = start ? Math.max(1, Math.floor((Date.now() - new Date(start).getTime()) / 604800000) + 1) : null;
+
+  var flags = [];
+  if (lastCkDays == null || lastCkDays > 21) flags.push('⚠');
+  if (aa == null || aa > 30) flags.push('💤');
+
+  // lowest real subscore drives the "reason"
+  var reason = '';
+  var lowest = Math.min(engagement, risk, (progressPending ? 999 : progress));
+  if (lowest === risk) reason = 'risk signals (gaps in check-ins / inactivity)';
+  else if (!progressPending && lowest === progress) reason = 'progress vs. plan stalling';
+  else reason = 'low engagement';
+
+  return { c:c, health:health, engagement:engagement, progress:progress, progressPending:progressPending,
+           risk:risk, completion4:completion4, completion8:completion8, lastCkDays:lastCkDays,
+           aaDays:aa, lastActiveDays:la, endDays:endDays, week:week, flags:flags, reason:reason };
+}
+
+async function renderCoachInsights(){
+  var host = document.getElementById('insightsHost'); if(!host) return;
+  host.innerHTML = '<div style="padding:30px;text-align:center;color:#5a6b76;">Computing client health…</div>';
+
+  var diags = [];
+  try { diags = await cdSelect('diagnostics', { select: 'id,status,created_at,survey_closed_at,close_date,client_id' }) || []; } catch(_) { diags = []; }
+
+  var cohort = (allClients || []).filter(function(c){ return !c.is_archived && (c.in_coaching_program || c.coaching_sessions_enabled || c.is_active_coaching); });
+  var models = cohort.map(ciClientModel).sort(function(a,b){ return a.health - b.health; }); // worst first
+
+  var n = models.length || 1;
+  var g = models.filter(function(m){return m.health>=80;}).length;
+  var y = models.filter(function(m){return m.health>=50 && m.health<80;}).length;
+  var r = models.filter(function(m){return m.health<50;}).length;
+  var avgCompletion4 = Math.round(models.reduce(function(a,m){return a+m.completion4;},0)/n);
+  var aaWeekly = Math.round(models.filter(function(m){return m.aaDays!=null && m.aaDays<=7;}).length/n*100);
+  var diagClosed = diags.length ? Math.round(diags.filter(function(d){return d.survey_closed_at;}).length/diags.length*100) : null;
+  var cycleArr = diags.filter(function(d){return d.survey_closed_at && d.created_at;}).map(function(d){ return Math.max(0, Math.floor((new Date(d.survey_closed_at)-new Date(d.created_at))/86400000)); });
+  var avgCycle = cycleArr.length ? Math.round(cycleArr.reduce(function(a,b){return a+b;},0)/cycleArr.length) : null;
+
+  var revenue = cohort.reduce(function(a,c){ return a + (+c.total_revenue_to_date||0); }, 0);
+  var renew90 = models.filter(function(m){return m.endDays!=null && m.endDays>=0 && m.endDays<=90;}).length;
+  var renewAtRisk = models.filter(function(m){return m.endDays!=null && m.endDays>=0 && m.endDays<=90 && m.health<50;}).length;
+  var avgRev = cohort.length ? Math.round(revenue/cohort.length) : 0;
+  var fmt$ = function(v){ return '$'+(v||0).toLocaleString('en-US'); };
+
+  // ── Business Health strip ──
+  var strip = '<div style="display:flex;flex-wrap:wrap;gap:14px;background:#04243a;color:#fff;border-radius:12px;padding:14px 18px;margin-bottom:16px;">'
+    + ciStripItem('Active clients', String(cohort.length), '#cfe3ea')
+    + ciStripItem('Revenue to date', fmt$(revenue), '#cfe3ea', 'MRR/ARR target — pending')
+    + ciStripItem('Renewals (90d)', String(renew90), renew90<=1?'#7ee0a1':renew90<=3?'#ffd76a':'#ff9aa9')
+    + ciStripItem('At-risk renewals', String(renewAtRisk), renewAtRisk>0?'#ff9aa9':'#7ee0a1')
+    + ciStripItem('Avg rev / client', fmt$(avgRev), '#cfe3ea')
+    + '</div>';
+
+  // ── KPI tiles ──
+  var tiles = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:18px;">'
+    + ciTile('Active clients', cohort.length, '#5a6b76', '<span style="color:#2e7d32;font-weight:700;">'+g+'</span> / <span style="color:#f9a825;font-weight:700;">'+y+'</span> / <span style="color:#DB1F48;font-weight:700;">'+r+'</span> health split')
+    + ciTile('Check-in completion', avgCompletion4+'%', ciTileColor(avgCompletion4,80,60), 'last 4 weeks')
+    + ciTilePending('Session attendance', 'no session data yet')
+    + ciTile('Ask Alex weekly use', aaWeekly+'%', ciTileColor(aaWeekly,60,35), 'of coaching clients')
+    + (diagClosed==null ? ciTilePending('Diagnostics completed','no diagnostics yet') : ciTile('Diagnostics completed', diagClosed+'%', ciTileColor(diagClosed,75,50), 'surveys closed'))
+    + (avgCycle==null ? ciTilePending('Diagnostic cycle time','no closed diagnostics') : ciTile('Diagnostic cycle time', avgCycle+'d', avgCycle<=10?'#2e7d32':avgCycle<=20?'#f9a825':'#DB1F48', 'invite → close'))
+    + '</div>';
+
+  // ── Client Health table ──
+  var rows = models.map(function(m){
+    var c=m.c;
+    var renewal = m.endDays==null ? '<span style="color:#9aa7ad;">—</span>'
+      : (m.endDays<0 ? '<span style="color:#DB1F48;">ended</span>'
+      : ('<span style="'+((m.endDays<60&&m.health<70)?'color:#DB1F48;font-weight:700;':'color:#5a6b76;')+'">'+m.endDays+'d</span>'));
+    var streak = '<div style="background:#eef1f2;border-radius:6px;height:8px;width:60px;overflow:hidden;display:inline-block;vertical-align:middle;"><div style="height:8px;width:'+Math.round(m.completion8)+'%;background:'+ciColor(m.completion8)+';"></div></div>';
+    var aa = (m.aaDays!=null && m.aaDays<=30) ? '<span style="color:#2e7d32;font-size:12px;">Active</span>' : '<span style="color:#9aa7ad;font-size:12px;">Inactive</span>';
+    var lastAct = m.lastActiveDays==null ? '—' : m.lastActiveDays+'d';
+    var nm = esc(c.name||'Unnamed'); var org = esc(c.organization||c.org||'');
+    return '<tr style="border-top:1px solid #e6ecee;">'
+      + '<td style="padding:9px 10px;"><a href="#" onclick="event.preventDefault();showSection(\'clients\');openClientProfile(\''+c.id+'\')" style="color:#004369;font-weight:700;text-decoration:none;">'+nm+'</a><div style="font-size:11px;color:#8a99a0;">'+org+'</div></td>'
+      + '<td style="padding:9px 10px;font-size:12px;color:#5a6b76;">'+(m.week?('Wk '+m.week):'—')+'</td>'
+      + '<td style="padding:9px 10px;">'+ciPill(m.health)+(m.progressPending?' <span title="Progress vs plan pending — no plan metrics" style="color:#c9a227;font-size:11px;">⧗</span>':'')+'</td>'
+      + '<td style="padding:9px 10px;">'+renewal+'</td>'
+      + '<td style="padding:9px 10px;">'+streak+'</td>'
+      + '<td style="padding:9px 10px;">'+aa+'</td>'
+      + '<td style="padding:9px 10px;font-size:12px;color:#5a6b76;">'+lastAct+'</td>'
+      + '<td style="padding:9px 10px;font-size:14px;">'+(m.flags.join(' ')||'—')+'</td>'
+      + '<td style="padding:9px 10px;white-space:nowrap;"><button onclick="showSection(\'clients\');openClientProfile(\''+c.id+'\')" style="padding:5px 10px;border:1px solid #dbe3e6;background:#fff;border-radius:6px;font-size:12px;cursor:pointer;color:#004369;">Open</button> <button onclick="ciLogNote(\''+c.id+'\')" style="padding:5px 10px;border:1px solid #dbe3e6;background:#fff;border-radius:6px;font-size:12px;cursor:pointer;color:#004369;">Note</button></td>'
+      + '</tr>';
+  }).join('');
+  var table = '<div style="background:#fff;border:1px solid #e6ecee;border-radius:12px;overflow:hidden;margin-bottom:18px;">'
+    + '<div style="padding:12px 16px;font-weight:800;color:#004369;font-family:Montserrat,sans-serif;border-bottom:1px solid #eef1f2;">Client Health — worst first ('+cohort.length+')</div>'
+    + (cohort.length ? '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#F7F4EE;text-align:left;color:#5a6b76;font-size:11px;text-transform:uppercase;"><th style="padding:9px 10px;">Client</th><th style="padding:9px 10px;">Week</th><th style="padding:9px 10px;">Health</th><th style="padding:9px 10px;">Renewal</th><th style="padding:9px 10px;">Check-in 8wk</th><th style="padding:9px 10px;">Ask Alex</th><th style="padding:9px 10px;">Last seen</th><th style="padding:9px 10px;">Flags</th><th style="padding:9px 10px;"></th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+       : '<div style="padding:24px;color:#5a6b76;">No active coaching clients yet.</div>')
+    + '</div>';
+
+  // ── Insights & Alerts ──
+  var immediate = [];
+  models.forEach(function(m){
+    if (m.health<50) immediate.push(esc(m.c.name)+' — health '+Math.round(m.health)+' ('+m.reason+')'+(m.endDays!=null&&m.endDays<=90?' · renews in '+m.endDays+'d':''));
+    else if (m.lastCkDays==null || m.lastCkDays>21) immediate.push(esc(m.c.name)+' — no check-in 3+ weeks');
+    else if (m.endDays!=null && m.endDays<60 && m.health<70) immediate.push(esc(m.c.name)+' — renews in '+m.endDays+'d and health '+Math.round(m.health));
+  });
+  var watch = [];
+  if (aaWeekly < 60) watch.push('Only '+aaWeekly+'% of coaching clients used Ask Alex in the last 7 days');
+  var friction = (allClients||[]).filter(function(c){ return !c.is_archived && (c.account_type==='trial' || c.is_workshop_participant) && !c.plan_submitted_at && ciDays(c.invited_at)!=null && ciDays(c.invited_at)>=7; });
+  if (friction.length) watch.push(friction.length+' invited guest'+(friction.length>1?'s have':' has')+' not completed the plan wizard within 7 days');
+  var trending = models.filter(function(m){return m.health>=50 && m.health<65;});
+  if (trending.length) watch.push(trending.length+' client'+(trending.length>1?'s are':' is')+' in the yellow zone (50–64) — watch for slippage');
+  var leverage = [];
+  var stars = models.filter(function(m){return m.health>=90;});
+  if (stars.length) leverage.push(stars.length+' client'+(stars.length>1?'s':'')+' at health ≥ 90 — referral / testimonial candidates: '+stars.slice(0,5).map(function(m){return esc(m.c.name);}).join(', '));
+  var power = models.filter(function(m){return m.aaDays!=null && m.aaDays<=7;});
+  if (power.length) leverage.push(power.length+' client'+(power.length>1?'s use':' uses')+' Ask Alex weekly — your most engaged segment');
+
+  function alertBlock(icon, title, items, color){
+    return '<div style="flex:1;min-width:240px;background:#fff;border:1px solid #e6ecee;border-top:3px solid '+color+';border-radius:10px;padding:14px 16px;">'
+      + '<div style="font-weight:800;color:#004369;margin-bottom:8px;">'+icon+' '+title+'</div>'
+      + (items.length ? '<ul style="margin:0;padding-left:18px;color:#3a4a52;font-size:13px;line-height:1.6;">'+items.map(function(i){return '<li>'+i+'</li>';}).join('')+'</ul>' : '<div style="color:#9aa7ad;font-size:13px;">Nothing right now.</div>')
+      + '</div>';
+  }
+  var alerts = '<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:18px;">'
+    + alertBlock('🔴','Immediate attention', immediate, '#DB1F48')
+    + alertBlock('🟡','Watch', watch, '#f9a825')
+    + alertBlock('🟢','Leverage / Expand', leverage, '#2e7d32')
+    + '</div>';
+
+  var headerBar = '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">'
+    + '<div style="font-family:Montserrat,sans-serif;font-size:20px;font-weight:800;color:#004369;">Coach Insights</div>'
+    + '<div style="font-size:11px;color:#8a99a0;">Read-only · health updates on load · session attendance & MRR pending data</div>'
+    + '</div>';
+
+  host.innerHTML = headerBar + strip + tiles + alerts + table
+    + '<div style="font-size:11px;color:#9aa7ad;margin-bottom:30px;">Health = average of available subscores (Engagement, Progress vs Plan, Risk Signals). Session Reliability is excluded until session data is captured; ⧗ marks clients whose Progress score is pending plan metrics. Thresholds: green ≥ 80, yellow 50–79, red &lt; 50.</div>';
+}
+
+function ciStripItem(label, val, valColor, sub){
+  return '<div style="min-width:120px;"><div style="font-size:11px;color:#9fc0d0;text-transform:uppercase;letter-spacing:.5px;">'+label+'</div>'
+    + '<div style="font-size:20px;font-weight:800;color:'+valColor+';font-family:Montserrat,sans-serif;">'+val+'</div>'
+    + (sub?'<div style="font-size:10px;color:#7fa3b5;">'+sub+'</div>':'')+'</div>';
+}
+function ciTile(label, val, color, sub){
+  return '<div style="background:#fff;border:1px solid #e6ecee;border-radius:10px;padding:14px 16px;">'
+    + '<div style="font-size:12px;color:#5a6b76;margin-bottom:6px;">'+label+'</div>'
+    + '<div style="font-size:26px;font-weight:800;color:'+color+';font-family:Montserrat,sans-serif;line-height:1;">'+val+'</div>'
+    + '<div style="height:4px;background:'+color+';border-radius:3px;margin:8px 0 6px;"></div>'
+    + '<div style="font-size:11px;color:#8a99a0;">'+sub+'</div></div>';
+}
+function ciTilePending(label, sub){
+  return '<div style="background:#fbfbf9;border:1px dashed #d5d9da;border-radius:10px;padding:14px 16px;">'
+    + '<div style="font-size:12px;color:#5a6b76;margin-bottom:6px;">'+label+'</div>'
+    + '<div style="font-size:18px;font-weight:800;color:#b0b8ba;font-family:Montserrat,sans-serif;">Pending</div>'
+    + '<div style="height:4px;background:#e3e6e7;border-radius:3px;margin:8px 0 6px;"></div>'
+    + '<div style="font-size:11px;color:#a7afb1;">'+sub+'</div></div>';
+}
+async function ciLogNote(clientId){
+  var c = (allClients||[]).find(function(x){return x.id===clientId;}); if(!c) return;
+  var note = prompt('Add a coach note for '+(c.name||'this client')+':'); if(!note) return;
+  var stamp = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  var existing = c.notes ? (c.notes+'\n') : '';
+  var updated = existing + '['+stamp+'] '+note;
+  try { await cdUpdate('clients', { notes: updated }, { eq: { id: clientId } }); c.notes = updated; toast('Note saved.'); }
+  catch(e){ toast('Could not save note: '+e.message); }
 }
 
 // ── Organizations: standalone top-level manager (add / edit companies) ──────
