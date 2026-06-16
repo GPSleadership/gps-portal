@@ -2168,9 +2168,9 @@ function renderClientCard(client, checkins) {
     </table>` : `<p style="color:var(--gray-600);font-size:13px;font-style:italic;">No check-ins submitted yet.</p>`;
 
   return `
-    <div class="client-card ${pillarClass} ${!client.is_active ? 'inactive' : ''}" id="card-${client.id}" style="${cleanupMode ? 'position:relative;'+(cleanupSelected.has(client.id)?'outline:2px solid var(--teal);':'') : ''}">
-      ${cleanupMode ? `<label style="position:absolute;top:10px;left:10px;z-index:5;display:flex;align-items:center;gap:6px;background:#fff;border:1.5px solid var(--gray-300);border-radius:6px;padding:4px 8px;cursor:pointer;" onclick="event.stopPropagation();toggleClientSelect('${client.id}')"><input type="checkbox" ${cleanupSelected.has(client.id)?'checked':''} onclick="event.stopPropagation();toggleClientSelect('${client.id}')" style="width:16px;height:16px;cursor:pointer;"><span style="font-size:11px;font-weight:700;color:var(--navy);">Select</span></label>` : ''}
+    <div class="client-card ${pillarClass} ${!client.is_active ? 'inactive' : ''}" id="card-${client.id}" style="${cleanupMode && cleanupSelected.has(client.id) ? 'outline:2px solid var(--teal);' : ''}">
       <div class="client-header" onclick="${cleanupMode ? `toggleClientSelect('${client.id}')` : `openClientProfile('${client.id}')`}">
+        ${cleanupMode ? `<input type="checkbox" ${cleanupSelected.has(client.id)?'checked':''} onclick="event.stopPropagation();toggleClientSelect('${client.id}')" title="Select for cleanup" style="width:18px;height:18px;cursor:pointer;margin-right:12px;flex:0 0 auto;">` : ''}
         <div class="client-avatar" style="${avatarRingStyle}" title="${completionPct !== null ? completionPct + '% follow-through rate' : 'No check-ins yet'}">${initials}</div>
         <div class="client-name-block">
           <div class="client-name">${client.name || 'Unnamed'}</div>
@@ -3536,10 +3536,22 @@ function updateCleanupBar() {
     document.body.appendChild(bar);
   }
   const n = cleanupSelected.size, dis = n ? '' : 'opacity:.45;pointer-events:none;';
+  const visible = document.querySelectorAll('.client-card').length;
+  const allSelected = visible > 0 && n >= visible;
   bar.innerHTML = '<span style="font-weight:700;">' + n + ' selected</span>'
+    + '<button onclick="selectAllVisibleForCleanup()" style="background:none;color:#fff;border:1px solid #5f93ad;border-radius:6px;padding:8px 16px;font-weight:700;cursor:pointer;">' + (allSelected ? 'Clear all' : 'Select all shown (' + visible + ')') + '</button>'
     + '<button onclick="bulkArchiveSelected()" style="background:#f9a825;color:#3a2d00;border:none;border-radius:6px;padding:8px 16px;font-weight:700;cursor:pointer;' + dis + '">Archive</button>'
     + '<button onclick="bulkDeleteSelected()" style="background:#DB1F48;color:#fff;border:none;border-radius:6px;padding:8px 16px;font-weight:700;cursor:pointer;' + dis + '">Delete permanently</button>'
     + '<button onclick="toggleCleanupMode()" style="background:none;color:#cfe8f0;border:1px solid #5f93ad;border-radius:6px;padding:8px 16px;cursor:pointer;margin-left:auto;">Done</button>';
+}
+
+function selectAllVisibleForCleanup() {
+  // Operate on exactly what's on screen (respects the current tab/filter/search).
+  const ids = Array.from(document.querySelectorAll('.client-card')).map(el => el.id.replace(/^card-/, '')).filter(Boolean);
+  const allSelected = ids.length > 0 && ids.every(id => cleanupSelected.has(id));
+  if (allSelected) { ids.forEach(id => cleanupSelected.delete(id)); }
+  else { ids.forEach(id => cleanupSelected.add(id)); }
+  renderClients(); updateCleanupBar();
 }
 
 async function bulkArchiveSelected() {
