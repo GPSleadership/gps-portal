@@ -8875,12 +8875,12 @@ async function drSendSponsor(sponsorId){
           if(!existing||!existing.length){
             // No email match — check for name collision before creating
             if(nm){
-              var nameDup=await cdSelect('clients',{ilike:{name:nm},select:'id,name,email',limit:3});
+              var nameDup=await cdSelect('clients',{ilike:{name:nm},select:'id,name,email,title',limit:3});
               if(nameDup&&nameDup.length){
-                var names=nameDup.map(function(c){ return c.name+' ('+c.email+')'; }).join(', ');
-                if(!confirm('Someone with a similar name is already in your system:\n\n'+names+'\n\nAre you sure you want to create a new profile for '+nm+' ('+em+')?\n\nClick Cancel to go back and select the existing person instead.')){
-                  out.textContent=''; return;
-                }
+                var names=nameDup.map(function(c){ return c.name+' ('+(c.email||'no email')+')'; }).join(', ');
+                var useExisting=confirm('Someone with a similar name is already in your system:\n\n'+names+'\n\nClick OK to add THAT existing person as the sponsor (no duplicate).\nClick Cancel to add "'+nm+'" as a NEW, separate person ('+em+').');
+                if(useExisting && nameDup[0].email){ em=(nameDup[0].email||'').toLowerCase(); nm=nameDup[0].name||nm; ttl=ttl||nameDup[0].title||null; }
+                // Cancel (or existing has no email) → fall through and create a new person with the entered email.
               }
             }
           } else {
@@ -9034,15 +9034,15 @@ async function drSendSponsor(sponsorId){
     var out=document.getElementById('wsRosterOut'); out.textContent='Parsing file…';
     if(typeof XLSX==='undefined'){ out.textContent='SheetJS not loaded. Refresh and try again.'; return; }
     try{
-      var rows;
+      var rows, aoa;
       if(/\.csv$/i.test(f.name)){
         var text=await new Promise(function(res,rej){ var fr=new FileReader(); fr.onload=function(){ res(fr.result); }; fr.onerror=rej; fr.readAsText(f); });
-        rows=parseCsv(text).map(_rosterMapRow).filter(function(r){return r.email&&r.name;});
+        aoa=text.split(/\r?\n/).filter(function(l){return l.trim();}).map(splitCsvLine);
       } else {
         var ab=await new Promise(function(res,rej){ var fr=new FileReader(); fr.onload=function(){ res(fr.result); }; fr.onerror=rej; fr.readAsArrayBuffer(f); });
-        var wb=XLSX.read(ab,{type:'array'}); var ws=wb.Sheets[wb.SheetNames[0]]; var json=XLSX.utils.sheet_to_json(ws,{defval:''});
-        rows=json.map(_rosterMapRow).filter(function(r){return r.email&&r.name;});
+        var wb=XLSX.read(ab,{type:'array'}); var ws=wb.Sheets[wb.SheetNames[0]]; aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
       }
+      rows=_rosterRowsFromAOA(aoa).map(_rosterMapRow).filter(function(r){return r.email&&r.name;});
       if(!rows.length){ out.textContent='No valid rows found — need at least a Name column and an Email column.'; return; }
       out.textContent='Uploading '+rows.length+' rows…';
       document.getElementById('wsUpload').disabled=true;
@@ -9079,18 +9079,43 @@ async function drSendSponsor(sponsorId){
   // Flexible header matcher — pick the first column whose (BOM-stripped, trimmed, lowercased) name is in `keys`.
   function _rosterPick(o, keys){ for(var k in o){ var lk=String(k).replace(/^﻿/,'').trim().toLowerCase(); if(keys.indexOf(lk)>-1){ var v=o[k]; if(v!=null&&String(v).trim()) return String(v).trim(); } } return ''; }
   // Map an arbitrary parsed row → the canonical {name,email,role,department,location}. Only name+email are required.
+  // Find the REAL header row (first row that has both a name-ish and an email-ish column),
+  // then build row objects from it. Handles title/blank rows above the headers — e.g. a
+  // sign-in sheet with "Training Name / Dates" on top and headers a few rows down.
+  function _rosterRowsFromAOA(aoa){
+    if(!aoa||!aoa.length) return [];
+    var hi=-1;
+    for(var i=0;i<Math.min(aoa.length,25);i++){
+      var row=aoa[i]||[];
+      var hasEmail=row.some(function(c){return /e-?mail/i.test(String(c==null?'':c));});
+      var hasName =row.some(function(c){return /name/i.test(String(c==null?'':c));});
+      if(hasEmail&&hasName){ hi=i; break; }
+    }
+    if(hi<0){ for(var j=0;j<Math.min(aoa.length,25);j++){ if((aoa[j]||[]).some(function(c){return /e-?mail/i.test(String(c==null?'':c));})){ hi=j; break; } } }
+    if(hi<0) hi=0;
+    var header=(aoa[hi]||[]).map(function(c){return String(c==null?'':c).trim();});
+    var out=[];
+    for(var r=hi+1;r<aoa.length;r++){
+      var cells=aoa[r]||[]; var o={}; var any=false;
+      header.forEach(function(h,ci){ if(h){ o[h]=cells[ci]; if(cells[ci]!=null&&String(cells[ci]).trim()) any=true; } });
+      if(any) out.push(o);
+    }
+    return out;
+  }
   function _rosterMapRow(o){
-    var name=_rosterPick(o,['name','full name','fullname','rater','participant','participant name','contact','contact name','employee','employee name']);
+    var name=_rosterPick(o,['name','full name','fullname','rater','participant','participant name','contact','contact name','employee','employee name','attendee','attendee name']);
     if(!name){ var fn=_rosterPick(o,['first name','firstname','first','given name']); var ln=_rosterPick(o,['last name','lastname','last','surname','family name']); name=(fn+' '+ln).trim(); }
+    // "Last, First" → "First Last" (common on sign-in sheets)
+    if(name && name.indexOf(',')>-1 && name.split(',').length===2){ var pp=name.split(','); var a=pp[0].trim(), b=pp[1].trim(); if(a&&b) name=b+' '+a; }
     return {
       name: name,
-      email: _rosterPick(o,['email','email address','e-mail','e mail','emailaddress','email_address','work email']).toLowerCase(),
+      email: _rosterPick(o,['email','email address','email addresses','emails','e-mail','e-mail address','e mail','emailaddress','email_address','work email']).toLowerCase(),
       role: _rosterPick(o,['role','title','job title','jobtitle','position','rater type','rater relationship','relationship']),
-      department: _rosterPick(o,['department','department/area','department / area','dept','area','division','team','department/division']),
-      location: _rosterPick(o,['location','site','region','office','city','branch'])
+      department: _rosterPick(o,['department','department/area','department / area','dept','area','division','team','department/division','office','office/division/branch','division/branch']),
+      location: _rosterPick(o,['location','site','region','city','branch'])
     };
   }
-  async function wsUploadRoster(){ var out=document.getElementById('wsRosterOut'); var fileEl=document.getElementById('wsRosterXlsx'); if(fileEl&&fileEl.files&&fileEl.files[0]){ return wsUploadRosterFile(fileEl.files[0]); } var rows=parseCsv(document.getElementById('wsRosterCsv').value).map(_rosterMapRow).filter(function(r){return r.email&&r.name;}); if(!rows.length){ out.textContent='No valid rows found — paste rows with a Name and Email, or pick a file below.'; return; } out.textContent='Uploading '+rows.length+' people…'; document.getElementById('wsUpload').disabled=true; try{ var r=await wsData('upload-roster',{ workshop_id:WS.cur.id, rows:rows }); out.textContent='Done — '+r.created+' new profiles, '+r.linked+' linked, '+r.skipped+' skipped.'; wsOpen(WS.cur.id); }catch(e){ out.textContent=e.message; document.getElementById('wsUpload').disabled=false; } }
+  async function wsUploadRoster(){ var out=document.getElementById('wsRosterOut'); var fileEl=document.getElementById('wsRosterXlsx'); if(fileEl&&fileEl.files&&fileEl.files[0]){ return wsUploadRosterFile(fileEl.files[0]); } var aoa=document.getElementById('wsRosterCsv').value.split(/\r?\n/).filter(function(l){return l.trim();}).map(splitCsvLine); var rows=_rosterRowsFromAOA(aoa).map(_rosterMapRow).filter(function(r){return r.email&&r.name;}); if(!rows.length){ out.textContent='No valid rows found — paste rows with a Name and Email, or pick a file below.'; return; } out.textContent='Uploading '+rows.length+' people…'; document.getElementById('wsUpload').disabled=true; try{ var r=await wsData('upload-roster',{ workshop_id:WS.cur.id, rows:rows }); out.textContent='Done — '+r.created+' new profiles, '+r.linked+' linked, '+r.skipped+' skipped.'; wsOpen(WS.cur.id); }catch(e){ out.textContent=e.message; document.getElementById('wsUpload').disabled=false; } }
   async function wsSendInvites(phase){ window.gpsPresendGate(_wsPresendOpts(function(){ _wsDoSendInvites(phase); })); }
   async function _wsDoSendInvites(phase){ if(!confirm('Send '+phase+'-survey invites to all '+WS.parts.length+' participants?')) return; try{ var r=await wsData('send-invites',{ workshop_id:WS.cur.id, phase:phase }); toast('Sent '+r.sent+' of '+r.total+' '+phase+'-survey invites.'); wsOpen(WS.cur.id); }catch(e){ toast(e.message); } }
 
