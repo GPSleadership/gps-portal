@@ -576,7 +576,7 @@ async function handleTrialSweep(req, res) {
 
   try {
     // Cohort: trial workshop guests, not in coaching, not already archived.
-    const cohortRes = await sb(`/rest/v1/clients?is_workshop_participant=eq.true&in_coaching_program=eq.false&is_archived=eq.false&account_type=eq.trial&select=id,name,email,invited_at,created_at,plan_submitted_at&limit=2000`);
+    const cohortRes = await sb(`/rest/v1/clients?is_workshop_participant=eq.true&in_coaching_program=eq.false&is_archived=eq.false&account_type=eq.trial&select=id,name,email,invited_at,created_at,plan_submitted_at,welcome_sent_at&limit=2000`);
     const cohort = await cohortRes.json() || [];
 
     // Exclude any client linked to a diagnostics row (these are real clients).
@@ -589,13 +589,17 @@ async function handleTrialSweep(req, res) {
     const ckRows = await ckRes.json() || [];
     const checkinClientIds = new Set((Array.isArray(ckRows) ? ckRows : []).map(c => c.client_id));
 
-    const buckets = { nudge_1: [], nudge_2: [], archive: [], activated: 0, diagnostic_excluded: 0 };
+    const buckets = { nudge_1: [], nudge_2: [], archive: [], activated: 0, diagnostic_excluded: 0, not_yet_welcomed: 0 };
     for (const c of cohort) {
       if (diagClientIds.has(c.id)) { buckets.diagnostic_excluded++; continue; } // never touch a diagnostic client
       const activated = !!c.plan_submitted_at && checkinClientIds.has(c.id);
       if (activated) { buckets.activated++; continue; }
-      const base = c.invited_at || c.created_at;
-      const days = base ? Math.floor((now - new Date(base).getTime()) / 86400000) : 0;
+      // The 10-day access clock starts when the WELCOME email is sent (= when they actually
+      // get access), NOT at roster import. A roster can be imported days before the workshop.
+      // No welcome sent yet → no access yet → clock hasn't started; leave them alone.
+      const base = c.welcome_sent_at;
+      if (!base) { buckets.not_yet_welcomed++; continue; }
+      const days = Math.floor((now - new Date(base).getTime()) / 86400000);
       const item = { id: c.id, name: c.name, email: c.email, days };
       if (days >= ARCHIVE_DAY) buckets.archive.push(item);
       else if (days >= NUDGE_2_DAY) buckets.nudge_2.push(item);
@@ -625,6 +629,7 @@ async function handleTrialSweep(req, res) {
         would_archive: buckets.archive.length,
         activated: buckets.activated,
         diagnostic_excluded: buckets.diagnostic_excluded,
+        not_yet_welcomed: buckets.not_yet_welcomed,
       },
       would_archive: buckets.archive,
       archived,
