@@ -223,6 +223,8 @@ export default async function handler(req, res) {
           to:      [client.email],
           subject,
           html,
+          text:    String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
+          reply_to: 'alex@gpsleadership.org',
         }),
       });
 

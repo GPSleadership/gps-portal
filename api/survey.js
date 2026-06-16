@@ -17,6 +17,15 @@ const SITE_URL        = process.env.SITE_URL        || 'https://portal.gpsleader
 const FROM_EMAIL      = process.env.RESEND_FROM_EMAIL || 'noreply@portal.gpsleadership.org';
 const FROM_NAME       = 'Alex Tremble | GPS Leadership Solutions';
 const ALEX_EMAIL      = 'alex@gpsleadership.org';
+// Deliverability: text/plain part alongside HTML (improves inbox placement).
+function htmlToText(html) {
+  return String(html || '')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<\/(p|div|tr|h[1-6]|li)>/gi, '\n').replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+}
 
 // ── Supabase fetch helper ────────────────────────────────────────────────────
 function sbFetch(path, method = 'GET', body = null, extraHeaders = {}) {
@@ -302,7 +311,9 @@ async function handleSend(req, res) {
           to:      [stakeholder.email],
           cc:      ccAddresses,
           subject: buildSendSubjectLine(client.name, checkpoint),
-          html:    buildSendEmailHtml(stakeholder.name, client.name, checkpoint, priorityBehavior, surveyLink)
+          html:    buildSendEmailHtml(stakeholder.name, client.name, checkpoint, priorityBehavior, surveyLink),
+          text:    htmlToText(buildSendEmailHtml(stakeholder.name, client.name, checkpoint, priorityBehavior, surveyLink)),
+          reply_to: ALEX_EMAIL
         })
       });
 
@@ -384,7 +395,9 @@ async function handleResend(req, res) {
         to:      [stakeholder.email],
         cc:      client.email ? [client.email] : [],
         subject: buildSendSubjectLine(client.name, checkpoint),
-        html:    buildSendEmailHtml(stakeholder.name, client.name, checkpoint, priorityBehavior, surveyLink)
+        html:    buildSendEmailHtml(stakeholder.name, client.name, checkpoint, priorityBehavior, surveyLink),
+        text:    htmlToText(buildSendEmailHtml(stakeholder.name, client.name, checkpoint, priorityBehavior, surveyLink)),
+        reply_to: ALEX_EMAIL
       })
     });
 
@@ -489,7 +502,7 @@ async function sendNotificationEmail(to, subject, html, client_id, clientName, e
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: `${FROM_NAME} <${FROM_EMAIL}>`, to: [to], subject, html })
+      body: JSON.stringify({ from: `${FROM_NAME} <${FROM_EMAIL}>`, to: [to], subject, html, text: htmlToText(html), reply_to: ALEX_EMAIL })
     });
     const data = await res.json();
     await logEmail({ client_id, recipient_email: to, recipient_name: clientName, email_type: emailType, subject, status: res.ok ? 'sent' : 'error', resend_id: res.ok ? (data.id || null) : null, error_details: res.ok ? null : JSON.stringify(data).slice(0, 500) });

@@ -103,6 +103,18 @@ function isoNow() { return new Date().toISOString(); }
 // TP3 themes → index buckets.
 const TP3_THEMES = { trust: 'trust', proactivity: 'proactivity', productivity: 'productivity' };
 
+// Deliverability: a reply-to that reaches a human + a text/plain part alongside the
+// HTML. Both materially improve inbox placement (esp. Microsoft 365 / corporate filters).
+const REPLY_TO = process.env.REPLY_TO_EMAIL || 'alex@gpsleadership.org';
+function htmlToText(html) {
+  return String(html || '')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<\/(p|div|tr|h[1-6]|li)>/gi, '\n').replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&rsquo;/g, '’').replace(/&ldquo;/g, '“').replace(/&rdquo;/g, '”')
+    .replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 // ── Email via Resend (self-contained, like diagnostic.js) ────────────────────
 async function sendEmail(to, subject, html) {
   if (!RESEND_API_KEY) return { ok: false, error: 'RESEND_API_KEY not set' };
@@ -110,7 +122,7 @@ async function sendEmail(to, subject, html) {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: `Alex Tremble – GPS Leadership <${RESEND_FROM}>`, to: [to], subject, html }),
+      body: JSON.stringify({ from: `Alex Tremble – GPS Leadership <${RESEND_FROM}>`, to: [to], subject, html, text: htmlToText(html), reply_to: REPLY_TO }),
     });
     const data = await r.json().catch(() => ({}));
     // Best-effort email log (table exists; ignore failures).
@@ -130,7 +142,7 @@ async function sendEmailMulti(toArr, subject, html) {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: `Alex Tremble – GPS Leadership <${RESEND_FROM}>`, to: uniq, subject, html }),
+      body: JSON.stringify({ from: `Alex Tremble – GPS Leadership <${RESEND_FROM}>`, to: uniq, subject, html, text: htmlToText(html), reply_to: REPLY_TO }),
     });
     return { ok: r.ok };
   } catch (e) { return { ok: false }; }

@@ -185,7 +185,9 @@ export default async function handler(req, res) {
           from:    `${FROM_NAME} <${FROM_EMAIL}>`,
           to:      [stakeholder.email],
           subject,
-          html
+          html,
+          text:    String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
+          reply_to: 'alex@gpsleadership.org'
         })
       });
 

@@ -881,6 +881,7 @@
           <div class="filter-tab" onclick="setFilter('complete', this)">Complete</div>
           <div class="filter-tab" onclick="setFilter('archived', this)">Archived</div>
         </div>
+        <button class="btn-export owner-only" id="cleanupToggle" onclick="toggleCleanupMode()">🧹 Clean up</button>
 <div style="position:relative;display:inline-block;" id="exportDropdownWrap">
           <button class="btn-export" onclick="toggleExportMenu()">⬇ Export ▾</button>
           <div id="exportMenu" style="display:none;position:absolute;right:0;top:36px;background:white;border:1px solid var(--gray-300);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.12);z-index:50;min-width:210px;">
@@ -2167,8 +2168,9 @@ function renderClientCard(client, checkins) {
     </table>` : `<p style="color:var(--gray-600);font-size:13px;font-style:italic;">No check-ins submitted yet.</p>`;
 
   return `
-    <div class="client-card ${pillarClass} ${!client.is_active ? 'inactive' : ''}" id="card-${client.id}">
-      <div class="client-header" onclick="openClientProfile('${client.id}')">
+    <div class="client-card ${pillarClass} ${!client.is_active ? 'inactive' : ''}" id="card-${client.id}" style="${cleanupMode ? 'position:relative;'+(cleanupSelected.has(client.id)?'outline:2px solid var(--teal);':'') : ''}">
+      ${cleanupMode ? `<label style="position:absolute;top:10px;left:10px;z-index:5;display:flex;align-items:center;gap:6px;background:#fff;border:1.5px solid var(--gray-300);border-radius:6px;padding:4px 8px;cursor:pointer;" onclick="event.stopPropagation();toggleClientSelect('${client.id}')"><input type="checkbox" ${cleanupSelected.has(client.id)?'checked':''} onclick="event.stopPropagation();toggleClientSelect('${client.id}')" style="width:16px;height:16px;cursor:pointer;"><span style="font-size:11px;font-weight:700;color:var(--navy);">Select</span></label>` : ''}
+      <div class="client-header" onclick="${cleanupMode ? `toggleClientSelect('${client.id}')` : `openClientProfile('${client.id}')`}">
         <div class="client-avatar" style="${avatarRingStyle}" title="${completionPct !== null ? completionPct + '% follow-through rate' : 'No check-ins yet'}">${initials}</div>
         <div class="client-name-block">
           <div class="client-name">${client.name || 'Unnamed'}</div>
@@ -3496,6 +3498,78 @@ function hardDeleteClient(clientId, clientName) {
       renderClients();
     }
   );
+}
+
+// ─────────────────────────────────────────────
+// BULK CLEANUP (multi-select archive / delete demo + old accounts)
+// ─────────────────────────────────────────────
+let cleanupMode = false;
+const cleanupSelected = new Set();
+
+function toggleCleanupMode() {
+  cleanupMode = !cleanupMode;
+  cleanupSelected.clear();
+  const t = document.getElementById('cleanupToggle');
+  if (t) t.textContent = cleanupMode ? '✓ Cleaning…' : '🧹 Clean up';
+  renderClients();
+  updateCleanupBar();
+}
+
+function toggleClientSelect(id) {
+  if (cleanupSelected.has(id)) cleanupSelected.delete(id); else cleanupSelected.add(id);
+  const card = document.getElementById('card-' + id);
+  if (card) {
+    const cb = card.querySelector('input[type=checkbox]');
+    if (cb) cb.checked = cleanupSelected.has(id);
+    card.style.outline = cleanupSelected.has(id) ? '2px solid var(--teal)' : '';
+  }
+  updateCleanupBar();
+}
+
+function updateCleanupBar() {
+  let bar = document.getElementById('cleanupBar');
+  if (!cleanupMode) { if (bar) bar.remove(); return; }
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'cleanupBar';
+    bar.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:9000;background:#004369;color:#fff;padding:12px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;box-shadow:0 -4px 16px rgba(0,0,0,.2);';
+    document.body.appendChild(bar);
+  }
+  const n = cleanupSelected.size, dis = n ? '' : 'opacity:.45;pointer-events:none;';
+  bar.innerHTML = '<span style="font-weight:700;">' + n + ' selected</span>'
+    + '<button onclick="bulkArchiveSelected()" style="background:#f9a825;color:#3a2d00;border:none;border-radius:6px;padding:8px 16px;font-weight:700;cursor:pointer;' + dis + '">Archive</button>'
+    + '<button onclick="bulkDeleteSelected()" style="background:#DB1F48;color:#fff;border:none;border-radius:6px;padding:8px 16px;font-weight:700;cursor:pointer;' + dis + '">Delete permanently</button>'
+    + '<button onclick="toggleCleanupMode()" style="background:none;color:#cfe8f0;border:1px solid #5f93ad;border-radius:6px;padding:8px 16px;cursor:pointer;margin-left:auto;">Done</button>';
+}
+
+async function bulkArchiveSelected() {
+  const ids = Array.from(cleanupSelected);
+  if (!ids.length) return;
+  if (!confirm('Archive ' + ids.length + ' profile' + (ids.length > 1 ? 's' : '') + '? They move to the Archived filter and can be restored.')) return;
+  for (const id of ids) {
+    try { await cdUpdate('clients', { is_archived: true }, { eq: { id } }); allClients = allClients.map(c => c.id === id ? { ...c, is_archived: true } : c); } catch (e) { /* skip */ }
+  }
+  cleanupSelected.clear(); renderStats(); renderClients(); updateCleanupBar();
+  toast('Archived ' + ids.length + '.');
+}
+
+async function bulkDeleteSelected() {
+  const ids = Array.from(cleanupSelected);
+  if (!ids.length) return;
+  const names = ids.map(id => { const c = allClients.find(x => x.id === id); return c ? c.name : id; });
+  if (!confirm('⚠️ PERMANENTLY delete ' + ids.length + ' profile' + (ids.length > 1 ? 's' : '') + ' and their check-ins? Use only for test/demo accounts — this cannot be undone.\n\n' + names.slice(0, 12).join(', ') + (names.length > 12 ? '…' : ''))) return;
+  let ok = 0; const failed = [];
+  for (const id of ids) {
+    try {
+      await cdDelete('checkins', { eq: { client_id: id } });
+      await cdDelete('clients', { eq: { id } });
+      allClients = allClients.filter(c => c.id !== id);
+      allCheckins = allCheckins.filter(c => c.client_id !== id);
+      ok++;
+    } catch (e) { const c = allClients.find(x => x.id === id); failed.push(c ? c.name : id); }
+  }
+  cleanupSelected.clear(); renderStats(); renderClients(); updateCleanupBar();
+  toast('Deleted ' + ok + '.' + (failed.length ? ' Could not delete ' + failed.length + ' (they have linked diagnostics/surveys — archive those instead): ' + failed.join(', ') : ''));
 }
 
 // ─────────────────────────────────────────────
