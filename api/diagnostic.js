@@ -220,6 +220,7 @@ export default async function handler(req, res) {
     case 'send-scheduled':       return handleSendScheduled(req, res);
     case 'trial-sweep':          return handleTrialSweep(req, res);
     case 'send-leader-link':     return handleSendLeaderLink(req, res);
+    case 'resend-rater':         return handleResendRater(req, res);
     case 'generate-question':    return handleGenerateQuestion(req, res);
     case 'generate-g2-question': return handleGenerateG2Question(req, res);
     case 'generate-report':      return handleGenerateReport(req, res);
@@ -240,6 +241,65 @@ export default async function handler(req, res) {
   }
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ACTION: resend-rater — re-send ONE rater's survey invite (e.g. they lost the link)
+// POST /api/diagnostic?action=resend-rater   Body: { rater_id, session }
+// Reuses the exact diagnostic_invite email (editable template + fallback).
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleResendRater(req, res) {
+  const { rater_id, session } = req.body || {};
+  if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
+  if (!rater_id) return res.status(400).json({ error: 'rater_id required' });
+  try {
+    const rRes  = await sb(`/rest/v1/diagnostic_raters?id=eq.${rater_id}&select=id,name,email,relationship,token,will_interview,invited_at,diagnostic_id&limit=1`);
+    const rRows = await rRes.json();
+    const rater = Array.isArray(rRows) ? rRows[0] : null;
+    if (!rater)       return res.status(404).json({ error: 'Rater not found' });
+    if (!rater.email) return res.status(400).json({ error: 'This rater has no email on file.' });
+
+    const dRes  = await sb(`/rest/v1/diagnostics?id=eq.${rater.diagnostic_id}&select=client_name,client_title,client_org,client_email,interviews_enabled,interview_calendar_link,anonymous_feedback&limit=1`);
+    const dRows = await dRes.json();
+    const diag  = Array.isArray(dRows) ? dRows[0] : null;
+    if (!diag) return res.status(404).json({ error: 'Diagnostic not found' });
+
+    const now = new Date();
+    const closeDate = new Date(now); closeDate.setDate(closeDate.getDate() + 7);
+    const closeDateDisp = closeDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const surveyLink   = `${PORTAL_BASE}/diagnostic-survey?token=${rater.token}`;
+    const calendarLink = (diag.interviews_enabled && rater.will_interview && diag.interview_calendar_link) ? diag.interview_calendar_link : null;
+
+    let subject  = calendarLink
+      ? `Your input is requested — ${diag.client_name} leadership feedback + interview invite`
+      : `Your input is requested — ${diag.client_name} leadership feedback`;
+    let bodyHtml = null;
+    const inviteTpl = await getApprovedTemplate('diagnostic_invite');
+    if (inviteTpl) {
+      const vars = {
+        first_name:  (rater.name || '').split(' ')[0] || 'there',
+        rater_name:  rater.name || '',
+        leader_name: diag.client_name || '',
+        leader_full: [diag.client_name, diag.client_title, diag.client_org].filter(Boolean).join(' — '),
+        close_date:  closeDateDisp,
+        survey_link: surveyLink,
+      };
+      if (inviteTpl.subject)   subject  = fillTemplate(inviteTpl.subject, vars) || subject;
+      if (inviteTpl.body_text) bodyHtml = tplBodyToHtml(fillTemplate(inviteTpl.body_text, vars));
+    }
+    const html = buildInviteEmail({
+      raterName: rater.name, leaderName: diag.client_name, leaderTitle: diag.client_title,
+      leaderOrg: diag.client_org, surveyLink, closeDate: closeDateDisp, calendarLink, bodyHtml,
+    });
+    const cc = (diag.anonymous_feedback ? [] : [diag.client_email]).concat('team@gpsleadership.org').filter(Boolean);
+    await sendEmail({ to: rater.email, subject, html, emailType: 'diagnostic_invite', recipientName: rater.name, cc });
+    if (!rater.invited_at) {
+      await sb(`/rest/v1/diagnostic_raters?id=eq.${rater.id}`, 'PATCH', { invited_at: now.toISOString() }, { Prefer: 'return=minimal' });
+    }
+    return res.status(200).json({ ok: true, sent_to: rater.email });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ACTION: send-invites

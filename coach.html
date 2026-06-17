@@ -6202,7 +6202,11 @@ function renderRatersTab() {
         : `<span class="dot ${r.completed_at?'dot-green':'dot-grey'}"></span>${r.completed_at?'Completed':'Pending'}`}
     </td>
     ${interviewCell}
-    <td><button class="dbtn dbtn-outline dbtn-sm" style="color:var(--d-red2);border-color:var(--d-red2);" onclick="removeRater('${r.id}')">Remove</button></td>
+    <td style="white-space:nowrap;">
+      <button class="dbtn dbtn-outline dbtn-sm" onclick="copyRaterLink('${r.token}')" title="Copy this person's survey link to paste into an email">Copy link</button>
+      ${!r.completed_at ? `<button class="dbtn dbtn-outline dbtn-sm" onclick="resendRaterInvite('${r.id}', this)" title="Re-send the survey invite email to this person">Resend</button>` : ''}
+      <button class="dbtn dbtn-outline dbtn-sm" style="color:var(--d-red2);border-color:var(--d-red2);" onclick="removeRater('${r.id}')">Remove</button>
+    </td>
   </tr>`;
   }).join('');
 
@@ -7637,6 +7641,32 @@ async function coachBulkRaterFile(input) {
   input.value = '';
 }
 
+function copyRaterLink(token) {
+  const link = location.origin + '/diagnostic-survey?token=' + token;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(link).then(
+      function(){ toast('Survey link copied — paste it into your email.'); },
+      function(){ window.prompt('Copy this survey link:', link); }
+    );
+  } else { window.prompt('Copy this survey link:', link); }
+}
+async function resendRaterInvite(id, btn) {
+  if (!confirm('Re-send the survey invite email to this person now?')) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  try {
+    const r = await fetch('/api/diagnostic?action=resend-rater', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rater_id: id, session: getCoachSessionToken() })
+    });
+    const j = await r.json().catch(function(){ return {}; });
+    if (!r.ok || j.error) throw new Error(j.error || 'Send failed');
+    toast('Invite re-sent to ' + (j.sent_to || 'them') + '.');
+    if (btn) { btn.textContent = 'Sent ✓'; }
+  } catch (e) {
+    toast('Could not resend: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = 'Resend'; }
+  }
+}
 async function removeRater(id) {
   if (!confirm('Remove this rater?')) return;
   await cdDelete('diagnostic_raters', { eq: { id } });
