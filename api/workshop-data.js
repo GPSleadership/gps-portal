@@ -384,13 +384,18 @@ export default async function handler(req, res) {
           const email = (raw.email || '').trim().toLowerCase();
           if (!email || !name) { skipped++; continue; }
           const rowOrg = (raw.org || '').trim() || null;
+          // GS grade only ever applies to government employees, so its presence is the
+          // gov signal — store it on the PROFILE (not just the roster) so coach-side
+          // federal-leads views can surface GS-14/15 as potential customers.
+          const rowGrade = (raw.grade || '').trim() || null;
           // One profile per person: find existing client by email first.
-          let client = await sbOne(`/rest/v1/clients?email=eq.${enc(email)}&select=id,organization&limit=1`);
+          let client = await sbOne(`/rest/v1/clients?email=eq.${enc(email)}&select=id,organization,gs_grade&limit=1`);
           if (!client) {
             const ins = await sb('/rest/v1/clients', 'POST', {
               // Row org wins; otherwise inherit the engagement's org.
               name, email, title: raw.role || null, organization: rowOrg || workshopOrg,
               is_workshop_participant: true, in_coaching_program: false, is_active: true,
+              gs_grade: rowGrade,
               // Trial-account lifecycle: mark as a trial guest and start the day-clock.
               account_type: 'trial', invited_at: new Date().toISOString(),
             }, { Prefer: 'return=representation' });
@@ -401,8 +406,12 @@ export default async function handler(req, res) {
           } else {
             // Existing person: fill org only when it's blank, so we never clobber a real value.
             const wantOrg = rowOrg || workshopOrg;
-            if (wantOrg && !(client.organization || '').trim()) {
-              await sb(`/rest/v1/clients?id=eq.${enc(client.id)}`, 'PATCH', { organization: wantOrg }, { Prefer: 'return=minimal' });
+            const patch = {};
+            if (wantOrg && !(client.organization || '').trim()) patch.organization = wantOrg;
+            // Set GS grade when the roster provides one and we don't already have it.
+            if (rowGrade && !(client.gs_grade || '').trim()) patch.gs_grade = rowGrade;
+            if (Object.keys(patch).length) {
+              await sb(`/rest/v1/clients?id=eq.${enc(client.id)}`, 'PATCH', patch, { Prefer: 'return=minimal' });
             }
           }
           // Link to workshop (idempotent on workshop_id+client_id).

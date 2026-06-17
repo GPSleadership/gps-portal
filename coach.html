@@ -948,6 +948,7 @@
       <div style="display:flex;gap:6px;align-items:center;">
         <button type="button" id="chip-needci" class="dchip" onclick="toggleClientChip('needci')">Needs check-in</button>
         <button type="button" id="chip-noplan" class="dchip" onclick="toggleClientChip('noplan')">No plan yet</button>
+        <button type="button" id="chip-leads" class="dchip" onclick="toggleClientChip('leads')" title="Government clients at GS-14/15 (or SES) — potential coaching customers">★ Federal leads</button>
       </div>
       <select id="clientIndustryFilter" onchange="renderClients()" style="padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;color:var(--text);">
         <option value="all">All industries</option>
@@ -1597,7 +1598,11 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON);
 let allClients = [];
 let allCheckins = [];
 let currentFilter = 'active';
-var clientChips = { needci: false, noplan: false };
+var clientChips = { needci: false, noplan: false, leads: false };
+// GS grade helpers: a "federal lead" is GS-14/15 (or SES/ES) — senior gov staff who are
+// the people most likely to become coaching customers.
+function gsParse(g){ if(!g) return null; var m = String(g).match(/\d{1,2}/); return m ? parseInt(m[0], 10) : null; }
+function gsIsLead(g){ if(!g) return false; if(/\b(ses|es|senior\s*exec)\b/i.test(g)) return true; var n = gsParse(g); return n != null && n >= 14; }
 function toggleClientChip(k){
   clientChips[k] = !clientChips[k];
   var el = document.getElementById('chip-' + k);
@@ -2001,6 +2006,7 @@ function renderClients() {
 
   // Quick chips
   if (clientChips.noplan) filtered = filtered.filter(c => !c.plan_submitted_at);
+  if (clientChips.leads)  filtered = filtered.filter(c => gsIsLead(c.gs_grade));
   if (clientChips.needci) {
     const wkMs = 7 * 24 * 3600 * 1000, nowMs = Date.now();
     filtered = filtered.filter(c => {
@@ -2185,7 +2191,7 @@ function renderClientCard(client, checkins) {
         <div class="client-avatar" style="${avatarRingStyle}" title="${completionPct !== null ? completionPct + '% follow-through rate' : 'No check-ins yet'}">${initials}</div>
         <div class="client-name-block">
           <div class="client-name">${client.name || 'Unnamed'}</div>
-          <div class="client-org">${client.organization || ''} ${client.tp3_pillar ? '&nbsp;·&nbsp;<span class="pillar-badge pillar-'+pillarKey+'">'+client.tp3_pillar+'</span>' : ''}</div>
+          <div class="client-org">${client.organization || ''} ${client.tp3_pillar ? '&nbsp;·&nbsp;<span class="pillar-badge pillar-'+pillarKey+'">'+client.tp3_pillar+'</span>' : ''}${client.gs_grade ? '&nbsp;<span title="GS grade (gov)" style="display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;'+(gsIsLead(client.gs_grade)?'background:#fde68a;color:#92400e;':'background:#eef1f2;color:#5a6b76;')+'">'+esc(client.gs_grade)+(gsIsLead(client.gs_grade)?' ★':'')+'</span>' : ''}</div>
         </div>
         <div class="client-meta">
           ${currentWeek ? `<div class="meta-item"><div class="week-badge">Wk ${currentWeek}</div>${(client.current_sprint_number || 1) > 1 ? `<div style="font-size:10px;text-align:center;color:var(--teal);font-weight:700;margin-top:2px;">Sprint ${client.current_sprint_number}</div>` : ''}</div>` : '<div class="meta-item"><div style="font-size:11px;color:var(--gray-600);">No plan yet</div></div>'}
