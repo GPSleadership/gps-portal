@@ -4508,6 +4508,10 @@ function renderPortal(client, checkins) {
   const flWeek    = Math.min(Math.max(currentWeek, 1), 12);
   const flPct     = Math.min(100, Math.max(2, Math.round((daysDiff / 84) * 100)));
   const flDone    = checkins.length;
+  // Consecutive-week check-in streak, counting back from the current (or last) week.
+  const _ckWeeks  = new Set(checkins.map(c => c.week_number));
+  let _streak = 0, _sw = alreadyCheckedInThisWeek ? currentWeek : currentWeek - 1;
+  while (_sw >= 1 && _ckWeeks.has(_sw)) { _streak++; _sw--; }
   const flLine    = isEngagementComplete
     ? 'You went the distance. 90 days, done.'
     : flWeek <= 2 ? 'Strong starts are built in the first two weeks. Keep the streak.'
@@ -4520,7 +4524,7 @@ function renderPortal(client, checkins) {
         <div style="font-size:13px;font-weight:800;color:var(--navy,#004369);font-family:'Montserrat',sans-serif;">
           ${isEngagementComplete ? '90-Day Sprint Complete' : `Week ${flWeek} of 12`}
         </div>
-        <div style="font-size:12px;color:#666;">${flDone} check-in${flDone === 1 ? '' : 's'} logged${isEngagementComplete ? '' : ` · ${flPct}% of your 90 days`}</div>
+        <div style="font-size:12px;color:#666;">${flDone} check-in${flDone === 1 ? '' : 's'} logged${isEngagementComplete ? '' : ` · ${flPct}% of your 90 days`}${_streak >= 2 ? ` · <span style="color:#c2410c;font-weight:700;">🔥 ${_streak}-week streak</span>` : ''}</div>
       </div>
       <div style="height:8px;background:#eee8df;border-radius:4px;margin-top:8px;overflow:hidden;">
         <div style="height:100%;width:${isEngagementComplete ? 100 : flPct}%;background:linear-gradient(90deg,#004369,#01949A);border-radius:4px;transition:width .6s;"></div>

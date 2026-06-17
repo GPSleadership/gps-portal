@@ -4032,7 +4032,7 @@ async function renderCoachInsights(){
       + '<td style="padding:9px 10px;">'+aa+'</td>'
       + '<td style="padding:9px 10px;font-size:12px;color:#5a6b76;">'+lastAct+'</td>'
       + '<td style="padding:9px 10px;font-size:14px;">'+(m.flags.join(' ')||'—')+'</td>'
-      + '<td style="padding:9px 10px;white-space:nowrap;"><button onclick="showSection(\'clients\');openClientProfile(\''+c.id+'\')" style="padding:5px 10px;border:1px solid #dbe3e6;background:#fff;border-radius:6px;font-size:12px;cursor:pointer;color:#004369;">Open</button> <button onclick="ciLogNote(\''+c.id+'\')" style="padding:5px 10px;border:1px solid #dbe3e6;background:#fff;border-radius:6px;font-size:12px;cursor:pointer;color:#004369;">Note</button></td>'
+      + '<td style="padding:9px 10px;white-space:nowrap;"><button onclick="showSection(\'clients\');openClientProfile(\''+c.id+'\')" style="padding:5px 10px;border:1px solid #dbe3e6;background:#fff;border-radius:6px;font-size:12px;cursor:pointer;color:#004369;">Open</button> <button onclick="ciShowRecap(\''+c.id+'\')" style="padding:5px 10px;border:1px solid #dbe3e6;background:#fff;border-radius:6px;font-size:12px;cursor:pointer;color:#004369;">Recap</button> <button onclick="ciLogNote(\''+c.id+'\')" style="padding:5px 10px;border:1px solid #dbe3e6;background:#fff;border-radius:6px;font-size:12px;cursor:pointer;color:#004369;">Note</button></td>'
       + '</tr>';
   }).join('');
   var table = '<div style="background:#fff;border:1px solid #e6ecee;border-radius:12px;overflow:hidden;margin-bottom:18px;">'
@@ -4099,6 +4099,54 @@ function ciTilePending(label, sub){
     + '<div style="font-size:18px;font-weight:800;color:#b0b8ba;font-family:Montserrat,sans-serif;">Pending</div>'
     + '<div style="height:4px;background:#e3e6e7;border-radius:3px;margin:8px 0 6px;"></div>'
     + '<div style="font-size:11px;color:#a7afb1;">'+sub+'</div></div>';
+}
+// Session recap — "open each session with: top trend, biggest win, one risk."
+// Rule-based from data we have (no history table yet, so trend reflects current state).
+function ciRecap(c, m){
+  var hLabel = m.health>=80?'green':m.health>=50?'yellow':'red';
+  var wk8 = Math.round(m.completion8/100*8);
+  var trend = 'Health '+Math.round(m.health)+' ('+hLabel+'). '
+    + (m.completion8>=80?'Checking in consistently':m.completion8>=50?'Check-ins are patchy':'Check-ins have lapsed')
+    + ' — '+wk8+' of the last 8 weeks. '
+    + (m.lastActiveDays==null?'No portal activity on record.':('Last in the portal '+m.lastActiveDays+'d ago.'));
+
+  var win;
+  var base=c.metric_baseline, tgt=c.metric_target, cur=c.metric_current;
+  if (base!=null && tgt!=null && cur!=null && String(cur)!=='' && String(base)!=='' && String(tgt)!=='') {
+    var moved = (+tgt!==+base) ? Math.round((+cur-+base)/(+tgt-+base)*100) : 0;
+    win = (c.metric_1_name||c.metric_name||'Their metric')+': now '+cur+(moved>0?(' — '+moved+'% toward target'):' (no movement yet)')+'.';
+  } else if (m.aaDays!=null && m.aaDays<=14) { win='Engaged with Ask Alex recently ('+m.aaDays+'d ago).'; }
+  else if (wk8>0) { win='Logged '+wk8+' check-in'+(wk8===1?'':'s')+' in the last 8 weeks.'; }
+  else { win='No clear win yet — first one to manufacture together this session.'; }
+
+  var risk;
+  if (m.flags.indexOf('⚠')>-1) risk='No check-in in 3+ weeks — re-engage before anything else.';
+  else if (m.flags.indexOf('💤')>-1) risk='Ask Alex unused 30+ days — point them to it on a real problem.';
+  else risk = m.reason.charAt(0).toUpperCase()+m.reason.slice(1)+'.';
+  if (m.endDays!=null && m.endDays<60 && m.health<70) risk += ' Renewal in '+m.endDays+'d at current health — open a renewal conversation.';
+
+  return { trend:trend, win:win, risk:risk };
+}
+function ciShowRecap(clientId){
+  var c = (allClients||[]).find(function(x){return x.id===clientId;}); if(!c) return;
+  var m = ciClientModel(c);
+  var rc = ciRecap(c, m);
+  var ov = document.getElementById('ciRecapOverlay'); if(ov) ov.remove();
+  ov = document.createElement('div');
+  ov.id = 'ciRecapOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(4,36,58,.45);z-index:9500;display:flex;align-items:center;justify-content:center;padding:20px;';
+  ov.onclick = function(e){ if(e.target===ov) ov.remove(); };
+  function block(icon,label,text,color){ return '<div style="margin-bottom:14px;"><div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:'+color+';font-weight:800;margin-bottom:3px;">'+icon+' '+label+'</div><div style="font-size:14px;color:#1a2a33;line-height:1.5;">'+text+'</div></div>'; }
+  ov.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:480px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden;">'
+    + '<div style="background:#04243a;color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;"><div style="font-family:Montserrat,sans-serif;font-weight:800;">Session recap — '+esc(c.name||'')+'</div><div onclick="var o=document.getElementById(\'ciRecapOverlay\');if(o)o.remove();" style="cursor:pointer;font-size:20px;line-height:1;opacity:.8;">×</div></div>'
+    + '<div style="padding:20px;">'
+    + block('📈','Top trend', rc.trend, '#01949A')
+    + block('✅','Biggest win', rc.win, '#2e7d32')
+    + block('⚠️','One risk to address', rc.risk, '#DB1F48')
+    + '<div style="font-size:11px;color:#9aa7ad;margin-top:6px;border-top:1px solid #eef1f2;padding-top:10px;">Open the session with this. Generated from current portal data — trend reflects present state until week-over-week history is tracked.</div>'
+    + '<div style="text-align:right;margin-top:12px;"><button onclick="showSection(\'clients\');openClientProfile(\''+c.id+'\');var o=document.getElementById(\'ciRecapOverlay\');if(o)o.remove();" style="padding:8px 16px;background:#004369;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;">Open full profile →</button></div>'
+    + '</div></div>';
+  document.body.appendChild(ov);
 }
 async function ciLogNote(clientId){
   var c = (allClients||[]).find(function(x){return x.id===clientId;}); if(!c) return;

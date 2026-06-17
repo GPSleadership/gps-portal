@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex" />
+  <title>Recover your portal link — GPS Leadership</title>
+  <style>
+    :root { --navy:#004369; --teal:#01949A; --cream:#E5DDC8; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:'Open Sans',Arial,sans-serif; background:#f3f1ea; color:#1a1a1a; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+    .wrap { max-width:460px; width:100%; }
+    .card { background:#fff; border:1px solid #e0ddd3; border-radius:14px; overflow:hidden; box-shadow:0 12px 40px rgba(0,0,0,.08); }
+    .hd { background:var(--navy); padding:22px 28px; }
+    .hd .eyebrow { color:var(--cream); font-size:11px; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
+    .hd .title { color:#fff; font-size:20px; font-weight:800; font-family:'Montserrat',Arial,sans-serif; }
+    .bd { padding:24px 28px 28px; }
+    .bd p { font-size:14px; line-height:1.6; color:#3a4a52; margin:0 0 16px; }
+    label { display:block; font-size:13px; font-weight:700; color:var(--navy); margin-bottom:6px; }
+    input[type=email] { width:100%; padding:12px 14px; border:1.5px solid #cfd6d8; border-radius:8px; font-size:15px; }
+    input[type=email]:focus { outline:none; border-color:var(--teal); }
+    button { width:100%; margin-top:16px; padding:13px 20px; background:var(--navy); color:#fff; border:none; border-radius:8px; font-size:15px; font-weight:700; cursor:pointer; }
+    button:disabled { opacity:.6; cursor:default; }
+    .msg { margin-top:16px; padding:14px 16px; border-radius:8px; font-size:14px; line-height:1.55; display:none; }
+    .msg.show { display:block; }
+    .msg.ok { background:#eef9f0; border:1px solid #b6e0c0; color:#1f5130; }
+    .msg.err { background:#fdecef; border:1px solid #f3b4c0; color:#9b1c33; }
+    .foot { margin-top:18px; font-size:12px; color:#8a99a0; text-align:center; }
+    .foot a { color:var(--teal); text-decoration:none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="hd">
+        <div class="eyebrow">GPS Leadership Solutions</div>
+        <div class="title">Recover your portal link</div>
+      </div>
+      <div class="bd">
+        <p>Lost the link to your Leadership Impact Portal? Enter the email address your access was sent to and we'll send you a fresh one.</p>
+        <form id="recoverForm" autocomplete="on">
+          <label for="email">Email address</label>
+          <input type="email" id="email" name="email" placeholder="you@company.com" required />
+          <button type="submit" id="submitBtn">Send my portal link</button>
+        </form>
+        <div class="msg" id="msg"></div>
+        <div class="foot">Still stuck? Email <a href="mailto:team@gpsleadership.org">team@gpsleadership.org</a>.</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var form = document.getElementById('recoverForm');
+    var btn  = document.getElementById('submitBtn');
+    var msg  = document.getElementById('msg');
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var email = (document.getElementById('email').value || '').trim();
+      if (!email) return;
+      btn.disabled = true; btn.textContent = 'Sending…';
+      msg.className = 'msg';
+      fetch('/api/recover-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email })
+      })
+      .then(function (r) { return r.json().catch(function(){ return {}; }); })
+      .then(function (data) {
+        msg.textContent = (data && data.message) ? data.message : "If that email is on file, we've sent a fresh portal link. Check your inbox (and spam).";
+        msg.className = 'msg ok show';
+        btn.textContent = 'Sent';
+        form.reset();
+      })
+      .catch(function () {
+        msg.textContent = 'Something went wrong on our end. Please email team@gpsleadership.org and we’ll sort it out.';
+        msg.className = 'msg err show';
+        btn.disabled = false; btn.textContent = 'Send my portal link';
+      });
+    });
+  </script>
+</body>
+</html>

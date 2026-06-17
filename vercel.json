@@ -47,6 +47,10 @@
     {
       "source": "/workshop-poc",
       "destination": "/workshop-poc.html"
+    },
+    {
+      "source": "/recover",
+      "destination": "/recover.html"
     }
   ],
   "crons": [

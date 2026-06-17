@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GPS — System Control</title>
+  <meta name="robots" content="noindex,nofollow" />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --navy:       #004369;
+      --red:        #DB1F48;
+      --teal:       #01949A;
+      --sand:       #E5DDC8;
+      --navy-dark:  #002D47;
+      --light-teal: #E8F7F7;
+      --light-sand: #F7F4EE;
+      --white:      #ffffff;
+      --gray-100:   #f5f5f5;
+      --gray-200:   #e8e8e8;
+      --gray-300:   #d0d0d0;
+      --gray-600:   #666666;
+      --text:       #1a1a1a;
+      --green:      #1a7a4a;
+      --green-bg:   #e8f7ef;
+      --yellow:     #b45309;
+      --yellow-bg:  #fef3c7;
+      --red-bg:     #fee2e2;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Open Sans', sans-serif; background: var(--gray-100); color: var(--text); min-height: 100vh; }
+
+    .top-bar { height: 6px; background: linear-gradient(to right, var(--navy), var(--teal), var(--red)); }
+
+    .header {
+      background: var(--navy);
+      padding: 16px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header-left { display: flex; align-items: center; gap: 14px; }
+    .header-logo { font-family: 'Montserrat', sans-serif; font-size: 22px; font-weight: 800; color: var(--sand); letter-spacing: 1px; }
+    .header-title { color: rgba(255,255,255,0.75); font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; }
+    .header-sub   { color: var(--white); font-family: 'Montserrat', sans-serif; font-size: 15px; font-weight: 700; }
+    .header-right { display: flex; align-items: center; gap: 16px; }
+    .last-refresh { color: rgba(255,255,255,0.55); font-size: 11px; }
+    .btn-refresh {
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: var(--white);
+      border-radius: 5px;
+      padding: 6px 14px;
+      font-size: 11px;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+    }
+    .btn-refresh:hover { background: rgba(255,255,255,0.2); }
+    .btn-logout {
+      background: transparent;
+      border: none;
+      color: rgba(255,255,255,0.5);
+      font-size: 11px;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
+    /* LOGIN */
+    .login-screen {
+      max-width: 380px;
+      margin: 80px auto;
+      background: var(--white);
+      border-radius: 10px;
+      padding: 40px;
+      text-align: center;
+      border-top: 4px solid var(--navy);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+    }
+    .login-screen h2 { font-family: 'Montserrat', sans-serif; color: var(--navy); margin-bottom: 6px; font-size: 20px; }
+    .login-screen p  { color: var(--gray-600); font-size: 13px; margin-bottom: 24px; }
+    .login-screen input {
+      width: 100%;
+      padding: 11px 14px;
+      border: 2px solid var(--gray-300);
+      border-radius: 6px;
+      font-size: 15px;
+      margin-bottom: 12px;
+      font-family: 'Open Sans', sans-serif;
+    }
+    .login-screen input:focus { outline: none; border-color: var(--teal); }
+    .login-error { color: var(--red); font-size: 13px; margin-bottom: 8px; min-height: 18px; }
+    .btn-login {
+      width: 100%;
+      background: var(--navy);
+      color: var(--white);
+      border: none;
+      border-radius: 6px;
+      padding: 12px;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-login:hover { background: var(--navy-dark); }
+
+    /* MAIN */
+    .container { max-width: 1140px; margin: 24px auto; padding: 0 20px 60px; }
+
+    /* TABS */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 20px;
+      border-bottom: 2px solid var(--gray-200);
+      padding-bottom: 0;
+    }
+    .tab {
+      padding: 9px 22px 11px;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--gray-600);
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      transition: color 0.15s;
+    }
+    .tab:hover { color: var(--navy); }
+    .tab.active { color: var(--navy); border-bottom-color: var(--navy); }
+
+    /* PANEL */
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* CARD */
+    .card {
+      background: var(--white);
+      border-radius: 8px;
+      padding: 22px 24px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .card-title {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--navy);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .card-badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-family: 'Montserrat', sans-serif;
+    }
+    .badge-ok      { background: var(--green-bg); color: var(--green); }
+    .badge-warn    { background: var(--yellow-bg); color: var(--yellow); }
+    .badge-error   { background: var(--red-bg); color: var(--red); }
+    .badge-gray    { background: var(--gray-200); color: var(--gray-600); }
+
+    /* TABLE */
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th {
+      text-align: left;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--gray-600);
+      padding: 6px 10px;
+      border-bottom: 2px solid var(--gray-200);
+    }
+    td {
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--gray-200);
+      vertical-align: middle;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--gray-100); }
+
+    .dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+      flex-shrink: 0;
+    }
+    .dot-green  { background: #22c55e; }
+    .dot-red    { background: var(--red); }
+    .dot-yellow { background: #f59e0b; }
+    .dot-gray   { background: var(--gray-300); }
+
+    .status-row { display: flex; align-items: center; }
+    .task-name { font-weight: 600; color: var(--navy); font-size: 13px; }
+    .task-time { color: var(--gray-600); font-size: 12px; }
+    .task-error { color: var(--red); font-size: 11px; font-style: italic; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* TOGGLE */
+    .toggle-wrap { display: flex; align-items: center; gap: 8px; }
+    .toggle {
+      position: relative;
+      width: 38px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background: var(--gray-300);
+      border-radius: 20px;
+      transition: 0.2s;
+    }
+    .toggle-slider:before {
+      content: '';
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      left: 3px;
+      top: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: 0.2s;
+    }
+    .toggle input:checked + .toggle-slider { background: var(--teal); }
+    .toggle input:checked + .toggle-slider:before { transform: translateX(18px); }
+    .toggle-label { font-size: 12px; color: var(--gray-600); }
+
+    /* ACTION BTNS */
+    .btn-small {
+      border: none;
+      border-radius: 4px;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .btn-done   { background: var(--green-bg); color: var(--green); }
+    .btn-done:hover { background: #c6f0d9; }
+    .btn-close  { background: var(--gray-200); color: var(--gray-600); }
+    .btn-close:hover { background: var(--gray-300); }
+    .btn-open   { background: var(--light-teal); color: var(--teal); }
+    .btn-open:hover { background: #c5eeef; }
+
+    .empty { color: var(--gray-600); font-size: 13px; font-style: italic; padding: 12px 0; }
+    .loading { color: var(--gray-600); font-size: 13px; padding: 12px 0; }
+
+    /* HEALTH SUMMARY BAR */
+    .health-bar {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .health-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--white);
+      border-radius: 8px;
+      padding: 12px 18px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+      flex: 1;
+      min-width: 140px;
+    }
+    .health-pill .num {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--navy);
+    }
+    .health-pill .lbl {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: var(--gray-600);
+      font-weight: 600;
+    }
+    .health-pill.warn .num { color: var(--yellow); }
+    .health-pill.err .num  { color: var(--red); }
+
+    /* PRIORITY BADGE */
+    .priority-high   { color: var(--red); font-weight: 700; font-size: 11px; }
+    .priority-normal { color: var(--gray-600); font-size: 11px; }
+
+    .overdue-flag { color: var(--red); font-size: 11px; font-weight: 700; }
+  </style>
+</head>
+<body>
+
+<div class="top-bar"></div>
+<div class="header">
+  <div class="header-left">
+    <span class="header-logo">GPS</span>
+    <div>
+      <div class="header-title">Leadership Solutions</div>
+      <div class="header-sub">System Control</div>
+    </div>
+  </div>
+  <div class="header-right" id="headerRight" style="display:none">
+    <span class="last-refresh" id="lastRefresh"></span>
+    <button class="btn-refresh" onclick="loadAll()">Refresh</button>
+    <button class="btn-logout" onclick="logout()">Sign out</button>
+  </div>
+</div>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-screen">
+    <h2>System Control</h2>
+    <p>GPS Leadership internal admin only</p>
+    <div class="login-error" id="loginError"></div>
+    <input type="password" id="pwInput" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()" />
+    <button class="btn-login" onclick="doLogin()">Access Control Panel</button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="mainApp" style="display:none">
+  <div class="container">
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('health')">System Health</div>
+      <div class="tab" onclick="switchTab('automations')">Automations</div>
+      <div class="tab" onclick="switchTab('followups')">Followups</div>
+      <div class="tab" onclick="switchTab('reminders')">Reminders</div>
+    </div>
+
+    <!-- HEALTH -->
+    <div class="panel active" id="panel-health">
+      <div class="health-bar" id="healthBar"><div class="loading">Loading...</div></div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Scheduled Task Runs — Last 48h</div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Task</th>
+              <th>Last Run</th>
+              <th>24h Errors</th>
+              <th>Summary / Error</th>
+            </tr>
+          </thead>
+          <tbody id="taskTable"><tr><td colspan="5" class="loading">Loading...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Data Freshness</div>
+        </div>
+        <table>
+          <thead><tr><th>Table</th><th>Last Snapshot</th><th>Age</th><th>Status</th></tr></thead>
+          <tbody id="freshnessTable"><tr><td colspan="4" class="loading">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- AUTOMATIONS -->
+    <div class="panel" id="panel-automations">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Automation Settings</div>
+          <span class="card-badge badge-gray" id="automationCount">—</span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Task</th>
+              <th>Enabled</th>
+              <th>Schedule</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody id="automationTable"><tr><td colspan="4" class="loading">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- FOLLOWUPS -->
+    <div class="panel" id="panel-followups">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Prospect Followup Contacts</div>
+          <span class="card-badge badge-gray" id="followupCount">—</span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Contact</th>
+              <th>Company</th>
+              <th>Sequence</th>
+              <th>Next Due</th>
+              <th>Last Contact</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="followupTable"><tr><td colspan="7" class="loading">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- REMINDERS -->
+    <div class="panel" id="panel-reminders">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Reminders</div>
+          <button class="btn-small btn-open" onclick="addReminder()">+ Add</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Due Date</th>
+              <th>Reminder</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="reminderTable"><tr><td colspan="5" class="loading">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL = 'https://pbnkefuqpoztcxfagiod.supabase.co';
+  const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBibmtlZnVxcG96dGN4ZmFnaW9kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5OTkwMzEsImV4cCI6MjA5MjU3NTAzMX0.DxEMR2Ckt9QJlRMkFenEZn-gzsVoi8-6CFcAItTePjo';
+
+  // Expected tasks for health check
+  const EXPECTED_TASKS = [
+    { name: 'gps-daily-brief',         maxAgeH: 25 },
+    { name: 'email-sweep-morning',     maxAgeH: 25 },
+    { name: 'email-sweep-midday',      maxAgeH: 25 },
+    { name: 'email-sweep-eod',         maxAgeH: 25 },
+    { name: 'nightly-backup',          maxAgeH: 25 },
+    { name: 'gps-system-health',       maxAgeH: 25 },
+    { name: 'prospect-followup-engine',maxAgeH:  3 },
+  ];
+
+  // Ops state tables are RLS-locked (anon revoked). Route those through the
+  // password-validated /api/ops-data endpoint (service key, server-side). Everything
+  // else (legacy gps_* tables that still allow anon) keeps using the anon key directly.
+  const OPS_TABLES_RE = /\/rest\/v1\/(finance_state|ops_state|client_state|automation_settings|followups|reminders|scheduled_task_runs)(\?|$)/;
+  const PW_KEY = 'gps_ctrl_pw';
+  // control.html runs locally (it's excluded from the deploy), so call the portal API
+  // absolutely when not served over http(s). CORS is open on /api/* in vercel.json.
+  const OPS_API = (location.origin && location.origin.indexOf('http') === 0)
+    ? location.origin + '/api/ops-data'
+    : 'https://portal.gpsleadership.org/api/ops-data';
+
+  function sbFetch(path, opts = {}) {
+    if (OPS_TABLES_RE.test(path)) {
+      const pw = sessionStorage.getItem(PW_KEY) || '';
+      const rawBody = opts.body != null ? (typeof opts.body === 'string' ? opts.body : JSON.stringify(opts.body)) : null;
+      const prefer = (opts.headers && (opts.headers.Prefer || opts.headers.prefer)) || null;
+      return fetch(OPS_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw, path: path, method: (opts.method || 'GET'), body: rawBody, prefer: prefer })
+      })
+      .then(r => r.json())
+      .then(payload => ({
+        ok: !!(payload && payload.ok),
+        status: (payload && payload.status) || 0,
+        json: () => Promise.resolve(payload ? payload.data : null)
+      }));
+    }
+    return fetch(SUPABASE_URL + path, {
+      headers: {
+        'apikey': ANON_KEY,
+        'Authorization': 'Bearer ' + ANON_KEY,
+        'Content-Type': 'application/json',
+        ...(opts.headers || {})
+      },
+      ...opts
+    });
+  }
+
+  // ── AUTH ──────────────────────────────────────────────────────────────────
+  const SESSION_KEY = 'gps_ctrl_auth';
+  let authed = false;
+
+  async function doLogin() {
+    const pw = document.getElementById('pwInput').value.trim();
+    if (!pw) return;
+    document.getElementById('loginError').textContent = '';
+    try {
+      // Check against gps_settings control_password key
+      const res = await sbFetch('/rest/v1/gps_settings?key=eq.control_password&select=value');
+      const data = await res.json();
+      const stored = data[0]?.value?.password || data[0]?.value;
+      if (!stored || pw !== stored) {
+        document.getElementById('loginError').textContent = 'Incorrect password.';
+        return;
+      }
+      sessionStorage.setItem(SESSION_KEY, '1');
+      sessionStorage.setItem(PW_KEY, pw); // needed to authenticate ops-data calls for locked tables
+      showApp();
+    } catch (e) {
+      document.getElementById('loginError').textContent = 'Connection error. Try again.';
+    }
+  }
+
+  function logout() {
+    sessionStorage.removeItem(SESSION_KEY);
+    location.reload();
+  }
+
+  function showApp() {
+    authed = true;
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'block';
+    document.getElementById('headerRight').style.display = 'flex';
+    loadAll();
+  }
+
+  // ── INIT ──────────────────────────────────────────────────────────────────
+  if (sessionStorage.getItem(SESSION_KEY)) showApp();
+
+  // ── TABS ──────────────────────────────────────────────────────────────────
+  function switchTab(name) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    event.target.classList.add('active');
+    document.getElementById('panel-' + name).classList.add('active');
+  }
+
+  // ── LOAD ALL ─────────────────────────────────────────────────────────────
+  async function loadAll() {
+    document.getElementById('lastRefresh').textContent = 'Refreshing...';
+    await Promise.all([loadHealth(), loadAutomations(), loadFollowups(), loadReminders()]);
+    document.getElementById('lastRefresh').textContent =
+      'Refreshed ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  }
+
+  // ── HEALTH ────────────────────────────────────────────────────────────────
+  async function loadHealth() {
+    const cutoff = new Date(Date.now() - 48 * 3600000).toISOString();
+    try {
+      const [runsRes, freshRes] = await Promise.all([
+        sbFetch(`/rest/v1/scheduled_task_runs?select=task_name,ran_at,status,error_message_text,summary_text&ran_at=gte.${cutoff}&order=ran_at.desc&limit=200`),
+        sbFetch(`/rest/v1/finance_state?select=snapshot_at&order=snapshot_at.desc&limit=1`).then(r => r.json()),
+      ]);
+      const runs = await runsRes.json();
+      const opsRes = await sbFetch(`/rest/v1/ops_state?select=snapshot_at,sweep_name&order=snapshot_at.desc&limit=1`);
+      const ops = await opsRes.json();
+
+      renderHealth(runs, freshRes, ops);
+    } catch(e) {
+      document.getElementById('taskTable').innerHTML = `<tr><td colspan="5" style="color:var(--red)">Error loading: ${e.message}</td></tr>`;
+    }
+  }
+
+  function ago(isoStr) {
+    if (!isoStr) return '—';
+    const diff = Date.now() - new Date(isoStr).getTime();
+    const h = diff / 3600000;
+    if (h < 1)  return Math.round(diff / 60000) + 'm ago';
+    if (h < 24) return Math.round(h) + 'h ago';
+    return Math.round(h / 24) + 'd ago';
+  }
+
+  function renderHealth(runs, financeState, opsState) {
+    // Group by task
+    const byTask = {};
+    for (const r of runs) {
+      if (!byTask[r.task_name]) byTask[r.task_name] = { ok: 0, err: 0, lastRun: null, lastErr: null, lastSummary: null };
+      const t = byTask[r.task_name];
+      if (!t.lastRun || r.ran_at > t.lastRun) { t.lastRun = r.ran_at; t.lastSummary = r.summary_text; }
+      if (r.status === 'error') { t.err++; if (!t.lastErr) t.lastErr = r.error_message_text; }
+      else t.ok++;
+    }
+
+    let totalErr = 0, totalMissing = 0, totalOk = 0;
+    const rows = [];
+
+    for (const et of EXPECTED_TASKS) {
+      const t = byTask[et.name];
+      const ageH = t ? (Date.now() - new Date(t.lastRun).getTime()) / 3600000 : Infinity;
+      const missing = ageH > et.maxAgeH;
+
+      let dot = 'dot-green', statusTxt = 'ok';
+      if (missing) { dot = 'dot-red'; statusTxt = 'MISSING'; totalMissing++; }
+      else if (t.err > 0) { dot = 'dot-yellow'; statusTxt = t.err + ' err'; totalErr++; }
+      else totalOk++;
+
+      rows.push(`<tr>
+        <td><span class="dot ${dot}"></span></td>
+        <td class="task-name">${et.name}</td>
+        <td class="task-time">${t ? ago(t.lastRun) : 'never'}</td>
+        <td>${t ? (t.err > 0 ? `<span class="priority-high">${t.err}</span>` : '<span style="color:var(--green)">0</span>') : '—'}</td>
+        <td class="task-error">${missing ? `Expected within ${et.maxAgeH}h — not found` : (t.lastErr ? t.lastErr : (t.lastSummary || ''))}</td>
+      </tr>`);
+    }
+
+    // Also show any unexpected tasks that errored
+    for (const [name, t] of Object.entries(byTask)) {
+      if (!EXPECTED_TASKS.find(e => e.name === name) && t.err > 0) {
+        rows.push(`<tr>
+          <td><span class="dot dot-yellow"></span></td>
+          <td class="task-name">${name}</td>
+          <td class="task-time">${ago(t.lastRun)}</td>
+          <td><span class="priority-high">${t.err}</span></td>
+          <td class="task-error">${t.lastErr || ''}</td>
+        </tr>`);
+        totalErr++;
+      }
+    }
+
+    document.getElementById('taskTable').innerHTML = rows.join('') || '<tr><td colspan="5" class="empty">No runs in last 48h</td></tr>';
+
+    // Summary pills
+    const pills = [
+      { num: totalOk, lbl: 'Tasks OK', cls: '' },
+      { num: totalErr, lbl: 'With Errors', cls: totalErr ? 'warn' : '' },
+      { num: totalMissing, lbl: 'Missing', cls: totalMissing ? 'err' : '' },
+    ];
+    document.getElementById('healthBar').innerHTML = pills.map(p =>
+      `<div class="health-pill ${p.cls}"><div><div class="num">${p.num}</div><div class="lbl">${p.lbl}</div></div></div>`
+    ).join('');
+
+    // Freshness table
+    const fnSnap = financeState?.[0]?.snapshot_at;
+    const opsSnap = opsState?.[0]?.snapshot_at;
+    const fnAgeH = fnSnap ? (Date.now() - new Date(fnSnap).getTime()) / 3600000 : Infinity;
+    const opsAgeH = opsSnap ? (Date.now() - new Date(opsSnap).getTime()) / 3600000 : Infinity;
+
+    const freshRows = [
+      { name: 'finance_state', snap: fnSnap, age: fnAgeH, maxH: 24*8, unit: 'd' },
+      { name: 'ops_state',     snap: opsSnap, age: opsAgeH, maxH: 20, unit: 'h' },
+    ].map(r => {
+      const stale = r.age > r.maxH;
+      const badge = stale ? '<span class="card-badge badge-error">STALE</span>' : '<span class="card-badge badge-ok">Fresh</span>';
+      return `<tr>
+        <td class="task-name">${r.name}</td>
+        <td class="task-time">${r.snap ? new Date(r.snap).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '—'}</td>
+        <td class="task-time">${ago(r.snap)}</td>
+        <td>${badge}</td>
+      </tr>`;
+    });
+    document.getElementById('freshnessTable').innerHTML = freshRows.join('');
+  }
+
+  // ── AUTOMATIONS ───────────────────────────────────────────────────────────
+  async function loadAutomations() {
+    try {
+      const res = await sbFetch('/rest/v1/automation_settings?select=*&order=task_name.asc');
+      const data = await res.json();
+      const enabled = data.filter(r => r.enabled).length;
+      document.getElementById('automationCount').textContent = `${enabled} / ${data.length} active`;
+
+      document.getElementById('automationTable').innerHTML = data.map(r => {
+        const isRetired = (r.notes || '').match(/MIGRATED|CONSOLIDATED|DISABLED/i);
+        return `<tr>
+          <td class="task-name" style="${isRetired?'color:var(--gray-300)':''}">${r.task_name}</td>
+          <td>
+            <label class="toggle">
+              <input type="checkbox" ${r.enabled?'checked':''} onchange="toggleAutomation('${r.task_name}',this.checked)" ${isRetired?'disabled':''}>
+              <span class="toggle-slider"></span>
+            </label>
+          </td>
+          <td class="task-time">${r.cadence_description || '—'}</td>
+          <td class="task-time" style="${isRetired?'color:var(--gray-300)':''}">${r.notes || ''}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="4" class="empty">No automation settings found</td></tr>';
+    } catch(e) {
+      document.getElementById('automationTable').innerHTML = `<tr><td colspan="4" style="color:var(--red)">Error: ${e.message}</td></tr>`;
+    }
+  }
+
+  async function toggleAutomation(taskName, enabled) {
+    try {
+      const res = await sbFetch(`/rest/v1/automation_settings?task_name=eq.${encodeURIComponent(taskName)}`, {
+        method: 'PATCH',
+        headers: { 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ enabled, updated_at: new Date().toISOString() })
+      });
+      if (!res.ok) {
+        const err = await res.text();
+        alert('Update failed: ' + err);
+        loadAutomations();
+      }
+    } catch(e) {
+      alert('Error: ' + e.message);
+      loadAutomations();
+    }
+  }
+
+  // ── FOLLOWUPS ─────────────────────────────────────────────────────────────
+  async function loadFollowups() {
+    try {
+      const res = await sbFetch('/rest/v1/followups?select=*&order=next_due_at.asc');
+      const data = await res.json();
+      document.getElementById('followupCount').textContent =
+        data.filter(r=>r.status==='open').length + ' open';
+
+      document.getElementById('followupTable').innerHTML = data.map(r => {
+        const overdue = r.status === 'open' && new Date(r.next_due_at) < new Date();
+        const dueStr = r.next_due_at
+          ? new Date(r.next_due_at).toLocaleDateString('en-US',{month:'short',day:'numeric'})
+          : '—';
+        const lastStr = r.last_contacted_at
+          ? new Date(r.last_contacted_at).toLocaleDateString('en-US',{month:'short',day:'numeric'})
+          : 'Never';
+        const badge = r.status === 'open'
+          ? `<span class="card-badge badge-ok">Open</span>`
+          : `<span class="card-badge badge-gray">${r.status}</span>`;
+        const actionBtn = r.status === 'open'
+          ? `<button class="btn-small btn-close" onclick="updateFollowup('${r.id}','closed')">Close</button>`
+          : `<button class="btn-small btn-open" onclick="updateFollowup('${r.id}','open')">Reopen</button>`;
+
+        return `<tr>
+          <td class="task-name">${r.contact_name}</td>
+          <td>${r.company || '—'}</td>
+          <td class="task-time">${r.sequence_name}</td>
+          <td>${overdue ? `<span class="overdue-flag">OVERDUE</span> ${dueStr}` : dueStr}</td>
+          <td class="task-time">${lastStr}</td>
+          <td>${badge}</td>
+          <td>${actionBtn}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="7" class="empty">No followup contacts in table</td></tr>';
+    } catch(e) {
+      document.getElementById('followupTable').innerHTML = `<tr><td colspan="7" style="color:var(--red)">Error: ${e.message}</td></tr>`;
+    }
+  }
+
+  async function updateFollowup(id, status) {
+    await sbFetch(`/rest/v1/followups?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: { 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ status, updated_at: new Date().toISOString() })
+    });
+    loadFollowups();
+  }
+
+  // ── REMINDERS ─────────────────────────────────────────────────────────────
+  async function loadReminders() {
+    try {
+      const res = await sbFetch('/rest/v1/reminders?select=*&order=due_date.asc');
+      const data = await res.json();
+
+      document.getElementById('reminderTable').innerHTML = data.map(r => {
+        const isOverdue = r.status !== 'DONE' && r.due_date && new Date(r.due_date) < new Date();
+        const dueFmt = r.due_date
+          ? new Date(r.due_date + 'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
+          : '—';
+        const statusBadge = r.status === 'DONE'
+          ? `<span class="card-badge badge-gray">Done</span>`
+          : r.status === 'CHECK'
+          ? `<span class="card-badge badge-warn">Check</span>`
+          : `<span class="card-badge badge-ok">Open</span>`;
+        const actionBtn = r.status !== 'DONE'
+          ? `<button class="btn-small btn-done" onclick="markReminderDone('${r.id}')">Done</button>`
+          : `<button class="btn-small btn-open" onclick="reopenReminder('${r.id}')">Reopen</button>`;
+
+        return `<tr>
+          <td class="task-name" style="font-size:12px">${r.code}</td>
+          <td>${isOverdue ? `<span class="overdue-flag">OVERDUE</span> ${dueFmt}` : dueFmt}</td>
+          <td>${r.reminder_text || ''}</td>
+          <td>${statusBadge}</td>
+          <td>${actionBtn}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="5" class="empty">No reminders</td></tr>';
+    } catch(e) {
+      document.getElementById('reminderTable').innerHTML = `<tr><td colspan="5" style="color:var(--red)">Error: ${e.message}</td></tr>`;
+    }
+  }
+
+  async function markReminderDone(id) {
+    await sbFetch(`/rest/v1/reminders?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: { 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ status: 'DONE', updated_at: new Date().toISOString() })
+    });
+    loadReminders();
+  }
+
+  async function reopenReminder(id) {
+    await sbFetch(`/rest/v1/reminders?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: { 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ status: 'OPEN', updated_at: new Date().toISOString() })
+    });
+    loadReminders();
+  }
+
+  async function addReminder() {
+    const code = prompt('Reminder code (e.g. R005):');
+    if (!code) return;
+    const text = prompt('Reminder text:');
+    if (!text) return;
+    const due = prompt('Due date (YYYY-MM-DD):');
+    if (!due) return;
+    await sbFetch('/rest/v1/reminders', {
+      method: 'POST',
+      headers: { 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ code: code.trim(), reminder_text: text.trim(), due_date: due.trim(), status: 'OPEN' })
+    });
+    loadReminders();
+  }
+</script>
+</body>
+</html>
