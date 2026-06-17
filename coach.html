@@ -1275,6 +1275,11 @@
           </select>
         </div>
       </div>
+      <div class="dform-group" style="margin-top:14px;">
+        <label>Fee / contract amount ($) — optional</label>
+        <input type="number" id="nd-fee" placeholder="Standard ≈ 5000 · Pro ≈ 10000" />
+        <div style="font-size:11px;color:var(--d-mid);margin-top:3px;">Feeds the revenue totals on the Insights tab.</div>
+      </div>
       <div style="font-size:12px;color:var(--d-mid);margin-top:4px;">
         Survey start and close dates are set automatically when you send rater invites.
       </div>
@@ -3979,7 +3984,9 @@ async function renderCoachInsights(){
   host.innerHTML = '<div style="padding:30px;text-align:center;color:#5a6b76;">Computing client health…</div>';
 
   var diags = [];
-  try { diags = await cdSelect('diagnostics', { select: 'id,status,created_at,survey_closed_at,close_date,client_id' }) || []; } catch(_) { diags = []; }
+  try { diags = await cdSelect('diagnostics', { select: 'id,status,created_at,survey_closed_at,close_date,client_id,fee' }) || []; } catch(_) { diags = []; }
+  var wsList = [];
+  try { wsList = await cdSelect('workshops', { select: 'id,fee,is_archived' }) || []; } catch(_) { wsList = []; }
 
   var cohort = (allClients || []).filter(function(c){ return !c.is_archived && (c.in_coaching_program || c.coaching_sessions_enabled || c.is_active_coaching); });
   var models = cohort.map(ciClientModel).sort(function(a,b){ return a.health - b.health; }); // worst first
@@ -3994,7 +4001,11 @@ async function renderCoachInsights(){
   var cycleArr = diags.filter(function(d){return d.survey_closed_at && d.created_at;}).map(function(d){ return Math.max(0, Math.floor((new Date(d.survey_closed_at)-new Date(d.created_at))/86400000)); });
   var avgCycle = cycleArr.length ? Math.round(cycleArr.reduce(function(a,b){return a+b;},0)/cycleArr.length) : null;
 
-  var revenue = cohort.reduce(function(a,c){ return a + (+c.total_revenue_to_date||0); }, 0);
+  // Revenue captured = coaching client revenue + diagnostic fees + workshop/assessment fees.
+  var coachingRev = cohort.reduce(function(a,c){ return a + (+c.total_revenue_to_date||0); }, 0);
+  var diagRev = diags.reduce(function(a,d){ return a + (+d.fee||0); }, 0);
+  var wsRev = wsList.filter(function(w){ return !w.is_archived; }).reduce(function(a,w){ return a + (+w.fee||0); }, 0);
+  var revenue = coachingRev + diagRev + wsRev;
   var renew90 = models.filter(function(m){return m.endDays!=null && m.endDays>=0 && m.endDays<=90;}).length;
   var renewAtRisk = models.filter(function(m){return m.endDays!=null && m.endDays>=0 && m.endDays<=90 && m.health<50;}).length;
   var avgRev = cohort.length ? Math.round(revenue/cohort.length) : 0;
@@ -4003,7 +4014,7 @@ async function renderCoachInsights(){
   // ── Business Health strip ──
   var strip = '<div style="display:flex;flex-wrap:wrap;gap:14px;background:#04243a;color:#fff;border-radius:12px;padding:14px 18px;margin-bottom:16px;">'
     + ciStripItem('Active clients', String(cohort.length), '#cfe3ea')
-    + ciStripItem('Revenue to date', fmt$(revenue), '#cfe3ea', 'MRR/ARR target — pending')
+    + ciStripItem('Revenue to date', fmt$(revenue), '#cfe3ea', 'diagnostics + workshops + coaching')
     + ciStripItem('Renewals (90d)', String(renew90), renew90<=1?'#7ee0a1':renew90<=3?'#ffd76a':'#ff9aa9')
     + ciStripItem('At-risk renewals', String(renewAtRisk), renewAtRisk>0?'#ff9aa9':'#7ee0a1')
     + ciStripItem('Avg rev / client', fmt$(avgRev), '#cfe3ea')
@@ -7910,12 +7921,15 @@ async function createDiagnostic() {
   let data = null, error = null;
   try {
     const tier = document.getElementById('nd-tier').value;
+    const _feeEl = document.getElementById('nd-fee');
+    const _fee = _feeEl && _feeEl.value !== '' ? (parseFloat(_feeEl.value) || null) : null;
     const _r = await cdInsert('diagnostics', {
       client_name:         name,
       client_email:        email,
       client_title:        document.getElementById('nd-title').value || null,
       client_org:          document.getElementById('nd-org').value   || null,
       tier:                tier,
+      fee:                 _fee,
       email_delivery_mode: document.getElementById('nd-delivery').value,
       client_id:           clientId,
       status:              'setup',
@@ -8947,6 +8961,7 @@ async function drSendSponsor(sponsorId){
       '<div style="margin-bottom:12px;padding:10px 12px;background:#F7F4EE;border:1px solid #dbe3e6;border-radius:7px;font-size:12px;color:#5a6b76;">You\'ll add the sponsor(s) and point of contact on the next screen — start typing a name and pick from your existing contacts.</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'+field('wsf_industry','Industry','','Trucking')+'<div style="margin-bottom:12px;"><label style="display:block;font-size:12px;font-weight:700;color:#5a6b76;margin-bottom:4px;">Audience level</label><select id="wsf_level" style="width:100%;padding:9px 11px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:14px;"><option value="">—</option><option value="executive">Executive</option><option value="manager">Manager</option><option value="mixed">Mixed</option><option value="na">N/A</option></select></div></div>'+
       field('wsf_size','Company size band','','$10–25M')+
+      field('wsf_fee','Fee / contract amount ($) — optional, feeds revenue in Insights','','5000','number')+
       field('wsf_tags','Internal tags (comma-separated)','','trucking, assessment')+
       (isA?'<div style="margin-bottom:12px;"><label style="display:block;font-size:12px;font-weight:700;color:#5a6b76;margin-bottom:4px;">Company logo (PNG/JPG/SVG, max 5 MB)</label><input type="file" id="wsf_logo" accept="image/png,image/jpeg,image/svg+xml" style="font-size:13px;width:100%;"><div style="font-size:11px;color:#94a3b8;margin-top:3px;">Optional — stored on the Organization, shown on sponsor &amp; survey pages.</div></div>':'')+
       (isA?'<div style="margin-bottom:12px;"><label style="display:flex;gap:8px;align-items:center;font-size:13px;color:#5a6b76;cursor:pointer;"><input type="checkbox" id="wsf_demo" style="width:16px;height:16px;"> Mark as demo (enables sample data generation)</label></div>':'')+
@@ -8987,11 +9002,12 @@ async function drSendSponsor(sponsorId){
           org_id:(orgId&&orgId!=='__create__'?orgId:null),
           debrief_date:v('wsf_debrief'),
           industry:v('wsf_industry')||null, audience_level:v('wsf_level')||null, size_band:v('wsf_size')||null,
+          fee:(parseFloat(v('wsf_fee'))||null),
           tags:tags, is_demo:isDemo, logo_data_url:logoDataUrl
         });
         if(r.workshop_id) wsOpen(r.workshop_id); else wsRender();
       } else {
-        var rec=await cdInsert('workshops',{title:title,engagement_kind:'workshop',client_org_name:orgName||null,workshop_date:(v('wsf_date')||null),debrief_date:(v('wsf_debrief')||null),sponsor_client_id:null,industry:v('wsf_industry')||null,company_size_band:v('wsf_size')||null,audience_level:(v('wsf_level')||null),tags:tags,status:'setup',is_archived:false});
+        var rec=await cdInsert('workshops',{title:title,engagement_kind:'workshop',client_org_name:orgName||null,workshop_date:(v('wsf_date')||null),debrief_date:(v('wsf_debrief')||null),sponsor_client_id:null,industry:v('wsf_industry')||null,company_size_band:v('wsf_size')||null,audience_level:(v('wsf_level')||null),fee:(parseFloat(v('wsf_fee'))||null),tags:tags,status:'setup',is_archived:false});
         var id=rec&&rec[0]&&rec[0].id; if(id) wsOpen(id); else wsRender();
       }
     }catch(e){ err.textContent='Error: '+e.message; document.getElementById('wsSave').disabled=false; }

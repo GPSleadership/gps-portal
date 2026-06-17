@@ -741,6 +741,7 @@ export default async function handler(req, res) {
           industry: body.industry || null,
           company_size_band: body.size_band || null,
           audience_level: body.audience_level || null,
+          fee: (body.fee != null && body.fee !== '' ? Number(body.fee) : null),
           tags: body.tags || [],
           status: 'setup',
           is_demo: body.is_demo === true,
