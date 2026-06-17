@@ -6257,6 +6257,23 @@ function renderRatersTab() {
     </div>
   </div>`;
 
+  // ── Engagement fee (always editable) ────────────────────────────────────────
+  const feePanel = `
+  <div class="card" style="margin-bottom:16px;box-shadow:none;border:1px solid var(--d-border);">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:2px;">Engagement fee</div>
+        <div style="font-size:11px;color:var(--d-mid);">What you're charging for this diagnostic — update anytime. Feeds the Insights revenue total.</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span style="font-size:14px;color:var(--d-mid);">$</span>
+        <input id="diag-fee" type="number" min="0" step="100" placeholder="e.g. 5000" value="${d.fee != null ? d.fee : ''}" style="font-size:13px;width:120px;">
+        <button class="dbtn dbtn-primary dbtn-sm" onclick="saveDiagFee()">Save</button>
+        <span id="diag-fee-msg" style="font-size:11px;color:var(--d-green);display:none;">✓ Saved</span>
+      </div>
+    </div>
+  </div>`;
+
   // ── Interview settings panel ─────────────────────────────────────────────────
   const interviewPanel = `
   <div class="card" style="margin-bottom:16px;border:1.5px solid ${intEnabled?'var(--d-blue)':'var(--d-border)'};background:${intEnabled?'var(--d-blue-light)':'var(--d-light)'};box-shadow:none;">
@@ -6307,6 +6324,7 @@ function renderRatersTab() {
     <div><strong>${d.client_name} submitted their rater list on ${diagFormatDate(d.raters_finalized_at)}.</strong>
     ${nonSelf.length} rater${nonSelf.length!==1?'s':''} added. Review the list below and send invitations when ready.</div></div>` : ''}
   ${anonPanel}
+  ${feePanel}
   ${interviewPanel}
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
     <div style="display:flex;gap:6px;flex-wrap:wrap;">${catBadges || '<span style="font-size:12px;color:var(--d-mid);">No raters added yet</span>'}</div>
@@ -6368,6 +6386,14 @@ async function toggleAnonymousFeedback(currentState) {
 async function toggleInterviews(currentState) {
   await updateDiag({ interviews_enabled: !currentState });
   renderRatersTab();
+}
+
+async function saveDiagFee() {
+  const el  = document.getElementById('diag-fee');
+  const fee = (el && el.value !== '') ? (parseFloat(el.value) || 0) : null;
+  await updateDiag({ fee: fee });
+  const msg = document.getElementById('diag-fee-msg');
+  if (msg) { msg.style.display = 'inline'; setTimeout(() => msg.style.display = 'none', 2500); }
 }
 
 async function saveInterviewSettings() {
@@ -9139,12 +9165,14 @@ async function drSendSponsor(sponsorId){
     var opts=statuses.map(function(s){ var lab=isA?s.replace('pre_survey','survey'):s; return '<option value="'+s+'"'+(w.status===s?' selected':'')+'>'+lab+'</option>'; }).join('');
     p.innerHTML=
       card('<div style="font-weight:800;margin-bottom:10px;color:#004369;">Status &amp; dates</div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;"><label style="font-size:12px;color:#5a6b76;font-weight:700;">Status</label><select id="wsStatus" style="padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;">'+opts+'</select>'+btn('wsStatusSave','Save status','ghost')+'</div><div style="font-size:13px;color:#5a6b76;">'+(isA?'':('Workshop: '+fmtDate(w.workshop_date)+' · '))+'Debrief date</div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px;"><input type="date" id="wsEditDebrief" value="'+(w.debrief_date||'')+'" style="padding:7px 10px;border:1.5px solid #dbe3e6;border-radius:7px;">'+btn('wsDatesSave','Save','ghost')+'<span id="wsDatesOut" style="font-size:12px;color:#5a6b76;"></span></div>')+
+      card('<div style="font-weight:800;margin-bottom:6px;color:#004369;">Engagement fee</div><div style="font-size:12px;color:#5a6b76;margin-bottom:8px;">What you\'re charging for this '+(isA?'assessment':'workshop')+' — update anytime. Feeds the Insights revenue total.</div><div style="display:flex;gap:8px;align-items:center;"><span style="color:#5a6b76;">$</span><input type="number" id="wsEditFee" min="0" step="100" value="'+(w.fee!=null?w.fee:'')+'" placeholder="e.g. 5000" style="width:140px;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;">'+btn('wsFeeSave','Save','ghost')+'<span id="wsFeeOut" style="font-size:12px;color:#5a6b76;"></span></div>')+
       card('<div style="font-weight:800;margin-bottom:8px;color:#004369;">Sponsor dashboard link</div><div style="font-size:12px;background:#F7F4EE;padding:10px;border-radius:7px;word-break:break-all;color:#004369;">'+esc(spLink)+'</div><div style="margin-top:10px;">'+btn('wsCopyLink','Copy link','ghost')+'</div>')+
       card('<div style="font-weight:800;margin-bottom:8px;color:#004369;">Point of contact link <span style="font-weight:400;font-size:12px;color:#5a6b76;">(progress only — no scores or report)</span></div><div style="font-size:12px;color:#5a6b76;margin-bottom:8px;">Share with your logistics contact. They see who has completed the survey and can add participant emails — never results.</div><div style="font-size:12px;background:#F7F4EE;padding:10px;border-radius:7px;word-break:break-all;color:#004369;">'+esc(pocLink)+'</div><div style="margin-top:10px;">'+btn('wsCopyPoc','Copy POC link','ghost')+'</div>')+
       card('<div style="font-weight:800;margin-bottom:6px;color:#004369;">Discovery call notes / transcript</div><div style="font-size:12px;color:#5a6b76;margin-bottom:8px;">Paste the discovery call transcript or your notes. The AI uses this to suggest client-specific questions (Questions tab → "AI suggest from discovery") and to draft the recap email.</div>'+wsTa('wsDisc', w.discovery_transcript||w.discovery_notes||'', 140)+'<div style="margin-top:8px;">'+btn('wsDiscSave','Save notes','ghost')+'<span id="wsDiscOut" style="font-size:12px;color:#5a6b76;margin-left:8px;"></span></div>'+(isA?'<div style="margin-top:12px;border-top:1px dashed #dbe3e6;padding-top:12px;"><div style="font-size:12px;font-weight:700;color:#5a6b76;margin-bottom:6px;">Attach discovery file (PDF, DOCX, TXT, max 10 MB)</div><input type="file" id="wsDiscFile" accept=".pdf,.docx,.txt" style="font-size:13px;width:100%;"><div id="wsDiscFileOut" style="font-size:12px;color:#5a6b76;margin-top:6px;">'+(w.discovery_attachment_url?'Attached: <a href="'+esc(w.discovery_attachment_url)+'" target="_blank" style="color:#01949A;">view file</a>':'No file attached.')+'</div></div>':''))+
       card('<div style="font-weight:800;margin-bottom:12px;color:#004369;">Sponsors</div><div style="font-size:12px;color:#5a6b76;margin-bottom:12px;">Sponsors can log into their portal and see this project. Add them by email — they\'ll get a portal tab for this '+esc(isA?'assessment':'workshop')+'.</div><div id="wsSponsorsPanel"><div id="wsSponsorList" style="margin-bottom:14px;"></div><div style="padding-top:10px;border-top:1px solid #f3f4f6;"><div style="position:relative;margin-bottom:8px;"><input id="wsSponsorEmail" placeholder="Search by email or name…" autocomplete="off" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;"><div id="wsSponsorSuggest" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid #dbe3e6;border-top:none;border-radius:0 0 7px 7px;z-index:50;max-height:180px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.1);"></div></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;"><input id="wsSponsorName" placeholder="Full name" style="flex:1;min-width:140px;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;"><input id="wsSponsorTitle" placeholder="Title (e.g. CEO)" style="flex:1;min-width:140px;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;"></div>'+btn('wsSponsorAdd','Add sponsor')+'<span id="wsSponsorOut" style="font-size:12px;color:#dc2626;margin-left:8px;"></span></div></div>');
     document.getElementById('wsStatusSave').onclick=async function(){ try{ await cdUpdate('workshops',{status:document.getElementById('wsStatus').value,updated_at:new Date().toISOString()},{eq:{id:w.id}}); w.status=document.getElementById('wsStatus').value; toast('Status saved.'); wsDetail(); }catch(e){ toast(e.message); } };
     var wsDatesBtn=document.getElementById('wsDatesSave'); if(wsDatesBtn) wsDatesBtn.onclick=async function(){ var o=document.getElementById('wsDatesOut'); o.textContent='Saving…'; var patch={ debrief_date:(document.getElementById('wsEditDebrief').value||null), updated_at:new Date().toISOString() }; var wd=document.getElementById('wsEditWsDate'); if(wd) patch.workshop_date=(wd.value||null); try{ await cdUpdate('workshops',patch,{eq:{id:w.id}}); w.debrief_date=patch.debrief_date; if(wd) w.workshop_date=patch.workshop_date; o.textContent='Saved.'; }catch(e){ o.textContent=e.message; } };
+    var wsFeeBtn=document.getElementById('wsFeeSave'); if(wsFeeBtn) wsFeeBtn.onclick=async function(){ var o=document.getElementById('wsFeeOut'); o.textContent='Saving…'; var feeEl=document.getElementById('wsEditFee'); var fee=(feeEl&&feeEl.value!=='')?(parseFloat(feeEl.value)||0):null; try{ await cdUpdate('workshops',{fee:fee,updated_at:new Date().toISOString()},{eq:{id:w.id}}); w.fee=fee; o.textContent='Saved.'; }catch(e){ o.textContent=e.message; } };
     document.getElementById('wsCopyLink').onclick=function(){ navigator.clipboard.writeText(spLink).then(function(){ toast('Link copied.'); },function(){ toast(spLink); }); };
     var cpoc=document.getElementById('wsCopyPoc'); if(cpoc) cpoc.onclick=function(){ navigator.clipboard.writeText(pocLink).then(function(){ toast('POC link copied.'); },function(){ toast(pocLink); }); };
     document.getElementById('wsDiscSave').onclick=async function(){ var o=document.getElementById('wsDiscOut'); o.textContent='Saving…'; try{ await cdUpdate('workshops',{discovery_transcript:document.getElementById('wsDisc').value,updated_at:new Date().toISOString()},{eq:{id:w.id}}); w.discovery_transcript=document.getElementById('wsDisc').value; o.textContent='Saved.'; }catch(e){ o.textContent=e.message; } };
