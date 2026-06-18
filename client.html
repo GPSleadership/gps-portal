@@ -3250,7 +3250,20 @@ async function loadClient() {
 
     const client = await clientRes.json();
 
-    if (client.is_active === false) {
+    // Derive the coaching-client flag FIRST, so the engagement/expiry locks below
+    // respect it. A diagnostic leader who is converted to coaching must never be
+    // locked out by the 90-day diagnostic window (the bug that forced a 2nd account).
+    client.is_coaching_client = !!(
+      client.coaching_sessions_enabled ||
+      client.in_coaching_program ||
+      client.is_active_coaching ||
+      client.engagement_type === 'diagnostic_plus_coaching' ||
+      (client.coaching_program_start_date && !client.coaching_program_end_date)
+    );
+
+    // "Engagement complete" applies only to NON-coaching clients. Coaching clients
+    // (including converted diagnostic leaders) keep access even if is_active is false.
+    if (client.is_active === false && !client.is_coaching_client) {
       showError('Engagement complete.', `Your 90-day engagement has been completed. Contact Alex at alex@gpsleadership.org to discuss what's next.`);
       return;
     }
@@ -3260,17 +3273,6 @@ async function loadClient() {
       showError('Portal temporarily locked.', 'Your GPS Leadership portal is temporarily locked. Please contact Alex or his team at alex@gpsleadership.org if you believe this is an error or if your engagement is being renewed.');
       return;
     }
-
-    // Derive coaching client flag. Broadened so anyone in the coaching program is
-    // recognized (not just those with the weekly-session toggle), which hides the
-    // "Explore 1:1 Executive Coaching" upsell on their own portal.
-    client.is_coaching_client = !!(
-      client.coaching_sessions_enabled ||
-      client.in_coaching_program ||
-      client.is_active_coaching ||
-      client.engagement_type === 'diagnostic_plus_coaching' ||
-      (client.coaching_program_start_date && !client.coaching_program_end_date)
-    );
 
     // 90-day access window for non-coaching clients
     const accessStatus = await initPortalAccessCheck(client);
