@@ -4012,9 +4012,9 @@ async function renderCoachInsights(){
   host.innerHTML = '<div style="padding:30px;text-align:center;color:#5a6b76;">Computing client health…</div>';
 
   var diags = [];
-  try { diags = await cdSelect('diagnostics', { select: 'id,status,created_at,survey_closed_at,close_date,client_id,fee' }) || []; } catch(_) { diags = []; }
+  try { diags = await cdSelect('diagnostics', { select: 'id,status,created_at,survey_closed_at,close_date,client_id,fee,client_name,client_org,tier' }) || []; } catch(_) { diags = []; }
   var wsList = [];
-  try { wsList = await cdSelect('workshops', { select: 'id,fee,is_archived' }) || []; } catch(_) { wsList = []; }
+  try { wsList = await cdSelect('workshops', { select: 'id,fee,is_archived,title,client_org_name,engagement_kind' }) || []; } catch(_) { wsList = []; }
 
   // Who Insights tracks = leaders you actually work with: coaching clients + diagnostic
   // leaders. Workshop/assessment trial guests are EXCLUDED (they skew the stats and aren't
@@ -4046,6 +4046,13 @@ async function renderCoachInsights(){
   var diagRev = diags.reduce(function(a,d){ return a + (+d.fee||0); }, 0);
   var wsRev = wsList.filter(function(w){ return !w.is_archived; }).reduce(function(a,w){ return a + (+w.fee||0); }, 0);
   var revenue = coachingRev + diagRev + wsRev;
+  // Line-item breakdown behind the Revenue total (click "Revenue to date" to view).
+  var revItems = [];
+  cohort.forEach(function(c){ var v=+c.total_revenue_to_date||0; if(v>0) revItems.push({label:c.name||'(unnamed)', org:c.organization||c.org||'', type:'Coaching', amount:v}); });
+  diags.forEach(function(d){ var v=+d.fee||0; if(v>0) revItems.push({label:d.client_name||'(diagnostic)', org:d.client_org||'', type:'Diagnostic'+(d.tier?(' · '+(d.tier==='pro'?'Pro':'Standard')):''), amount:v}); });
+  wsList.filter(function(w){return !w.is_archived;}).forEach(function(w){ var v=+w.fee||0; if(v>0) revItems.push({label:w.title||'(engagement)', org:w.client_org_name||'', type:(w.engagement_kind==='assessment'?'Assessment':'Workshop'), amount:v}); });
+  revItems.sort(function(a,b){ return b.amount-a.amount; });
+  window._ciRevenue = { total:revenue, coachingRev:coachingRev, diagRev:diagRev, wsRev:wsRev, items:revItems };
   var renew90 = models.filter(function(m){return m.endDays!=null && m.endDays>=0 && m.endDays<=90;}).length;
   var renewAtRisk = models.filter(function(m){return m.endDays!=null && m.endDays>=0 && m.endDays<=90 && m.health<50;}).length;
   var avgRev = cohort.length ? Math.round(revenue/cohort.length) : 0;
@@ -4054,7 +4061,7 @@ async function renderCoachInsights(){
   // ── Business Health strip ──
   var strip = '<div style="display:flex;flex-wrap:wrap;gap:14px;background:#04243a;color:#fff;border-radius:12px;padding:14px 18px;margin-bottom:16px;">'
     + ciStripItem('Active clients', String(cohort.length), '#cfe3ea')
-    + ciStripItem('Revenue to date', fmt$(revenue), '#cfe3ea', 'diagnostics + workshops + coaching')
+    + ciStripItem('Revenue to date', fmt$(revenue), '#cfe3ea', 'click for breakdown', 'ciShowRevenue()')
     + ciStripItem('Renewals (90d)', String(renew90), renew90<=1?'#7ee0a1':renew90<=3?'#ffd76a':'#ff9aa9')
     + ciStripItem('At-risk renewals', String(renewAtRisk), renewAtRisk>0?'#ff9aa9':'#7ee0a1')
     + ciStripItem('Avg rev / client', fmt$(avgRev), '#cfe3ea')
@@ -4138,10 +4145,41 @@ async function renderCoachInsights(){
     + '<div style="font-size:11px;color:#9aa7ad;margin-bottom:30px;">Health = average of available subscores (Engagement, Progress vs Plan, Risk Signals). Session Reliability is excluded until session data is captured; ⧗ marks clients whose Progress score is pending plan metrics. Thresholds: green ≥ 80, yellow 50–79, red &lt; 50.</div>';
 }
 
-function ciStripItem(label, val, valColor, sub){
-  return '<div style="min-width:120px;"><div style="font-size:11px;color:#9fc0d0;text-transform:uppercase;letter-spacing:.5px;">'+label+'</div>'
-    + '<div style="font-size:20px;font-weight:800;color:'+valColor+';font-family:Montserrat,sans-serif;">'+val+'</div>'
+function ciStripItem(label, val, valColor, sub, onclick){
+  var wrap = onclick ? 'min-width:120px;cursor:pointer;' : 'min-width:120px;';
+  var attr = onclick ? ' onclick="'+onclick+'" title="Click for breakdown"' : '';
+  var arrow = onclick ? ' <span style="font-size:13px;opacity:.8;">▸</span>' : '';
+  return '<div style="'+wrap+'"'+attr+'><div style="font-size:11px;color:#9fc0d0;text-transform:uppercase;letter-spacing:.5px;">'+label+'</div>'
+    + '<div style="font-size:20px;font-weight:800;color:'+valColor+';font-family:Montserrat,sans-serif;">'+val+arrow+'</div>'
     + (sub?'<div style="font-size:10px;color:#7fa3b5;">'+sub+'</div>':'')+'</div>';
+}
+function ciShowRevenue(){
+  var R = window._ciRevenue; if(!R) return;
+  var fmt = function(v){ return '$'+(v||0).toLocaleString('en-US'); };
+  var ov = document.getElementById('ciRevenueOverlay'); if(ov) ov.remove();
+  ov = document.createElement('div');
+  ov.id = 'ciRevenueOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(4,36,58,.45);z-index:9500;display:flex;align-items:center;justify-content:center;padding:20px;';
+  ov.onclick = function(e){ if(e.target===ov) ov.remove(); };
+  function typeRow(label,amt){ return '<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;"><span style="color:#5a6b76;">'+label+'</span><span style="font-weight:700;color:#004369;">'+fmt(amt)+'</span></div>'; }
+  var itemRows = R.items.length ? R.items.map(function(it){
+    return '<tr style="border-top:1px solid #eef1f2;"><td style="padding:7px 8px;font-size:12px;color:#004369;font-weight:600;">'+esc(it.label)+'</td>'
+      + '<td style="padding:7px 8px;font-size:12px;color:#5a6b76;">'+esc(it.org||'—')+'</td>'
+      + '<td style="padding:7px 8px;font-size:11px;color:#8a99a0;">'+esc(it.type)+'</td>'
+      + '<td style="padding:7px 8px;font-size:12px;text-align:right;font-weight:700;color:#004369;white-space:nowrap;">'+fmt(it.amount)+'</td></tr>';
+  }).join('') : '<tr><td colspan="4" style="padding:14px;color:#9aa7ad;font-size:13px;">No fees captured yet. Add fees on each engagement to populate this.</td></tr>';
+  ov.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:620px;width:100%;max-height:85vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);">'
+    + '<div style="background:#04243a;color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;"><div style="font-family:Montserrat,sans-serif;font-weight:800;">Revenue to date — '+fmt(R.total)+'</div><div onclick="var o=document.getElementById(\'ciRevenueOverlay\');if(o)o.remove();" style="cursor:pointer;font-size:20px;line-height:1;opacity:.8;">×</div></div>'
+    + '<div style="padding:18px 20px;">'
+    + '<div style="background:#f5f9f9;border-radius:8px;padding:12px 14px;margin-bottom:16px;">'
+    + '<div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#5a6b76;font-weight:800;margin-bottom:4px;">By type</div>'
+    + typeRow('Coaching', R.coachingRev) + typeRow('Diagnostics', R.diagRev) + typeRow('Workshops & Assessments', R.wsRev)
+    + '<div style="display:flex;justify-content:space-between;padding:8px 0 0;border-top:2px solid #dce5e7;margin-top:6px;font-size:14px;"><span style="font-weight:800;color:#004369;">Total</span><span style="font-weight:800;color:#004369;">'+fmt(R.total)+'</span></div>'
+    + '</div>'
+    + '<div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#5a6b76;font-weight:800;margin-bottom:6px;">Every source ('+R.items.length+')</div>'
+    + '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#F7F4EE;text-align:left;color:#5a6b76;font-size:10px;text-transform:uppercase;"><th style="padding:6px 8px;">Source</th><th style="padding:6px 8px;">Organization</th><th style="padding:6px 8px;">Type</th><th style="padding:6px 8px;text-align:right;">Amount</th></tr></thead><tbody>'+itemRows+'</tbody></table>'
+    + '</div></div>';
+  document.body.appendChild(ov);
 }
 function ciTile(label, val, color, sub){
   return '<div style="background:#fff;border:1px solid #e6ecee;border-radius:10px;padding:14px 16px;">'
