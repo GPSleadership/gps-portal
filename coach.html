@@ -4183,6 +4183,38 @@ async function renderCoachInsights(){
   var avgRev = started.length ? Math.round(revenue/started.length) : 0;
   var fmt$ = function(v){ return '$'+(v||0).toLocaleString('en-US'); };
 
+  // ── Conversion funnel: diagnostic → 90-day sprint → retainer ──
+  var fnPct = function(n,d){ return d>0 ? Math.round(n/d*100) : 0; };
+  var diagLeaders = (allClients||[]).filter(function(c){ return !c.is_archived && !c.is_test_account && diagClientIdSet.has(c.id); });
+  var fnDiag   = diagLeaders.length;
+  var fnSprint = diagLeaders.filter(function(c){ return !!(c.coaching_program_start_date || c.in_coaching_program || c.is_active_coaching); }).length;
+  var fnRet    = diagLeaders.filter(function(c){ return !!c.converted_to_retainer; }).length;
+  var coachingBook = (allClients||[]).filter(function(c){ return !c.is_archived && !c.is_test_account && (c.in_coaching_program || c.is_active_coaching || c.coaching_program_start_date); });
+  var activeRet = coachingBook.filter(function(c){ return c.converted_to_retainer && !c.coaching_program_end_date; }).length;
+  var churnedN  = coachingBook.filter(function(c){ return !!c.coaching_program_end_date; }).length;
+  var tenures = coachingBook.filter(function(c){ return c.coaching_program_start_date; }).map(function(c){
+    var s = new Date(c.coaching_program_start_date).getTime();
+    var e = c.coaching_program_end_date ? new Date(c.coaching_program_end_date).getTime() : Date.now();
+    return Math.max(0, (e - s) / 2629800000); // ms → months
+  }).sort(function(a,b){ return a-b; });
+  var medTen = tenures.length ? (tenures.length % 2 ? tenures[(tenures.length-1)/2] : (tenures[tenures.length/2-1] + tenures[tenures.length/2]) / 2) : null;
+  var fnW2 = fnDiag>0 ? Math.max(14, Math.round(fnSprint/fnDiag*100)) : 100;
+  var fnW3 = fnDiag>0 ? Math.max(14, Math.round(fnRet/fnDiag*100)) : 100;
+  var funnel = '<div style="background:#fff;border:1px solid #e6ecee;border-radius:12px;overflow:hidden;margin-bottom:18px;">'
+    + '<div style="background:#04243a;color:#fff;padding:12px 16px;font-weight:800;font-family:Montserrat,sans-serif;">Conversion funnel</div>'
+    + '<div style="padding:16px;">'
+    + (fnDiag===0 ? '<div style="color:#5a6b76;font-size:13px;margin-bottom:14px;">No diagnostic-to-coaching activity yet — this fills in as leaders complete a diagnostic, start a sprint, and continue to retainer.</div>' :
+        '<div style="width:100%;background:#9FE1CB;border-radius:8px;padding:11px 14px;display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:#04342C;font-weight:700;font-size:13px;">Diagnostics</span><span style="color:#04342C;font-weight:800;">'+fnDiag+'</span></div>'
+      + '<div style="font-size:12px;color:#5a6b76;margin:0 0 8px 4px;">↓ '+fnPct(fnSprint,fnDiag)+'% started a 90-day sprint</div>'
+      + '<div style="width:'+fnW2+'%;min-width:130px;background:#5DCAA5;border-radius:8px;padding:11px 14px;display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:#04342C;font-weight:700;font-size:13px;">90-day sprint</span><span style="color:#04342C;font-weight:800;">'+fnSprint+'</span></div>'
+      + '<div style="font-size:12px;color:#5a6b76;margin:0 0 8px 4px;">↓ '+fnPct(fnRet,fnSprint)+'% continued to retainer</div>'
+      + '<div style="width:'+fnW3+'%;min-width:130px;background:#1D9E75;border-radius:8px;padding:11px 14px;display:flex;justify-content:space-between;margin-bottom:14px;"><span style="color:#fff;font-weight:700;font-size:13px;">Retainer</span><span style="color:#fff;font-weight:800;">'+fnRet+'</span></div>')
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">'
+    + ciTile('Active on retainer', activeRet, '#5a6b76', 'paying month-to-month')
+    + ciTile('Median months on retainer', medTen==null ? '—' : (medTen<10 ? medTen.toFixed(1) : Math.round(medTen)), '#5a6b76', 'start → today / end')
+    + ciTile('Churned', churnedN, '#5a6b76', 'engagement ended')
+    + '</div></div></div>';
+
   // ── Business Health strip ──
   var strip = '<div style="display:flex;flex-wrap:wrap;gap:14px;background:#04243a;color:#fff;border-radius:12px;padding:14px 18px;margin-bottom:16px;">'
     + ciStripItem('Active clients', String(started.length), '#cfe3ea', notStartedCount ? (notStartedCount+' not started yet') : 'all started')
@@ -4267,7 +4299,7 @@ async function renderCoachInsights(){
     + '<div style="font-size:11px;color:#8a99a0;">Read-only · health updates on load · session attendance & MRR pending data</div>'
     + '</div>';
 
-  host.innerHTML = headerBar + ciRangeControl() + strip + tiles + alerts + table
+  host.innerHTML = headerBar + ciRangeControl() + strip + tiles + funnel + alerts + table
     + '<div style="font-size:11px;color:#9aa7ad;margin-bottom:30px;">Health = average of available subscores (Engagement, Progress vs Plan, Risk Signals). Session Reliability is excluded until session data is captured; ⧗ marks clients whose Progress score is pending plan metrics. Thresholds: green ≥ 80, yellow 50–79, red &lt; 50.</div>';
 }
 
@@ -6319,9 +6351,13 @@ function renderOverviewTab() {
       </div>
 
       <div style="margin-bottom:14px;padding-top:14px;border-top:1px solid var(--d-border);">
-        <div style="font-size:11px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Interview Notes</div>
-        <textarea id="interview-notes-field" style="min-height:100px;" placeholder="Notes from 1:1 interviews with raters or stakeholders..." onblur="saveInterviewNotes(this.value)">${d.interview_notes || ''}</textarea>
-        <div class="dhint">Auto-saves when you click away. Included in report generation.</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <div style="font-size:11px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.04em;">Interview Notes</div>
+          <button class="dbtn dbtn-outline dbtn-sm" onclick="addInterviewEntry()">+ Add interview</button>
+        </div>
+        <div id="intvEntries">${renderIntvEntries(d)}</div>
+        ${d.interview_notes ? `<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--d-border);"><div style="font-size:11px;color:var(--d-mid);margin-bottom:4px;">Earlier general interview notes</div><textarea style="min-height:60px;width:100%;" onblur="saveInterviewNotes(this.value)">${d.interview_notes}</textarea></div>` : ''}
+        <div class="dhint">Each interview gets its own box and saves when you click away. All are included in report generation.</div>
       </div>
 
       <div style="margin-bottom:14px;padding-top:14px;border-top:1px solid var(--d-border);">
@@ -7708,6 +7744,51 @@ async function saveCoachingNotes(val) {
 
 async function saveInterviewNotes(val) {
   await updateDiag({ interview_notes: val });
+}
+
+// ── Per-interview notes (each 1:1 gets its own box) ──────────────────────────
+function _intvArr() {
+  var v = DIAG_SEL && DIAG_SEL.interview_notes_json;
+  if (Array.isArray(v)) return v;
+  if (typeof v === 'string' && v.trim()) { try { var p = JSON.parse(v); return Array.isArray(p) ? p : []; } catch (_) { return []; } }
+  return [];
+}
+function renderIntvEntries(d) {
+  var arr = Array.isArray(d.interview_notes_json) ? d.interview_notes_json : _intvArr();
+  if (!arr.length) return '<div class="dhint" style="margin-bottom:8px;">No interviews logged yet. Click “Add interview” to give each 1:1 its own box.</div>';
+  return arr.map(function (it, i) {
+    var nm = (it.name || '').replace(/"/g, '&quot;');
+    var notes = (it.notes || '').replace(/</g, '&lt;');
+    return '<div style="border:1px solid var(--d-border);border-radius:8px;padding:10px;margin-bottom:8px;">'
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;align-items:center;">'
+      + '<input placeholder="Who you interviewed" value="' + nm + '" onblur="saveInterviewEntry(' + i + ',\'name\',this.value)" style="flex:1;min-width:160px;font-size:12px;padding:6px 8px;border:1.5px solid var(--d-border);border-radius:6px;">'
+      + '<input type="date" value="' + (it.date || '') + '" onchange="saveInterviewEntry(' + i + ',\'date\',this.value)" style="font-size:12px;padding:6px 8px;border:1.5px solid var(--d-border);border-radius:6px;">'
+      + '<button class="dbtn dbtn-outline dbtn-sm" onclick="removeInterviewEntry(' + i + ')" title="Remove interview">🗑</button>'
+      + '</div>'
+      + '<textarea style="min-height:80px;width:100%;" placeholder="Notes from this interview…" onblur="saveInterviewEntry(' + i + ',\'notes\',this.value)">' + notes + '</textarea>'
+      + '</div>';
+  }).join('');
+}
+async function addInterviewEntry() {
+  var arr = _intvArr().slice();
+  arr.push({ name: '', date: '', notes: '' });
+  await updateDiag({ interview_notes_json: arr });
+  var host = document.getElementById('intvEntries');
+  if (host) host.innerHTML = renderIntvEntries(DIAG_SEL);
+}
+async function saveInterviewEntry(i, field, val) {
+  var arr = _intvArr().slice();
+  if (!arr[i]) return;
+  arr[i] = Object.assign({}, arr[i], { [field]: val });
+  await updateDiag({ interview_notes_json: arr });
+}
+async function removeInterviewEntry(i) {
+  if (!confirm('Remove this interview note? This cannot be undone.')) return;
+  var arr = _intvArr().slice();
+  arr.splice(i, 1);
+  await updateDiag({ interview_notes_json: arr });
+  var host = document.getElementById('intvEntries');
+  if (host) host.innerHTML = renderIntvEntries(DIAG_SEL);
 }
 
 async function saveTranscriptUrl() {
