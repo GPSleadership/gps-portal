@@ -201,6 +201,15 @@
     var html='';
     html+='<div class="page-title">'+esc(w.title)+'</div><div class="page-sub">'+esc(w.org||'')+(isA?'':(w.workshop_date?' · Workshop '+fmtDate(w.workshop_date):''))+(w.debrief_date?' · Debrief '+fmtDate(w.debrief_date):'')+'</div>';
 
+    // Curated one-off results page for the OMB Mastering Messaging Clarity workshop.
+    if (TOKEN === '70429e14-8d52-417d-8cf2-6a40467f9247') {
+      html += '<a href="/omb-message-clarity-results.html" target="_blank" rel="noopener" style="display:block;text-decoration:none;background:#04243a;color:#fff;border-radius:12px;padding:16px 20px;margin-bottom:16px;">'
+        + '<div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#9fc4d2;margin-bottom:4px;">Your workshop results</div>'
+        + '<div style="font-size:16px;font-weight:700;">View the Mastering Messaging Clarity results summary &rarr;</div>'
+        + '<div style="font-size:13px;color:#cfe3ea;margin-top:3px;">Ratings, themes, and what your team is taking back to work</div>'
+        + '</a>';
+    }
+
     // 1) WHAT HAPPENED — Executive summary
     html+='<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Executive summary</div><div class="actions"><button class="btn-ghost" id="dlPdf">Download 1-page summary</button><button class="btn-ghost" id="cpEmail">Copy summary for email</button></div></div>';
     html+='<div class="quick-read">'+esc(quickRead(s, isA))+'</div>';
