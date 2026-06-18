@@ -1532,7 +1532,7 @@
     <div class="rp-body" id="rp-body">
       <div class="rp-loading">Loading report draft…</div>
     </div>
-    <div class="rp-footer">
+    <div class="rp-footer" id="rp-footer">
       <div class="rp-check-row">
         <input type="checkbox" id="rp-review-check" onchange="toggleFinalizeBtn()" />
         <label for="rp-review-check">I have read this report in full. It is accurate and ready to send to <strong id="rp-client-name-label">this client</strong>.</label>
@@ -6891,8 +6891,12 @@ function renderReportTab() {
     </div>
     ${!surveyUnlocked ? `<div class="dalert dalert-amber">
       <span class="dalert-icon">⏳</span>
-      <div>Report generation available once the survey is closed.</div>
-    </div>` : !canGenerate ? `<div class="dalert dalert-amber">
+      <div>The survey is still open, so finalizing and sending stay locked. ${done>=3 ? 'You can generate a private preview for your eyes only.' : 'Once 3+ responses are in, you can generate a private preview.'}</div>
+    </div>${done>=3 ? `<div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+      <button class="dbtn dbtn-outline" onclick="generateReportPreview(event)">👁 Preview report now (private)</button>
+      ${d.report_preview_at ? `<button class="dbtn dbtn-outline" onclick="openReportPreview({preview:true})">Re-open last preview</button>` : ''}
+      <span class="dhint" style="margin:0;">Based on the ${done} response${done===1?'':'s'} so far. Not visible to the leader or sponsor. Finalize stays locked until you close the survey.</span>
+    </div>` : ''}` : !canGenerate ? `<div class="dalert dalert-amber">
       <span class="dalert-icon">⚠</span>
       <div><strong>Below minimum threshold.</strong> You need at least 7 completed rater surveys to generate a reliable report.
       ${canOverride ? ' You can override below, but the report quality will be limited.' : ' Fewer than 3 responses — override is not available.'}</div>
@@ -7450,11 +7454,34 @@ async function generateReportOverride() {
   await generateReport(null);
 }
 
+// Private coach preview while the survey is still open. Generates a draft WITHOUT
+// changing the diagnostic status (survey keeps collecting) and WITHOUT enabling the
+// finalize/send path — leader and sponsor can never see it until the survey closes
+// and the report is finalized.
+async function generateReportPreview(e) {
+  const btn = e ? e.currentTarget : null;
+  if (btn) { btn.disabled = true; btn.textContent = '⚙ Generating preview…'; }
+  try {
+    const resp = await fetch('/api/diagnostic?action=generate-report', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ diagnostic_id: DIAG_SEL.id, preview: true }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    await updateDiag({ report_preview_at: new Date().toISOString() });
+    openReportPreview({ preview: true });
+  } catch(ex) {
+    alert('Error generating preview: ' + ex.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '👁 Preview report now (private)'; }
+  }
+}
+
 // ── Report preview + three-layer finalize gate ───────────────────────────
 
-async function openReportPreview() {
+async function openReportPreview(opts) {
   const d = DIAG_SEL;
   if (!d) return;
+  const previewMode = !!(opts && opts.preview);
 
   // Reset modal state
   const bodyEl      = document.getElementById('rp-body');
@@ -7476,6 +7503,10 @@ async function openReportPreview() {
 
   // Open modal immediately so coach sees it loading
   document.getElementById('report-preview-modal').classList.add('open');
+  // Preview mode (survey still open): hide the finalize/send footer entirely.
+  var _rpFooter = document.getElementById('rp-footer');
+  if (_rpFooter) _rpFooter.style.display = previewMode ? 'none' : '';
+  if (metaEl && previewMode) metaEl.textContent = 'PRIVATE PREVIEW · survey still open · ' + metaEl.textContent;
 
   // Fetch latest report draft
   try {
@@ -7492,9 +7523,10 @@ async function openReportPreview() {
     const report  = draft.content_json || {};
     const narrative = report.full_narrative || null;
 
-    bodyEl.innerHTML = narrative
-      ? narrative
-      : buildCoachReportFallback(report);
+    var _previewBanner = previewMode
+      ? '<div style="background:#fff8e1;border:1px solid #ffd76a;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:13px;color:#7a5b00;"><strong>Private preview.</strong> Generated from the responses received so far while the survey is still open. The leader and sponsor cannot see this. Finalizing and sending stay locked until you close the survey.</div>'
+      : '';
+    bodyEl.innerHTML = _previewBanner + (narrative ? narrative : buildCoachReportFallback(report));
 
   } catch (err) {
     bodyEl.innerHTML = `<div class="rp-loading" style="color:#dc2626;">Error loading report: ${err.message}</div>`;

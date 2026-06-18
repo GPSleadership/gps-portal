@@ -1697,8 +1697,11 @@ Write the complete 14-Day Executive Leadership Diagnostic Report for ${diag.clie
     const drafts = await draftRes.json();
     const draft  = Array.isArray(drafts) ? drafts[0] : drafts;
 
+    const isPreview = !!(req.body && req.body.preview);
     await sb(`/rest/v1/diagnostics?id=eq.${diagnostic_id}`, 'PATCH',
-      { status: 'report_draft', report_generated_at: now, updated_at: now },
+      isPreview
+        ? { report_preview_at: now, updated_at: now }                       // private coach preview — survey stays OPEN, status unchanged, never visible to leader/sponsor
+        : { status: 'report_draft', report_generated_at: now, updated_at: now },
       { Prefer: 'return=minimal' }
     );
 
