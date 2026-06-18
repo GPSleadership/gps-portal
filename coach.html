@@ -949,6 +949,7 @@
         <button type="button" id="chip-needci" class="dchip" onclick="toggleClientChip('needci')">Needs check-in</button>
         <button type="button" id="chip-noplan" class="dchip" onclick="toggleClientChip('noplan')">No plan yet</button>
         <button type="button" id="chip-leads" class="dchip" onclick="toggleClientChip('leads')" title="Government clients at GS-14/15 (or SES) — potential coaching customers">★ Federal leads</button>
+        <button type="button" id="chip-test" class="dchip" onclick="toggleClientChip('test')" title="Show internal test / demo accounts (hidden from the list and from Insights by default)">🧪 Test accounts</button>
       </div>
       <select id="clientIndustryFilter" onchange="renderClients()" style="padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;color:var(--text);">
         <option value="all">All industries</option>
@@ -1603,7 +1604,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON);
 let allClients = [];
 let allCheckins = [];
 let currentFilter = 'active';
-var clientChips = { needci: false, noplan: false, leads: false };
+var clientChips = { needci: false, noplan: false, leads: false, test: false };
 // GS grade helpers: a "federal lead" is GS-14/15 (or SES/ES) — senior gov staff who are
 // the people most likely to become coaching customers.
 function gsParse(g){ if(!g) return null; var m = String(g).match(/\d{1,2}/); return m ? parseInt(m[0], 10) : null; }
@@ -2012,6 +2013,10 @@ function renderClients() {
       return false;
     });
   }
+
+  // Test/demo accounts are hidden by default; the "Test accounts" chip reveals them.
+  filtered = clientChips.test ? filtered.filter(c => c.is_test_account)
+                              : filtered.filter(c => !c.is_test_account);
 
   // Quick chips
   if (clientChips.noplan) filtered = filtered.filter(c => !c.plan_submitted_at);
@@ -2676,6 +2681,22 @@ function renderProfileSection(section, client, checkins) {
             ${client.ask_alex_enabled ? 'Disable Ask Alex' : 'Enable Ask Alex'}
           </button>
         </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--gray-200);">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--navy);">Test / demo account</div>
+            <div id="testAcctStatus-${client.id}" style="font-size:12px;color:var(--gray-600);margin-top:2px;">
+              ${client.is_test_account
+                ? '🧪 Marked as test — hidden from the client list and excluded from Insights.'
+                : 'Real account — counts in the client list and Insights.'}
+            </div>
+          </div>
+          <button id="testAcctBtn-${client.id}"
+            onclick="toggleTestAccount('${client.id}', ${!!client.is_test_account})"
+            style="padding:7px 16px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;border:none;white-space:nowrap;
+              background:${client.is_test_account ? 'var(--teal)' : 'var(--gray-600)'};color:#fff;">
+            ${client.is_test_account ? 'Mark as real' : 'Mark as test'}
+          </button>
+        </div>
         <div style="padding:12px 0;">
           <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:8px;">Coaching Program Dates <span style="font-weight:400;font-size:11px;color:var(--gray-600);">(informational only)</span></div>
           <div style="display:flex;gap:16px;flex-wrap:wrap;">
@@ -3266,6 +3287,38 @@ async function toggleAskAlex(clientId, currentState) {
     btn.style.background = 'var(--teal)';
     btn.setAttribute('onclick', `toggleAskAlex('${clientId}', false)`);
     if (statusEl) statusEl.textContent = '⛔ Disabled — Ask Alex tab is hidden for this client.';
+  }
+  btn.disabled = false;
+}
+
+async function toggleTestAccount(clientId, currentState) {
+  const newState = !currentState;
+  const btn = document.getElementById('testAcctBtn-' + clientId);
+  const statusEl = document.getElementById('testAcctStatus-' + clientId);
+  btn.textContent = 'Saving…';
+  btn.disabled = true;
+
+  let error = null;
+  try { await cdUpdate('clients', { is_test_account: newState }, { eq: { id: clientId } }); } catch (e) { error = e; }
+
+  if (error) {
+    btn.textContent = 'Error — try again';
+    btn.disabled = false;
+    return;
+  }
+
+  allClients = allClients.map(c => c.id === clientId ? { ...c, is_test_account: newState } : c);
+
+  if (newState) {
+    btn.textContent = 'Mark as real';
+    btn.style.background = 'var(--teal)';
+    btn.setAttribute('onclick', `toggleTestAccount('${clientId}', true)`);
+    if (statusEl) statusEl.textContent = '🧪 Marked as test — hidden from the client list and excluded from Insights.';
+  } else {
+    btn.textContent = 'Mark as test';
+    btn.style.background = 'var(--gray-600)';
+    btn.setAttribute('onclick', `toggleTestAccount('${clientId}', false)`);
+    if (statusEl) statusEl.textContent = 'Real account — counts in the client list and Insights.';
   }
   btn.disabled = false;
 }
@@ -4007,6 +4060,68 @@ function ciClientModel(c){
            aaDays:aa, lastActiveDays:la, endDays:endDays, week:week, flags:flags, reason:reason };
 }
 
+// Insights reporting period. Scopes revenue + diagnostic-throughput metrics by booking date.
+// Client health is always current-state. Default 'all' = "to date" (matches prior behavior).
+var ciRange = { mode: 'all', from: null, to: null };
+function ciRangeBounds(){
+  var now = new Date(), start = null, end = null;
+  if (ciRange.mode === '30d')  start = new Date(now.getTime() - 30*86400000);
+  else if (ciRange.mode === '90d')  start = new Date(now.getTime() - 90*86400000);
+  else if (ciRange.mode === '12mo') { start = new Date(now); start.setFullYear(start.getFullYear()-1); }
+  else if (ciRange.mode === 'ytd')  start = new Date(now.getFullYear(), 0, 1);
+  else if (ciRange.mode === 'custom') {
+    start = ciRange.from ? new Date(ciRange.from + 'T00:00:00') : null;
+    end   = ciRange.to   ? new Date(ciRange.to   + 'T23:59:59') : null;
+  }
+  return { start: start, end: end };
+}
+function ciInRange(dateStr, b){
+  if (b.start == null && b.end == null) return true; // all time
+  if (!dateStr) return false; // dated metrics need a date to fall in a window
+  var t = new Date(dateStr).getTime();
+  if (isNaN(t)) return false;
+  if (b.start && t < b.start.getTime()) return false;
+  if (b.end   && t > b.end.getTime())   return false;
+  return true;
+}
+function ciRangeLabel(){
+  if (ciRange.mode === '30d')  return 'last 30 days';
+  if (ciRange.mode === '90d')  return 'last 90 days';
+  if (ciRange.mode === '12mo') return 'last 12 months';
+  if (ciRange.mode === 'ytd')  return 'year to date';
+  if (ciRange.mode === 'custom') return (ciRange.from||'…')+' → '+(ciRange.to||'…');
+  return 'all time';
+}
+function ciSetRange(mode){
+  ciRange.mode = mode;
+  if (mode !== 'custom') { ciRange.from = null; ciRange.to = null; }
+  renderCoachInsights();
+}
+function ciSetCustomRange(){
+  var f = document.getElementById('ciRangeFrom'), t = document.getElementById('ciRangeTo');
+  ciRange.mode = 'custom';
+  ciRange.from = (f && f.value) || null;
+  ciRange.to   = (t && t.value) || null;
+  renderCoachInsights();
+}
+function ciRangeControl(){
+  var presets = [['all','All time'],['30d','30 days'],['90d','90 days'],['12mo','12 months'],['ytd','YTD'],['custom','Custom']];
+  var btns = presets.map(function(p){
+    var on = ciRange.mode === p[0];
+    return '<button type="button" onclick="ciSetRange(\''+p[0]+'\')" style="padding:5px 11px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid '+(on?'#01949A':'#cfd6d8')+';background:'+(on?'#01949A':'#fff')+';color:'+(on?'#fff':'#3a4a52')+';">'+p[1]+'</button>';
+  }).join('');
+  var custom = ciRange.mode === 'custom'
+    ? '<span style="display:inline-flex;align-items:center;gap:6px;margin-left:6px;">'
+      + '<input type="date" id="ciRangeFrom" value="'+(ciRange.from||'')+'" onchange="ciSetCustomRange()" style="padding:4px 7px;border:1px solid #cfd6d8;border-radius:6px;font-size:12px;">'
+      + '<span style="color:#8a99a0;font-size:12px;">to</span>'
+      + '<input type="date" id="ciRangeTo" value="'+(ciRange.to||'')+'" onchange="ciSetCustomRange()" style="padding:4px 7px;border:1px solid #cfd6d8;border-radius:6px;font-size:12px;">'
+      + '</span>'
+    : '';
+  return '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:12px;">'
+    + '<span style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#8a99a0;font-weight:700;margin-right:2px;">Period</span>'
+    + btns + custom + '</div>';
+}
+
 async function renderCoachInsights(){
   var host = document.getElementById('insightsHost'); if(!host) return;
   host.innerHTML = '<div style="padding:30px;text-align:center;color:#5a6b76;">Computing client health…</div>';
@@ -4014,7 +4129,7 @@ async function renderCoachInsights(){
   var diags = [];
   try { diags = await cdSelect('diagnostics', { select: 'id,status,created_at,survey_closed_at,close_date,client_id,fee,client_name,client_org,tier' }) || []; } catch(_) { diags = []; }
   var wsList = [];
-  try { wsList = await cdSelect('workshops', { select: 'id,fee,is_archived,title,client_org_name,engagement_kind' }) || []; } catch(_) { wsList = []; }
+  try { wsList = await cdSelect('workshops', { select: 'id,fee,is_archived,title,client_org_name,engagement_kind,created_at' }) || []; } catch(_) { wsList = []; }
 
   // Who Insights tracks = leaders you actually work with: coaching clients + diagnostic
   // leaders. Workshop/assessment trial guests are EXCLUDED (they skew the stats and aren't
@@ -4022,6 +4137,7 @@ async function renderCoachInsights(){
   var diagClientIdSet = new Set((diags || []).map(function(d){ return d.client_id; }).filter(Boolean));
   var cohort = (allClients || []).filter(function(c){
     if (c.is_archived) return false;
+    if (c.is_test_account) return false; // test/demo accounts never count toward Insights
     var isCoaching   = !!(c.in_coaching_program || c.coaching_sessions_enabled || c.is_active_coaching);
     var isDiagLeader = diagClientIdSet.has(c.id);
     if (!isCoaching && !isDiagLeader) return false;
@@ -4042,22 +4158,26 @@ async function renderCoachInsights(){
   var r = models.filter(function(m){return m.health<50;}).length;
   var avgCompletion4 = Math.round(models.reduce(function(a,m){return a+m.completion4;},0)/n);
   var aaWeekly = Math.round(models.filter(function(m){return m.aaDays!=null && m.aaDays<=7;}).length/n*100);
-  var diagClosed = diags.length ? Math.round(diags.filter(function(d){return d.survey_closed_at;}).length/diags.length*100) : null;
-  var cycleArr = diags.filter(function(d){return d.survey_closed_at && d.created_at;}).map(function(d){ return Math.max(0, Math.floor((new Date(d.survey_closed_at)-new Date(d.created_at))/86400000)); });
+  // Reporting period — scopes revenue + diagnostic throughput by booking date.
+  var ciBnds = ciRangeBounds();
+  var inPeriod = ciRange.mode !== 'all';
+  var diagsR = diags.filter(function(d){ return ciInRange(d.created_at, ciBnds); });
+  var diagClosed = diagsR.length ? Math.round(diagsR.filter(function(d){return d.survey_closed_at;}).length/diagsR.length*100) : null;
+  var cycleArr = diagsR.filter(function(d){return d.survey_closed_at && d.created_at;}).map(function(d){ return Math.max(0, Math.floor((new Date(d.survey_closed_at)-new Date(d.created_at))/86400000)); });
   var avgCycle = cycleArr.length ? Math.round(cycleArr.reduce(function(a,b){return a+b;},0)/cycleArr.length) : null;
 
-  // Revenue captured = coaching client revenue + diagnostic fees + workshop/assessment fees.
-  var coachingRev = cohort.reduce(function(a,c){ return a + (+c.total_revenue_to_date||0); }, 0);
-  var diagRev = diags.reduce(function(a,d){ return a + (+d.fee||0); }, 0);
-  var wsRev = wsList.filter(function(w){ return !w.is_archived; }).reduce(function(a,w){ return a + (+w.fee||0); }, 0);
-  var revenue = coachingRev + diagRev + wsRev;
-  // Line-item breakdown behind the Revenue total (click "Revenue to date" to view).
+  // Revenue captured (within the selected period) = coaching + diagnostic fees + workshop/assessment fees.
+  // Coaching is dated by program start (fallback created_at); diagnostics & workshops by created_at.
   var revItems = [];
-  cohort.forEach(function(c){ var v=+c.total_revenue_to_date||0; if(v>0) revItems.push({label:c.name||'(unnamed)', org:c.organization||c.org||'', type:'Coaching', amount:v}); });
-  diags.forEach(function(d){ var v=+d.fee||0; if(v>0) revItems.push({label:d.client_name||'(diagnostic)', org:d.client_org||'', type:'Diagnostic'+(d.tier?(' · '+(d.tier==='pro'?'Pro':'Standard')):''), amount:v}); });
-  wsList.filter(function(w){return !w.is_archived;}).forEach(function(w){ var v=+w.fee||0; if(v>0) revItems.push({label:w.title||'(engagement)', org:w.client_org_name||'', type:(w.engagement_kind==='assessment'?'Assessment':'Workshop'), amount:v}); });
+  cohort.forEach(function(c){ var v=+c.total_revenue_to_date||0; if(v>0 && ciInRange(c.coaching_program_start_date||c.created_at, ciBnds)) revItems.push({cat:'coaching', label:c.name||'(unnamed)', org:c.organization||c.org||'', type:'Coaching', amount:v}); });
+  diagsR.forEach(function(d){ var v=+d.fee||0; if(v>0) revItems.push({cat:'diag', label:d.client_name||'(diagnostic)', org:d.client_org||'', type:'Diagnostic'+(d.tier?(' · '+(d.tier==='pro'?'Pro':'Standard')):''), amount:v}); });
+  wsList.filter(function(w){return !w.is_archived;}).forEach(function(w){ var v=+w.fee||0; if(v>0 && ciInRange(w.created_at, ciBnds)) revItems.push({cat:'ws', label:w.title||'(engagement)', org:w.client_org_name||'', type:(w.engagement_kind==='assessment'?'Assessment':'Workshop'), amount:v}); });
   revItems.sort(function(a,b){ return b.amount-a.amount; });
-  window._ciRevenue = { total:revenue, coachingRev:coachingRev, diagRev:diagRev, wsRev:wsRev, items:revItems };
+  var coachingRev = revItems.filter(function(i){return i.cat==='coaching';}).reduce(function(a,i){return a+i.amount;},0);
+  var diagRev = revItems.filter(function(i){return i.cat==='diag';}).reduce(function(a,i){return a+i.amount;},0);
+  var wsRev = revItems.filter(function(i){return i.cat==='ws';}).reduce(function(a,i){return a+i.amount;},0);
+  var revenue = coachingRev + diagRev + wsRev;
+  window._ciRevenue = { total:revenue, coachingRev:coachingRev, diagRev:diagRev, wsRev:wsRev, items:revItems, periodLabel:ciRangeLabel() };
   var renew90 = models.filter(function(m){return m.endDays!=null && m.endDays>=0 && m.endDays<=90;}).length;
   var renewAtRisk = models.filter(function(m){return m.endDays!=null && m.endDays>=0 && m.endDays<=90 && m.health<50;}).length;
   var avgRev = started.length ? Math.round(revenue/started.length) : 0;
@@ -4066,7 +4186,7 @@ async function renderCoachInsights(){
   // ── Business Health strip ──
   var strip = '<div style="display:flex;flex-wrap:wrap;gap:14px;background:#04243a;color:#fff;border-radius:12px;padding:14px 18px;margin-bottom:16px;">'
     + ciStripItem('Active clients', String(started.length), '#cfe3ea', notStartedCount ? (notStartedCount+' not started yet') : 'all started')
-    + ciStripItem('Revenue to date', fmt$(revenue), '#cfe3ea', 'click for breakdown', 'ciShowRevenue()')
+    + ciStripItem(inPeriod ? 'Revenue (period)' : 'Revenue to date', fmt$(revenue), '#cfe3ea', inPeriod ? (ciRangeLabel()+' · breakdown') : 'click for breakdown', 'ciShowRevenue()')
     + ciStripItem('Renewals (90d)', String(renew90), renew90<=1?'#7ee0a1':renew90<=3?'#ffd76a':'#ff9aa9')
     + ciStripItem('At-risk renewals', String(renewAtRisk), renewAtRisk>0?'#ff9aa9':'#7ee0a1')
     + ciStripItem('Avg rev / client', fmt$(avgRev), '#cfe3ea')
@@ -4078,7 +4198,7 @@ async function renderCoachInsights(){
     + ciTile('Check-in completion', avgCompletion4+'%', ciTileColor(avgCompletion4,80,60), 'last 4 weeks')
     + ciTilePending('Session attendance', 'no session data yet')
     + ciTile('Ask Alex weekly use', aaWeekly+'%', ciTileColor(aaWeekly,60,35), 'of coaching clients')
-    + (diagClosed==null ? ciTilePending('Diagnostics completed','no diagnostics yet') : ciTile('Diagnostics completed', diagClosed+'%', ciTileColor(diagClosed,75,50), 'surveys closed'))
+    + (diagClosed==null ? ciTilePending('Diagnostics completed', inPeriod ? 'none in this period' : 'no diagnostics yet') : ciTile('Diagnostics completed', diagClosed+'%', ciTileColor(diagClosed,75,50), 'surveys closed'+(inPeriod?(' · '+ciRangeLabel()):'')))
     + (avgCycle==null ? ciTilePending('Diagnostic cycle time','no closed diagnostics') : ciTile('Diagnostic cycle time', avgCycle+'d', avgCycle<=10?'#2e7d32':avgCycle<=20?'#f9a825':'#DB1F48', 'invite → close'))
     + '</div>';
 
@@ -4147,7 +4267,7 @@ async function renderCoachInsights(){
     + '<div style="font-size:11px;color:#8a99a0;">Read-only · health updates on load · session attendance & MRR pending data</div>'
     + '</div>';
 
-  host.innerHTML = headerBar + strip + tiles + alerts + table
+  host.innerHTML = headerBar + ciRangeControl() + strip + tiles + alerts + table
     + '<div style="font-size:11px;color:#9aa7ad;margin-bottom:30px;">Health = average of available subscores (Engagement, Progress vs Plan, Risk Signals). Session Reliability is excluded until session data is captured; ⧗ marks clients whose Progress score is pending plan metrics. Thresholds: green ≥ 80, yellow 50–79, red &lt; 50.</div>';
 }
 
@@ -4175,7 +4295,7 @@ function ciShowRevenue(){
       + '<td style="padding:7px 8px;font-size:12px;text-align:right;font-weight:700;color:#004369;white-space:nowrap;">'+fmt(it.amount)+'</td></tr>';
   }).join('') : '<tr><td colspan="4" style="padding:14px;color:#9aa7ad;font-size:13px;">No fees captured yet. Add fees on each engagement to populate this.</td></tr>';
   ov.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:620px;width:100%;max-height:85vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);">'
-    + '<div style="background:#04243a;color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;"><div style="font-family:Montserrat,sans-serif;font-weight:800;">Revenue to date — '+fmt(R.total)+'</div><div onclick="var o=document.getElementById(\'ciRevenueOverlay\');if(o)o.remove();" style="cursor:pointer;font-size:20px;line-height:1;opacity:.8;">×</div></div>'
+    + '<div style="background:#04243a;color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;"><div style="font-family:Montserrat,sans-serif;font-weight:800;">'+((R.periodLabel && R.periodLabel!=='all time') ? ('Revenue — '+R.periodLabel+' · ') : 'Revenue to date — ')+fmt(R.total)+'</div><div onclick="var o=document.getElementById(\'ciRevenueOverlay\');if(o)o.remove();" style="cursor:pointer;font-size:20px;line-height:1;opacity:.8;">×</div></div>'
     + '<div style="padding:18px 20px;">'
     + '<div style="background:#f5f9f9;border-radius:8px;padding:12px 14px;margin-bottom:16px;">'
     + '<div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#5a6b76;font-weight:800;margin-bottom:4px;">By type</div>'
