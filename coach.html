@@ -941,7 +941,7 @@
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;border:2px solid var(--gray-300);border-radius:6px;padding:5px 10px;font-size:12.5px;font-family:'Open Sans',sans-serif;color:var(--text);">
         <span style="color:var(--gray-600);font-weight:600;">Show:</span>
         <label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" id="bucket-coaching" checked onchange="renderClients()"> Coaching</label>
-        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" id="bucket-diagnostic" onchange="renderClients()"> Diagnostic</label>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" id="bucket-diagnostic" checked onchange="renderClients()"> Diagnostic</label>
         <label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" id="bucket-member" onchange="renderClients()"> Team member</label>
         <label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" id="bucket-sponsor" onchange="renderClients()"> Sponsor</label>
       </div>
@@ -2000,14 +2000,18 @@ function renderClients() {
     });
   }
 
-  // Bucket filters — combinable; a client must match ALL checked buckets.
-  if (wantCoach)   filtered = filtered.filter(c => c.coaching_sessions_enabled || c.in_coaching_program || c.is_active_coaching);
-  if (wantDiag) {
+  // Bucket filters — UNION: show clients matching ANY checked bucket (e.g. Coaching OR
+  // Diagnostic). If none are checked, no bucket filter is applied (show all in the tab).
+  if (wantCoach || wantDiag || wantMember || wantSponsor) {
     const diagIds = new Set((typeof ALL_DIAGS !== 'undefined' ? ALL_DIAGS : []).map(d => d.client_id).filter(Boolean));
-    filtered = filtered.filter(c => diagIds.has(c.id));
+    filtered = filtered.filter(c => {
+      if (wantCoach   && (c.coaching_sessions_enabled || c.in_coaching_program || c.is_active_coaching)) return true;
+      if (wantDiag    && diagIds.has(c.id)) return true;
+      if (wantMember  && MEMBER_CLIENT_IDS.has(c.id)) return true;
+      if (wantSponsor && (c.is_sponsor || SPONSOR_EMAILS.has((c.email || '').toLowerCase()))) return true;
+      return false;
+    });
   }
-  if (wantMember)  filtered = filtered.filter(c => MEMBER_CLIENT_IDS.has(c.id));
-  if (wantSponsor) filtered = filtered.filter(c => c.is_sponsor || SPONSOR_EMAILS.has((c.email || '').toLowerCase()));
 
   // Quick chips
   if (clientChips.noplan) filtered = filtered.filter(c => !c.plan_submitted_at);
@@ -4012,7 +4016,19 @@ async function renderCoachInsights(){
   var wsList = [];
   try { wsList = await cdSelect('workshops', { select: 'id,fee,is_archived' }) || []; } catch(_) { wsList = []; }
 
-  var cohort = (allClients || []).filter(function(c){ return !c.is_archived && (c.in_coaching_program || c.coaching_sessions_enabled || c.is_active_coaching); });
+  // Who Insights tracks = leaders you actually work with: coaching clients + diagnostic
+  // leaders. Workshop/assessment trial guests are EXCLUDED (they skew the stats and aren't
+  // who you focus on) — their org revenue is still counted in the Business strip below.
+  var diagClientIdSet = new Set((diags || []).map(function(d){ return d.client_id; }).filter(Boolean));
+  var cohort = (allClients || []).filter(function(c){
+    if (c.is_archived) return false;
+    var isCoaching   = !!(c.in_coaching_program || c.coaching_sessions_enabled || c.is_active_coaching);
+    var isDiagLeader = diagClientIdSet.has(c.id);
+    if (!isCoaching && !isDiagLeader) return false;
+    // Drop workshop/assessment trial guests who haven't actually converted to coaching.
+    if ((c.account_type === 'trial' || c.is_workshop_participant) && !c.in_coaching_program) return false;
+    return true;
+  });
   var models = cohort.map(ciClientModel).sort(function(a,b){ return a.health - b.health; }); // worst first
 
   var n = models.length || 1;
