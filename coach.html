@@ -4029,7 +4029,12 @@ async function renderCoachInsights(){
     if ((c.account_type === 'trial' || c.is_workshop_participant) && !c.in_coaching_program) return false;
     return true;
   });
-  var models = cohort.map(ciClientModel).sort(function(a,b){ return a.health - b.health; }); // worst first
+  // Only health-score clients who have actually STARTED — i.e. completed the wizard and
+  // set a plan (plan_submitted_at). Before that they're "not started," not "struggling,"
+  // so they never appear in the health table or Immediate-attention.
+  var started = cohort.filter(function(c){ return !!c.plan_submitted_at; });
+  var notStartedCount = cohort.length - started.length;
+  var models = started.map(ciClientModel).sort(function(a,b){ return a.health - b.health; }); // worst first
 
   var n = models.length || 1;
   var g = models.filter(function(m){return m.health>=80;}).length;
@@ -4055,12 +4060,12 @@ async function renderCoachInsights(){
   window._ciRevenue = { total:revenue, coachingRev:coachingRev, diagRev:diagRev, wsRev:wsRev, items:revItems };
   var renew90 = models.filter(function(m){return m.endDays!=null && m.endDays>=0 && m.endDays<=90;}).length;
   var renewAtRisk = models.filter(function(m){return m.endDays!=null && m.endDays>=0 && m.endDays<=90 && m.health<50;}).length;
-  var avgRev = cohort.length ? Math.round(revenue/cohort.length) : 0;
+  var avgRev = started.length ? Math.round(revenue/started.length) : 0;
   var fmt$ = function(v){ return '$'+(v||0).toLocaleString('en-US'); };
 
   // ── Business Health strip ──
   var strip = '<div style="display:flex;flex-wrap:wrap;gap:14px;background:#04243a;color:#fff;border-radius:12px;padding:14px 18px;margin-bottom:16px;">'
-    + ciStripItem('Active clients', String(cohort.length), '#cfe3ea')
+    + ciStripItem('Active clients', String(started.length), '#cfe3ea', notStartedCount ? (notStartedCount+' not started yet') : 'all started')
     + ciStripItem('Revenue to date', fmt$(revenue), '#cfe3ea', 'click for breakdown', 'ciShowRevenue()')
     + ciStripItem('Renewals (90d)', String(renew90), renew90<=1?'#7ee0a1':renew90<=3?'#ffd76a':'#ff9aa9')
     + ciStripItem('At-risk renewals', String(renewAtRisk), renewAtRisk>0?'#ff9aa9':'#7ee0a1')
@@ -4069,7 +4074,7 @@ async function renderCoachInsights(){
 
   // ── KPI tiles ──
   var tiles = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:18px;">'
-    + ciTile('Active clients', cohort.length, '#5a6b76', '<span style="color:#2e7d32;font-weight:700;">'+g+'</span> / <span style="color:#f9a825;font-weight:700;">'+y+'</span> / <span style="color:#DB1F48;font-weight:700;">'+r+'</span> health split')
+    + ciTile('Active clients', started.length, '#5a6b76', '<span style="color:#2e7d32;font-weight:700;">'+g+'</span> / <span style="color:#f9a825;font-weight:700;">'+y+'</span> / <span style="color:#DB1F48;font-weight:700;">'+r+'</span> health split'+(notStartedCount?(' · '+notStartedCount+' not started'):''))
     + ciTile('Check-in completion', avgCompletion4+'%', ciTileColor(avgCompletion4,80,60), 'last 4 weeks')
     + ciTilePending('Session attendance', 'no session data yet')
     + ciTile('Ask Alex weekly use', aaWeekly+'%', ciTileColor(aaWeekly,60,35), 'of coaching clients')
@@ -4100,7 +4105,7 @@ async function renderCoachInsights(){
       + '</tr>';
   }).join('');
   var table = '<div style="background:#fff;border:1px solid #e6ecee;border-radius:12px;overflow:hidden;margin-bottom:18px;">'
-    + '<div style="padding:12px 16px;font-weight:800;color:#004369;font-family:Montserrat,sans-serif;border-bottom:1px solid #eef1f2;">Client Health — worst first ('+cohort.length+')</div>'
+    + '<div style="padding:12px 16px;font-weight:800;color:#004369;font-family:Montserrat,sans-serif;border-bottom:1px solid #eef1f2;">Client Health — worst first ('+started.length+' started'+(notStartedCount?(', '+notStartedCount+' not started yet'):'')+')</div>'
     + (cohort.length ? '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#F7F4EE;text-align:left;color:#5a6b76;font-size:11px;text-transform:uppercase;"><th style="padding:9px 10px;">Client</th><th style="padding:9px 10px;">Week</th><th style="padding:9px 10px;">Health</th><th style="padding:9px 10px;">Renewal</th><th style="padding:9px 10px;">Check-in 8wk</th><th style="padding:9px 10px;">Ask Alex</th><th style="padding:9px 10px;">Last seen</th><th style="padding:9px 10px;">Flags</th><th style="padding:9px 10px;"></th></tr></thead><tbody>'+rows+'</tbody></table></div>'
        : '<div style="padding:24px;color:#5a6b76;">No active coaching clients yet.</div>')
     + '</div>';
@@ -4113,6 +4118,7 @@ async function renderCoachInsights(){
     else if (m.endDays!=null && m.endDays<60 && m.health<70) immediate.push(esc(m.c.name)+' — renews in '+m.endDays+'d and health '+Math.round(m.health));
   });
   var watch = [];
+  if (notStartedCount) watch.push(notStartedCount+' coaching/diagnostic client'+(notStartedCount>1?'s have':' has')+' not built a plan yet — they appear in the health table once they complete setup');
   if (aaWeekly < 60) watch.push('Only '+aaWeekly+'% of coaching clients used Ask Alex in the last 7 days');
   var friction = (allClients||[]).filter(function(c){ return !c.is_archived && (c.account_type==='trial' || c.is_workshop_participant) && !c.plan_submitted_at && ciDays(c.invited_at)!=null && ciDays(c.invited_at)>=7; });
   if (friction.length) watch.push(friction.length+' invited guest'+(friction.length>1?'s have':' has')+' not completed the plan wizard within 7 days');
