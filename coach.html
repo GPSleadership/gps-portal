@@ -2730,6 +2730,23 @@ function renderProfileSection(section, client, checkins) {
             </div>
           </div>
           <p id="cpDatesMsg-${client.id}" style="font-size:11px;color:var(--gray-600);margin-top:6px;">Dates &amp; fee auto-save on change. Fee feeds the Insights revenue total.</p>
+
+          <div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--gray-300);">
+            <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:6px;">Retainer calculator <span style="font-weight:400;font-size:11px;color:var(--gray-600);">(auto-fills the fee + paid-through date)</span></div>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+              <div><label style="font-size:11px;text-transform:uppercase;letter-spacing:0.4px;color:var(--gray-600);display:block;margin-bottom:4px;">$ / hour</label><input type="number" min="0" step="25" id="cpRate-${client.id}" value="${client.coaching_hourly_rate != null ? client.coaching_hourly_rate : ''}" placeholder="550" style="width:90px;padding:6px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;"></div>
+              <div><label style="font-size:11px;text-transform:uppercase;letter-spacing:0.4px;color:var(--gray-600);display:block;margin-bottom:4px;">Hours / mo</label><input type="number" min="0" step="0.5" id="cpHours-${client.id}" value="${client.coaching_hours_per_month != null ? client.coaching_hours_per_month : ''}" placeholder="2" style="width:90px;padding:6px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;"></div>
+              <div><label style="font-size:11px;text-transform:uppercase;letter-spacing:0.4px;color:var(--gray-600);display:block;margin-bottom:4px;">Months prepaid</label><input type="number" min="0" step="1" id="cpMonths-${client.id}" value="${client.coaching_months_prepaid != null ? client.coaching_months_prepaid : ''}" placeholder="6" style="width:90px;padding:6px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;"></div>
+              <button onclick="calcRetainer('${client.id}')" style="padding:7px 16px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;border:none;background:var(--navy);color:#fff;font-family:'Montserrat',sans-serif;">Calculate &amp; save</button>
+            </div>
+            <p id="cpRetainerMsg-${client.id}" style="font-size:11px;color:var(--gray-600);margin-top:6px;">Rate × hours × months sets the fee; start date + months sets the paid-through (end) date.</p>
+          </div>
+
+          <div style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--gray-300);display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+            <span style="font-size:12px;font-weight:700;color:var(--navy);">Lifecycle:</span>
+            <button onclick="toggleRetainer('${client.id}', ${!!client.converted_to_retainer})" style="padding:7px 14px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid ${client.converted_to_retainer ? 'var(--teal)' : 'var(--gray-300)'};background:${client.converted_to_retainer ? 'var(--teal)' : '#fff'};color:${client.converted_to_retainer ? '#fff' : 'var(--navy)'};">${client.converted_to_retainer ? '✓ On retainer (month-to-month)' : 'Mark continued to retainer'}</button>
+            <button onclick="markEngagementEnded('${client.id}')" style="padding:7px 14px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid ${client.coaching_program_end_date ? 'var(--red)' : 'var(--gray-300)'};background:#fff;color:${client.coaching_program_end_date ? 'var(--red)' : 'var(--navy)'};">${client.coaching_program_end_date ? 'Ended ' + client.coaching_program_end_date : 'Mark engagement ended'}</button>
+          </div>
         </div>
       </div>
       <div class="detail-section">
@@ -3216,8 +3233,12 @@ async function setEnrolledStatus(clientId, newState) {
   const statusEl = document.getElementById('enrollmentStatus-' + clientId);
   if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
   try {
-    await cdUpdate('clients', { in_coaching_program: newState }, { eq: { id: clientId } });
-    allClients = allClients.map(c => c.id === clientId ? { ...c, in_coaching_program: newState } : c);
+    const c0 = allClients.find(x => x.id === clientId);
+    const payload = { in_coaching_program: newState };
+    // Auto-stamp the coaching start date on first enrollment so the 90-day clock + funnel work.
+    if (newState && c0 && !c0.coaching_program_start_date) payload.coaching_program_start_date = _todayStr();
+    await cdUpdate('clients', payload, { eq: { id: clientId } });
+    allClients = allClients.map(c => c.id === clientId ? { ...c, ...payload } : c);
     toast(newState ? 'Client enrolled in coaching program.' : 'Client removed from coaching program.');
     // Re-render the settings section so all buttons/text refresh.
     switchProfileNav(document.querySelector('.profile-nav-item.active')?.id?.replace('profNav-','') || 'settings');
@@ -3335,6 +3356,79 @@ async function saveCoachingFee(clientId) {
   } catch (e) {
     if (msgEl) { msgEl.textContent = 'Error saving fee — try again.'; msgEl.style.color = 'var(--red)'; }
   }
+}
+
+function _todayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function _addMonths(dateStr, n) {
+  const d = dateStr ? new Date(dateStr + 'T00:00:00') : new Date();
+  d.setMonth(d.getMonth() + Math.round(n));
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+// Retainer calculator: $/hr × hours/mo × months → engagement fee; start + months → paid-through (end) date.
+async function calcRetainer(clientId) {
+  const rate   = parseFloat((document.getElementById('cpRate-'  + clientId) || {}).value) || 0;
+  const hours  = parseFloat((document.getElementById('cpHours-' + clientId) || {}).value) || 0;
+  const months = parseFloat((document.getElementById('cpMonths-'+ clientId) || {}).value) || 0;
+  const startEl = document.getElementById('cpStart-' + clientId);
+  const endEl   = document.getElementById('cpEnd-'   + clientId);
+  const feeEl   = document.getElementById('cpFee-'   + clientId);
+  const msg     = document.getElementById('cpRetainerMsg-' + clientId);
+  const fee = Math.round(rate * hours * months);
+  const start = (startEl && startEl.value) ? startEl.value : _todayStr();
+  const paidThrough = months > 0 ? _addMonths(start, months) : null;
+  const payload = {
+    coaching_hourly_rate:     rate   || null,
+    coaching_hours_per_month: hours  || null,
+    coaching_months_prepaid:  months || null,
+    coaching_program_start_date: start,
+    total_revenue_to_date:    fee || null,
+  };
+  if (paidThrough) payload.coaching_program_end_date = paidThrough;
+  if (msg) { msg.style.color = 'var(--gray-600)'; msg.textContent = 'Saving…'; }
+  try {
+    await cdUpdate('clients', payload, { eq: { id: clientId } });
+    allClients = allClients.map(c => c.id === clientId ? { ...c, ...payload } : c);
+    if (startEl) startEl.value = start;
+    if (endEl && paidThrough) endEl.value = paidThrough;
+    if (feeEl) feeEl.value = fee || '';
+    if (msg) { msg.style.color = '#2e7d32'; msg.textContent = '✓ Fee $' + (fee || 0).toLocaleString() + (paidThrough ? ' · paid through ' + paidThrough : ' · add months to set a paid-through date'); }
+  } catch (e) {
+    if (msg) { msg.style.color = 'var(--red)'; msg.textContent = 'Error — try again.'; }
+  }
+}
+
+async function toggleRetainer(clientId, current) {
+  try {
+    await cdUpdate('clients', { converted_to_retainer: !current }, { eq: { id: clientId } });
+    allClients = allClients.map(c => c.id === clientId ? { ...c, converted_to_retainer: !current } : c);
+    toast(!current ? 'Marked as continued to retainer.' : 'Retainer flag removed.');
+    switchProfileNav(document.querySelector('.profile-nav-item.active')?.id?.replace('profNav-','') || 'settings');
+  } catch (e) { toast('Error: ' + e.message); }
+}
+
+async function markEngagementEnded(clientId) {
+  const c = allClients.find(x => x.id === clientId);
+  const navBack = () => switchProfileNav(document.querySelector('.profile-nav-item.active')?.id?.replace('profNav-','') || 'settings');
+  if (c && c.coaching_program_end_date) {
+    if (!confirm('This engagement already has an end date (' + c.coaching_program_end_date + '). Clear it and reactivate?')) return;
+    try {
+      await cdUpdate('clients', { coaching_program_end_date: null }, { eq: { id: clientId } });
+      allClients = allClients.map(x => x.id === clientId ? { ...x, coaching_program_end_date: null } : x);
+      toast('End date cleared — engagement reactivated.'); navBack();
+    } catch (e) { toast('Error: ' + e.message); }
+    return;
+  }
+  if (!confirm('Mark this engagement as ended today? This stamps the churn date and counts it in the conversion funnel.')) return;
+  try {
+    const today = _todayStr();
+    await cdUpdate('clients', { coaching_program_end_date: today }, { eq: { id: clientId } });
+    allClients = allClients.map(x => x.id === clientId ? { ...x, coaching_program_end_date: today } : x);
+    toast('Engagement marked ended ' + today + '.'); navBack();
+  } catch (e) { toast('Error: ' + e.message); }
 }
 
 async function saveCoachingDates(clientId) {
