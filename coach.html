@@ -2693,8 +2693,18 @@ function renderProfileSection(section, client, checkins) {
                 onfocus="this.style.borderColor='var(--teal)'"
                 onblur="this.style.borderColor='var(--gray-300)'" />
             </div>
+            <div>
+              <label style="font-size:11px;text-transform:uppercase;letter-spacing:0.4px;color:var(--gray-600);display:block;margin-bottom:4px;">Engagement fee ($)</label>
+              <input type="number" min="0" step="100" id="cpFee-${client.id}"
+                value="${client.total_revenue_to_date != null ? client.total_revenue_to_date : ''}"
+                placeholder="e.g. 12000"
+                onchange="saveCoachingFee('${client.id}')"
+                style="padding:6px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;width:120px;"
+                onfocus="this.style.borderColor='var(--teal)'"
+                onblur="this.style.borderColor='var(--gray-300)'" />
+            </div>
           </div>
-          <p id="cpDatesMsg-${client.id}" style="font-size:11px;color:var(--gray-600);margin-top:6px;">Dates auto-save on change.</p>
+          <p id="cpDatesMsg-${client.id}" style="font-size:11px;color:var(--gray-600);margin-top:6px;">Dates &amp; fee auto-save on change. Fee feeds the Insights revenue total.</p>
         </div>
       </div>
       <div class="detail-section">
@@ -3254,6 +3264,20 @@ async function toggleAskAlex(clientId, currentState) {
     if (statusEl) statusEl.textContent = '⛔ Disabled — Ask Alex tab is hidden for this client.';
   }
   btn.disabled = false;
+}
+
+async function saveCoachingFee(clientId) {
+  const feeEl = document.getElementById('cpFee-' + clientId);
+  const msgEl = document.getElementById('cpDatesMsg-' + clientId);
+  const fee = (feeEl && feeEl.value !== '') ? (parseFloat(feeEl.value) || 0) : null;
+  if (msgEl) msgEl.textContent = 'Saving…';
+  try {
+    await cdUpdate('clients', { total_revenue_to_date: fee }, { eq: { id: clientId } });
+    allClients = allClients.map(c => c.id === clientId ? { ...c, total_revenue_to_date: fee } : c);
+    if (msgEl) { msgEl.textContent = '✓ Fee saved.'; msgEl.style.color = 'var(--gray-600)'; }
+  } catch (e) {
+    if (msgEl) { msgEl.textContent = 'Error saving fee — try again.'; msgEl.style.color = 'var(--red)'; }
+  }
 }
 
 async function saveCoachingDates(clientId) {
@@ -6085,6 +6109,17 @@ function renderOverviewTab() {
     <div class="card" style="margin-bottom:0;">
       <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:14px;">Coach Notes</div>
 
+      <div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--d-border);">
+        <div style="font-size:11px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Engagement fee</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span style="color:var(--d-mid);">$</span>
+          <input id="diag-fee" type="number" min="0" step="100" placeholder="${d.tier==='pro'?'10000':'5000'}" value="${d.fee!=null?d.fee:''}" style="width:130px;font-size:13px;">
+          <button class="dbtn dbtn-primary dbtn-sm" onclick="saveDiagFee()">Save</button>
+          <span id="diag-fee-msg" style="font-size:11px;color:var(--d-green);display:none;">✓ Saved</span>
+        </div>
+        <div style="font-size:11px;color:var(--d-mid);margin-top:4px;">What you actually charged — Standard ≈ $5K, Pro ≈ $10K, override as needed. Feeds the Insights revenue total.</div>
+      </div>
+
       <div style="margin-bottom:14px;">
         <div style="font-size:11px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Kick-off / Intake Notes</div>
         <textarea id="intake-notes-field" style="min-height:100px;" onblur="saveIntakeNotes(this.value)">${d.intake_notes || ''}</textarea>
@@ -6324,7 +6359,6 @@ function renderRatersTab() {
     <div><strong>${d.client_name} submitted their rater list on ${diagFormatDate(d.raters_finalized_at)}.</strong>
     ${nonSelf.length} rater${nonSelf.length!==1?'s':''} added. Review the list below and send invitations when ready.</div></div>` : ''}
   ${anonPanel}
-  ${feePanel}
   ${interviewPanel}
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
     <div style="display:flex;gap:6px;flex-wrap:wrap;">${catBadges || '<span style="font-size:12px;color:var(--d-mid);">No raters added yet</span>'}</div>
@@ -9298,7 +9332,7 @@ async function drSendSponsor(sponsorId){
       '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><label style="font-size:12px;font-weight:700;color:#5a6b76;">Or upload a file (XLSX or CSV):</label><input type="file" id="wsRosterXlsx" accept=".xlsx,.xls,.csv" style="font-size:13px;flex:1;"></div>'+
       '<div style="margin-top:10px;">'+btn('wsUpload','Upload roster')+'</div><div id="wsRosterOut" style="font-size:13px;margin-top:8px;color:#5a6b76;"></div>'+
       '<div style="margin-top:16px;padding-top:14px;border-top:1px solid #eef1f2;"><div style="font-weight:800;margin-bottom:6px;color:#004369;">Add one participant</div><div style="font-size:12px;color:#5a6b76;margin-bottom:8px;">For a single person (e.g. a late add or walk-in). Name and email required.</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"><input id="wsAddName" placeholder="Full name" style="flex:1;min-width:140px;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;"><input id="wsAddEmail" placeholder="Email" style="flex:1;min-width:160px;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;"><input id="wsAddRole" placeholder="Title / role (optional)" style="flex:1;min-width:160px;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;">'+btn('wsAddOne','+ Add participant')+'</div><div id="wsAddOut" style="font-size:13px;margin-top:8px;color:#5a6b76;"></div></div>')+
-    card('<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;" id="wsRosterHdr"><div style="font-weight:800;color:#004369;">Participants ('+WS.parts.length+')</div><div>'+btn('wsSendPre',(isA?'Send survey emails (not-sent)':'Send pre-survey'))+(isA?'':btn('wsSendPost','Send post-survey (email)','ghost'))+btn('wsSendWelcomeAll','✉ Welcome selected to portal','ghost')+'</div></div><div id="wsRosterTable"><div style="color:#5a6b76;font-size:13px;">Loading roster…</div></div>');
+    card('<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;" id="wsRosterHdr"><div style="font-weight:800;color:#004369;">Participants ('+WS.parts.length+')</div><div>'+btn('wsSendPre',(isA?'Send survey emails (not-sent)':'Send pre-survey'))+(isA?'':btn('wsSendPost','Send post-survey (email)','ghost'))+btn('wsSendWelcomeAll','✉ Welcome selected to portal','ghost')+btn('wsRemoveSelected','🗑 Remove selected','danger')+'</div></div><div id="wsRosterTable"><div style="color:#5a6b76;font-size:13px;">Loading roster…</div></div>');
     var qrGen=document.getElementById('wsQrGen'); if(qrGen){ wsRenderQR(); qrGen.onclick=wsRenderQR; var qrDl=document.getElementById('wsQrDl'); if(qrDl) qrDl.onclick=wsDownloadQR; }
     document.getElementById('wsUpload').onclick=wsUploadRoster;
     var addOneBtn=document.getElementById('wsAddOne'); if(addOneBtn) addOneBtn.onclick=wsAddOneParticipant;
@@ -9307,6 +9341,7 @@ async function drSendSponsor(sponsorId){
     if(xlsxIn) xlsxIn.onchange=function(){ if(this.files&&this.files[0]) wsUploadRosterFile(this.files[0]); };
     document.getElementById('wsSendPre').onclick=function(){ wsSendSurveyEmails(); };
     var swa=document.getElementById('wsSendWelcomeAll'); if(swa) swa.onclick=wsSendAllWelcome;
+    var rms=document.getElementById('wsRemoveSelected'); if(rms) rms.onclick=wsRemoveSelected;
     var spb=document.getElementById('wsSendPost'); if(spb) spb.onclick=function(){ wsSendInvites('post'); };
     var lockBtn=document.getElementById('wsLockRoster');
     if(lockBtn) lockBtn.onclick=async function(){
@@ -9349,7 +9384,7 @@ async function drSendSponsor(sponsorId){
           : (pt.organization ? esc(pt.organization) : '<span style="color:#9aa7ad;">—</span>');
         var orgCell='<td style="padding:8px 10px;font-size:12px;color:'+(pt.tied_to_org?'#2e7d32':'#5a6b76')+';">'+orgTxt+'</td>';
         var tieBtn = wsOrg ? btn('wsTie_'+pt.id, pt.tied_to_org?'Untie':'Tie to org', 'ghost') : '';
-        var welCb='<td style="padding:8px 10px;text-align:center;"><input type="checkbox" class="wsWelCb" data-cid="'+esc(pt.client_id||'')+'" data-email="'+esc(pt.email||'').replace(/"/g,'&quot;')+'" data-name="'+esc(pt.name||'').replace(/"/g,'&quot;')+'"'+(pt.email?' checked':'')+(pt.email?'':' disabled title="No email on file"')+'></td>';
+        var welCb='<td style="padding:8px 10px;text-align:center;"><input type="checkbox" class="wsWelCb" data-cid="'+esc(pt.client_id||'')+'" data-pid="'+esc(pt.id||'')+'" data-email="'+esc(pt.email||'').replace(/"/g,'&quot;')+'" data-name="'+esc(pt.name||'').replace(/"/g,'&quot;')+'"'+(pt.email?' checked':'')+'></td>';
         return '<tr id="wsRow_'+pt.id+'" style="border-top:1px solid #dbe3e6;">'+welCb+'<td style="padding:8px 10px;">'+esc(pt.name||'—')+'</td><td style="padding:8px 10px;font-size:12px;color:#5a6b76;">'+esc(pt.email||'—')+'</td><td style="padding:8px 10px;font-size:12px;">'+esc(pt.role||'—')+'</td>'+orgCell+'<td style="padding:8px 10px;">'+pill(pt.display_status)+'</td><td style="padding:8px 10px;white-space:nowrap;">'+btn('wsEdPart_'+pt.id,'Edit','ghost')+resend+tieBtn+btn('wsRmPart_'+pt.id,'Remove','danger')+'</td></tr>';
       }).join('');
       tbl.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#F7F4EE;text-align:left;color:#5a6b76;font-size:11px;text-transform:uppercase;"><th style="padding:8px 10px;text-align:center;"><input type="checkbox" id="wsWelAll" checked title="Select / deselect everyone for the welcome send"></th><th style="padding:8px 10px;">Name</th><th style="padding:8px 10px;">Email</th><th style="padding:8px 10px;">Role</th><th style="padding:8px 10px;">Organization</th><th style="padding:8px 10px;">Status</th><th style="padding:8px 10px;"></th></tr></thead><tbody>'+rows+'</tbody></table>';
@@ -9473,6 +9508,23 @@ async function drSendSponsor(sponsorId){
     }
     if(btn){ btn.disabled=false; btn.textContent='✉ Welcome selected to portal'; }
     toast('Workshop welcome sent to '+ok+' attendee'+(ok===1?'':'s')+(noemail?(' · '+noemail+' had no email'):'')+(fail?(' · '+fail+' failed'):'')+'.');
+  }
+  async function wsRemoveSelected(){
+    var checked=Array.prototype.filter.call(document.querySelectorAll('.wsWelCb'),function(cb){ return cb.checked && cb.getAttribute('data-pid'); });
+    if(!checked.length){ toast('Select at least one person to remove (use the checkboxes).'); return; }
+    var names=checked.map(function(cb){ return cb.getAttribute('data-name')||'(unnamed)'; });
+    var isA=(WS.cur&&WS.cur.engagement_kind==='assessment');
+    if(!confirm('Remove '+checked.length+' selected participant'+(checked.length===1?'':'s')+' from this '+(isA?'assessment':'workshop')+'?\n\nUse this for no-shows. It takes them off the roster — it does NOT delete their client profile.\n\n'+names.slice(0,12).join(', ')+(names.length>12?'…':''))) return;
+    var btn=document.getElementById('wsRemoveSelected'); if(btn){ btn.disabled=true; btn.textContent='Removing…'; }
+    var ok=0, fail=0;
+    for(var i=0;i<checked.length;i++){
+      try{ await wsData('remove-participant',{participant_id:checked[i].getAttribute('data-pid')}); ok++; }
+      catch(e){ fail++; }
+    }
+    try{ WS.parts=await cdSelect('workshop_participants',{eq:{workshop_id:WS.cur.id},order:{col:'created_at',asc:true}}); }catch(_){}
+    if(btn){ btn.disabled=false; btn.textContent='🗑 Remove selected'; }
+    wsLoadRoster();
+    toast('Removed '+ok+' participant'+(ok===1?'':'s')+(fail?(' · '+fail+' failed'):'')+'.');
   }
   async function wsSendSurveyEmails(){
     var total=WS.parts.length;
