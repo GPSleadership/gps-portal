@@ -150,8 +150,13 @@ function htmlToText(html) {
     .trim();
 }
 
-async function sendEmail({ to, subject, html, text, emailType, recipientName, cc }) {
+async function sendEmail({ to, subject, html, text, emailType, recipientName, cc, client, brandUrl }) {
   if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY not configured');
+  // Auto-link the first "GPS Leadership Solutions" mention to the segment-appropriate page.
+  try {
+    const { gpsDiagnosticLink, autoLinkBrand } = require('./brand-link');
+    html = autoLinkBrand(html, brandUrl || gpsDiagnosticLink(client));
+  } catch (_) { /* never block a send on branding */ }
   const payload = {
     from: `Alex Tremble – GPS Leadership <${RESEND_FROM}>`,
     to: [to],

@@ -252,7 +252,7 @@ async function handleSend(req, res) {
     const authOk = !!verifyCoachSession(req.body.session) || await verifyPassword(password);
     if (!authOk) return res.status(401).json({ error: 'Not authorized' });
 
-    const clientRes = await sbFetch(`/rest/v1/clients?id=eq.${client_id}&select=id,name,email,behavior_1,start_behavior,current_sprint_number,observable_measure`);
+    const clientRes = await sbFetch(`/rest/v1/clients?id=eq.${client_id}&select=id,name,email,behavior_1,start_behavior,current_sprint_number,observable_measure,organization,industry,gs_grade`);
     if (!clientRes.ok) return res.status(500).json({ error: 'Failed to load client' });
     const clients = await clientRes.json();
     if (!clients || clients.length === 0) return res.status(404).json({ error: 'Client not found' });
@@ -303,6 +303,8 @@ async function handleSend(req, res) {
 
       const surveyLink = `${SITE_URL}/survey?t=${token}`;
       const ccAddresses = client.email ? [client.email] : [];
+      const _bl = require('./brand-link');
+      const _html = _bl.autoLinkBrand(buildSendEmailHtml(stakeholder.name, client.name, checkpoint, priorityBehavior, surveyLink), _bl.gpsDiagnosticLink(client));
       const emailRes = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
@@ -311,8 +313,8 @@ async function handleSend(req, res) {
           to:      [stakeholder.email],
           cc:      ccAddresses,
           subject: buildSendSubjectLine(client.name, checkpoint),
-          html:    buildSendEmailHtml(stakeholder.name, client.name, checkpoint, priorityBehavior, surveyLink),
-          text:    htmlToText(buildSendEmailHtml(stakeholder.name, client.name, checkpoint, priorityBehavior, surveyLink)),
+          html:    _html,
+          text:    htmlToText(_html),
           reply_to: ALEX_EMAIL
         })
       });
@@ -354,7 +356,7 @@ async function handleResend(req, res) {
     if (!authOk) return res.status(401).json({ error: 'Not authorized' });
 
     // Load client
-    const clientRes = await sbFetch(`/rest/v1/clients?id=eq.${client_id}&select=id,name,email,behavior_1,start_behavior,current_sprint_number,observable_measure`);
+    const clientRes = await sbFetch(`/rest/v1/clients?id=eq.${client_id}&select=id,name,email,behavior_1,start_behavior,current_sprint_number,observable_measure,organization,industry,gs_grade`);
     const clients = clientRes.ok ? await clientRes.json() : [];
     if (!clients.length) return res.status(404).json({ error: 'Client not found' });
     const client = clients[0];
@@ -387,6 +389,8 @@ async function handleResend(req, res) {
 
     // Send email
     const surveyLink = `${SITE_URL}/survey?t=${token}`;
+    const _bl2 = require('./brand-link');
+    const _html2 = _bl2.autoLinkBrand(buildSendEmailHtml(stakeholder.name, client.name, checkpoint, priorityBehavior, surveyLink), _bl2.gpsDiagnosticLink(client));
     const emailRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
@@ -395,8 +399,8 @@ async function handleResend(req, res) {
         to:      [stakeholder.email],
         cc:      client.email ? [client.email] : [],
         subject: buildSendSubjectLine(client.name, checkpoint),
-        html:    buildSendEmailHtml(stakeholder.name, client.name, checkpoint, priorityBehavior, surveyLink),
-        text:    htmlToText(buildSendEmailHtml(stakeholder.name, client.name, checkpoint, priorityBehavior, surveyLink)),
+        html:    _html2,
+        text:    htmlToText(_html2),
         reply_to: ALEX_EMAIL
       })
     });

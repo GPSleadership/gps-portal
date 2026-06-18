@@ -116,8 +116,9 @@ function htmlToText(html) {
 }
 
 // ── Email via Resend (self-contained, like diagnostic.js) ────────────────────
-async function sendEmail(to, subject, html) {
+async function sendEmail(to, subject, html, ctx) {
   if (!RESEND_API_KEY) return { ok: false, error: 'RESEND_API_KEY not set' };
+  try { const b = require('./brand-link'); html = b.autoLinkBrand(html, b.gpsDiagnosticLink(ctx)); } catch (_) {}
   try {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -135,9 +136,10 @@ async function sendEmail(to, subject, html) {
 }
 
 // Send one email to multiple recipients (visibility copies / notifications).
-async function sendEmailMulti(toArr, subject, html) {
+async function sendEmailMulti(toArr, subject, html, ctx) {
   const uniq = Array.from(new Set((toArr || []).map(e => String(e || '').trim().toLowerCase()).filter(Boolean)));
   if (!RESEND_API_KEY || !uniq.length) return { ok: false };
+  try { const b = require('./brand-link'); html = b.autoLinkBrand(html, b.gpsDiagnosticLink(ctx)); } catch (_) {}
   try {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -515,7 +517,7 @@ export default async function handler(req, res) {
             ? `Quick pre-work before the ${w.title} workshop (5-7 min)`
             : `Your follow-up survey for the ${w.title} workshop (5 min)`;
           const html = inviteHtml(c.name, w, phase, url);
-          const r = await sendEmail(c.email, subj, html);
+          const r = await sendEmail(c.email, subj, html, w);
           if (r.ok) { sent++; await sb(`/rest/v1/workshop_participants?id=eq.${enc(p.id)}`, 'PATCH', { invited_at: isoNow() }, { Prefer: 'return=minimal' }); }
         }
         // Use existing open timestamp if already set — don't overwrite the audit trail.
@@ -539,7 +541,7 @@ export default async function handler(req, res) {
         const rec = w.recommendation_json || recommendFrom(agg, w);
         const html = recapHtml(sponsor?.name || 'there', w, agg, findings, rec);
         const subj = `Recap & next steps — ${w.title}`;
-        const r = await sendEmail(to, subj, html);
+        const r = await sendEmail(to, subj, html, w);
         if (r.ok) await sb(`/rest/v1/workshops?id=eq.${enc(body.workshop_id)}`, 'PATCH', { recap_sent_at: isoNow(), updated_at: isoNow() }, { Prefer: 'return=minimal' });
         return res.status(200).json({ ok: r.ok, error: r.error });
       }
@@ -878,7 +880,7 @@ export default async function handler(req, res) {
           const url = `${PORTAL_BASE_URL}/workshop-survey?token=${enc(p.participant_token)}&phase=pre`;
           const subj = `Your ${w.title} survey — 5–10 minutes, completely confidential`;
           const html = inviteHtml(c.name, w, 'pre', url);
-          const r = await sendEmail(c.email, subj, html);
+          const r = await sendEmail(c.email, subj, html, w);
           if (r.ok) {
             sent++;
             await sb(`/rest/v1/workshop_participants?id=eq.${enc(p.id)}`, 'PATCH',
@@ -909,7 +911,7 @@ export default async function handler(req, res) {
         const url = `${PORTAL_BASE_URL}/workshop-survey?token=${enc(p.participant_token)}&phase=${phase}`;
         const subj = `Reminder: ${w.title} survey — still need your input`;
         const html = reminderHtml(c.name, w, phase, url, 'is still open');
-        const r = await sendEmail(c.email, subj, html);
+        const r = await sendEmail(c.email, subj, html, w);
         if (r.ok) {
           await sb(`/rest/v1/workshop_participants?id=eq.${enc(participantId)}`, 'PATCH',
             { invited_at: p.invited_at || isoNow(), last_reminder_at: isoNow() },
@@ -1352,7 +1354,7 @@ async function runReminders() {
         const url = `${PORTAL_BASE_URL}/workshop-survey?token=${enc(p.participant_token)}&phase=${phase}`;
         const when = days === 0 ? 'closes today' : `closes in ${days} day${days === 1 ? '' : 's'}`;
         const html = reminderHtml(c.name, w, phase, url, when);
-        const r = await sendEmail(c.email, `Reminder: your ${w.title} survey ${when}`, html);
+        const r = await sendEmail(c.email, `Reminder: your ${w.title} survey ${when}`, html, w);
         if (r.ok) nudged++;
       }
     }
