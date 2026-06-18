@@ -378,8 +378,12 @@ export default async function handler(req, res) {
         if (!workshopId || !rows.length) return res.status(400).json({ error: 'workshop_id and rows required' });
         // The org running this engagement — everyone added inherits it unless their row
         // specifies a different org or they already have one on file.
-        const wForOrg = await sbOne(`/rest/v1/workshops?id=eq.${enc(workshopId)}&select=client_org_name&limit=1`);
+        const wForOrg = await sbOne(`/rest/v1/workshops?id=eq.${enc(workshopId)}&select=client_org_name,engagement_kind&limit=1`);
         const workshopOrg = (wForOrg?.client_org_name || '').trim() || null;
+        // Assessment raters are not coaching clients. Keep them off the coach roster
+        // (archived + flagged) so the client list stays clean; they still function as
+        // workshop_participants for the assessment itself.
+        const isAssessmentRoster = (wForOrg?.engagement_kind === 'assessment');
         let created = 0, linked = 0, skipped = 0;
         for (const raw of rows) {
           const name  = (raw.name || '').trim();
@@ -398,6 +402,8 @@ export default async function handler(req, res) {
               name, email, title: raw.role || null, organization: rowOrg || workshopOrg,
               is_workshop_participant: true, in_coaching_program: false, is_active: true,
               gs_grade: rowGrade,
+              // Assessment raters are flagged + archived so they never appear as clients.
+              is_assessment_rater: isAssessmentRoster, is_archived: isAssessmentRoster,
               // Trial-account lifecycle: mark as a trial guest and start the day-clock.
               account_type: 'trial', invited_at: new Date().toISOString(),
             }, { Prefer: 'return=representation' });
