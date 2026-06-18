@@ -3749,7 +3749,13 @@ function wizS0() {
         <strong>What you'll do:</strong> pick the <em>one</em> thing you most want to improve, set a way to measure it, and track real progress. Setup takes about 10–15 minutes; after that it's about 5 minutes a week.<br><br>
         <strong>The deal:</strong> access is yours for 90 days — log in and complete at least one weekly check-in within your first 10 days to keep it. Growth only happens when you take action.
       </div>
-    </div>` : ''}
+    </div>` : (!wizIsEdit ? `<div class="card" style="border-left:4px solid #01949A;">
+      <div style="font-size:13px;line-height:1.65;color:#1a1a1a;">
+        <strong>What this is:</strong> your private space to turn your leadership goals into clear, trackable progress over the next 90 days.<br><br>
+        <strong>What you'll do:</strong> pick the one focus that matters most right now, set how you'll measure it, and keep it moving with a quick weekly check-in. Setup takes about 10–15 minutes; after that it's about 5 minutes a week.<br><br>
+        <strong>What you'll walk away with:</strong> a concrete 90-day plan and a simple rhythm to actually follow through — because growth only happens when you take action.
+      </div>
+    </div>` : '')}
     <div class="card">
       ${scoreHtml}
       ${hasDiag && !wizIsEdit ? `<div class="card-title" style="font-size:14px;margin-bottom:12px;">What\'s Pre-Built For You</div>${prefillList}` : ''}
