@@ -5805,6 +5805,10 @@ let DIAG_LINKED_CLIENT = null; // client record for the currently-open diagnosti
 let DIAG_CLIENTS         = [];
 let DIAG_COACHING_CLIENTS= []; // active clients with check-in status
 let DIAG_RATER_STATS     = {}; // { diagId: { total, responded, pct } }
+let DIAG_SEND_WS         = []; // workshops/assessments: roster ready, some not invited
+let DIAG_SEND_STAKE      = []; // coaching clients: stakeholders saved, survey not sent
+let DIAG_AWAITING_STAKE  = []; // coaching stakeholder surveys sent but not completed
+let _actionItemsLoaded   = false;
 let _diagBooted          = false;
 const DIAG_BASE_URL = window.location.origin;
 
@@ -5849,6 +5853,41 @@ async function loadDiagnostics() {
   }
 
   renderDiagList();
+}
+
+// Loads the cross-engagement "waiting on you" + "awaiting responses" signals for the
+// Today tab: workshop/assessment rosters not yet sent, and coaching stakeholders saved
+// but not yet surveyed. Diagnostic "raters ready" is derived inline from ALL_DIAGS.
+async function loadActionItems() {
+  try {
+    var ws = await cdSelect('workshops', { eq: { is_archived: false }, select: 'id,client_org_name,title,engagement_kind' }) || [];
+    var wids = ws.map(function(w){ return w.id; });
+    var wp = wids.length ? (await cdSelect('workshop_participants', { in: { workshop_id: wids }, select: 'workshop_id,invited_at,pre_completed_at' }) || []) : [];
+    DIAG_SEND_WS = ws.map(function(w){
+      var ps = wp.filter(function(p){ return p.workshop_id === w.id; });
+      return { id: w.id, who: (w.client_org_name || w.title), title: w.title, kind: (w.engagement_kind || 'workshop'),
+               total: ps.length,
+               notSent: ps.filter(function(p){ return !p.invited_at; }).length,
+               outstanding: ps.filter(function(p){ return p.invited_at && !p.pre_completed_at; }).length };
+    }).filter(function(x){ return x.total > 0; });
+  } catch (e) { DIAG_SEND_WS = []; }
+  try {
+    var st = await cdSelect('stakeholders', { eq: { is_active: true }, select: 'client_id' }) || [];
+    var cids = Array.from(new Set(st.map(function(s){ return s.client_id; }).filter(Boolean)));
+    var tk = cids.length ? (await cdSelect('survey_tokens', { in: { client_id: cids }, select: 'client_id,sent_at,used_at' }) || []) : [];
+    DIAG_SEND_STAKE = []; DIAG_AWAITING_STAKE = [];
+    cids.forEach(function(cid){
+      var cli = (typeof allClients !== 'undefined' ? allClients : []).find(function(c){ return c.id === cid; });
+      if (!cli || cli.is_archived) return;
+      var isCoach = cli.in_coaching_program || cli.is_active_coaching || cli.coaching_sessions_enabled;
+      if (!isCoach) return;
+      var shCount = st.filter(function(s){ return s.client_id === cid; }).length;
+      var sentCount = tk.filter(function(t){ return t.client_id === cid && t.sent_at; }).length;
+      var outstanding = tk.filter(function(t){ return t.client_id === cid && t.sent_at && !t.used_at; }).length;
+      if (shCount > 0 && sentCount === 0) DIAG_SEND_STAKE.push({ id: cid, who: cli.name, count: shCount });
+      if (outstanding > 0) DIAG_AWAITING_STAKE.push({ id: cid, who: cli.name, outstanding: outstanding });
+    });
+  } catch (e) { DIAG_SEND_STAKE = []; DIAG_AWAITING_STAKE = []; }
 }
 
 async function diagLoadClients() {
@@ -5924,6 +5963,8 @@ function fmtLastReminder(clientId){
 function renderDiagHome() {
   const el = document.getElementById('dashboardContent');
   if (!el) return;
+  // Lazy-load cross-engagement action signals once, then re-render with them.
+  if (!_actionItemsLoaded) { _actionItemsLoaded = true; loadActionItems().then(function(){ renderDiagHome(); }).catch(function(){}); }
 
   const now   = new Date();
   const hour  = now.getHours();
@@ -5949,14 +5990,65 @@ function renderDiagHome() {
   });
   // Stalled clients (gone quiet 2+ weeks) surface as their own stronger signal;
   // exclude them from the gentler weekly missed-check-in flag so they aren't double-listed.
-  const stalledClients = DIAG_COACHING_CLIENTS.filter(c => c.stalled);
-  const stalledIds   = new Set(stalledClients.map(c => c.id));
-  const missingCIs   = DIAG_COACHING_CLIENTS.filter(c => c.checkinStatus === 'overdue' && !stalledIds.has(c.id));
+  // Snooze: once you've sent a reminder, hide that client's flag for 48h. It
+  // reappears automatically if they still haven't checked in after the window.
+  const SNOOZE_MS = 48 * 3600 * 1000;
+  const recentlyReminded = (id) => {
+    const cr = (typeof allClients !== 'undefined' ? allClients : []).find(x => x.id === id);
+    return !!(cr && cr.last_checkin_reminder_at && (Date.now() - new Date(cr.last_checkin_reminder_at).getTime() < SNOOZE_MS));
+  };
+  const stalledAll   = DIAG_COACHING_CLIENTS.filter(c => c.stalled);
+  const stalledIds   = new Set(stalledAll.map(c => c.id));
+  const stalledClients = stalledAll.filter(c => !recentlyReminded(c.id));
+  const missingAll   = DIAG_COACHING_CLIENTS.filter(c => c.checkinStatus === 'overdue' && !stalledIds.has(c.id));
+  const missingCIs   = missingAll.filter(c => !recentlyReminded(c.id));
+  const snoozedCount = (stalledAll.length - stalledClients.length) + (missingAll.length - missingCIs.length);
   const reportsReviewReady = ALL_DIAGS.filter(d => d.report_generated_at && d.status === 'report_draft');
-  const attention    = closingUrgent.length + needReport.length + lowResponse.length + stalledClients.length + missingCIs.length + reportsReviewReady.length;
+  // ── Waiting on YOU: someone did their part, now it's your move ────────────────
+  const sendDiag  = (ALL_DIAGS || []).filter(d => d.raters_finalized_at && !d.invites_sent_at && !d.invites_scheduled_at && !d.survey_closed_at && !d.is_archived);
+  const wsSend    = (DIAG_SEND_WS || []).filter(w => w.notSent > 0);
+  const stakeSend = DIAG_SEND_STAKE || [];
+  const waitingOnYou = sendDiag.length + wsSend.length + stakeSend.length;
+  const attention    = waitingOnYou + closingUrgent.length + needReport.length + lowResponse.length + stalledClients.length + missingCIs.length + reportsReviewReady.length;
 
   // ── Needs Attention flags ────────────────────────────────────────────────────
   let flagsHtml = '';
+
+  // Waiting on YOU — shown first because the action is yours.
+  sendDiag.forEach(d => {
+    flagsHtml += `<div class="dflag" style="border-left:3px solid var(--d-blue);background:#eef4fb;">
+      <div style="font-size:22px;flex-shrink:0;margin-top:-2px;">📨</div>
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:700;color:var(--d-blue);">${d.client_name} finished their rater list — waiting on you to send invites</div>
+        <div style="font-size:12px;color:var(--d-mid);margin-top:3px;">Rater list submitted ${diagFormatDate(d.raters_finalized_at)}. Open the diagnostic and send the survey.</div>
+        <div style="margin-top:10px;"><button class="dbtn dbtn-outline dbtn-sm" onclick="showSection('diagnostics');openDiag('${d.id}')">Open &amp; send invites →</button></div>
+      </div>
+      <span class="dbadge dbadge-standard" style="flex-shrink:0;align-self:flex-start;">Diagnostic</span>
+    </div>`;
+  });
+  wsSend.forEach(w => {
+    const kindLabel = w.kind === 'assessment' ? 'assessment' : 'workshop';
+    flagsHtml += `<div class="dflag" style="border-left:3px solid var(--d-blue);background:#eef4fb;">
+      <div style="font-size:22px;flex-shrink:0;margin-top:-2px;">📨</div>
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:700;color:var(--d-blue);">${esc(w.who)} — ${kindLabel} roster ready, ${w.notSent} not invited yet</div>
+        <div style="font-size:12px;color:var(--d-mid);margin-top:3px;">The roster is uploaded. Open it and send the survey to whoever hasn't been invited.</div>
+        <div style="margin-top:10px;"><button class="dbtn dbtn-outline dbtn-sm" onclick="showSection('workshops', true);wsOpen('${w.id}')">Open &amp; send survey →</button></div>
+      </div>
+      <span class="dbadge dbadge-standard" style="flex-shrink:0;align-self:flex-start;">${w.kind === 'assessment' ? 'Assessment' : 'Workshop'}</span>
+    </div>`;
+  });
+  stakeSend.forEach(s => {
+    flagsHtml += `<div class="dflag" style="border-left:3px solid var(--d-blue);background:#eef4fb;">
+      <div style="font-size:22px;flex-shrink:0;margin-top:-2px;">📨</div>
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:700;color:var(--d-blue);">${esc(s.who)} added stakeholders — waiting on you to send their survey</div>
+        <div style="font-size:12px;color:var(--d-mid);margin-top:3px;">${s.count} stakeholder${s.count !== 1 ? 's' : ''} saved, no survey sent yet. Open their profile and send it.</div>
+        <div style="margin-top:10px;"><button class="dbtn dbtn-outline dbtn-sm" onclick="openClientProfile('${s.id}')">Open profile →</button></div>
+      </div>
+      <span class="dbadge dbadge-standard" style="flex-shrink:0;align-self:flex-start;">Coaching</span>
+    </div>`;
+  });
 
   closingUrgent.forEach(d => {
     const days  = diagDaysUntil(d.close_date);
@@ -6044,6 +6136,26 @@ function renderDiagHome() {
     </div>`;
   });
 
+  // ── Awaiting responses (you've sent — they haven't finished). Info, not action. ─
+  const _flaggedDiag = new Set([].concat(closingUrgent, lowResponse).map(d => d.id));
+  const awaitingRows = [];
+  (ALL_DIAGS || []).filter(d => d.status === 'survey_open' && !d.is_archived && !_flaggedDiag.has(d.id)).forEach(d => {
+    const s = DIAG_RATER_STATS[d.id];
+    if (s && s.total > 0 && s.responded < s.total) awaitingRows.push({ label: d.client_name + ' (diagnostic)', txt: s.responded + ' of ' + s.total + ' in', go: "showSection('diagnostics');openDiag('" + d.id + "')" });
+  });
+  (DIAG_SEND_WS || []).filter(w => w.outstanding > 0).forEach(w => {
+    const inv = w.total - w.notSent;
+    awaitingRows.push({ label: esc(w.who) + ' (' + (w.kind === 'assessment' ? 'assessment' : 'workshop') + ')', txt: (inv - w.outstanding) + ' of ' + inv + ' in', go: "showSection('workshops', true);wsOpen('" + w.id + "')" });
+  });
+  (DIAG_AWAITING_STAKE || []).forEach(s => {
+    awaitingRows.push({ label: esc(s.who) + ' (stakeholders)', txt: s.outstanding + ' still out', go: "openClientProfile('" + s.id + "')" });
+  });
+  if (awaitingRows.length) {
+    flagsHtml += `<div class="dflag dflag-gray"><div style="font-size:22px;flex-shrink:0;margin-top:-2px;">⏳</div><div style="flex:1;"><div style="font-size:13px;font-weight:700;color:var(--d-dark);">Awaiting responses (${awaitingRows.length})</div><div style="font-size:12px;color:var(--d-mid);margin-top:5px;line-height:1.8;">`
+      + awaitingRows.map(r => `• <a href="#" onclick="${r.go};return false;" style="color:var(--d-blue);text-decoration:none;">${r.label}</a> — ${r.txt}`).join('<br>')
+      + `</div></div></div>`;
+  }
+  if (snoozedCount > 0) flagsHtml += `<div style="font-size:12px;color:var(--d-mid);padding:10px 4px 0;border-top:1px dashed #e3e8ec;margin-top:6px;">✓ ${snoozedCount} recently nudged — hidden for 48 hours. They'll reappear if there's still no check-in.</div>`;
   const needsSection = flagsHtml
     ? `<div class="card" style="margin-bottom:20px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">

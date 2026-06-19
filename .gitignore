@@ -39,3 +39,6 @@ Thumbs.db
 
 # Node
 node_modules/
+
+# DB migration files with seeded secrets — never commit
+supabase-add-coach-settings.sql
