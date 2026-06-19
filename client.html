@@ -622,6 +622,8 @@
     }
     .ptab:hover { color: rgba(255,255,255,0.9); }
     .ptab.active { color: var(--sand); border-bottom-color: var(--teal); }
+    .ptab-locked { opacity: 0.45; cursor: help; }
+    .ptab-locked::after { content: ' 🔒'; font-size: 11px; opacity: 0.8; }
     .ptab-ask.active { border-bottom-color: var(--red); }
     .ptab-results.active { border-bottom-color: #C9A84C; }
 
@@ -3017,14 +3019,14 @@ function renderDiagActiveMode(d, raters) {
 
     ${renderDiagStepTracker(d)}
 
-    ${/* Step 2: Self-assessment */ selfRater && !d.self_assessment_completed_at ? `
+    ${/* Step 2: Self-assessment */ selfRater && !(d.self_assessment_completed_at || cur >= 4) ? `
     <div class="dc-card" style="border-left:4px solid #1A3D6E;">
       <h3>Your Self-Assessment</h3>
       <p>This is your starting point. Answer honestly — this is your lens, not a test. Takes about 15–20 minutes.</p>
       ${selfRater.token
         ? `<a href="/survey?token=${encodeURIComponent(selfRater.token)}" class="dc-btn dc-btn-primary" style="text-decoration:none;display:inline-block;">Start Self-Assessment →</a>`
         : `<p style="color:#6b7280;font-size:13px;">Your survey link isn\'t ready yet. Your coach will send it shortly.</p>`}
-    </div>` : d.self_assessment_completed_at ? `
+    </div>` : (d.self_assessment_completed_at || cur >= 4) ? `
     <div class="dc-card">
       <div class="dc-card-done">✓ Self-assessment complete</div>
     </div>` : ''}
@@ -3367,10 +3369,12 @@ async function loadClient() {
       // Always show tab nav once plan is submitted
       document.getElementById('portalTabNav').style.display = 'flex';
 
-      // Show Ask Alex tab only if explicitly enabled for this client
-      if (client.ask_alex_enabled === true) {
-        document.getElementById('tabAsk').style.display = '';
-        qaInitUI(); // initialize Q&A input listeners
+      // Ask Alex: visible to EVERYONE; locked (grayed) unless enabled for this client.
+      const _tabAsk = document.getElementById('tabAsk');
+      if (_tabAsk) {
+        _tabAsk.style.display = '';
+        if (client.ask_alex_enabled === true) { _tabAsk.classList.remove('ptab-locked'); qaInitUI(); }
+        else { _tabAsk.classList.add('ptab-locked'); }
       }
 
       // Show Workshops tab if this client is a sponsor on any workshops
@@ -3379,10 +3383,12 @@ async function loadClient() {
         renderWorkshopTab(myWorkshops);
       }
 
-      // Contact Your Coach is available to active coaching clients only.
-      if (client.is_coaching_client) {
-        const tc = document.getElementById('tabCoach');
-        if (tc) tc.style.display = '';
+      // Contact Your Coach: visible to EVERYONE; locked (grayed) unless an active coaching client.
+      const tc = document.getElementById('tabCoach');
+      if (tc) {
+        tc.style.display = '';
+        if (client.is_coaching_client) tc.classList.remove('ptab-locked');
+        else tc.classList.add('ptab-locked');
       }
 
       // Store survey data globally for Results tab
@@ -6216,6 +6222,15 @@ function emailHistItem(i, btn) {
 }
 
 function showPortalTab(tab) {
+  // Locked tabs: visible to everyone, but access-gated.
+  if (tab === 'coach' && !(currentClient && currentClient.is_coaching_client)) {
+    alert('Contact Your Coach is part of an active 1:1 coaching engagement. To work with Alex directly, reach out to team@gpsleadership.org.');
+    return;
+  }
+  if (tab === 'ask' && !(currentClient && currentClient.ask_alex_enabled === true)) {
+    alert('Ask Alex is available on coaching engagements. Ask about enabling it for your account.');
+    return;
+  }
   const mainContent   = document.getElementById('mainContent');
   const qaPanel       = document.getElementById('qaPanel');
   const resultsPanel  = document.getElementById('resultsPanel');

@@ -2369,6 +2369,7 @@ async function handleNudgeCheckin(req, res) {
     const link = `${PORTAL_BASE}/client?token=${c.token}`;
     const first = String(c.preferred_name || c.name || 'there').split(' ')[0];
     await sendEmail({ to: c.email, subject: 'Quick reminder: your weekly check-in', html: buildNudgeEmail({ first, link, message }), emailType: 'checkin_nudge', recipientName: c.name });
+    try { await sb(`/rest/v1/clients?id=eq.${client_id}`, 'PATCH', { last_checkin_reminder_at: new Date().toISOString() }, { Prefer: 'return=minimal' }); } catch (_) {}
     // SMS path (future): with an SMS provider configured (e.g. Twilio creds in env)
     // and the client's mobile + opt-in, also send a text with the same link here.
     return res.status(200).json({ ok: true, email_sent: true, to: c.email });

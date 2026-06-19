@@ -1992,7 +1992,7 @@ function renderClients() {
   const industryF =  document.getElementById('clientIndustryFilter')?.value   || 'all';
 
   let filtered = allClients.filter(c => {
-    if (currentFilter === 'active')   return c.is_active && !c.is_archived;
+    if (currentFilter === 'active')   return (c.is_active || c.in_coaching_program || c.is_active_coaching || c.coaching_sessions_enabled) && !c.is_archived;
     if (currentFilter === 'complete') return !c.is_active && !c.is_archived && c.plan_submitted_at;
     if (currentFilter === 'archived') return c.is_archived;
     return !c.is_archived; // 'all' excludes archived
@@ -5913,6 +5913,14 @@ function diagStatCard(n, label, numColor, topBorderClass) {
   </div>`;
 }
 
+function fmtLastReminder(clientId){
+  var c=(typeof allClients!=='undefined'?allClients:[]).find(function(x){return x.id===clientId;});
+  var iso=c&&c.last_checkin_reminder_at; if(!iso) return '';
+  var d=new Date(iso); if(isNaN(d.getTime())) return '';
+  var n=Math.floor((Date.now()-d.getTime())/86400000);
+  var rel=n<=0?'today':n===1?'yesterday':n+' days ago';
+  return '<div style="font-size:11px;color:var(--d-mid);margin-top:6px;">Last reminder sent '+d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' · '+rel+'</div>';
+}
 function renderDiagHome() {
   const el = document.getElementById('dashboardContent');
   if (!el) return;
@@ -6002,7 +6010,8 @@ function renderDiagHome() {
       <div style="flex:1;">
         <div style="font-size:13px;font-weight:700;color:var(--d-amber);">${c.name} has gone quiet</div>
         <div style="font-size:12px;color:var(--d-mid);margin-top:3px;">${gapTxt} Week ${c.currentWeek} of 13. A quick nudge now keeps momentum before they drift.</div>
-        <div style="margin-top:10px;"><button class="dbtn dbtn-outline dbtn-sm" onclick="drNudgeClient('${c.id}','${(c.name||'').replace(/'/g,"\\'")}')">Send reminder</button></div>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;"><button class="dbtn dbtn-outline dbtn-sm" onclick="drNudgeClient('${c.id}','${(c.name||'').replace(/'/g,"\\'")}')">Send reminder</button><button class="dbtn dbtn-outline dbtn-sm" onclick="openClientProfile('${c.id}')">View profile →</button></div>
+        ${fmtLastReminder(c.id)}
       </div>
       <span class="dbadge dbadge-standard" style="flex-shrink:0;align-self:flex-start;">Coaching</span>
     </div>`;
@@ -6014,9 +6023,11 @@ function renderDiagHome() {
       <div style="flex:1;">
         <div style="font-size:13px;font-weight:700;color:var(--d-dark);">${c.name} hasn't submitted this week's check-in</div>
         <div style="font-size:12px;color:var(--d-mid);margin-top:3px;">${c.lastCIDate ? `Last submitted ${c.lastCIDate}.` : 'No check-ins yet.'} Check in or send a nudge.</div>
+        ${fmtLastReminder(c.id)}
       </div>
-      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;align-self:flex-start;">
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;align-self:flex-start;flex-wrap:wrap;justify-content:flex-end;">
         <button class="dbtn dbtn-outline dbtn-sm" onclick="drNudgeClient('${c.id}','${(c.name||'').replace(/'/g,"\\'")}')">Send reminder</button>
+        <button class="dbtn dbtn-outline dbtn-sm" onclick="openClientProfile('${c.id}')">View profile →</button>
         <span class="dbadge dbadge-standard">Coaching</span>
       </div>
     </div>`;
@@ -9048,6 +9059,9 @@ async function drNudgeClient(clientId, name){
     var r=await fetch('/api/diagnostic?action=nudge-checkin',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ client_id:clientId, session:getCoachSessionToken(), message: (msg.trim()||null) }) });
     var j=await r.json().catch(function(){return{};});
     if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+    var cc=(typeof allClients!=='undefined'?allClients:[]).find(function(x){return x.id===clientId;});
+    if(cc) cc.last_checkin_reminder_at=new Date().toISOString();
+    if(typeof renderDiagHome==='function') renderDiagHome();
     alert('Reminder emailed to '+(j.to||name||'the client')+'.');
   }catch(e){ alert('Could not send reminder: '+e.message); }
 }
@@ -9779,7 +9793,7 @@ async function drSendSponsor(sponsorId){
       '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><label style="font-size:12px;font-weight:700;color:#5a6b76;">Or upload a file (XLSX or CSV):</label><input type="file" id="wsRosterXlsx" accept=".xlsx,.xls,.csv" style="font-size:13px;flex:1;"></div>'+
       '<div style="margin-top:10px;">'+btn('wsUpload','Upload roster')+'</div><div id="wsRosterOut" style="font-size:13px;margin-top:8px;color:#5a6b76;"></div>'+
       '<div style="margin-top:16px;padding-top:14px;border-top:1px solid #eef1f2;"><div style="font-weight:800;margin-bottom:6px;color:#004369;">Add one participant</div><div style="font-size:12px;color:#5a6b76;margin-bottom:8px;">For a single person (e.g. a late add or walk-in). Name and email required.</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"><input id="wsAddName" placeholder="Full name" style="flex:1;min-width:140px;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;"><input id="wsAddEmail" placeholder="Email" style="flex:1;min-width:160px;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;"><input id="wsAddRole" placeholder="Title / role (optional)" style="flex:1;min-width:160px;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;">'+btn('wsAddOne','+ Add participant')+'</div><div id="wsAddOut" style="font-size:13px;margin-top:8px;color:#5a6b76;"></div></div>')+
-    card('<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;" id="wsRosterHdr"><div style="font-weight:800;color:#004369;">Participants ('+WS.parts.length+')</div><div>'+btn('wsSendPre',(isA?'Send survey emails (not-sent)':'Send pre-survey'))+(isA?'':btn('wsSendPost','Send post-survey (email)','ghost'))+btn('wsSendWelcomeAll','✉ Welcome selected to portal','ghost')+btn('wsRemoveSelected','🗑 Remove selected','danger')+'</div></div><div id="wsRosterTable"><div style="color:#5a6b76;font-size:13px;">Loading roster…</div></div>');
+    card('<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;" id="wsRosterHdr"><div style="font-weight:800;color:#004369;">Participants ('+WS.parts.length+')</div><div>'+btn('wsSendPre',(isA?'Send survey emails (not-sent)':'Send pre-survey'))+(isA?'':btn('wsSendPost','Send post-survey (email)','ghost'))+(isA?'':btn('wsSendWelcomeAll','✉ Welcome selected to portal','ghost'))+btn('wsRemoveSelected','🗑 Remove selected','danger')+'</div></div><div id="wsRosterTable"><div style="color:#5a6b76;font-size:13px;">Loading roster…</div></div>');
     var qrGen=document.getElementById('wsQrGen'); if(qrGen){ wsRenderQR(); qrGen.onclick=wsRenderQR; var qrDl=document.getElementById('wsQrDl'); if(qrDl) qrDl.onclick=wsDownloadQR; }
     document.getElementById('wsUpload').onclick=wsUploadRoster;
     var addOneBtn=document.getElementById('wsAddOne'); if(addOneBtn) addOneBtn.onclick=wsAddOneParticipant;
