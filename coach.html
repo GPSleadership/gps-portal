@@ -4103,7 +4103,7 @@ function showSection(name, skipHooks) {
   if (name === 'messages')    loadCoachInbox();
   if (name === 'admins')      loadAdminAccounts();
   if (name === 'templates')   loadEmailTemplates();
-  if (name === 'dashboard')   { renderDiagHome(); refreshMsgBadge(); }
+  if (name === 'dashboard')   { _actionItemsLoaded = false; renderDiagHome(); refreshMsgBadge(); }
   if (name === 'diagnostics') { diagBoot(); renderDiagTable(); }
   if (name === 'organizations') renderOrganizations();
   if (name === 'insights')    renderCoachInsights();

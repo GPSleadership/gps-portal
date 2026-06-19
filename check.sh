@@ -47,6 +47,21 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "  GPS Portal Pre-Push Check"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+# ── 0. Core files must exist (guards against a broken/empty "delete-everything" commit) ──
+echo ""
+echo "▸ Core files present"
+CORE_FILES=("coach.html" "client.html" "diagnostic-survey.html" "survey.html" "vercel.json" "api/health.js" "api/coach-data.js" "api/diagnostic.js" "api/get-client.js")
+MISSING=0
+for f in "${CORE_FILES[@]}"; do
+  if [ ! -f "$f" ]; then
+    echo "  ✗ MISSING: $f — refusing to push. This looks like a broken/empty commit."
+    ERRORS=$((ERRORS + 1)); MISSING=$((MISSING + 1))
+  fi
+done
+if [ "$MISSING" -eq 0 ]; then
+  echo "  ✓ All ${#CORE_FILES[@]} core files present"
+fi
+
 # ── 1. JS syntax check on all HTML files ──────────────────────────────────────
 echo ""
 echo "▸ JavaScript syntax"
