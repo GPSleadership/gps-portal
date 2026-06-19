@@ -512,7 +512,8 @@ export default async function handler(req, res) {
       }
     } catch (_) { /* fall back to built-in copy */ }
 
-    const ctaBtn = `<div style="text-align:center;margin:28px 0;"><a href="${portalURL}" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;">Open My Portal →</a></div>`;
+    const ctaBtn = `<div style="text-align:center;margin:28px 0;"><a href="${portalURL}" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;">Open My Portal →</a></div>`
+      + `<p style="text-align:center;font-size:13px;color:#555;margin:0 0 8px;">If the button doesn't open (some workplace email systems block links), copy and paste this into your browser:<br><span style="color:#004369;word-break:break-all;">${portalURL}</span></p>`;
     const fill = (s) => (s || '')
       .replace(/\{\{\s*first_name\s*\}\}/gi, firstName)
       .replace(/\{\{\s*organization\s*\}\}/gi, org)

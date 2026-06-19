@@ -848,10 +848,30 @@
       <div class="section-subtab active" id="sub-emails"    onclick="showSection('emails')">Email Log</div>
       <div class="section-subtab"        id="sub-messages"  onclick="showSection('messages')">Client Messages <span id="msgNavBadge" style="display:none;background:#C0392B;color:#fff;border-radius:9px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:4px;">0</span></div>
       <div class="section-subtab"        id="sub-templates" onclick="showSection('templates')">Templates &amp; Automation</div>
+      <div class="section-subtab"        id="sub-accesshelp" onclick="showSection('accesshelp')">Access &amp; IT</div>
     </div>
     <div id="subnav-settings" class="section-subnav" style="display:none;">
       <div class="section-subtab active" id="sub-admins"   onclick="showSection('admins')">Admin Accounts</div>
       <div class="section-subtab"        id="sub-security" onclick="showSection('security')">Account &amp; Security</div>
+    </div>
+
+    <!-- ═══ ACCESS & IT (allowlist sheet) SECTION ═══ -->
+    <div id="section-accesshelp" style="display:none;">
+      <div class="card" style="max-width:760px;">
+        <div style="font-family:'Montserrat',sans-serif;font-size:18px;font-weight:800;color:var(--navy);margin-bottom:6px;">Portal access &amp; IT allowlist</div>
+        <p style="font-size:13px;color:var(--gray-600);line-height:1.6;margin-bottom:14px;">When a client in a locked-down environment (government, large corporate) can't open their portal link, it's almost always their email-security or web filter. Send them the note below to forward to their IT team. It's also attached automatically to the diagnostic link email.</p>
+        <div style="background:#f6faf9;border:1px solid var(--gray-300);border-radius:8px;padding:14px 16px;font-size:13px;line-height:1.7;color:#2f3f48;" id="allowlistLetter">Hi team,
+
+I'm taking part in a leadership assessment run by GPS Leadership Solutions. Their portal link won't open on our network. Could you please allowlist the website portal.gpsleadership.org (and gpsleadership.org) and emails from gpsleadership.org, and exclude them from link rewriting/sandboxing? It's a standard, confidential assessment site — no downloads or attachments. Thank you.</div>
+        <button onclick="(function(){var t=document.getElementById('allowlistLetter').innerText;navigator.clipboard.writeText(t).then(function(){var b=event.target;var o=b.textContent;b.textContent='✓ Copied';setTimeout(function(){b.textContent=o;},1500);});})()" style="margin-top:12px;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;border:none;background:var(--navy);color:#fff;font-family:'Montserrat',sans-serif;">Copy letter</button>
+        <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--gray-200);font-size:12.5px;color:var(--gray-600);line-height:1.7;">
+          <strong style="color:var(--navy);">What their IT should allowlist:</strong><br>
+          • Website: <strong>portal.gpsleadership.org</strong> and <strong>gpsleadership.org</strong> (exclude from URL rewriting / sandboxing)<br>
+          • Email senders: <strong>alex@gpsleadership.org</strong>, <strong>team@gpsleadership.org</strong><br>
+          • Email auth: mail authenticates as gpsleadership.org (SPF/DKIM/DMARC) via Resend<br>
+          • Links point only to https://portal.gpsleadership.org — don't alter the token in the address
+        </div>
+      </div>
     </div>
 
     <!-- ═══ COACH INSIGHTS SECTION ═══ -->
@@ -3938,7 +3958,7 @@ document.getElementById('addAdminModal').addEventListener('click', function(e) {
 let _currentSection = 'dashboard';
 
 // Refactored IA: 5 top-level groups, each mapping to one or more underlying sections.
-var GROUP_OF = { dashboard:'today', clients:'clients', insights:'insights', diagnostics:'diagteams', decisionroom:'diagteams', emails:'comms', messages:'comms', templates:'comms', admins:'settings', security:'settings', workshops:'workshops', organizations:'organizations' };
+var GROUP_OF = { dashboard:'today', clients:'clients', insights:'insights', diagnostics:'diagteams', decisionroom:'diagteams', emails:'comms', messages:'comms', templates:'comms', accesshelp:'comms', admins:'settings', security:'settings', workshops:'workshops', organizations:'organizations' };
 var GROUP_DEFAULT = { today:'dashboard', clients:'clients', insights:'insights', diagteams:'diagnostics', comms:'emails', settings:'admins', workshops:'workshops', organizations:'organizations' };
 function showGroup(group){ showSection(GROUP_DEFAULT[group] || 'dashboard'); }
 
@@ -4054,7 +4074,7 @@ function showSection(name, skipHooks) {
   _currentSection = name;
   try { localStorage.setItem('gps_coach_section', name); } catch (_) {}
   // Toggle the underlying content sections.
-  ['dashboard', 'clients', 'insights', 'emails', 'messages', 'templates', 'admins', 'security', 'diagnostics', 'decisionroom', 'workshops', 'organizations'].forEach(s => {
+  ['dashboard', 'clients', 'insights', 'emails', 'messages', 'templates', 'accesshelp', 'admins', 'security', 'diagnostics', 'decisionroom', 'workshops', 'organizations'].forEach(s => {
     var sec = document.getElementById('section-' + s);
     if (sec) sec.style.display = s === name ? 'block' : 'none';
   });
@@ -7006,6 +7026,7 @@ function renderReportTab() {
       The finalize step will fail until you generate one. Open the client profile → scroll to Portal Access → generate a link.</div>
     </div>` : ''}
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+      ${done>=1 ? `<button class="dbtn dbtn-outline" onclick="viewCurrentScores()">📊 View current scores (numbers only)</button>` : ''}
       <button class="dbtn dbtn-primary" ${canGenerate?'':'disabled'} onclick="generateReport(event)">
         ⚙ Generate Draft Report (Claude)
       </button>
@@ -7546,6 +7567,45 @@ async function generateReportOverride() {
   }
   // Proceed — generateReport expects an event; pass null and call directly
   await generateReport(null);
+}
+
+// Numbers-only scores view. Computes the TP3 averages from responses in the browser —
+// no Claude call, so it never times out and works while the survey is still open.
+async function viewCurrentScores() {
+  const d = DIAG_SEL; if (!d) return;
+  let resp = [];
+  try { resp = await cdSelect('diagnostic_responses', { eq: { diagnostic_id: d.id }, select: 'question_code,score,rater_id' }); }
+  catch (e) { alert('Could not load responses: ' + e.message); return; }
+  const rated = (resp || []).filter(r => r.score != null);
+  if (!rated.length) { alert('No scored responses yet.'); return; }
+  const avg = codes => { const v = rated.filter(r => codes.includes(r.question_code)).map(r => +r.score); return v.length ? v.reduce((a,b)=>a+b,0)/v.length : null; };
+  const cnt = codes => rated.filter(r => codes.includes(r.question_code)).length;
+  const trust = avg(['A1','A2','A3','A4','A5','A6','A7']), pro = avg(['B1','B2','B3','B4','B5','B6']), prod = avg(['C1','C2','C3','C4','C5','C6']);
+  const impact = avg(['D1']), bench = avg(['F1','F2']);
+  const tp3v = [trust,pro,prod].filter(x => x != null);
+  const tp3 = tp3v.length ? tp3v.reduce((a,b)=>a+b,0)/tp3v.length : null;
+  const ratersEst = Math.round(cnt(['A1','A2','A3','A4','A5','A6','A7']) / 7) || (new Set(rated.map(r=>r.rater_id).filter(Boolean)).size);
+  const f = x => x == null ? '—' : x.toFixed(2);
+  const row = (label, val, n) => '<tr style="border-top:1px solid #eef1f2;"><td style="padding:8px 10px;">' + label + '</td><td style="padding:8px 10px;text-align:right;font-weight:800;color:#004369;">' + f(val) + '<span style="color:#9aa7ad;font-weight:400;font-size:12px;">/5</span></td><td style="padding:8px 10px;text-align:right;color:#5a6b76;font-size:12px;">' + n + '</td></tr>';
+  var ov = document.getElementById('scoresOverlay'); if (ov) ov.remove();
+  ov = document.createElement('div'); ov.id = 'scoresOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(4,36,58,.45);z-index:9600;display:flex;align-items:center;justify-content:center;padding:20px;';
+  ov.onclick = function(e){ if (e.target === ov) ov.remove(); };
+  ov.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:520px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden;">'
+    + '<div style="background:#04243a;color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;"><div style="font-family:Montserrat,sans-serif;font-weight:800;">Current scores — ' + esc(d.client_name||'') + '</div><div onclick="var o=document.getElementById(\'scoresOverlay\');if(o)o.remove();" style="cursor:pointer;font-size:20px;opacity:.8;">×</div></div>'
+    + '<div style="padding:16px 20px;">'
+    + '<div style="font-size:12px;color:#5a6b76;margin-bottom:10px;">' + (d.status==='survey_open'?'Survey still open — live so far. ':'') + '~' + ratersEst + ' raters in. Numbers only; no analysis.</div>'
+    + '<table style="width:100%;border-collapse:collapse;font-size:14px;"><thead><tr style="background:#F7F4EE;text-align:left;color:#5a6b76;font-size:11px;text-transform:uppercase;"><th style="padding:7px 10px;">Dimension</th><th style="padding:7px 10px;text-align:right;">Avg</th><th style="padding:7px 10px;text-align:right;">n</th></tr></thead><tbody>'
+    + row('Trust (A1–A7)', trust, cnt(['A1','A2','A3','A4','A5','A6','A7']))
+    + row('Proactivity (B1–B6)', pro, cnt(['B1','B2','B3','B4','B5','B6']))
+    + row('Productivity (C1–C6)', prod, cnt(['C1','C2','C3','C4','C5','C6']))
+    + '<tr style="border-top:2px solid #dce5e7;"><td style="padding:8px 10px;font-weight:800;color:#04342C;">TP3 Index</td><td style="padding:8px 10px;text-align:right;font-weight:800;color:#0F6E56;">' + f(tp3) + '<span style="color:#9aa7ad;font-weight:400;font-size:12px;">/5</span></td><td></td></tr>'
+    + row('Overall impact (D1)', impact, cnt(['D1']))
+    + row('Bench / succession (F1–F2)', bench, cnt(['F1','F2']))
+    + '</tbody></table>'
+    + '<div style="font-size:11px;color:#9aa7ad;margin-top:10px;">Live snapshot. The full written report (with analysis) is generated separately after the survey closes.</div>'
+    + '</div></div>';
+  document.body.appendChild(ov);
 }
 
 // Private coach preview while the survey is still open. Generates a draft WITHOUT
