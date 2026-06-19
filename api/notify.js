@@ -374,10 +374,11 @@ export default async function handler(req, res) {
           <div style="background:#ffffff;padding:28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
             <p>Hi ${firstName},</p>
             <p>Your Leadership Impact Portal link has been updated. Use the link below going forward — your previous link is no longer active.</p>
-            <div style="text-align:center;margin:28px 0;">
+            <div style="text-align:center;margin:28px 0 0;">
               <a href="${portalURL}" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;">Open My Leadership Portal →</a>
             </div>
-            <ul style="font-size:13px;color:#444;padding-left:20px;">
+            ${(function(){ try { return require('./brand-link').pasteLink(portalURL, 'center'); } catch (_) { return ''; } })()}
+            <ul style="font-size:13px;color:#444;padding-left:20px;margin-top:16px;">
               <li style="margin-bottom:8px;">Bookmark this new link or save it to your favorites so you can access it easily from your phone or computer.</li>
               <li>There is no username or password — your unique link is your access.</li>
             </ul>
@@ -406,9 +407,10 @@ export default async function handler(req, res) {
             <div style="margin:28px 0;padding:20px 24px;background:#f5f9f9;border-left:4px solid #01949A;border-radius:0 6px 6px 0;">
               <div style="font-weight:700;color:#004369;font-size:14px;margin-bottom:12px;">How to access your portal</div>
               <p style="margin:0 0 16px;font-size:14px;">Your personal access link is below:</p>
-              <div style="text-align:center;margin:16px 0;">
+              <div style="text-align:center;margin:16px 0 0;">
                 <a href="${portalURL}" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;">Open My Leadership Portal →</a>
               </div>
+              ${(function(){ try { return require('./brand-link').pasteLink(portalURL, 'center'); } catch (_) { return ''; } })()}
               <ul style="font-size:13px;color:#444;padding-left:20px;margin:12px 0 0;">
                 <li style="margin-bottom:8px;">This link is unique to you. Please do not share or forward it.</li>
                 <li style="margin-bottom:8px;">Bookmark it or add it to your favorites so you can get back in easily from your phone or computer.</li>
@@ -590,9 +592,10 @@ export default async function handler(req, res) {
       </div>`;
 
     const portalBtn = portalURL ? `
-      <div style="margin:24px 0;">
+      <div style="margin:24px 0 0;">
         <a href="${portalURL}" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:13px 28px;border-radius:8px;font-size:15px;font-weight:700;">Open My Leadership Portal →</a>
-      </div>` : '';
+      </div>
+      ${(function(){ try { return require('./brand-link').pasteLink(portalURL); } catch (_) { return ''; } })()}` : '';
 
     let wrSubject, wrHtml;
 
@@ -737,9 +740,10 @@ export default async function handler(req, res) {
 
           <div style="margin:28px 0;padding:20px 24px;background:#f5f9f9;border-left:4px solid #01949A;border-radius:0 6px 6px 0;">
             <div style="font-weight:700;color:#004369;font-size:14px;margin-bottom:12px;">Access your portal here</div>
-            <div style="text-align:center;margin:16px 0;">
+            <div style="text-align:center;margin:16px 0 0;">
               <a href="${portalURL}" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;">Open My Coaching Portal &rarr;</a>
             </div>
+            ${(function(){ try { return require('./brand-link').pasteLink(portalURL, 'center'); } catch (_) { return ''; } })()}
             <ul style="font-size:13px;color:#444;padding-left:20px;margin:12px 0 0;">
               <li style="margin-bottom:8px;">This link is unique to you. Please do not share or forward it. It signs you in automatically.</li>
               <li style="margin-bottom:8px;"><b>Save it so it is one tap away.</b> On your iPhone: open the link in Safari or Chrome, tap the Share button (the square with the up arrow), then choose &ldquo;Add to Home Screen.&rdquo; You will get a GPS icon you tap like any app. On Android: open it in Chrome and tap &ldquo;Add to Home screen.&rdquo; On your computer: bookmark it (Cmd+D / Ctrl+D).</li>

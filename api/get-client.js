@@ -101,8 +101,9 @@ function buildSponsorInviteEmail(name, url) {
     + '<h2 style="color:#004369;">Your Leadership Decision Room</h2>'
     + '<p>Hi ' + first + ',</p>'
     + '<p>Your GPS Leadership Decision Room is ready. It gives you a fast, current read on your leadership team — where they stand, what is already in motion, and the highest-leverage next moves.</p>'
-    + '<p style="margin:24px 0;"><a href="' + url + '" style="background:#01949A;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:700;">Open your Decision Room</a></p>'
-    + '<p style="font-size:12px;color:#666;">This private link is just for you. Please do not forward it.</p>'
+    + '<p style="margin:24px 0 0;"><a href="' + url + '" style="background:#01949A;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:700;">Open your Decision Room</a></p>'
+    + (function(){ try { return require('./brand-link').pasteLink(url); } catch (_) { return ''; } })()
+    + '<p style="font-size:12px;color:#666;margin-top:16px;">This private link is just for you. Please do not forward it.</p>'
     + '<p style="font-size:12px;color:#666;">— Alex Tremble, GPS Leadership Solutions</p></div>';
 }
 async function sponsorInvite(body, res) {

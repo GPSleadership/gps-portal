@@ -1373,13 +1373,16 @@ function shell(inner) {
   return `<div style="font-family:'Open Sans',Arial,sans-serif;max-width:560px;margin:0 auto;color:#1a2332;line-height:1.55;font-size:15px;">${inner}<p style="margin-top:28px;color:#6b7280;font-size:13px;">— Alex Tremble, GPS Leadership Solutions</p></div>`;
 }
 function btn(url, label) {
-  return `<p style="margin:22px 0;"><a href="${url}" style="background:#0d9488;color:#fff;text-decoration:none;padding:12px 22px;border-radius:6px;font-weight:700;display:inline-block;">${label}</a></p>`;
+  let pl = '';
+  try { pl = require('./brand-link').pasteLink(url); } catch (_) {}
+  return `<p style="margin:22px 0;"><a href="${url}" style="background:#0d9488;color:#fff;text-decoration:none;padding:12px 22px;border-radius:6px;font-weight:700;display:inline-block;">${label}</a></p>${pl}`;
 }
 function inviteHtml(name, w, phase, url) {
   const lead = phase === 'pre'
     ? `Before our <strong>${w.title}</strong> session, I'd like your honest read on how the team is operating today. It takes about 5-7 minutes and your answers are confidential — I only ever share the team-level picture.`
     : `Now that the <strong>${w.title}</strong> workshop is behind us, a short follow-up (about 5 minutes) helps us see what actually shifted. Confidential, team-level only.`;
-  return shell(`<p>Hi ${escEmail(name)},</p><p>${lead}</p>${btn(url, phase === 'pre' ? 'Start the pre-work (5-7 min)' : 'Start the follow-up (5 min)')}<p style="color:#6b7280;font-size:13px;">You can save and come back to this link anytime before it closes.</p>`);
+  const itNote = `<div style="background:#fbf7ec;border:1px solid #e8dcb8;border-radius:8px;padding:14px 18px;margin:18px 0;font-size:13px;color:#5a4a1f;line-height:1.6;"><strong>If the link won't open:</strong> some organizations' security tools block or rewrite outside links. If that happens, forward this note to your IT team:<br><br><em>"Please allowlist the website portal.gpsleadership.org (and gpsleadership.org) and emails from gpsleadership.org, and exclude them from link rewriting/sandboxing. It is a standard, confidential survey with no downloads or attachments."</em></div>`;
+  return shell(`<p>Hi ${escEmail(name)},</p><p>${lead}</p>${btn(url, phase === 'pre' ? 'Start the pre-work (5-7 min)' : 'Start the follow-up (5 min)')}${itNote}<p style="color:#6b7280;font-size:13px;">You can save and come back to this link anytime before it closes.</p>`);
 }
 function reminderHtml(name, w, phase, url, when) {
   return shell(`<p>Hi ${escEmail(name)},</p><p>A quick nudge — your ${phase === 'pre' ? 'pre-work' : 'follow-up'} survey for <strong>${w.title}</strong> ${when}. It only takes a few minutes and your input shapes what we focus on.</p>${btn(url, 'Finish the survey')}`);

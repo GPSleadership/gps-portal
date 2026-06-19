@@ -412,6 +412,8 @@ function buildSubject(clientFirstName, reminderNum) {
 function buildReminderHtml(stakeholderName, clientFirstName, surveyLink, reminderNum) {
   const p   = t => `<p style="color:#1B2A4A;font-size:15px;line-height:1.75;margin:0 0 14px;">${t}</p>`;
 
+  let _remPaste = '';
+  try { _remPaste = require('./brand-link').pasteLink(surveyLink, 'center'); } catch (_) {}
   const ctaBtn = `
     <div style="text-align:center;margin:28px 0;">
       <a href="${surveyLink}"
@@ -420,7 +422,8 @@ function buildReminderHtml(stakeholderName, clientFirstName, surveyLink, reminde
         Complete the Survey →
       </a>
     </div>
-    <p style="color:#9CA3AF;font-size:12px;text-align:center;margin:0 0 4px;">
+    ${_remPaste}
+    <p style="color:#9CA3AF;font-size:12px;text-align:center;margin:8px 0 4px;">
       This link is unique to you.
     </p>`;
 

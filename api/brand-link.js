@@ -50,4 +50,17 @@ function autoLinkBrand(html, url) {
   });
 }
 
-module.exports = { gpsDiagnosticLink, autoLinkBrand, LINK_TRUCK, LINK_GOV, LINK_EXEC };
+// STANDARD: a paste-able raw-link fallback to place directly under any CTA button
+// in an external email. Workplace email security (Proofpoint/Microsoft Safe Links,
+// web filters, etc.) frequently rewrites or strips the button's link, so a click
+// does nothing. This gives the recipient the real URL to copy and paste. Use this
+// under EVERY survey-link or portal-link button we send to an external recipient.
+function pasteLink(url, align) {
+  if (!url) return '';
+  align = align || 'left';
+  return '<p style="text-align:' + align + ';font-size:13px;color:#555;margin:8px 0 0;line-height:1.5;">'
+    + 'Button not working? Some workplace email systems block links. Copy and paste this address into your browser:<br>'
+    + '<span style="color:#004369;word-break:break-all;">' + url + '</span></p>';
+}
+
+module.exports = { gpsDiagnosticLink, autoLinkBrand, pasteLink, LINK_TRUCK, LINK_GOV, LINK_EXEC };

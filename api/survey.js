@@ -113,13 +113,16 @@ function buildSendEmailHtml(stakeholderName, clientName, checkpoint, priorityBeh
       "${priorityBehavior}"
     </div>`;
 
+  let _surveyPaste = '';
+  try { _surveyPaste = require('./brand-link').pasteLink(surveyLink, 'center'); } catch (_) {}
   const ctaBtn = `
     <div style="text-align:center;margin:28px 0;">
       <a href="${surveyLink}" style="display:inline-block;background:#1B2A4A;color:#FFFFFF;text-decoration:none;padding:14px 36px;border-radius:8px;font-size:15px;font-weight:700;">
         Complete the Survey →
       </a>
     </div>
-    <p style="color:#9CA3AF;font-size:12px;line-height:1.5;margin:0 0 4px;text-align:center;">
+    ${_surveyPaste}
+    <p style="color:#9CA3AF;font-size:12px;line-height:1.5;margin:8px 0 4px;text-align:center;">
       This link is unique to you and expires in 30 days.
     </p>`;
 

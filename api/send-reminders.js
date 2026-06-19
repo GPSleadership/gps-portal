@@ -188,12 +188,13 @@ export default async function handler(req, res) {
 
           <p>The leaders who move fastest are the ones who stay honest with themselves weekly — not just on coaching calls.</p>
 
-          <div style="margin:28px 0;text-align:center;">
+          <div style="margin:28px 0 0;text-align:center;">
             <a href="${portalLink}"
                style="background:#004369;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;display:inline-block;letter-spacing:0.3px;">
               Complete My Week ${currentWeek} Check-In →
             </a>
           </div>
+          ${(() => { try { return require('./brand-link').pasteLink(portalLink, 'center'); } catch (_) { return ''; } })()}
 
           <div style="margin-top:4px;padding:16px 20px;background:#f7f4ee;border-radius:8px;text-align:center;">
             <p style="font-size:12px;color:#666;margin:0 0 8px 0;">Want a recurring Monday reminder on your calendar?</p>

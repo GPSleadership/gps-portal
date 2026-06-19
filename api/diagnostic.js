@@ -747,6 +747,10 @@ function buildLeaderOnboardingEmail({ leaderName, leaderTitle, leaderOrg, portal
           </a>
         </div>
         <p style="font-size:13px;color:#666;text-align:center;">Or copy this link: <a href="${portalLink}" style="color:#1A3D6E;word-break:break-all;">${portalLink}</a></p>
+        <div style="background:#fbf7ec;border:1px solid #e8dcb8;border-radius:8px;padding:14px 18px;margin:18px 0;font-size:13px;color:#5a4a1f;line-height:1.6;">
+          <strong>If the link won't open:</strong> some organizations' security tools block or rewrite outside links. If that happens, forward this note to your IT team:<br /><br />
+          <em>"Please allowlist the website portal.gpsleadership.org (and gpsleadership.org) and emails from gpsleadership.org, and exclude them from link rewriting/sandboxing. It is a standard, confidential assessment site with no downloads or attachments."</em>
+        </div>
         <p style="margin-top:24px;">Once you complete the self-assessment, I'll reach out about next steps — including finalizing the list of people who will provide feedback on your leadership.</p>
         <p>${contactLine}</p>
         <p>– Alex Tremble<br /><span style="color:#666;font-size:13px;">GPS Leadership Solutions</span></p>
@@ -1997,9 +2001,10 @@ function buildPortalNudgeEmail({ clientName, leaderOrg, portalUrl, daysSince }) 
           <p>Hey ${firstName},</p>
           <p>It's been a few days since you logged into your leadership portal${orgLine}. The tools are there when you need them — and the leaders who get the most out of this process are the ones who make it a quick weekly habit.</p>
           <p><strong>Two minutes is enough.</strong> Check your 90-day plan, ask a leadership question, or just see where things stand.</p>
-          <div style="margin:28px 0;text-align:center;">
+          <div style="margin:28px 0 0;text-align:center;">
             <a href="${portalUrl}" style="background:#1A3D6E;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;display:inline-block;">Open My Portal →</a>
           </div>
+          ${(() => { try { return require('./brand-link').pasteLink(portalUrl, 'center'); } catch (_) { return ''; } })()}
           <p style="font-size:14px;color:#555;">If you have questions or something isn't working, reply to this email and I'll sort it out.</p>
           <p>– Alex<br><span style="font-size:13px;color:#888;">GPS Leadership Solutions</span></p>
         </div>
@@ -2342,10 +2347,11 @@ function buildNudgeEmail({ first, link, message }) {
     </div>
     <div style="background:#fff;padding:24px 26px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;">
       ${body}
-      <div style="margin:22px 0;text-align:center;">
+      <div style="margin:22px 0 0;text-align:center;">
         <a href="${link}" style="background:#1A3D6E;color:#fff;text-decoration:none;padding:13px 30px;border-radius:8px;font-size:15px;font-weight:700;display:inline-block;">Open your portal &rarr;</a>
       </div>
-      <p style="font-size:12px;color:#888;text-align:center;margin:0;">You can do it right from your phone. – Alex, GPS Leadership Solutions</p>
+      ${(() => { try { return require('./brand-link').pasteLink(link, 'center'); } catch (_) { return ''; } })()}
+      <p style="font-size:12px;color:#888;text-align:center;margin:12px 0 0;">You can do it right from your phone. – Alex, GPS Leadership Solutions</p>
     </div>
   </div>`;
 }
@@ -2518,10 +2524,11 @@ function buildExternalFeedbackEmail({ name, teamName, link }) {
     <div style="background:#ffffff;padding:28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
       <p>Hi ${first},</p>
       <p>As part of our work with the <strong>${teamName}</strong> leadership team, I'd value a short, candid observation from you. It takes about two minutes.</p>
-      <div style="margin:26px 0;text-align:center;">
+      <div style="margin:26px 0 0;text-align:center;">
         <a href="${link}" style="background:#1A3D6E;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;display:inline-block;">Share your input →</a>
       </div>
-      <p style="font-size:13px;color:#666;">This link is unique to you. – Alex Tremble, GPS Leadership Solutions</p>
+      ${(() => { try { return require('./brand-link').pasteLink(link, 'center'); } catch (_) { return ''; } })()}
+      <p style="font-size:13px;color:#666;margin:12px 0 0;">This link is unique to you. – Alex Tremble, GPS Leadership Solutions</p>
     </div>
   </div>`;
 }
