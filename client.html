@@ -4642,14 +4642,14 @@ function renderPortal(client, checkins) {
     <!-- HISTORY -->
     ${checkins.length > 0 ? renderHistory(checkins, client) : ''}
 
-    <!-- RESOURCES (hidden on mobile via CSS; surfaced in the Resources tab) -->
-    ${renderResources(client)}
+    <!-- RESOURCES — the full Toolkit Library now lives in the dedicated Resources tab
+         (always visible in the nav). Inline render removed to avoid duplicate IDs. -->
 
-    <!-- Non-coaching coaching teaser (mobile, above the resources link) -->
+    <!-- Non-coaching coaching teaser (above the resources link) -->
     ${mobileStatus !== 'coaching_client' ? renderCoachingTeaser() : ''}
 
-    <!-- Mobile link to the Resources tab (tools + full About Alex) -->
-    <div class="mobile-only" style="text-align:center;margin:18px 0 4px;">
+    <!-- Link to the Resources tab (tools + full About Alex) -->
+    <div style="text-align:center;margin:18px 0 4px;">
       <a onclick="showPortalTab('resources')" style="font-size:13px;color:var(--teal);font-weight:700;cursor:pointer;text-decoration:underline;">View leadership tools and about Alex &rarr;</a>
     </div>
     </div><!-- /portal-main -->
