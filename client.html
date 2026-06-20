@@ -6000,7 +6000,6 @@ const TOOLS_CATALOG = [
   { id:'t_tp3onepager', name:'GPS TP3 Culture Change One-Pager', cat:'foundations', level:'core', tags:[], desc:'How Trust, Proactivity, and Productivity drive results, on one page.', url:DRIVE('1A2IKMsrG0trbnUoPIlpETHg-f3VLFYGy') },
   { id:'t_tp3high', name:'High-Trust. High-Proactivity. High-Productivity.', cat:'foundations', level:'core', tags:[], desc:'The TP3 model and why it moves the business.', url:DRIVE('18ZP0pf2YzWqhTKIWeunq9PQBToa6Ncus') },
   { id:'t_accel', name:'Your Leadership Acceleration Guide', cat:'foundations', level:'core', tags:[], desc:'An orientation to accelerating your leadership growth.', url:DRIVE('1gXXPGTxudzteyyELEB-faJtAGWn8Il0R') },
-  { id:'t_lsucks', name:'Leadership Sucks — CEO Edition', cat:'foundations', level:'core', tags:[], desc:'A candid take on the hard parts of leading at the top.', url:DRIVE('15663e1t5uKaGTJ2K_Ge9btQsZfbd9FiP') },
   { id:'t_career', name:'Executive Life & Career Trajectory Blueprint', cat:'foundations', level:'core', tags:['self'], desc:'Map where your career is headed and what to build next.', url:DRIVE('1XwJxL8xuDd330vi02CyuOYQgmPwdvN11') },
 
   // Assess Where You Stand
@@ -6056,10 +6055,12 @@ const TOOLS_CATALOG = [
   { id:'t_90impact', name:'90-Day Leadership Impact Plan (360)', cat:'plan', level:'diagnostic', tags:['planning'], desc:'Build the 90-day behavior plan off your 360.', url:DRIVE('1P5mqXp3QKYYW22QVsGJXmBwOSh6yF1lW') },
   { id:'t_90mentor', name:'90-Day Mentoring Partnership Plan', cat:'plan', level:'coaching', tags:['planning'], desc:'Structure a 90-day mentoring partnership.', url:DRIVE('1oFwq97P5b-VEZxcXv60lD5752mUFZApK') },
 
-  // Books (open to all)
-  { id:'b_reaching', name:'Reaching Senior Leadership', cat:'books', level:'core', tags:[], desc:'Alex’s book on the path to senior leadership.', url:DRIVE('1RMJlx-mbGvlIN2-KNH1VAP2lfo8qhM8o') },
-  { id:'b_gpsguide', name:'The GPS Guide to Success', cat:'books', level:'core', tags:[], desc:'The GPS approach to leading and winning.', url:DRIVE('1RU9FK6yR9zXsrL8BAM2l3a-4V8RPT-FR') },
-  { id:'b_relationships', name:'Relationships That Work', cat:'books', level:'core', tags:[], desc:'Building the relationships that drive results.', url:DRIVE('1blXM2L4tieYU2fNIJWiW-P4AZYeuEh9E') },
+  // Books (open to all) — link to the Amazon purchase pages, not internal drafts.
+  { id:'b_unlocking', name:'Unlocking the Executive Advantage', cat:'books', level:'core', tags:[], cta:'View on Amazon', desc:'Cultivating high-impact relationships for leadership success with the 3R Model.', url:'https://www.amazon.com/Unlocking-Executive-Advantage-Cultivating-Relationships-ebook/dp/B0FMWQDLJQ' },
+  { id:'b_relationships', name:'Relationships That Work', cat:'books', level:'core', tags:[], cta:'View on Amazon', desc:'4 simple steps to building intentional connections in business and in life.', url:'https://www.amazon.com/Relationships-That-Work-Intentional-Connections-ebook/dp/B0CD2KJX17' },
+  { id:'b_reaching', name:'Reaching Senior Leadership', cat:'books', level:'core', tags:[], cta:'View on Amazon', desc:'10 growth strategies every government leader should know.', url:'https://www.amazon.com/Reaching-Senior-Leadership-Strategies-Government-ebook/dp/B07NSTQCTS' },
+  { id:'b_leadershipsucks', name:'Leadership Sucks (Sometimes)', cat:'books', level:'core', tags:[], cta:'View on Amazon', desc:'An executive breakdown of the hard parts of leading — and how to push through.', url:'https://www.amazon.com/Leadership-Sucks-Sometimes-Executive-Breakdown-ebook/dp/B0FPXDLMDW' },
+  { id:'b_gpsguide', name:'The GPS Guide to Success', cat:'books', level:'core', tags:[], cta:'View on Amazon', desc:'How to navigate life to reach your personal and career goals.', url:'https://www.amazon.com/GPS-Guide-Success-Navigate-Personal-ebook/dp/B07RC9J7F1' },
 ];
 
 // Active scenario-chip filter (tag) for the library
@@ -6259,7 +6260,7 @@ function renderToolCard(t, unlocked, opts) {
   }
   let btn;
   if (unlocked) {
-    btn = `<button onclick="toolOpen('${t.id}')" style="margin-top:10px;width:100%;background:#1A3D6E;color:#fff;border:none;border-radius:7px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;">Open tool</button>`;
+    btn = `<button onclick="toolOpen('${t.id}')" style="margin-top:10px;width:100%;background:#1A3D6E;color:#fff;border:none;border-radius:7px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;">${t.cta || 'Open tool'}</button>`;
   } else {
     const label = t.level === 'coaching' ? 'Unlock with coaching' : 'Unlock with the diagnostic';
     const sub   = t.level === 'coaching'
@@ -6335,13 +6336,14 @@ function renderResources(client) {
     if (!inCat.length) return '';
     const visibleCount = inCat.filter(function(t){ return !recSet[t.id]; }).length;  // shown in library (rec ones live in Recommended)
     let idx = 0;
+    const noCollapse = (catKey === 'books');   // Books shows all (4–5), no collapse
     const cards = inCat.map(function(t){
       const isRec = !!recSet[t.id];
       let overflow = false;
-      if (!isRec) { if (idx >= 3) overflow = true; idx++; }   // collapse to first 3 non-rec
+      if (!isRec) { if (!noCollapse && idx >= 3) overflow = true; idx++; }   // collapse to first 3 non-rec
       return renderToolCard(t, toolUnlocked(t, level), { recHidden: isRec, overflow: overflow, hidePill: true });
     }).join('');
-    const toggle = (visibleCount > 3)
+    const toggle = (!noCollapse && visibleCount > 3)
       ? `<a href="#" class="tool-cat-toggle" data-cat="${catKey}" data-count="${visibleCount}" onclick="toolToggleCat('${catKey}');return false;" style="color:#7c8a99;font-weight:600;font-size:11.5px;white-space:nowrap;">Show all ${visibleCount} tools</a>`
       : '';
     return `<div class="tool-cat-block" id="catblock-${catKey}" data-catblock="${catKey}" style="margin-top:24px;scroll-margin-top:80px;">
