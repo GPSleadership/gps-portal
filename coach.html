@@ -8391,6 +8391,34 @@ async function exportDiagData(format = 'csv') {
       };
     });
 
+    // ── Notes & Context (coaching notes, interview notes, self narrative) — for the report packet ──
+    const _ivArr = (function () {
+      const v = DIAG_SEL.interview_notes_json;
+      if (Array.isArray(v)) return v;
+      if (typeof v === 'string' && v.trim()) { try { const p = JSON.parse(v); return Array.isArray(p) ? p : []; } catch (_) { return []; } }
+      return [];
+    })();
+    const perInterview = _ivArr.length
+      ? _ivArr.map((it, i) => 'Interview ' + (i + 1) + (it.name ? (' — ' + it.name) : '') + (it.date ? (' (' + it.date + ')') : '') + ':\n' + (it.notes || '')).join('\n\n')
+      : '';
+    const contextRows = [
+      { Field: 'Leader',                              Value: DIAG_SEL.client_name || '' },
+      { Field: 'Title',                               Value: DIAG_SEL.client_title || '' },
+      { Field: 'Organization',                        Value: DIAG_SEL.client_org || '' },
+      { Field: 'Kick-off / Intake Notes',             Value: DIAG_SEL.intake_notes || '' },
+      { Field: 'Coaching Notes',                      Value: DIAG_SEL.coaching_notes || '' },
+      { Field: 'General Interview Notes',             Value: DIAG_SEL.interview_notes || '' },
+      { Field: 'Per-Interview Notes',                 Value: perInterview },
+      { Field: 'Self: 3-Year Vision',                 Value: DIAG_SEL.self_three_year_vision || '' },
+      { Field: 'Self: Future-Self Capabilities',      Value: DIAG_SEL.self_future_self_capabilities || '' },
+      { Field: 'Self: Immediate Successor View',      Value: DIAG_SEL.self_immediate_successor_view || '' },
+      { Field: 'Self: Successor Candidates',          Value: DIAG_SEL.self_successor_candidates || '' },
+      { Field: 'Self: Successor Development Actions',  Value: DIAG_SEL.self_successor_development_actions || '' },
+      { Field: 'Custom Question G1',                  Value: DIAG_SEL.custom_g1_question || '' },
+      { Field: 'Custom Question G2',                  Value: DIAG_SEL.custom_g2_question || '' },
+      { Field: 'Custom Question G3',                  Value: DIAG_SEL.custom_g3_question || '' },
+    ];
+
     if (format === 'excel') {
       // Excel export via SheetJS (already loaded for client import)
       const ws = XLSX.utils.json_to_sheet(dataRows);
@@ -8414,6 +8442,10 @@ async function exportDiagData(format = 'csv') {
       const wsMeta = XLSX.utils.json_to_sheet(meta);
       wsMeta['!cols'] = [{ wch: 18 }, { wch: 40 }];
       XLSX.utils.book_append_sheet(wb, wsMeta, 'Diagnostic Info');
+      // Notes & Context sheet (coaching notes, interview notes, self narrative)
+      const wsCtx = XLSX.utils.json_to_sheet(contextRows);
+      wsCtx['!cols'] = [{ wch: 32 }, { wch: 90 }];
+      XLSX.utils.book_append_sheet(wb, wsCtx, 'Notes & Context');
       XLSX.writeFile(wb, `${filename}.xlsx`);
 
     } else {
@@ -8429,6 +8461,11 @@ async function exportDiagData(format = 'csv') {
       }
       const lines = [headers.map(csvEsc).join(',')];
       dataRows.forEach(row => lines.push(headers.map(h => csvEsc(row[h])).join(',')));
+      // Append Notes & Context section below the responses
+      lines.push('');
+      lines.push('NOTES & CONTEXT');
+      lines.push(['Field', 'Value'].map(csvEsc).join(','));
+      contextRows.forEach(row => lines.push([row.Field, row.Value].map(csvEsc).join(',')));
       const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement('a');
