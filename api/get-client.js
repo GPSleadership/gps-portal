@@ -331,7 +331,13 @@ export default async function handler(req, res) {
   const isCoaching    = !!(client.in_coaching_program || client.coaching_sessions_enabled || client.is_active_coaching || client.engagement_type === 'diagnostic_plus_coaching');
   const isSponsor     = client.is_sponsor === true;
   const isParticipant = client.is_workshop_participant === true;
-  if (!isCoaching && !isSponsor && !isParticipant) {
+  const hasPlan       = !!client.plan_submitted_at;          // completed the 90-day plan wizard
+  const hasDiagnostic = client.has_diagnostic === true;      // diagnostic client (no coaching required)
+  // A valid token already identifies the client; this gate only blocks records with
+  // NO engagement at all (e.g. a stub). Coaching, workshop, a submitted plan, or a
+  // diagnostic all qualify — non-coaching clients must load so they can see the
+  // locked-tab / Request-a-Diagnostic experience (#123).
+  if (!isCoaching && !isSponsor && !isParticipant && !hasPlan && !hasDiagnostic) {
     return res.status(403).json({ error: 'Access not available. Contact your coach.' });
   }
 
