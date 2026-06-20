@@ -6193,6 +6193,15 @@ function _favPaint(id){
     const star = recRow.querySelector('[data-fav-id="'+id+'"]');
     if (star) { const card = star.closest('.tool-card'); if (card) card.style.display = on ? 'none' : ''; }
   }
+  refreshRecommendedVisibility();
+}
+function refreshRecommendedVisibility(){
+  const block = document.getElementById('recommendedBlock');
+  const row = document.getElementById('recommendedRow');
+  if (!block || !row) return;
+  let vis = 0;
+  row.querySelectorAll('.tool-card').forEach(function(cd){ if (cd.style.display !== 'none') vis++; });
+  block.style.display = vis ? '' : 'none';
 }
 async function toolToggleFav(id){
   const turnOn = TOOL_FAVS.indexOf(id) === -1;
@@ -6336,7 +6345,7 @@ function renderResources(client) {
       ? `<a href="#" class="tool-cat-toggle" data-cat="${catKey}" data-count="${visibleCount}" onclick="toolToggleCat('${catKey}');return false;" style="color:#7c8a99;font-weight:600;font-size:11.5px;white-space:nowrap;">Show all ${visibleCount} tools</a>`
       : '';
     return `<div class="tool-cat-block" id="catblock-${catKey}" data-catblock="${catKey}" style="margin-top:24px;scroll-margin-top:80px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;background:#eef3f6;border-left:5px solid var(--teal);border-radius:6px;padding:12px 16px;margin-bottom:14px;">
+        <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px 10px;background:#eef3f6;border-left:5px solid var(--teal);border-radius:6px;padding:12px 16px;margin-bottom:14px;">
           <h3 style="margin:0;font-family:'Montserrat',sans-serif;font-size:17px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--navy);">${escH(TOOL_CATS[catKey])}</h3>
           ${toggle}
         </div>
@@ -6371,9 +6380,11 @@ function renderResources(client) {
       <div id="myToolsInner">${renderMyToolsInner(level)}</div>
     </div>
 
-    <div style="font-weight:700;color:var(--navy);font-size:15px;">Recommended for you</div>
-    <div style="font-size:12.5px;color:#7c8a99;margin:2px 0 8px;">Start here this week.</div>
-    <div id="recommendedRow" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:6px;">${recHtml}</div>
+    <div id="recommendedBlock" style="${recIds.filter(function(id){ return !toolIsFav(id); }).length ? '' : 'display:none;'}">
+      <div style="font-weight:700;color:var(--navy);font-size:15px;">Recommended for you</div>
+      <div style="font-size:12.5px;color:#7c8a99;margin:2px 0 8px;">Start here this week.</div>
+      <div id="recommendedRow" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:6px;">${recHtml}</div>
+    </div>
 
     ${diagCard}
 
