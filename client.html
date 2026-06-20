@@ -6099,6 +6099,7 @@ function toolToggleChip(tag) {
   });
   toolApplyFilters();
 }
+let EXPANDED_CATS = {};
 function toolApplyFilters() {
   const q   = (document.getElementById('toolSearch')?.value || '').toLowerCase().trim();
   const cat = document.getElementById('toolCatFilter')?.value || 'all';
@@ -6111,21 +6112,50 @@ function toolApplyFilters() {
     const c    = card.getAttribute('data-cat') || '';
     const tags = card.getAttribute('data-tags') || '';
     const locked = card.getAttribute('data-locked') === '1';
-    let ok = true;
-    if (q && name.indexOf(q) === -1 && desc.indexOf(q) === -1) ok = false;
-    if (cat !== 'all' && c !== cat) ok = false;
-    if (TOOL_CHIP && tags.split(' ').indexOf(TOOL_CHIP) === -1) ok = false;
-    if (acc === 'unlocked' && locked) ok = false;
-    if (acc === 'locked' && !locked) ok = false;
-    // In the default (unfiltered) view, hide tools already shown in "Recommended for you".
-    if (isDefault && card.getAttribute('data-rec') === '1') ok = false;
-    card.style.display = ok ? '' : 'none';
-    if (ok) shown++;
+    const isRec = card.getAttribute('data-rec') === '1';
+    const isOvf = card.getAttribute('data-ovf') === '1';
+    let match = true;
+    if (q && name.indexOf(q) === -1 && desc.indexOf(q) === -1) match = false;
+    if (cat !== 'all' && c !== cat) match = false;
+    if (TOOL_CHIP && tags.split(' ').indexOf(TOOL_CHIP) === -1) match = false;
+    if (acc === 'unlocked' && locked) match = false;
+    if (acc === 'locked' && !locked) match = false;
+    let show;
+    if (isDefault) {
+      // Default view: hide Recommended duplicates; collapse each category to 3
+      // tools unless the user expanded it.
+      show = true;
+      if (isRec) show = false;
+      if (isOvf && !EXPANDED_CATS[c]) show = false;
+    } else {
+      show = match;   // any active filter shows all matches, incl. recommended + overflow
+    }
+    card.style.display = show ? '' : 'none';
+    if (show) shown++;
+  });
+  // Per-category: hide empty blocks; set the Show all / Show fewer link.
+  document.querySelectorAll('#toolLibraryGrid .tool-cat-block').forEach(function(block){
+    let vis = 0;
+    block.querySelectorAll('.tool-card').forEach(function(cd){ if (cd.style.display !== 'none') vis++; });
+    block.style.display = vis ? '' : 'none';
+    const link = block.querySelector('.tool-cat-toggle');
+    if (link) {
+      if (!isDefault) { link.style.display = 'none'; }
+      else {
+        const ck = link.getAttribute('data-cat'); const n = link.getAttribute('data-count');
+        link.style.display = 'inline-block';
+        link.textContent = EXPANDED_CATS[ck] ? 'Show fewer' : ('Show all ' + n + ' tools');
+      }
+    }
   });
   const empty = document.getElementById('toolEmpty');
   if (empty) empty.style.display = shown === 0 ? 'block' : 'none';
   const clr = document.getElementById('toolClear');
   if (clr) clr.style.display = isDefault ? 'none' : 'inline';
+}
+function toolToggleCat(cat){
+  EXPANDED_CATS[cat] = !EXPANDED_CATS[cat];
+  toolApplyFilters();
 }
 function toolClearFilters() {
   const s = document.getElementById('toolSearch');       if (s) s.value = '';
@@ -6136,21 +6166,37 @@ function toolClearFilters() {
   toolApplyFilters();
 }
 
-// ── My Tools (favorites) — stored per device via localStorage (token-scoped) ──
-function _favKey(){ try { return 'gps_tool_favs_' + String(token || window.token || 'anon').slice(0,10); } catch(_) { return 'gps_tool_favs_anon'; } }
-function toolFavs(){ try { return JSON.parse(localStorage.getItem(_favKey()) || '[]'); } catch(_) { return []; } }
-function toolIsFav(id){ return toolFavs().indexOf(id) > -1; }
-function toolToggleFav(id){
-  let f = toolFavs(); const i = f.indexOf(id);
-  if (i > -1) f.splice(i,1); else f.unshift(id);   // most-recent first
-  try { localStorage.setItem(_favKey(), JSON.stringify(f.slice(0,50))); } catch(_) {}
+// ── My Tools (favorites) — stored server-side so they follow the client across devices ──
+let TOOL_FAVS = [];
+async function loadToolFavs(){
+  try { const r = await portalData('get-favorites', {}); TOOL_FAVS = Array.isArray(r && r.favorites) ? r.favorites : []; }
+  catch(_) { TOOL_FAVS = []; }
+}
+function toolFavs(){ return TOOL_FAVS.slice(); }
+function toolIsFav(id){ return TOOL_FAVS.indexOf(id) > -1; }
+function _favPaint(id){
+  const on = toolIsFav(id);
   document.querySelectorAll('[data-fav-id="'+id+'"]').forEach(function(s){
-    const on = toolIsFav(id);
     s.textContent = on ? '★' : '☆';
     s.style.color = on ? '#f5a623' : '#c7d2dd';
     s.title = on ? 'Remove from My Tools' : 'Add to My Tools';
   });
-  refreshMyTools();
+  // Keep the Recommended row free of any tool that's now in My Tools.
+  const recRow = document.getElementById('recommendedRow');
+  if (recRow) {
+    const star = recRow.querySelector('[data-fav-id="'+id+'"]');
+    if (star) { const card = star.closest('.tool-card'); if (card) card.style.display = on ? 'none' : ''; }
+  }
+}
+async function toolToggleFav(id){
+  const turnOn = TOOL_FAVS.indexOf(id) === -1;
+  if (turnOn) TOOL_FAVS.unshift(id); else TOOL_FAVS = TOOL_FAVS.filter(function(x){ return x !== id; });
+  _favPaint(id); refreshMyTools();                 // optimistic
+  try { await portalData('toggle-favorite', { tool_id: id, on: turnOn }); }
+  catch(_) {                                        // revert on failure
+    if (turnOn) TOOL_FAVS = TOOL_FAVS.filter(function(x){ return x !== id; }); else TOOL_FAVS.unshift(id);
+    _favPaint(id); refreshMyTools();
+  }
 }
 function renderMyToolsInner(level){
   const favs = toolFavs();
@@ -6214,8 +6260,9 @@ function renderToolCard(t, unlocked, opts) {
       </div>`
     : '';
   const recAttr   = opts.recHidden ? ' data-rec="1"' : '';
-  const hideStyle = opts.recHidden ? 'display:none;' : '';
-  return `<div class="tool-card"${recAttr} data-name="${escH(t.name).toLowerCase()}" data-desc="${escH(t.desc).toLowerCase()}" data-cat="${t.cat}" data-tags="${(t.tags||[]).join(' ')}" data-locked="${unlocked?'0':'1'}"
+  const ovfAttr   = opts.overflow ? ' data-ovf="1"' : '';
+  const hideStyle = (opts.recHidden || opts.overflow || opts.hidden) ? 'display:none;' : '';
+  return `<div class="tool-card"${recAttr}${ovfAttr} data-name="${escH(t.name).toLowerCase()}" data-desc="${escH(t.desc).toLowerCase()}" data-cat="${t.cat}" data-tags="${(t.tags||[]).join(' ')}" data-locked="${unlocked?'0':'1'}"
       style="border:1px solid var(--gray-200);border-radius:10px;padding:14px;background:#fff;${unlocked?'':'opacity:.72;'}${hideStyle}display:flex;flex-direction:column;">
       <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#7c8a99;font-weight:700;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center;gap:6px;"><span>${escH(catLabel)}</span>${rightCtl}</div>
       <div style="font-weight:700;color:var(--navy);font-size:14px;line-height:1.3;">${escH(t.name)}</div>
@@ -6238,7 +6285,7 @@ function renderResources(client) {
   // Recommended strip: a curated default set, filtered to what this tier can open.
   const recIds = RECOMMENDED_DEFAULT.filter(function(id){ var t = TOOLS_CATALOG.find(function(x){return x.id===id;}); return t && toolUnlocked(t, level); }).slice(0, 4);
   const recSet = {}; recIds.forEach(function(id){ recSet[id] = 1; });
-  const recHtml = recIds.map(function(id){ return renderToolCard(TOOLS_CATALOG.find(function(t){return t.id===id;}), true); }).join('');
+  const recHtml = recIds.map(function(id){ return renderToolCard(TOOLS_CATALOG.find(function(t){return t.id===id;}), true, { hidden: toolIsFav(id) }); }).join('');
 
   // Diagnostic Toolkit card
   let diagCard;
@@ -6266,8 +6313,26 @@ function renderResources(client) {
   }).join('');
 
   // Full library grid (ordered by category)
-  const ordered = TOOLS_CATALOG.slice().sort(function(a,b){ return TOOL_CAT_ORDER.indexOf(a.cat) - TOOL_CAT_ORDER.indexOf(b.cat); });
-  const grid = ordered.map(function(t){ return renderToolCard(t, toolUnlocked(t, level), { recHidden: !!recSet[t.id] }); }).join('');
+  const libraryHtml = TOOL_CAT_ORDER.map(function(catKey){
+    const inCat = TOOLS_CATALOG.filter(function(t){ return t.cat === catKey; });
+    if (!inCat.length) return '';
+    const visibleCount = inCat.filter(function(t){ return !recSet[t.id]; }).length;  // shown in library (rec ones live in Recommended)
+    let idx = 0;
+    const cards = inCat.map(function(t){
+      const isRec = !!recSet[t.id];
+      let overflow = false;
+      if (!isRec) { if (idx >= 3) overflow = true; idx++; }   // collapse to first 3 non-rec
+      return renderToolCard(t, toolUnlocked(t, level), { recHidden: isRec, overflow: overflow });
+    }).join('');
+    const toggle = (visibleCount > 3)
+      ? `<a href="#" class="tool-cat-toggle" data-cat="${catKey}" data-count="${visibleCount}" onclick="toolToggleCat('${catKey}');return false;" style="display:inline-block;margin-top:8px;color:var(--teal);font-weight:700;font-size:12.5px;">Show all ${visibleCount} tools</a>`
+      : '';
+    return `<div class="tool-cat-block" data-catblock="${catKey}" style="margin-top:16px;">
+        <div style="font-size:13px;font-weight:800;color:var(--navy);margin-bottom:8px;">${escH(TOOL_CATS[catKey])}</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;">${cards}</div>
+        ${toggle}
+      </div>`;
+  }).join('');
 
   // Ask Alex footer (Ask Alex is available to everyone)
   const askFooter = `<div class="card" style="margin-top:18px;text-align:center;background:#f3f8fb;">
@@ -6285,12 +6350,13 @@ function renderResources(client) {
 
     <div id="myToolsSection" style="${toolFavs().length ? '' : 'display:none;'}margin-bottom:18px;">
       <div style="font-weight:700;color:var(--navy);font-size:15px;">My Tools</div>
-      <div style="color:var(--gray-600);font-size:13px;margin:2px 0 10px;">Your personal toolbox. Pin the tools you use most so they’re always within reach.</div>
+      <div style="color:var(--gray-600);font-size:13px;margin:2px 0 4px;">Your personal toolbox. Pin the tools you use most so they’re always within reach.${level === 'coaching' ? ' During coaching, we’ll pick 2–3 tools to keep in My Tools as your focus for this 90-day sprint.' : ''}</div>
+      <div style="color:#94a3b8;font-size:12px;margin:0 0 10px;">Tap the star on any tool card to add or remove it from My Tools.</div>
       <div id="myToolsInner">${renderMyToolsInner(level)}</div>
     </div>
 
     <div style="margin-bottom:6px;font-weight:700;color:var(--navy);font-size:15px;">Recommended for you</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:6px;">${recHtml}</div>
+    <div id="recommendedRow" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:6px;">${recHtml}</div>
 
     ${diagCard}
 
@@ -6309,7 +6375,7 @@ function renderResources(client) {
       </div>
       <div style="margin:14px 0 4px;font-size:12px;color:#7c8a99;font-weight:700;">I need to… <span style="font-weight:400;color:#94a3b8;">(tap a scenario to filter tools)</span></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">${chipHtml}</div>
-      <div id="toolLibraryGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;">${grid}</div>
+      <div id="toolLibraryGrid">${libraryHtml}</div>
       <div id="toolEmpty" style="display:none;text-align:center;color:var(--gray-600);padding:24px;font-size:14px;">No tools match those filters. Clear a filter or try a different search.</div>
     </div>
 
@@ -6608,7 +6674,14 @@ function showPortalTab(tab) {
     if (wsPanel) wsPanel.classList.add('active');
     if (tabWS)   tabWS.classList.add('active');
   } else if (tab === 'resources') {
-    if (resPanel) { resPanel.style.display = 'block'; const rc = document.getElementById('resources-content'); if (rc) rc.innerHTML = renderResourcesPage(currentClient); }
+    if (resPanel) {
+      resPanel.style.display = 'block';
+      const rc = document.getElementById('resources-content');
+      if (rc) {
+        rc.innerHTML = '<div class="card" style="margin:16px;">Loading…</div>';
+        loadToolFavs().then(function(){ rc.innerHTML = renderResourcesPage(currentClient); });
+      }
+    }
     if (tabRes) tabRes.classList.add('active');
     window.scrollTo({ top: 0 });
   } else if (tab === 'coach') {

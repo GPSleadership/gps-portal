@@ -168,6 +168,32 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true, history: await r.json() });
       }
 
+      // ── Toolkit Library: favorites (My Tools, cross-device) + open logging ───
+      case 'get-favorites': {
+        const r = await sb(`/rest/v1/tool_favorites?client_id=eq.${clientId}&select=tool_id&order=created_at.desc`);
+        const rows = r.ok ? await r.json() : [];
+        return res.status(200).json({ ok: true, favorites: rows.map(function (x) { return x.tool_id; }) });
+      }
+      case 'toggle-favorite': {
+        const toolId = String(body.tool_id || '').slice(0, 80);
+        if (!toolId) return res.status(400).json({ error: 'tool_id required' });
+        if (body.on) {
+          await sb('/rest/v1/tool_favorites?on_conflict=client_id,tool_id', 'POST',
+            { client_id: clientId, tool_id: toolId },
+            { Prefer: 'resolution=ignore-duplicates,return=minimal' });
+        } else {
+          await sb(`/rest/v1/tool_favorites?client_id=eq.${clientId}&tool_id=eq.${encodeURIComponent(toolId)}`, 'DELETE', null, { Prefer: 'return=minimal' });
+        }
+        return res.status(200).json({ ok: true });
+      }
+      case 'tool-usage': {
+        const toolId = String(body.tool_id || '').slice(0, 80);
+        if (toolId) {
+          await sb('/rest/v1/tool_usage', 'POST', { client_id: clientId, tool_id: toolId }, { Prefer: 'return=minimal' });
+        }
+        return res.status(200).json({ ok: true });
+      }
+
       // ── Contact Your Coach: read the client's own thread ────────────────────
       // Eligibility is enforced SERVER-side: non-coaching clients get eligible:false
       // and never see message rows. Scoped strictly to this client's conversation.
