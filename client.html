@@ -6103,8 +6103,9 @@ function toolApplyFilters() {
   const q   = (document.getElementById('toolSearch')?.value || '').toLowerCase().trim();
   const cat = document.getElementById('toolCatFilter')?.value || 'all';
   const acc = document.getElementById('toolAccessFilter')?.value || 'all';
+  const isDefault = !q && cat === 'all' && acc === 'all' && !TOOL_CHIP;
   let shown = 0;
-  document.querySelectorAll('.tool-card').forEach(function(card){
+  document.querySelectorAll('#toolLibraryGrid .tool-card').forEach(function(card){
     const name = card.getAttribute('data-name') || '';
     const desc = card.getAttribute('data-desc') || '';
     const c    = card.getAttribute('data-cat') || '';
@@ -6116,16 +6117,84 @@ function toolApplyFilters() {
     if (TOOL_CHIP && tags.split(' ').indexOf(TOOL_CHIP) === -1) ok = false;
     if (acc === 'unlocked' && locked) ok = false;
     if (acc === 'locked' && !locked) ok = false;
+    // In the default (unfiltered) view, hide tools already shown in "Recommended for you".
+    if (isDefault && card.getAttribute('data-rec') === '1') ok = false;
     card.style.display = ok ? '' : 'none';
     if (ok) shown++;
   });
   const empty = document.getElementById('toolEmpty');
   if (empty) empty.style.display = shown === 0 ? 'block' : 'none';
+  const clr = document.getElementById('toolClear');
+  if (clr) clr.style.display = isDefault ? 'none' : 'inline';
+}
+function toolClearFilters() {
+  const s = document.getElementById('toolSearch');       if (s) s.value = '';
+  const c = document.getElementById('toolCatFilter');    if (c) c.value = 'all';
+  const a = document.getElementById('toolAccessFilter'); if (a) a.value = 'all';
+  TOOL_CHIP = '';
+  document.querySelectorAll('.tool-chip').forEach(function(ch){ ch.style.background='#fff'; ch.style.color='#33506b'; ch.style.borderColor='#c7d2dd'; });
+  toolApplyFilters();
 }
 
-function renderToolCard(t, unlocked) {
+// ── My Tools (favorites) — stored per device via localStorage (token-scoped) ──
+function _favKey(){ try { return 'gps_tool_favs_' + String(token || window.token || 'anon').slice(0,10); } catch(_) { return 'gps_tool_favs_anon'; } }
+function toolFavs(){ try { return JSON.parse(localStorage.getItem(_favKey()) || '[]'); } catch(_) { return []; } }
+function toolIsFav(id){ return toolFavs().indexOf(id) > -1; }
+function toolToggleFav(id){
+  let f = toolFavs(); const i = f.indexOf(id);
+  if (i > -1) f.splice(i,1); else f.unshift(id);   // most-recent first
+  try { localStorage.setItem(_favKey(), JSON.stringify(f.slice(0,50))); } catch(_) {}
+  document.querySelectorAll('[data-fav-id="'+id+'"]').forEach(function(s){
+    const on = toolIsFav(id);
+    s.textContent = on ? '★' : '☆';
+    s.style.color = on ? '#f5a623' : '#c7d2dd';
+    s.title = on ? 'Remove from My Tools' : 'Add to My Tools';
+  });
+  refreshMyTools();
+}
+function renderMyToolsInner(level){
+  const favs = toolFavs();
+  const items = favs.map(function(id){ return TOOLS_CATALOG.find(function(t){ return t.id === id; }); }).filter(Boolean).slice(0,6);
+  if (!items.length) return '';
+  return '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;">' +
+    items.map(function(t){ return renderToolCard(t, toolUnlocked(t, level)); }).join('') + '</div>';
+}
+function refreshMyTools(){
+  const sec = document.getElementById('myToolsSection');
+  const inner = document.getElementById('myToolsInner');
+  if (!sec || !inner) return;
+  const html = renderMyToolsInner(toolsAccessLevel(currentClient));
+  inner.innerHTML = html;
+  sec.style.display = html ? 'block' : 'none';
+}
+
+// Light "how to use" mini-guides (Recommended + Assess + Delegate tools)
+const TOOL_GUIDES = {
+  t_bottlenecks:  { when:'when the business slows down every time you get involved.', time:'15–20 minutes solo.' },
+  t_execscorecard:{ when:'when you want a fast read on where your leadership stands.', time:'10–15 minutes solo.' },
+  t_talent:       { when:'when you need a fast view of bench strength and talent risk.', time:'20–30 minutes with your leadership team.' },
+  t_workforce:    { when:'when you suspect capability gaps are capping results.', time:'20–30 minutes solo or with HR.' },
+  t_readiness:    { when:'before kicking off a major program or change.', time:'20–30 minutes with your team.' },
+  t_delegos:      { when:'when your week is full of work your team should own.', time:'30–45 minutes to set up, then reuse weekly.' },
+  t_1on1:         { when:'when your 1-on-1s feel like status updates, not progress.', time:'15 minutes to set up; use every 1-on-1.' },
+  t_toomuchtime:  { when:'when you can’t tell where your hours actually go.', time:'15–20 minutes solo.' },
+  t_timeblueprint:{ when:'when your calendar doesn’t match your priorities.', time:'30 minutes solo.' },
+  t_brave:        { when:'before a conversation you’ve been avoiding.', time:'15 minutes to prep.' },
+  t_premortemlite:{ when:'before committing to a high-stakes decision.', time:'10 minutes solo or with your team.' },
+};
+const RECOMMENDED_DEFAULT = ['t_bottlenecks','t_brave','t_premortemlite','t_1on1','t_toomuchtime','t_delegos'];
+
+function renderToolCard(t, unlocked, opts) {
+  opts = opts || {};
   const catLabel = TOOL_CATS[t.cat] || '';
-  const lockBadge = unlocked ? '' : '<span style="font-size:11px;">🔒</span>';
+  // Top-right control: favorite star when unlocked, lock icon when locked.
+  let rightCtl;
+  if (unlocked) {
+    const fav = toolIsFav(t.id);
+    rightCtl = `<span class="tool-star" data-fav-id="${t.id}" onclick="event.stopPropagation();toolToggleFav('${t.id}')" title="${fav?'Remove from My Tools':'Add to My Tools'}" style="cursor:pointer;font-size:15px;line-height:1;color:${fav?'#f5a623':'#c7d2dd'};">${fav?'★':'☆'}</span>`;
+  } else {
+    rightCtl = '<span style="font-size:11px;">🔒</span>';
+  }
   let btn;
   if (unlocked) {
     btn = `<button onclick="toolOpen('${t.id}')" style="margin-top:10px;width:100%;background:#1A3D6E;color:#fff;border:none;border-radius:7px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;">Open tool</button>`;
@@ -6137,11 +6206,21 @@ function renderToolCard(t, unlocked) {
     btn = `<button onclick="toolOpen('${t.id}')" style="margin-top:10px;width:100%;background:#fff;color:#1A3D6E;border:1.5px solid #c7d2dd;border-radius:7px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;">${label}</button>
       <div style="font-size:11px;color:#94a3b8;margin-top:5px;text-align:center;">${sub}</div>`;
   }
-  return `<div class="tool-card" data-name="${escH(t.name).toLowerCase()}" data-desc="${escH(t.desc).toLowerCase()}" data-cat="${t.cat}" data-tags="${(t.tags||[]).join(' ')}" data-locked="${unlocked?'0':'1'}"
-      style="border:1px solid var(--gray-200);border-radius:10px;padding:14px;background:#fff;${unlocked?'':'opacity:.72;'}display:flex;flex-direction:column;">
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#7c8a99;font-weight:700;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center;gap:6px;"><span>${escH(catLabel)}</span>${lockBadge}</div>
+  const g = TOOL_GUIDES[t.id];
+  const guideHtml = g
+    ? `<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--gray-200);font-size:11.5px;color:#94a3b8;line-height:1.45;">
+        <div><b style="color:#7c8a99;">When to use:</b> ${escH(g.when)}</div>
+        <div><b style="color:#7c8a99;">Time:</b> ${escH(g.time)}</div>
+      </div>`
+    : '';
+  const recAttr   = opts.recHidden ? ' data-rec="1"' : '';
+  const hideStyle = opts.recHidden ? 'display:none;' : '';
+  return `<div class="tool-card"${recAttr} data-name="${escH(t.name).toLowerCase()}" data-desc="${escH(t.desc).toLowerCase()}" data-cat="${t.cat}" data-tags="${(t.tags||[]).join(' ')}" data-locked="${unlocked?'0':'1'}"
+      style="border:1px solid var(--gray-200);border-radius:10px;padding:14px;background:#fff;${unlocked?'':'opacity:.72;'}${hideStyle}display:flex;flex-direction:column;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#7c8a99;font-weight:700;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center;gap:6px;"><span>${escH(catLabel)}</span>${rightCtl}</div>
       <div style="font-weight:700;color:var(--navy);font-size:14px;line-height:1.3;">${escH(t.name)}</div>
       <div style="font-size:12.5px;color:var(--gray-600);line-height:1.45;margin-top:5px;flex:1;">${escH(t.desc)}</div>
+      ${guideHtml}
       ${btn}
     </div>`;
 }
@@ -6156,10 +6235,10 @@ function renderResources(client) {
   else if (level === 'diagnostic') tierLine = 'Your diagnostic has unlocked tools tailored to your results. Coaching unlocks the full library.';
   else tierLine = 'You have access to a starter set of tools. Completing a diagnostic or starting coaching unlocks the full library.';
 
-  // Recommended strip: prefer the client's TP3 focus pillar where we can, else core quick wins
-  const unlockedTools = TOOLS_CATALOG.filter(function(t){ return toolUnlocked(t, level); });
-  const recs = unlockedTools.slice(0, 4);
-  const recHtml = recs.map(function(t){ return renderToolCard(t, true); }).join('');
+  // Recommended strip: a curated default set, filtered to what this tier can open.
+  const recIds = RECOMMENDED_DEFAULT.filter(function(id){ var t = TOOLS_CATALOG.find(function(x){return x.id===id;}); return t && toolUnlocked(t, level); }).slice(0, 4);
+  const recSet = {}; recIds.forEach(function(id){ recSet[id] = 1; });
+  const recHtml = recIds.map(function(id){ return renderToolCard(TOOLS_CATALOG.find(function(t){return t.id===id;}), true); }).join('');
 
   // Diagnostic Toolkit card
   let diagCard;
@@ -6188,7 +6267,7 @@ function renderResources(client) {
 
   // Full library grid (ordered by category)
   const ordered = TOOLS_CATALOG.slice().sort(function(a,b){ return TOOL_CAT_ORDER.indexOf(a.cat) - TOOL_CAT_ORDER.indexOf(b.cat); });
-  const grid = ordered.map(function(t){ return renderToolCard(t, toolUnlocked(t, level)); }).join('');
+  const grid = ordered.map(function(t){ return renderToolCard(t, toolUnlocked(t, level), { recHidden: !!recSet[t.id] }); }).join('');
 
   // Ask Alex footer (Ask Alex is available to everyone)
   const askFooter = `<div class="card" style="margin-top:18px;text-align:center;background:#f3f8fb;">
@@ -6202,6 +6281,12 @@ function renderResources(client) {
       <h2 style="font-family:'Montserrat',sans-serif;color:var(--navy);font-size:22px;margin:0 0 6px;">Resources and Tools</h2>
       <p style="color:var(--gray-600);font-size:14px;line-height:1.55;margin:0 0 4px;max-width:760px;">Practical tools to help you build trust, increase ownership, and move work faster.</p>
       <p style="color:var(--gray-600);font-size:13px;line-height:1.5;margin:0 0 18px;max-width:760px;">${tierLine}</p>
+    </div>
+
+    <div id="myToolsSection" style="${toolFavs().length ? '' : 'display:none;'}margin-bottom:18px;">
+      <div style="font-weight:700;color:var(--navy);font-size:15px;">My Tools</div>
+      <div style="color:var(--gray-600);font-size:13px;margin:2px 0 10px;">Your personal toolbox. Pin the tools you use most so they’re always within reach.</div>
+      <div id="myToolsInner">${renderMyToolsInner(level)}</div>
     </div>
 
     <div style="margin-bottom:6px;font-weight:700;color:var(--navy);font-size:15px;">Recommended for you</div>
@@ -6219,11 +6304,12 @@ function renderResources(client) {
           <input id="toolSearch" oninput="toolApplyFilters()" placeholder="Search tools by name or use case" style="padding:8px 11px;border:1.5px solid var(--gray-300);border-radius:7px;font-size:13px;min-width:200px;">
           <select id="toolCatFilter" onchange="toolApplyFilters()" style="padding:8px 11px;border:1.5px solid var(--gray-300);border-radius:7px;font-size:13px;">${catOptions}</select>
           <select id="toolAccessFilter" onchange="toolApplyFilters()" style="padding:8px 11px;border:1.5px solid var(--gray-300);border-radius:7px;font-size:13px;"><option value="all">All access</option><option value="unlocked">Unlocked</option><option value="locked">Locked</option></select>
+          <a href="#" id="toolClear" onclick="toolClearFilters();return false;" style="display:none;align-self:center;color:var(--teal);font-weight:700;font-size:12.5px;">Clear filters</a>
         </div>
       </div>
-      <div style="margin:14px 0 4px;font-size:12px;color:#7c8a99;font-weight:700;">I need to…</div>
+      <div style="margin:14px 0 4px;font-size:12px;color:#7c8a99;font-weight:700;">I need to… <span style="font-weight:400;color:#94a3b8;">(tap a scenario to filter tools)</span></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">${chipHtml}</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;">${grid}</div>
+      <div id="toolLibraryGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;">${grid}</div>
       <div id="toolEmpty" style="display:none;text-align:center;color:var(--gray-600);padding:24px;font-size:14px;">No tools match those filters. Clear a filter or try a different search.</div>
     </div>
 
