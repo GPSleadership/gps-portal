@@ -74,7 +74,7 @@ const READ_TABLES = new Set([
   'ask_alex_usage', 'ask_alex_log', 'email_log', 'email_templates', 'client_errors',
   'testimonials', 'referrals',
   // Decision Room (v27)
-  'teams', 'team_members', 'sponsors', 'sponsor_teams', 'recommendations', 'external_signals',
+  'teams', 'team_members', 'sponsors', 'sponsor_teams', 'recommendations', 'external_signals', 'external_feedback_invites',
   // Workshop Module (v35)
   'workshops', 'workshop_participants', 'workshop_questions', 'workshop_responses',
   // Organizations (v40)

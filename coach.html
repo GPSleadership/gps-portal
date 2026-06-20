@@ -5733,8 +5733,14 @@ async function saveClientInfo(clientId) {
   const email    = document.getElementById('editEmail-'    + clientId)?.value.trim() || '';
   const org      = document.getElementById('editOrg-'      + clientId)?.value.trim() || '';
   const title    = document.getElementById('editTitle-'    + clientId)?.value.trim() || '';
-  const website  = document.getElementById('editWebsite-'  + clientId)?.value.trim() || '';
-  const industry = document.getElementById('editIndustry-' + clientId)?.value || null;
+  let   website  = document.getElementById('editWebsite-'  + clientId)?.value.trim() || '';
+  let   industry = document.getElementById('editIndustry-' + clientId)?.value || null;
+  // #122: when this client is tied to a known Organization and these are blank, pull from the org.
+  const _orgRec = org ? ORG_RECORDS[org.toLowerCase()] : null;
+  if (_orgRec) {
+    if (!website  && _orgRec.website)  website  = _orgRec.website;
+    if (!industry && _orgRec.industry) industry = _orgRec.industry;
+  }
   const btn      = document.getElementById('saveInfoBtn-'  + clientId);
   const msg      = document.getElementById('saveInfoMsg-'  + clientId);
 
@@ -9016,7 +9022,7 @@ async function drCreateTeam(){
 async function drManageTeam(teamId){
   if(!teamId){ drRender(); return; }
   var el=document.getElementById('drAdmin'); el.innerHTML='<div class="spinner"></div>';
-  var team, members=[], clients=[], recs=[], signals=[], links=[], sponsors=[], reports=[], diags=[];
+  var team, members=[], clients=[], recs=[], signals=[], links=[], sponsors=[], reports=[], diags=[], fbInvites=[];
   try {
     // Fire the independent reads in parallel (was 9 sequential round-trips → now 2 batches).
     var b1 = await Promise.all([
@@ -9026,9 +9032,10 @@ async function drManageTeam(teamId){
       cdSelect('recommendations',{ eq:{team_id:teamId}, order:{col:'updated_at',asc:false} }),
       cdSelect('external_signals',{ eq:{team_id:teamId}, order:{col:'date_observed',asc:false} }),
       cdSelect('sponsor_teams',{ eq:{team_id:teamId} }),
-      cdSelect('diagnostic_team_reports',{ eq:{team_id:teamId}, order:{col:'generated_at',asc:false} })
+      cdSelect('diagnostic_team_reports',{ eq:{team_id:teamId}, order:{col:'generated_at',asc:false} }),
+      cdSelect('external_feedback_invites',{ eq:{team_id:teamId}, order:{col:'created_at',asc:false} }).catch(function(){return [];})
     ]);
-    team=b1[0][0]; members=b1[1]; clients=b1[2]; recs=b1[3]; signals=b1[4]; links=b1[5]; reports=b1[6];
+    team=b1[0][0]; members=b1[1]; clients=b1[2]; recs=b1[3]; signals=b1[4]; links=b1[5]; reports=b1[6]; fbInvites=b1[7]||[];
     var memberCids=members.map(function(m){return m.client_id;}).filter(Boolean);
     var b2 = await Promise.all([
       links.length ? cdSelect('sponsors',{ in:{ id: links.map(function(l){return l.sponsor_id;}) } }) : Promise.resolve([]),
@@ -9043,7 +9050,7 @@ async function drManageTeam(teamId){
   var panelMembers=drMembersPanel(team, members, clients, nameById);
   var panelReport=drTeamReportPanel(team, reports, members, nameById, diags);
   var panelRecs=drRecsPanel(team, recs);
-  var panelSignals=drSignalsPanel(team, signals);
+  var panelSignals=drSignalsPanel(team, signals, fbInvites);
   var panelSponsors=drSponsorsPanel(team, links, sponsors, members, nameById);
   var panelPOC=drPocPanel(team, clients);
   var panelNarr=drNarrativePanel(team);
@@ -9392,7 +9399,7 @@ async function drRecApprove(id, teamId){ try{ await cdUpdate('recommendations',{
 async function drRecUnapprove(id, teamId){ try{ await cdUpdate('recommendations',{ status:'draft', visible_to_client:false, updated_at:new Date().toISOString() },{ eq:{id:id} }); drRefreshRecs(teamId); }catch(e){ alert(e.message); } }
 async function drRecVis(id, vis, teamId){ try{ await cdUpdate('recommendations',{ visible_to_client:vis, updated_at:new Date().toISOString() },{ eq:{id:id} }); drRefreshRecs(teamId); }catch(e){ alert(e.message); } }
 
-function drSignalsPanel(t, signals){
+function drSignalsPanel(t, signals, invites){
   var list=signals.map(function(s){
     var vis=s.visible_to_client?'<span style="color:#2e7d32;font-weight:700;">Visible</span>':'<span style="color:#DB1F48;font-weight:700;">Internal</span>';
     return '<div style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:13px;">'+drEsc(s.date_observed||'')+' · '+drEsc(s.by_role||'')+' · level '+drEsc(s.level)+' · '+vis
@@ -9413,7 +9420,26 @@ function drSignalsPanel(t, signals){
     +'<input id="dr_efemail" placeholder="Email" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;" />'
     +'<input id="dr_efrole" placeholder="Role (optional, e.g. Board)" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;" />'
     +'<button class="btn-add" style="background:#004369;" onclick="drRequestFeedback(\''+t.id+'\')">Send feedback request</button></div></div>';
-  return drCard('External signals', list+add+req);
+  var invitesHtml='';
+  if(invites && invites.length){
+    invitesHtml='<div style="margin-top:14px;border-top:1px solid #eee;padding-top:12px;">'
+      +'<div style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;margin-bottom:2px;">Sent requests</div>'
+      +'<div style="font-size:11px;color:#888;margin-bottom:8px;">Copy a link to paste into your own email, or resend if they misplaced it.</div>'
+      + invites.map(function(iv){
+          var status = iv.submitted_at ? '<span style="color:#2e7d32;font-weight:700;">Responded</span>' : '<span style="color:#888;">Awaiting response</span>';
+          return '<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f3f3f3;font-size:12px;flex-wrap:wrap;">'
+            +'<div>'+drEsc(iv.name||'(no name)')+(iv.email?' · '+drEsc(iv.email):'')+(iv.by_role?' · '+drEsc(iv.by_role):'')+' · '+status+'</div>'
+            +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#fff;color:#01949A;border:1px solid #01949A;" onclick="drCopyFeedbackLink(\''+drEsc(iv.token)+'\',this)">Copy link</button>'
+            +'</div>';
+        }).join('')
+      +'</div>';
+  }
+  return drCard('External signals', list+add+req+invitesHtml);
+}
+async function drCopyFeedbackLink(token, btn){
+  var link=location.origin+'/feedback?token='+token;
+  try{ await navigator.clipboard.writeText(link); if(btn){ var o=btn.textContent; btn.textContent='Copied!'; setTimeout(function(){ btn.textContent=o; },1400); } }
+  catch(_){ prompt('Copy this feedback link:', link); }
 }
 async function drAddSignal(teamId){
   if(!drVal('dr_ssum')){ alert('Summary required.'); return; }
@@ -9427,7 +9453,10 @@ async function drRequestFeedback(teamId){
     var r=await fetch('/api/diagnostic?action=request-external-feedback',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ team_id:teamId, name:name, email:email, by_role:role||null, session:getCoachSessionToken() }) });
     var j=await r.json().catch(function(){return{};});
     if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
-    alert('Feedback request created.'+(j.email_sent?'\n\nEmail sent to '+email+'.':'\n\nEmail could not be sent — share this link manually:\n'+j.link));
+    var copied=false; try{ await navigator.clipboard.writeText(j.link); copied=true; }catch(_){}
+    alert('Feedback request created'+(j.email_sent?' and emailed to '+email:'')+'.'
+      +'\n\nLink'+(copied?' (copied to your clipboard)':'')+':\n'+j.link
+      +'\n\nYou can paste this into your own email, and it stays under “Sent requests” to copy again later.');
     drManageTeam(teamId);
   }catch(e){ alert('Could not send request: '+e.message); }
 }

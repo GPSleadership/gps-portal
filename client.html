@@ -2886,7 +2886,14 @@ async function loadClientDiagnostic() {
     // Phase 1: read through the token-scoped server endpoint (service key). The
     // old anon db.from reads are dead post-v26 lockdown.
     const resp = await portalData('diag-get', {});
-    if (!resp || !resp.ok || !resp.diagnostic) return;
+    if (!resp || !resp.ok || !resp.diagnostic) {
+      // #123: no diagnostic yet — still surface the tab with a "Request a Diagnostic" CTA.
+      CLIENT_DIAG = null;
+      const tabDiagEl = document.getElementById('tabDiag');
+      if (tabDiagEl) tabDiagEl.style.display = '';
+      try { renderDiagnosticTab(); } catch (_) {}
+      return;
+    }
     CLIENT_DIAG = resp.diagnostic;
     CLIENT_DIAG_RATERS = resp.raters || [];
     if (CLIENT_DIAG.report_finalized_at) {
@@ -2934,10 +2941,13 @@ function renderDiagnosticTab() {
   const el = document.getElementById('diag-content');
   if (!el) return;
   if (!CLIENT_DIAG) {
-    el.innerHTML = `<div class="dc-card" style="text-align:center;padding:40px 24px;">
-      <div style="font-size:40px;margin-bottom:12px;">📋</div>
-      <h3 style="color:#1A3D6E;margin-bottom:8px;">No diagnostic found</h3>
-      <p style="color:#6b7280;font-size:14px;">Your coach hasn\'t set up a diagnostic for you yet. Reach out to Alex if you think this is an error.</p>
+    // #123: no diagnostic on file — invite them to request one (brief explainer + booking link).
+    el.innerHTML = `<div class="dc-card" style="text-align:center;padding:42px 24px;max-width:640px;margin:0 auto;">
+      <div style="font-size:40px;margin-bottom:12px;">🧭</div>
+      <h3 style="color:#1A3D6E;margin-bottom:10px;">Request a Diagnostic</h3>
+      <p style="color:#374151;font-size:14px;line-height:1.65;margin:0 auto 10px;max-width:520px;">The 14-Day Executive Leadership Diagnostic gives you a clear, outside read on how your leadership lands with the people around you, and where the gaps are slowing decisions and ownership on your team.</p>
+      <p style="color:#374151;font-size:14px;line-height:1.65;margin:0 auto 22px;max-width:520px;">It is fast, confidential, and built for operators. If you want to see where you stand, book a short call and we will walk you through it.</p>
+      <a href="https://api.leadconnectorhq.com/widget/bookings/15-min-360-snapshot-discovery-call" target="_blank" rel="noopener" style="display:inline-block;background:#1A3D6E;color:#fff;text-decoration:none;font-weight:700;padding:13px 26px;border-radius:8px;font-size:14px;">Book a 15-minute call →</a>
     </div>`;
     return;
   }
@@ -3369,12 +3379,14 @@ async function loadClient() {
       // Always show tab nav once plan is submitted
       document.getElementById('portalTabNav').style.display = 'flex';
 
-      // Ask Alex: visible to EVERYONE; locked (grayed) unless enabled for this client.
+      // Ask Alex: usable by EVERY client by default. Only locked if the coach has
+      // explicitly disabled it (ask_alex_enabled === false) — mirrors the server gate
+      // in api/ask.js so the UI and endpoint agree. (#123)
       const _tabAsk = document.getElementById('tabAsk');
       if (_tabAsk) {
         _tabAsk.style.display = '';
-        if (client.ask_alex_enabled === true) { _tabAsk.classList.remove('ptab-locked'); qaInitUI(); }
-        else { _tabAsk.classList.add('ptab-locked'); }
+        if (client.ask_alex_enabled === false) { _tabAsk.classList.add('ptab-locked'); }
+        else { _tabAsk.classList.remove('ptab-locked'); qaInitUI(); }
       }
 
       // Show Workshops tab if this client is a sponsor on any workshops
@@ -7303,6 +7315,41 @@ function renderClientStakeholderCard(clientId, stakeholders) {
 
   const confirmed = stakeholders.filter(s => s.confirmed_at);
   const drafts    = stakeholders.filter(s => !s.confirmed_at);
+
+  // #124: once the plan is submitted/locked, the home is read-only — never the add UI.
+  // Show a tidy "who will rate you" list; if nobody is on file, hide the card entirely.
+  const _planLocked = !!(window._currentClient && window._currentClient.plan_submitted_at && !window._currentClient.allow_plan_edit);
+  if (_planLocked) {
+    const shown = stakeholders.slice();
+    if (shown.length === 0) { section.innerHTML = ''; return; }
+    const lrows = shown.map(s => {
+      const role = s.is_board_member ? 'Board Member' : s.is_supervisor ? 'Supervisor' : s.relationship || 'Other';
+      return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--gray-200);">
+        <div style="width:34px;height:34px;border-radius:50%;background:var(--teal);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;">${escH((s.name||'?')[0]).toUpperCase()}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;color:var(--navy);font-size:14px;">${escH(s.name)}</div>
+          <div style="font-size:12px;color:var(--gray-600);">${escH(s.email)}&nbsp;·&nbsp;${escH(role)}</div>
+        </div>
+      </div>`;
+    }).join('');
+    section.innerHTML = `
+      <div class="card stakeholder-card" style="margin-top:16px;border-left:4px solid #2e7d32;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
+          <div class="card-title" style="margin:0;">Your Stakeholders</div>
+          <span style="background:#e8f5e9;color:#2e7d32;font-size:11px;font-weight:700;padding:3px 10px;border-radius:10px;">✓ Locked</span>
+        </div>
+        <div class="stakeholder-collapsed-summary">
+          <div style="font-size:13px;color:var(--gray-700);">${shown.length} ${shown.length===1?'person':'people'} will rate your progress at day 30 and day 90.</div>
+          <button class="stakeholder-toggle-btn" onclick="toggleStakeholderCard(this)">Show who &#9662;</button>
+        </div>
+        <div class="stakeholder-detail">
+          <div class="card-subtitle" style="margin-bottom:14px;">Your coach will collect feedback from these people during your 90-day program.</div>
+          ${lrows}
+          <p style="font-size:12px;color:var(--gray-600);margin-top:12px;margin-bottom:0;">Need to make a change? Contact Alex at <a href="mailto:alex@gpsleadership.org" style="color:var(--teal);">alex@gpsleadership.org</a>.</p>
+        </div>
+      </div>`;
+    return;
+  }
 
   if (confirmed.length > 0) {
     // Confirmed — show locked list
