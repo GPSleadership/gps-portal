@@ -6157,6 +6157,12 @@ function toolToggleCat(cat){
   EXPANDED_CATS[cat] = !EXPANDED_CATS[cat];
   toolApplyFilters();
 }
+function toolJumpTo(key){
+  let block = document.getElementById('catblock-' + key);
+  if (!block) return;
+  if (block.style.display === 'none') { toolClearFilters(); }   // reveal it if filters hid it
+  setTimeout(function(){ const b = document.getElementById('catblock-' + key); if (b) b.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 60);
+}
 function toolClearFilters() {
   const s = document.getElementById('toolSearch');       if (s) s.value = '';
   const c = document.getElementById('toolCatFilter');    if (c) c.value = 'all';
@@ -6264,7 +6270,7 @@ function renderToolCard(t, unlocked, opts) {
   const hideStyle = (opts.recHidden || opts.overflow || opts.hidden) ? 'display:none;' : '';
   return `<div class="tool-card"${recAttr}${ovfAttr} data-name="${escH(t.name).toLowerCase()}" data-desc="${escH(t.desc).toLowerCase()}" data-cat="${t.cat}" data-tags="${(t.tags||[]).join(' ')}" data-locked="${unlocked?'0':'1'}"
       style="border:1px solid var(--gray-200);border-radius:10px;padding:14px;background:#fff;${unlocked?'':'opacity:.72;'}${hideStyle}display:flex;flex-direction:column;">
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#7c8a99;font-weight:700;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center;gap:6px;"><span>${escH(catLabel)}</span>${rightCtl}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:6px;"><span style="font-size:10px;font-weight:700;color:#5a6b76;background:#eef3f6;border-radius:999px;padding:2px 8px;">${escH(catLabel)}</span>${rightCtl}</div>
       <div style="font-weight:700;color:var(--navy);font-size:14px;line-height:1.3;">${escH(t.name)}</div>
       <div style="font-size:12.5px;color:var(--gray-600);line-height:1.45;margin-top:5px;flex:1;">${escH(t.desc)}</div>
       ${guideHtml}
@@ -6325,14 +6331,22 @@ function renderResources(client) {
       return renderToolCard(t, toolUnlocked(t, level), { recHidden: isRec, overflow: overflow });
     }).join('');
     const toggle = (visibleCount > 3)
-      ? `<a href="#" class="tool-cat-toggle" data-cat="${catKey}" data-count="${visibleCount}" onclick="toolToggleCat('${catKey}');return false;" style="display:inline-block;margin-top:8px;color:var(--teal);font-weight:700;font-size:12.5px;">Show all ${visibleCount} tools</a>`
+      ? `<a href="#" class="tool-cat-toggle" data-cat="${catKey}" data-count="${visibleCount}" onclick="toolToggleCat('${catKey}');return false;" style="color:var(--teal);font-weight:700;font-size:12.5px;white-space:nowrap;">Show all ${visibleCount} tools</a>`
       : '';
-    return `<div class="tool-cat-block" data-catblock="${catKey}" style="margin-top:16px;">
-        <div style="font-size:13px;font-weight:800;color:var(--navy);margin-bottom:8px;">${escH(TOOL_CATS[catKey])}</div>
+    return `<div class="tool-cat-block" id="catblock-${catKey}" data-catblock="${catKey}" style="margin-top:22px;scroll-margin-top:80px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;background:#eef3f6;border-left:4px solid var(--teal);border-radius:6px;padding:10px 14px;margin-bottom:12px;">
+          <h3 style="margin:0;font-family:'Montserrat',sans-serif;font-size:16px;font-weight:800;color:var(--navy);">${escH(TOOL_CATS[catKey])}</h3>
+          ${toggle}
+        </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;">${cards}</div>
-        ${toggle}
       </div>`;
   }).join('');
+  // Jump-to nav (short labels) for fast scanning by problem area.
+  const _jumpShort = { foundations:'Foundations', assess:'Assess', align:'Align', communicate:'Communicate', conversations:'Hard Conversations', delegate:'Delegate', decide:'Decide', ownership:'Ownership', plan:'Plan', books:'Books' };
+  const jumpHtml = '<div style="margin:4px 0 14px;font-size:12.5px;color:#7c8a99;line-height:1.8;">Jump to: ' +
+    TOOL_CAT_ORDER.filter(function(k){ return TOOLS_CATALOG.some(function(t){ return t.cat === k; }); })
+      .map(function(k){ return '<a href="#" onclick="toolJumpTo(\'' + k + '\');return false;" style="color:var(--teal);font-weight:600;text-decoration:none;">' + escH(_jumpShort[k] || TOOL_CATS[k]) + '</a>'; })
+      .join(' · ') + '</div>';
 
   // Ask Alex footer (Ask Alex is available to everyone)
   const askFooter = `<div class="card" style="margin-top:18px;text-align:center;background:#f3f8fb;">
@@ -6375,6 +6389,7 @@ function renderResources(client) {
       </div>
       <div style="margin:14px 0 4px;font-size:12px;color:#7c8a99;font-weight:700;">I need to… <span style="font-weight:400;color:#94a3b8;">(tap a scenario to filter tools)</span></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">${chipHtml}</div>
+      ${jumpHtml}
       <div id="toolLibraryGrid">${libraryHtml}</div>
       <div id="toolEmpty" style="display:none;text-align:center;color:var(--gray-600);padding:24px;font-size:14px;">No tools match those filters. Clear a filter or try a different search.</div>
     </div>
