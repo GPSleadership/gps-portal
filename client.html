@@ -4511,6 +4511,11 @@ function renderPortal(client, checkins) {
   const daysDiff   = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
   const currentWeek = Math.min(Math.max(Math.ceil((daysDiff + 1) / 7), 1), 13);
 
+  // A new 90-day plan starts a clean slate. Ignore any check-ins logged BEFORE this
+  // plan's start date (e.g. carried over from an earlier engagement) so the week count,
+  // progress %, 13-week schedule, and history all reflect the CURRENT plan only.
+  checkins = (checkins || []).filter(c => !c.submitted_at || new Date(c.submitted_at) >= startDate);
+
   // week badge removed from header — week shown in portal timeline
   // (week number shown in timeline below)
 
@@ -4529,7 +4534,7 @@ function renderPortal(client, checkins) {
   const lastCheckin = checkins.length > 0 ? checkins[checkins.length - 1] : null;
   const alreadyCheckedInThisWeek = lastCheckin && lastCheckin.week_number === currentWeek;
 
-  const isEngagementComplete = currentWeek > 12;
+  const isEngagementComplete = currentWeek > 13;
   const closeoutDone        = !!client.closeout_submitted_at;
 
   const displayName = client.preferred_name || (client.name || '').split(' ')[0] || 'Your';
@@ -4537,8 +4542,8 @@ function renderPortal(client, checkins) {
   // ── Finish line: visible progress through the 90 days ──────────────────────
   // Each visit shows motion toward the end of the sprint instead of an
   // open-ended chore. Time-based bar (12 weeks) + check-ins logged.
-  const flWeek    = Math.min(Math.max(currentWeek, 1), 12);
-  const flPct     = Math.min(100, Math.max(2, Math.round((daysDiff / 84) * 100)));
+  const flWeek    = Math.min(Math.max(currentWeek, 1), 13);
+  const flPct     = Math.min(100, Math.max(2, Math.round((daysDiff / 90) * 100)));
   const flDone    = checkins.length;
   // Consecutive-week check-in streak, counting back from the current (or last) week.
   const _ckWeeks  = new Set(checkins.map(c => c.week_number));
@@ -4554,7 +4559,7 @@ function renderPortal(client, checkins) {
     <div class="card" style="margin-top:24px;padding:16px 22px;">
       <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;">
         <div style="font-size:13px;font-weight:800;color:var(--navy,#004369);font-family:'Montserrat',sans-serif;">
-          ${isEngagementComplete ? '90-Day Sprint Complete' : `Week ${flWeek} of 12`}
+          ${isEngagementComplete ? '90-Day Sprint Complete' : `Week ${flWeek} of 13`}
         </div>
         <div style="font-size:12px;color:#666;">${flDone} check-in${flDone === 1 ? '' : 's'} logged${isEngagementComplete ? '' : ` · ${flPct}% of your 90 days`}${_streak >= 2 ? ` · <span style="color:#c2410c;font-weight:700;">🔥 ${_streak}-week streak</span>` : ''}</div>
       </div>
@@ -4802,9 +4807,13 @@ function renderCheckinForm(client, checkins, currentWeek) {
   weekStartDate.setDate(programStart.getDate() + (currentWeek - 1) * 7);
   const weekEndDate = new Date(weekStartDate);
   weekEndDate.setDate(weekStartDate.getDate() + 6);
-  const fmt = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const nextOpenDate = new Date(weekEndDate);
+  nextOpenDate.setDate(weekEndDate.getDate() + 1);
+  const fmt  = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const fmtW = d => d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   const weekDateRange = `${fmt(weekStartDate)} – ${fmt(weekEndDate)}`;
-  const weekDeadline = fmt(weekEndDate);
+  const weekDeadline  = fmtW(weekEndDate);
+  const nextOpenStr   = fmtW(nextOpenDate);
 
   return `
     <div class="card red-top checkin-card" id="checkinCard">
@@ -4817,7 +4826,11 @@ function renderCheckinForm(client, checkins, currentWeek) {
         <div class="week-label">
           <strong>Week ${currentWeek} of 13</strong>
           ${13 - currentWeek > 0 ? `${13 - currentWeek} weeks remaining` : 'Final week — strong finish.'}
-          <div style="font-size:12px;font-weight:400;color:rgba(255,255,255,0.7);margin-top:3px;">${weekDateRange} &nbsp;·&nbsp; You can update this check-in until ${weekDeadline} at 11:59 PM.</div>
+          <div style="font-size:12px;font-weight:400;color:rgba(255,255,255,0.9);margin-top:5px;line-height:1.55;">
+            🟢 Open now — this is your week (${weekDateRange}).<br>
+            Closes <strong>${weekDeadline}, 11:59 PM</strong>; you can edit until then.<br>
+            Next week's check-in opens <strong>${nextOpenStr}</strong>.
+          </div>
         </div>
       </div>
 
@@ -5181,7 +5194,7 @@ function renderWeekTimeline(client, checkins, currentWeek) {
     const unlockDate = new Date(startDate);
     unlockDate.setDate(unlockDate.getDate() + (i * 7));
     const dateStr = unlockDate.toLocaleDateString('en-US', {month:'short', day:'numeric'});
-    const done    = checkins.some(c => c.week_number === weekNum);
+    const done    = weekNum <= currentWeek && checkins.some(c => c.week_number === weekNum);
     const current = weekNum === currentWeek;
     const future  = weekNum > currentWeek;
 
