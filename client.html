@@ -2331,7 +2331,7 @@
   <button class="ptab ptab-ws" id="tabWorkshop" onclick="showPortalTab('workshop')" style="display:none;">My Workshops</button>
   <button class="ptab ptab-ask" id="tabAsk" onclick="showPortalTab('ask')" style="display:none;">Ask Alex</button>
   <button class="ptab ptab-coach" id="tabCoach" onclick="showPortalTab('coach')" style="display:none;">Contact Your Coach</button>
-  <button class="ptab ptab-resources mobile-only" id="tabResources" onclick="showPortalTab('resources')">Resources</button>
+  <button class="ptab ptab-resources" id="tabResources" onclick="showPortalTab('resources')">Resources</button>
 </div>
 
 <!-- ── WEEKLY LEADERSHIP PROMPT MODAL ── -->
@@ -5954,61 +5954,280 @@ function escHtmlResults(t) {
 function renderResourcesPage(client) {
   if (!client) return '<div class="card" style="margin:16px;">Loading…</div>';
   // Ask Alex has its own tab, so it is intentionally not duplicated here.
-  return `<div style="padding:16px;max-width:760px;margin:0 auto;">
+  return `<div style="padding:16px;max-width:1040px;margin:0 auto;">
     ${renderResources(client)}
     ${renderMeetYourCoach(client)}
   </div>`;
 }
 
+// ─────────────────────────────────────────────
+// GPS TOOLKIT LIBRARY (Resources tab) — #127
+// Catalog is static (fast, no endpoint); files open from Drive for v1.
+// level: 'core' (everyone) | 'diagnostic' (unlocks w/ diagnostic) | 'coaching' (coaching only)
+// ─────────────────────────────────────────────
+function DRIVE(id){ return 'https://drive.google.com/file/d/' + id + '/view'; }
+const BOOKING_URL = 'https://api.leadconnectorhq.com/widget/bookings/15-min-360-snapshot-discovery-call';
+
+const TOOL_CATS = {
+  foundations:  'Foundations & Models',
+  assess:       'Assess Where You Stand',
+  align:        'Align Team & Relationships',
+  communicate:  'Communicate & Speak with Impact',
+  conversations:'Hard Conversations & Feedback',
+  delegate:     'Delegate & Win Back Time',
+  decide:       'Decide & De-risk',
+  ownership:    'Ownership & Accountability',
+  plan:         'Plan the Next 90 Days',
+  books:        'Books',
+};
+const TOOL_CAT_ORDER = ['foundations','assess','align','communicate','conversations','delegate','decide','ownership','plan','books'];
+const TOOL_CHIPS = [
+  { l:'Run a better meeting', t:'meetings' },
+  { l:'Delegate a project',   t:'delegation' },
+  { l:'Have a hard conversation', t:'feedback' },
+  { l:'Speak with impact',    t:'speaking' },
+  { l:'Align my team',        t:'alignment' },
+  { l:'Pressure-test a decision', t:'decision' },
+  { l:'Build ownership',      t:'ownership' },
+  { l:'Plan my 90 days',      t:'planning' },
+  { l:'Win back my time',     t:'time' },
+];
+
+const TOOLS_CATALOG = [
+  // Foundations & Models (open to all)
+  { id:'t_45principles', name:'The 45 Executive Operating Principles', cat:'foundations', level:'core', tags:[], desc:'The core operating principles behind GPS leadership.', url:DRIVE('1ZjRMulyq6gOo37X3rVcRAkL1ViWk17Xi') },
+  { id:'t_fieldguide', name:'The Executive Operating Principles — Field Guide', cat:'foundations', level:'core', tags:[], desc:'A working guide to applying the operating principles day to day.', url:DRIVE('1VyJe6cApjiG5NVAFRWk2NnZisDbzR5Aw') },
+  { id:'t_tp3onepager', name:'GPS TP3 Culture Change One-Pager', cat:'foundations', level:'core', tags:[], desc:'How Trust, Proactivity, and Productivity drive results, on one page.', url:DRIVE('1A2IKMsrG0trbnUoPIlpETHg-f3VLFYGy') },
+  { id:'t_tp3high', name:'High-Trust. High-Proactivity. High-Productivity.', cat:'foundations', level:'core', tags:[], desc:'The TP3 model and why it moves the business.', url:DRIVE('18ZP0pf2YzWqhTKIWeunq9PQBToa6Ncus') },
+  { id:'t_accel', name:'Your Leadership Acceleration Guide', cat:'foundations', level:'core', tags:[], desc:'An orientation to accelerating your leadership growth.', url:DRIVE('1gXXPGTxudzteyyELEB-faJtAGWn8Il0R') },
+  { id:'t_lsucks', name:'Leadership Sucks — CEO Edition', cat:'foundations', level:'core', tags:[], desc:'A candid take on the hard parts of leading at the top.', url:DRIVE('15663e1t5uKaGTJ2K_Ge9btQsZfbd9FiP') },
+  { id:'t_career', name:'Executive Life & Career Trajectory Blueprint', cat:'foundations', level:'core', tags:['self'], desc:'Map where your career is headed and what to build next.', url:DRIVE('1XwJxL8xuDd330vi02CyuOYQgmPwdvN11') },
+
+  // Assess Where You Stand
+  { id:'t_bottlenecks', name:'The 5 CEO Bottlenecks Scorecard', cat:'assess', level:'core', tags:['bottlenecks'], desc:'Score the five places the business slows down when you get involved.', url:DRIVE('1Zg8Nwy0eYfe6CikpGXGIBja9zOWxMFFy') },
+  { id:'t_execscorecard', name:'The GPS Executive Leadership Scorecard', cat:'assess', level:'core', tags:[], desc:'A quick read on where your leadership stands today.', url:DRIVE('14R4sCyBq_yl9vzgOmsgvQ_rI8CR4x2Av') },
+  { id:'t_talent', name:'Executive Talent Snapshot', cat:'assess', level:'diagnostic', tags:['succession'], desc:'A fast view of bench strength and talent risk on your team.', url:DRIVE('18ag5r5bkE0wq56j-iFmoAc9AvAPg-Dbd') },
+  { id:'t_workforce', name:'GPS Workforce Capability', cat:'assess', level:'diagnostic', tags:[], desc:'Assess where your workforce can and can’t deliver.', url:DRIVE('1_L9jxMqLYiCnf8VrSlgVFHWWDQ8bYMt7') },
+  { id:'t_readiness', name:'Program Management Readiness & Alignment Checklist', cat:'assess', level:'diagnostic', tags:['alignment'], desc:'Check whether a program is set up to actually land.', url:DRIVE('1ZkbS29IZeXvM9eTv0hef49Fmpbv7sVzb') },
+
+  // Align Team & Relationships
+  { id:'t_alignqs', name:'Executive Alignment Quickstart', cat:'align', level:'core', tags:['alignment'], desc:'A fast way to get your team pointed the same direction.', url:DRIVE('1tNXFsDhtXPx-dEhXXzPD3rlHi5HoDaDC') },
+  { id:'t_alignbp', name:'GPS Alignment Blueprint', cat:'align', level:'diagnostic', tags:['alignment'], desc:'The full method for aligning a leadership team.', url:DRIVE('1Aci0rG3C5_2dHBemnxw-O9MepNKxs5p3') },
+  { id:'t_workingagree', name:'Strategic Working Agreements Worksheet', cat:'align', level:'diagnostic', tags:['alignment'], desc:'Set explicit agreements on how your team operates.', url:DRIVE('1wXpeAMWOq_VUIBqep5hl0i8vFJMSzHKV') },
+  { id:'t_influencemap', name:'Executive Influence Alignment Map', cat:'align', level:'diagnostic', tags:['alignment'], desc:'Map the stakeholders you need aligned and how to move them.', url:DRIVE('1brxQ60FCow0OXr4utZUGV_1ZUwW2iwaA') },
+  { id:'t_relmatrix', name:'Executive Relationship Matrix', cat:'align', level:'diagnostic', tags:['alignment'], desc:'See the key relationships that make or break your results.', url:DRIVE('1vh5vGtS0S6G8skQ4D9jCId6uCcTcNCuX') },
+  { id:'t_mgrreset', name:'Manager–Employee Relationship Reset', cat:'align', level:'diagnostic', tags:['alignment','feedback'], desc:'Reset a strained manager–report relationship.', url:DRIVE('1oqsMSuQuohL4F415QbdjjIVAtDs2_M86') },
+
+  // Communicate & Speak with Impact
+  { id:'t_speakimpact', name:'GPS Speak with Impact', cat:'communicate', level:'core', tags:['speaking'], desc:'Make your message land the first time.', url:DRIVE('1EmGDdrOjvPdTb-K7ZWsARmUSzD0rVKp1') },
+  { id:'t_decisionchk', name:'Decision-Ready Communication — Quick Checklist', cat:'communicate', level:'core', tags:['speaking','decision'], desc:'A pre-flight checklist so your ask gets a decision.', url:DRIVE('1BBKPQyDK7ZtpRjCYQ8jCg_NmtDy26EBj') },
+  { id:'t_pressureplay', name:'Under-Pressure Communication Playbook', cat:'communicate', level:'core', tags:['speaking','pressure'], desc:'Stay clear and composed when the stakes are high.', url:DRIVE('1g5DYr8gq31bM4krBjNcdNwtQ-nXrqB-2') },
+  { id:'t_pressuresnap', name:'Under-Pressure Communication Snapshot', cat:'communicate', level:'core', tags:['speaking','pressure'], desc:'The one-page version of the under-pressure playbook.', url:DRIVE('1G_I-CweT20r7mP5UpML141jvyZD4Ba9J') },
+  { id:'t_pcp', name:'Speaking Under Pressure — Pause / Clarify / Punt Card', cat:'communicate', level:'core', tags:['speaking','pressure'], desc:'A pocket card for when you’re put on the spot.', url:DRIVE('1VhIm6k_W5cOBzhgfm-hWl4b7e3VhLOoS') },
+  { id:'t_decisionbp', name:'Decision-Ready Communication Blueprint', cat:'communicate', level:'diagnostic', tags:['speaking','decision'], desc:'Structure any message so leaders can decide fast.', url:DRIVE('1w2btHbZBqihAqUQzxrodzx1yt_O_Qle7') },
+  { id:'t_speakplaybook', name:'The Executive Speaking Playbook', cat:'communicate', level:'diagnostic', tags:['speaking'], desc:'The full system for high-stakes executive communication.', url:DRIVE('1VUT3LDGUXASZRUI-ipMYcgHWkWu3rwE2') },
+  { id:'t_speakext', name:'The Extended Speaking Guide', cat:'communicate', level:'diagnostic', tags:['speaking'], desc:'A deeper reference for speaking with presence.', url:DRIVE('1Vb3Qd4iOi8LRJsljNnUdFy0gUDmmQQWe') },
+  { id:'t_presence', name:'Presence Feedback Rubric', cat:'communicate', level:'diagnostic', tags:['speaking'], desc:'Score and sharpen your executive presence.', url:DRIVE('100q_zCIgZ5x52NaDumNOri2LGjviRKvK') },
+
+  // Hard Conversations & Feedback
+  { id:'t_brave', name:'Brave Conversation Blueprint', cat:'conversations', level:'core', tags:['feedback'], desc:'Plan and hold the conversation you’ve been avoiding.', url:DRIVE('1jhNML-z75NFkYatvHcFvbgAammN2Blmo') },
+  { id:'t_clear', name:'GPS CLEAR Feedback Tool (Exec)', cat:'conversations', level:'diagnostic', tags:['feedback'], desc:'A simple structure for feedback that changes behavior.', url:DRIVE('1twbHaL93IgtNM9fvhKh9fUlj61lDTtC1') },
+  { id:'t_trustaccel', name:'The Trust Accelerator Conversation', cat:'conversations', level:'diagnostic', tags:['feedback'], desc:'A conversation that rebuilds trust quickly.', url:DRIVE('1WyZlDZR0CWv4N_Vs1UuSgZuu_WAk0kKn') },
+  { id:'t_connguide', name:'Executive 360 Connection Conversation Guide', cat:'conversations', level:'diagnostic', tags:['feedback'], desc:'Turn 360 feedback into a real conversation.', url:DRIVE('1LK4ntbSdWQ_3iCdL_hn1svQOdCeCC-P1') },
+  { id:'t_perfprep', name:'Executive Performance Conversation Prep Guide', cat:'conversations', level:'diagnostic', tags:['feedback'], desc:'Prepare for a performance conversation that sticks.', url:DRIVE('1YlKqXIFcSe06bRtVRGFen7n7vkoA45_0') },
+
+  // Delegate & Win Back Time
+  { id:'t_1on1', name:'GPS 1-on-1 Meeting Alignment Guide', cat:'delegate', level:'core', tags:['meetings'], desc:'Run 1-on-1s that actually move work forward.', url:DRIVE('1-g41L7lgQ1vlkVfgqZ9MXhbY8WcZ5Fwl') },
+  { id:'t_toomuchtime', name:'Where I’m Spending Too Much Time', cat:'delegate', level:'core', tags:['time'], desc:'Find the work you should stop doing yourself.', url:DRIVE('18AZI-xvFFLIwG7pjDCO_SEEZbxFPSTN5') },
+  { id:'t_delegos', name:'GPS Delegation Operating System', cat:'delegate', level:'diagnostic', tags:['delegation'], desc:'A repeatable system for handing off the right work.', url:DRIVE('1q89oxe_Affiv2iAmCdSij4zrBcSqiiIP') },
+  { id:'t_timeblueprint', name:'The Time Alignment Blueprint', cat:'delegate', level:'diagnostic', tags:['time'], desc:'Align your calendar to what actually matters.', url:DRIVE('1C477nB4mB8SBLmKzBYdddQmuMmMh_Cqx') },
+
+  // Decide & De-risk
+  { id:'t_premortemlite', name:'Pre-Mortem Playbook (Lite, 10 min)', cat:'decide', level:'core', tags:['decision'], desc:'A fast way to surface why a plan might fail — before it does.', url:DRIVE('1TK1_Cnb2mpo4LGfL5FtyStSpChASbZwp') },
+  { id:'t_premortemdeep', name:'Pre-Mortem Playbook (Deep, 20-30 min)', cat:'decide', level:'diagnostic', tags:['decision'], desc:'The full pre-mortem for high-stakes decisions.', url:DRIVE('1B_ODpfyuv38BW0ZjxuERTuIz6TNuamvh') },
+
+  // Ownership & Accountability
+  { id:'t_ownreset', name:'Own the Outcome — Personal Accountability Reset', cat:'ownership', level:'diagnostic', tags:['ownership'], desc:'Reset accountability when ownership has slipped.', url:DRIVE('1ahvRp_XfKHWi1k-IZJDkVKV8L_zQmeMu') },
+  { id:'t_ownmentor', name:'Own the Outcome — Mentor Exercise', cat:'ownership', level:'coaching', tags:['ownership'], desc:'A guided exercise to build ownership in a leader you’re developing.', url:DRIVE('1qptm8kaki8ncVgcsHzGaeImEMhKE3uts') },
+  { id:'t_grow', name:'Executive Coaching Questions — GROW Guide', cat:'ownership', level:'coaching', tags:[], desc:'Coaching questions that build thinking, not dependence.', url:DRIVE('1647RZln3UgdTsZCOCHlvkq2w0N7MCkoD') },
+
+  // Plan the Next 90 Days
+  { id:'t_90pip', name:'90-Day PIP (Fillable)', cat:'plan', level:'diagnostic', tags:['planning'], desc:'Turn feedback into a concrete 90-day plan.', url:DRIVE('13LNv8179UGj6sU0mXOYMKAF-wJeDAwmH') },
+  { id:'t_90impact', name:'90-Day Leadership Impact Plan (360)', cat:'plan', level:'diagnostic', tags:['planning'], desc:'Build the 90-day behavior plan off your 360.', url:DRIVE('1P5mqXp3QKYYW22QVsGJXmBwOSh6yF1lW') },
+  { id:'t_90mentor', name:'90-Day Mentoring Partnership Plan', cat:'plan', level:'coaching', tags:['planning'], desc:'Structure a 90-day mentoring partnership.', url:DRIVE('1oFwq97P5b-VEZxcXv60lD5752mUFZApK') },
+
+  // Books (open to all)
+  { id:'b_reaching', name:'Reaching Senior Leadership', cat:'books', level:'core', tags:[], desc:'Alex’s book on the path to senior leadership.', url:DRIVE('1RMJlx-mbGvlIN2-KNH1VAP2lfo8qhM8o') },
+  { id:'b_gpsguide', name:'The GPS Guide to Success', cat:'books', level:'core', tags:[], desc:'The GPS approach to leading and winning.', url:DRIVE('1RU9FK6yR9zXsrL8BAM2l3a-4V8RPT-FR') },
+  { id:'b_relationships', name:'Relationships That Work', cat:'books', level:'core', tags:[], desc:'Building the relationships that drive results.', url:DRIVE('1blXM2L4tieYU2fNIJWiW-P4AZYeuEh9E') },
+];
+
+// Active scenario-chip filter (tag) for the library
+let TOOL_CHIP = '';
+
+function toolsAccessLevel(client) {
+  if (client && client.is_coaching_client) return 'coaching';
+  if (typeof CLIENT_DIAG !== 'undefined' && CLIENT_DIAG) return 'diagnostic';
+  if (client && client.has_diagnostic) return 'diagnostic';
+  return 'free';
+}
+function toolUnlocked(tool, level) {
+  if (level === 'coaching') return true;
+  if (level === 'diagnostic') return tool.level === 'core' || tool.level === 'diagnostic';
+  return tool.level === 'core';
+}
+function toolOpen(id) {
+  const t = TOOLS_CATALOG.find(x => x.id === id);
+  if (!t) return;
+  const level = toolsAccessLevel(currentClient);
+  if (toolUnlocked(t, level)) {
+    window.open(t.url, '_blank', 'noopener');
+    try { portalData('tool-usage', { tool_id: t.id }).catch(function(){}); } catch(_) {}
+  } else if (t.level === 'coaching') {
+    window.open(BOOKING_URL, '_blank', 'noopener');
+  } else {
+    showPortalTab('diagnostic'); // routes to the Request-a-Diagnostic CTA
+  }
+}
+function toolToggleChip(tag) {
+  TOOL_CHIP = (TOOL_CHIP === tag) ? '' : tag;
+  document.querySelectorAll('.tool-chip').forEach(function(c){
+    var on = c.getAttribute('data-tag') === TOOL_CHIP;
+    c.style.background  = on ? '#1A3D6E' : '#fff';
+    c.style.color       = on ? '#fff' : '#33506b';
+    c.style.borderColor = on ? '#1A3D6E' : '#c7d2dd';
+  });
+  toolApplyFilters();
+}
+function toolApplyFilters() {
+  const q   = (document.getElementById('toolSearch')?.value || '').toLowerCase().trim();
+  const cat = document.getElementById('toolCatFilter')?.value || 'all';
+  const acc = document.getElementById('toolAccessFilter')?.value || 'all';
+  let shown = 0;
+  document.querySelectorAll('.tool-card').forEach(function(card){
+    const name = card.getAttribute('data-name') || '';
+    const desc = card.getAttribute('data-desc') || '';
+    const c    = card.getAttribute('data-cat') || '';
+    const tags = card.getAttribute('data-tags') || '';
+    const locked = card.getAttribute('data-locked') === '1';
+    let ok = true;
+    if (q && name.indexOf(q) === -1 && desc.indexOf(q) === -1) ok = false;
+    if (cat !== 'all' && c !== cat) ok = false;
+    if (TOOL_CHIP && tags.split(' ').indexOf(TOOL_CHIP) === -1) ok = false;
+    if (acc === 'unlocked' && locked) ok = false;
+    if (acc === 'locked' && !locked) ok = false;
+    card.style.display = ok ? '' : 'none';
+    if (ok) shown++;
+  });
+  const empty = document.getElementById('toolEmpty');
+  if (empty) empty.style.display = shown === 0 ? 'block' : 'none';
+}
+
+function renderToolCard(t, unlocked) {
+  const catLabel = TOOL_CATS[t.cat] || '';
+  const lockBadge = unlocked ? '' : '<span style="font-size:11px;">🔒</span>';
+  let btn;
+  if (unlocked) {
+    btn = `<button onclick="toolOpen('${t.id}')" style="margin-top:10px;width:100%;background:#1A3D6E;color:#fff;border:none;border-radius:7px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;">Open tool</button>`;
+  } else {
+    const label = t.level === 'coaching' ? 'Unlock with coaching' : 'Unlock with the diagnostic';
+    const sub   = t.level === 'coaching'
+      ? 'Available on an active coaching engagement.'
+      : 'Unlocks with the Executive Leadership Diagnostic.';
+    btn = `<button onclick="toolOpen('${t.id}')" style="margin-top:10px;width:100%;background:#fff;color:#1A3D6E;border:1.5px solid #c7d2dd;border-radius:7px;padding:9px;font-size:13px;font-weight:700;cursor:pointer;">${label}</button>
+      <div style="font-size:11px;color:#94a3b8;margin-top:5px;text-align:center;">${sub}</div>`;
+  }
+  return `<div class="tool-card" data-name="${escH(t.name).toLowerCase()}" data-desc="${escH(t.desc).toLowerCase()}" data-cat="${t.cat}" data-tags="${(t.tags||[]).join(' ')}" data-locked="${unlocked?'0':'1'}"
+      style="border:1px solid var(--gray-200);border-radius:10px;padding:14px;background:#fff;${unlocked?'':'opacity:.72;'}display:flex;flex-direction:column;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#7c8a99;font-weight:700;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center;gap:6px;"><span>${escH(catLabel)}</span>${lockBadge}</div>
+      <div style="font-weight:700;color:var(--navy);font-size:14px;line-height:1.3;">${escH(t.name)}</div>
+      <div style="font-size:12.5px;color:var(--gray-600);line-height:1.45;margin-top:5px;flex:1;">${escH(t.desc)}</div>
+      ${btn}
+    </div>`;
+}
+
 function renderResources(client) {
-  // Build diagnostic button separately so conditional logic works cleanly
-  const diagBtn = client.diagnostic_report_url
-    ? `<a
-        href="${client.diagnostic_report_url}"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="toolkit-btn"
-        style="background:var(--teal);margin-bottom:4px;"
-        title="Your Executive Leadership Diagnostic Report"
-      >
-        📊 View Your Executive Leadership Diagnostic Report
-      </a>
-      <span class="toolkit-btn-sub" style="margin-bottom:20px;">Your personal 14-Day Executive Leadership Diagnostic — opens in a new tab</span>`
-    : '';
+  const level = toolsAccessLevel(client);
+  const hasDiag = (level === 'coaching') || (typeof CLIENT_DIAG !== 'undefined' && !!CLIENT_DIAG) || !!client.has_diagnostic;
+
+  // Tier-aware header sub-copy
+  let tierLine = '';
+  if (level === 'coaching') tierLine = 'As a coaching client, you have full access to the GPS tool library.';
+  else if (level === 'diagnostic') tierLine = 'Your diagnostic has unlocked tools tailored to your results. Coaching unlocks the full library.';
+  else tierLine = 'You have access to a starter set of tools. Completing a diagnostic or starting coaching unlocks the full library.';
+
+  // Recommended strip: prefer the client's TP3 focus pillar where we can, else core quick wins
+  const unlockedTools = TOOLS_CATALOG.filter(function(t){ return toolUnlocked(t, level); });
+  const recs = unlockedTools.slice(0, 4);
+  const recHtml = recs.map(function(t){ return renderToolCard(t, true); }).join('');
+
+  // Diagnostic Toolkit card
+  let diagCard;
+  if (hasDiag) {
+    const tkUrl = client.diagnostic_report_url || 'https://drive.google.com/drive/folders/14yT6gZ3RvOyRP3qg7wg97x8Sj1EcmVcS';
+    diagCard = `<div class="card" style="border-left:4px solid var(--teal);margin-top:18px;">
+      <div class="card-title" style="margin:0 0 4px;">Executive Leadership Diagnostic Toolkit</div>
+      <div class="card-subtitle" style="margin-bottom:12px;">These tools help you turn your diagnostic insights into consistent behavior change over the next 90 days.</div>
+      <a href="${tkUrl}" target="_blank" rel="noopener" style="display:inline-block;background:var(--teal);color:#fff;text-decoration:none;font-weight:700;padding:10px 18px;border-radius:7px;font-size:13px;">Open Diagnostic Toolkit</a>
+      <a href="#" onclick="showPortalTab('diagnostic');return false;" style="display:inline-block;margin-left:14px;color:var(--teal);font-weight:700;font-size:13px;">Review my diagnostic report →</a>
+    </div>`;
+  } else {
+    diagCard = `<div class="card" style="border-left:4px solid var(--gray-300);margin-top:18px;opacity:.85;">
+      <div class="card-title" style="margin:0 0 4px;">🔒 Executive Leadership Diagnostic Toolkit</div>
+      <div class="card-subtitle" style="margin-bottom:12px;">This toolkit unlocks once you complete the 14-Day Executive Leadership Diagnostic. It includes tools to act on your leadership feedback and build a concrete 90-day plan.</div>
+      <a href="#" onclick="showPortalTab('diagnostic');return false;" style="display:inline-block;background:#1A3D6E;color:#fff;text-decoration:none;font-weight:700;padding:10px 18px;border-radius:7px;font-size:13px;">Learn about the diagnostic</a>
+    </div>`;
+  }
+
+  // Category dropdown + chips
+  const catOptions = '<option value="all">All categories</option>' +
+    TOOL_CAT_ORDER.map(function(k){ return `<option value="${k}">${escH(TOOL_CATS[k])}</option>`; }).join('');
+  const chipHtml = TOOL_CHIPS.map(function(c){
+    return `<button class="tool-chip" data-tag="${c.t}" onclick="toolToggleChip('${c.t}')" style="border:1.5px solid #c7d2dd;background:#fff;color:#33506b;border-radius:999px;padding:6px 13px;font-size:12.5px;font-weight:600;cursor:pointer;">${escH(c.l)}</button>`;
+  }).join('');
+
+  // Full library grid (ordered by category)
+  const ordered = TOOLS_CATALOG.slice().sort(function(a,b){ return TOOL_CAT_ORDER.indexOf(a.cat) - TOOL_CAT_ORDER.indexOf(b.cat); });
+  const grid = ordered.map(function(t){ return renderToolCard(t, toolUnlocked(t, level)); }).join('');
+
+  // Ask Alex footer (Ask Alex is available to everyone)
+  const askFooter = `<div class="card" style="margin-top:18px;text-align:center;background:#f3f8fb;">
+      <div style="font-size:14px;color:var(--navy);font-weight:600;margin-bottom:8px;">Not sure which tool fits your situation?</div>
+      <div style="font-size:13px;color:var(--gray-600);margin-bottom:12px;">Ask Alex can recommend the right tool from this library for what you’re facing.</div>
+      <button onclick="showPortalTab('ask')" style="background:#1A3D6E;color:#fff;border:none;border-radius:7px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;">Ask Alex now</button>
+    </div>`;
 
   return `
-    <div class="card" id="resourcesSection" style="margin-top:24px;scroll-margin-top:72px;">
-      <div class="card-title">Executive Leadership Toolkit</div>
-      <div class="card-subtitle">Tools and resources from your GPS engagement.</div>
-
-      <!-- DIAGNOSTIC REPORT — only renders if URL is saved on this client -->
-      ${diagBtn}
-
-      <!-- INDIVIDUAL TOOLS -->
-      <div class="resource-list">
-        <a href="https://drive.google.com/drive/folders/1H9I3lS7XENDBmH2x3PUVbCRa7wnhuhgs?usp=drive_link" target="_blank" rel="noopener noreferrer" class="resource-item">
-          <span class="resource-item-icon">⚙️</span>
-          <div>
-            <div>01 – Execution Toolkit</div>
-            <div class="resource-item-desc">Meeting cadences, delegation, and the operating habits that drive results</div>
-          </div>
-        </a>
-        <a href="https://drive.google.com/drive/folders/11bcYqfXr54vZ8JxyAc8w67OSRvDFfnjK?usp=drive_link" target="_blank" rel="noopener noreferrer" class="resource-item">
-          <span class="resource-item-icon">🤝</span>
-          <div>
-            <div>02 – Relationship &amp; Influence Toolkit</div>
-            <div class="resource-item-desc">1:1 structure, communication frameworks, and team trust tools</div>
-          </div>
-        </a>
-        <a href="https://drive.google.com/drive/folders/1Nre0pNe-leUQlN1UBXM3MblyW-8_Z2gF?usp=drive_link" target="_blank" rel="noopener noreferrer" class="resource-item">
-          <span class="resource-item-icon">🚀</span>
-          <div>
-            <div>03 – Next Step Offer</div>
-            <div class="resource-item-desc">Options for continuing your leadership development beyond this engagement</div>
-          </div>
-        </a>
-      </div>
+    <div style="margin-top:8px;">
+      <h2 style="font-family:'Montserrat',sans-serif;color:var(--navy);font-size:22px;margin:0 0 6px;">Resources and Tools</h2>
+      <p style="color:var(--gray-600);font-size:14px;line-height:1.55;margin:0 0 4px;max-width:760px;">Practical tools to help you build trust, increase ownership, and move work faster.</p>
+      <p style="color:var(--gray-600);font-size:13px;line-height:1.5;margin:0 0 18px;max-width:760px;">${tierLine}</p>
     </div>
+
+    <div style="margin-bottom:6px;font-weight:700;color:var(--navy);font-size:15px;">Recommended for you</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:6px;">${recHtml}</div>
+
+    ${diagCard}
+
+    <div class="card" style="margin-top:18px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
+        <div>
+          <div class="card-title" style="margin:0;">Tool library</div>
+          <div class="card-subtitle" style="margin:2px 0 0;">Search or filter to find the right tool for your situation.</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <input id="toolSearch" oninput="toolApplyFilters()" placeholder="Search tools by name or use case" style="padding:8px 11px;border:1.5px solid var(--gray-300);border-radius:7px;font-size:13px;min-width:200px;">
+          <select id="toolCatFilter" onchange="toolApplyFilters()" style="padding:8px 11px;border:1.5px solid var(--gray-300);border-radius:7px;font-size:13px;">${catOptions}</select>
+          <select id="toolAccessFilter" onchange="toolApplyFilters()" style="padding:8px 11px;border:1.5px solid var(--gray-300);border-radius:7px;font-size:13px;"><option value="all">All access</option><option value="unlocked">Unlocked</option><option value="locked">Locked</option></select>
+        </div>
+      </div>
+      <div style="margin:14px 0 4px;font-size:12px;color:#7c8a99;font-weight:700;">I need to…</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">${chipHtml}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;">${grid}</div>
+      <div id="toolEmpty" style="display:none;text-align:center;color:var(--gray-600);padding:24px;font-size:14px;">No tools match those filters. Clear a filter or try a different search.</div>
+    </div>
+
+    ${askFooter}
   `;
 }
 
@@ -6245,8 +6464,8 @@ function showPortalTab(tab) {
     alert('Contact Your Coach is part of an active 1:1 coaching engagement. To work with Alex directly, reach out to team@gpsleadership.org.');
     return;
   }
-  if (tab === 'ask' && !(currentClient && currentClient.ask_alex_enabled === true)) {
-    alert('Ask Alex is available on coaching engagements. Ask about enabling it for your account.');
+  if (tab === 'ask' && currentClient && currentClient.ask_alex_enabled === false) {
+    alert('Ask Alex has been turned off for your account. Contact alex@gpsleadership.org if you would like it enabled.');
     return;
   }
   const mainContent   = document.getElementById('mainContent');
