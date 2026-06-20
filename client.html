@@ -6215,7 +6215,8 @@ function refreshMyTools(){
   const sec = document.getElementById('myToolsSection');
   const inner = document.getElementById('myToolsInner');
   if (!sec || !inner) return;
-  const html = renderMyToolsInner(toolsAccessLevel(currentClient));
+  const level = toolsAccessLevel(currentClient);
+  const html = (level === 'coaching') ? renderMyToolsInner(level) : '';
   inner.innerHTML = html;
   sec.style.display = html ? 'block' : 'none';
 }
@@ -6270,7 +6271,7 @@ function renderToolCard(t, unlocked, opts) {
   const hideStyle = (opts.recHidden || opts.overflow || opts.hidden) ? 'display:none;' : '';
   return `<div class="tool-card"${recAttr}${ovfAttr} data-name="${escH(t.name).toLowerCase()}" data-desc="${escH(t.desc).toLowerCase()}" data-cat="${t.cat}" data-tags="${(t.tags||[]).join(' ')}" data-locked="${unlocked?'0':'1'}"
       style="border:1px solid var(--gray-200);border-radius:10px;padding:14px;background:#fff;${unlocked?'':'opacity:.72;'}${hideStyle}display:flex;flex-direction:column;">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:6px;"><span style="font-size:10px;font-weight:700;color:#5a6b76;background:#eef3f6;border-radius:999px;padding:2px 8px;">${escH(catLabel)}</span>${rightCtl}</div>
+      <div style="display:flex;justify-content:${opts.hidePill?'flex-end':'space-between'};align-items:center;gap:6px;margin-bottom:6px;">${opts.hidePill?'':`<span style="font-size:10px;font-weight:700;color:#5a6b76;background:#eef3f6;border-radius:999px;padding:2px 8px;">${escH(catLabel)}</span>`}${rightCtl}</div>
       <div style="font-weight:700;color:var(--navy);font-size:14px;line-height:1.3;">${escH(t.name)}</div>
       <div style="font-size:12.5px;color:var(--gray-600);line-height:1.45;margin-top:5px;flex:1;">${escH(t.desc)}</div>
       ${guideHtml}
@@ -6299,7 +6300,8 @@ function renderResources(client) {
     const tkUrl = client.diagnostic_report_url || 'https://drive.google.com/drive/folders/14yT6gZ3RvOyRP3qg7wg97x8Sj1EcmVcS';
     diagCard = `<div class="card" style="border-left:4px solid var(--teal);margin-top:18px;">
       <div class="card-title" style="margin:0 0 4px;">Executive Leadership Diagnostic Toolkit</div>
-      <div class="card-subtitle" style="margin-bottom:12px;">These tools help you turn your diagnostic insights into consistent behavior change over the next 90 days.</div>
+      <div class="card-subtitle" style="margin-bottom:4px;">These tools help you turn your diagnostic insights into consistent behavior change over the next 90 days.</div>
+      <div style="font-size:12.5px;color:#7c8a99;font-weight:600;margin-bottom:12px;">Start here in the first 30 days after your diagnostic.</div>
       <a href="${tkUrl}" target="_blank" rel="noopener" style="display:inline-block;background:var(--teal);color:#fff;text-decoration:none;font-weight:700;padding:10px 18px;border-radius:7px;font-size:13px;">Open Diagnostic Toolkit</a>
       <a href="#" onclick="showPortalTab('diagnostic');return false;" style="display:inline-block;margin-left:14px;color:var(--teal);font-weight:700;font-size:13px;">Review my diagnostic report →</a>
     </div>`;
@@ -6328,14 +6330,14 @@ function renderResources(client) {
       const isRec = !!recSet[t.id];
       let overflow = false;
       if (!isRec) { if (idx >= 3) overflow = true; idx++; }   // collapse to first 3 non-rec
-      return renderToolCard(t, toolUnlocked(t, level), { recHidden: isRec, overflow: overflow });
+      return renderToolCard(t, toolUnlocked(t, level), { recHidden: isRec, overflow: overflow, hidePill: true });
     }).join('');
     const toggle = (visibleCount > 3)
-      ? `<a href="#" class="tool-cat-toggle" data-cat="${catKey}" data-count="${visibleCount}" onclick="toolToggleCat('${catKey}');return false;" style="color:var(--teal);font-weight:700;font-size:12.5px;white-space:nowrap;">Show all ${visibleCount} tools</a>`
+      ? `<a href="#" class="tool-cat-toggle" data-cat="${catKey}" data-count="${visibleCount}" onclick="toolToggleCat('${catKey}');return false;" style="color:#7c8a99;font-weight:600;font-size:11.5px;white-space:nowrap;">Show all ${visibleCount} tools</a>`
       : '';
-    return `<div class="tool-cat-block" id="catblock-${catKey}" data-catblock="${catKey}" style="margin-top:22px;scroll-margin-top:80px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;background:#eef3f6;border-left:4px solid var(--teal);border-radius:6px;padding:10px 14px;margin-bottom:12px;">
-          <h3 style="margin:0;font-family:'Montserrat',sans-serif;font-size:16px;font-weight:800;color:var(--navy);">${escH(TOOL_CATS[catKey])}</h3>
+    return `<div class="tool-cat-block" id="catblock-${catKey}" data-catblock="${catKey}" style="margin-top:24px;scroll-margin-top:80px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;background:#eef3f6;border-left:5px solid var(--teal);border-radius:6px;padding:12px 16px;margin-bottom:14px;">
+          <h3 style="margin:0;font-family:'Montserrat',sans-serif;font-size:17px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--navy);">${escH(TOOL_CATS[catKey])}</h3>
           ${toggle}
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;">${cards}</div>
@@ -6362,14 +6364,15 @@ function renderResources(client) {
       <p style="color:var(--gray-600);font-size:13px;line-height:1.5;margin:0 0 18px;max-width:760px;">${tierLine}</p>
     </div>
 
-    <div id="myToolsSection" style="${toolFavs().length ? '' : 'display:none;'}margin-bottom:18px;">
+    <div id="myToolsSection" style="${(level === 'coaching' && toolFavs().length) ? '' : 'display:none;'}margin-bottom:18px;">
       <div style="font-weight:700;color:var(--navy);font-size:15px;">My Tools</div>
-      <div style="color:var(--gray-600);font-size:13px;margin:2px 0 4px;">Your personal toolbox. Pin the tools you use most so they’re always within reach.${level === 'coaching' ? ' During coaching, we’ll pick 2–3 tools to keep in My Tools as your focus for this 90-day sprint.' : ''}</div>
+      <div style="color:var(--gray-600);font-size:13px;margin:2px 0 4px;">Your personal toolbox. During coaching, we’ll pick 2–3 tools to keep here as your focus for this 90-day sprint.</div>
       <div style="color:#94a3b8;font-size:12px;margin:0 0 10px;">Tap the star on any tool card to add or remove it from My Tools.</div>
       <div id="myToolsInner">${renderMyToolsInner(level)}</div>
     </div>
 
-    <div style="margin-bottom:6px;font-weight:700;color:var(--navy);font-size:15px;">Recommended for you</div>
+    <div style="font-weight:700;color:var(--navy);font-size:15px;">Recommended for you</div>
+    <div style="font-size:12.5px;color:#7c8a99;margin:2px 0 8px;">Start here this week.</div>
     <div id="recommendedRow" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:6px;">${recHtml}</div>
 
     ${diagCard}
