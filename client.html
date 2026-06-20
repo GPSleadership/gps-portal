@@ -2941,13 +2941,19 @@ function renderDiagnosticTab() {
   const el = document.getElementById('diag-content');
   if (!el) return;
   if (!CLIENT_DIAG) {
-    // #123: no diagnostic on file — invite them to request one (brief explainer + booking link).
-    el.innerHTML = `<div class="dc-card" style="text-align:center;padding:42px 24px;max-width:640px;margin:0 auto;">
-      <div style="font-size:40px;margin-bottom:12px;">🧭</div>
-      <h3 style="color:#1A3D6E;margin-bottom:10px;">Request a Diagnostic</h3>
-      <p style="color:#374151;font-size:14px;line-height:1.65;margin:0 auto 10px;max-width:520px;">The 14-Day Executive Leadership Diagnostic gives you a clear, outside read on how your leadership lands with the people around you, and where the gaps are slowing decisions and ownership on your team.</p>
-      <p style="color:#374151;font-size:14px;line-height:1.65;margin:0 auto 22px;max-width:520px;">It is fast, confidential, and built for operators. If you want to see where you stand, book a short call and we will walk you through it.</p>
-      <a href="https://api.leadconnectorhq.com/widget/bookings/15-min-360-snapshot-discovery-call" target="_blank" rel="noopener" style="display:inline-block;background:#1A3D6E;color:#fff;text-decoration:none;font-weight:700;padding:13px 26px;border-radius:8px;font-size:14px;">Book a 15-minute call →</a>
+    // #123: no diagnostic on file — invite them to request one (Alex's approved copy).
+    el.innerHTML = `<div class="dc-card" style="padding:40px 30px;max-width:640px;margin:0 auto;">
+      <h3 style="color:#1A3D6E;font-size:22px;margin:0 0 10px;text-align:center;">See what your leaders aren't telling you</h3>
+      <p style="color:#374151;font-size:15px;line-height:1.6;text-align:center;margin:0 auto 22px;max-width:540px;">A 14-day Executive Leadership Diagnostic that shows exactly where trust, proactivity, and execution are leaking.</p>
+      <ul style="list-style:none;padding:0;margin:0 auto 20px;max-width:520px;display:grid;gap:12px;">
+        <li style="display:flex;gap:10px;align-items:flex-start;font-size:14px;color:#374151;line-height:1.55;"><span style="color:#2EA887;font-weight:700;flex-shrink:0;">✓</span><span>A confidential 360 from the people who matter most (direct reports, peers, boss).</span></li>
+        <li style="display:flex;gap:10px;align-items:flex-start;font-size:14px;color:#374151;line-height:1.55;"><span style="color:#2EA887;font-weight:700;flex-shrink:0;">✓</span><span>A clear TP3 scorecard plus your top 3 leadership bottlenecks.</span></li>
+        <li style="display:flex;gap:10px;align-items:flex-start;font-size:14px;color:#374151;line-height:1.55;"><span style="color:#2EA887;font-weight:700;flex-shrink:0;">✓</span><span>A live debrief with Alex that turns feedback into a 90-day behavior plan.</span></li>
+      </ul>
+      <p style="text-align:center;color:#6b7280;font-size:13px;font-style:italic;margin:0 auto 22px;max-width:520px;">We run the whole process for you; your team gets one link, you get the signal.</p>
+      <div style="text-align:center;">
+        <a href="https://api.leadconnectorhq.com/widget/bookings/15-min-360-snapshot-discovery-call" target="_blank" rel="noopener" style="display:inline-block;background:#1A3D6E;color:#fff;text-decoration:none;font-weight:700;padding:13px 28px;border-radius:8px;font-size:15px;">Book a 15-minute call</a>
+      </div>
     </div>`;
     return;
   }

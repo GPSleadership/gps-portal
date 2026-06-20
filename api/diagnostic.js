@@ -2566,7 +2566,7 @@ async function handleFeedbackContext(req, res) {
     if (!inv) return res.status(404).json({ error: 'This link is invalid or has expired.' });
     const teamRows = await (await sb(`/rest/v1/teams?id=eq.${inv.team_id}&select=name,client_org_name`)).json();
     const team = (Array.isArray(teamRows) && teamRows[0]) || {};
-    return res.status(200).json({ ok: true, name: inv.name, by_role: inv.by_role || '', team_name: team.client_org_name || team.name || 'the leadership team', submitted: !!inv.submitted_at });
+    return res.status(200).json({ ok: true, name: inv.name, by_role: inv.by_role || '', team_name: team.client_org_name || team.name || 'the leadership team', submitted: !!inv.submitted_at, submitted_at: inv.submitted_at || null });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }

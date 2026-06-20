@@ -46,7 +46,8 @@ async function api(action, body){
   if(!r.ok) throw new Error(j.error || ('Request failed ('+r.status+')'));
   return j;
 }
-function thanks(){ document.getElementById('view').innerHTML = '<div class="center"><div class="big">✓</div><div style="font-size:18px;font-weight:700;color:#1A3D6E;margin-top:8px;">Thank you</div><div class="muted" style="margin-top:8px;">Your input has been recorded. You can close this window.</div></div>'; }
+function fmtDate(s){ try { var d = s ? new Date(s) : new Date(); return d.toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' }); } catch(_) { return ''; } }
+function thanks(dateStr){ var d = dateStr ? ('<div class="muted" style="margin-top:6px;">Submitted on '+esc(dateStr)+'.</div>') : ''; document.getElementById('view').innerHTML = '<div class="center"><div class="big">✓</div><div style="font-size:18px;font-weight:700;color:#1A3D6E;margin-top:8px;">Thank you</div><div class="muted" style="margin-top:8px;">Your input has been recorded. You can close this window.</div>'+d+'</div>'; }
 function errorBox(msg){ document.getElementById('view').innerHTML = '<div class="center"><div class="muted">'+esc(msg)+'</div></div>'; }
 
 function pickLevel(el, lv){ LEVEL=lv; document.querySelectorAll('.lv').forEach(function(x){x.classList.remove('sel');}); el.classList.add('sel'); }
@@ -54,6 +55,7 @@ function pickLevel(el, lv){ LEVEL=lv; document.querySelectorAll('.lv').forEach(f
 function renderForm(ctx){
   document.getElementById('view').innerHTML =
     '<div class="muted">Hi '+esc((ctx.name||'').split(' ')[0]||'there')+', thank you for taking a moment. Your candid observation about the <b>'+esc(ctx.team_name)+'</b> leadership team helps inform our work.</div>'
+    + '<div class="muted" style="margin-top:6px;">Date: <b>'+esc(fmtDate())+'</b> — your input will be recorded with today\'s date.</div>'
     + '<label>Your name</label>'
     + '<input type="text" id="fbName" value="'+esc(ctx.name||'')+'" placeholder="First and last name" />'
     + '<label>Your role / relationship to the team</label>'
@@ -78,14 +80,14 @@ async function submit(){
   if(!role){ m.style.color='#b00'; m.textContent='Please add your role or relationship to the team.'; return; }
   if(!obs){ m.style.color='#b00'; m.textContent='Please add a short observation before submitting.'; return; }
   btn.disabled=true; btn.textContent='Submitting…';
-  try{ await api('submit-external-feedback', { token:TOKEN, summary:obs, level:LEVEL, name:nm, by_role:role }); thanks(); }
+  try{ await api('submit-external-feedback', { token:TOKEN, summary:obs, level:LEVEL, name:nm, by_role:role }); thanks(fmtDate()); }
   catch(e){ m.style.color='#b00'; m.textContent=e.message; btn.disabled=false; btn.textContent='Submit my input'; }
 }
 (async function(){
   if(!TOKEN){ errorBox('This link is missing its token. Please use the link from your email.'); return; }
   try{
     var ctx = await api('feedback-context', { token:TOKEN });
-    if(ctx.submitted){ thanks(); return; }
+    if(ctx.submitted){ thanks(fmtDate(ctx.submitted_at)); return; }
     renderForm(ctx);
   }catch(e){ errorBox(e.message); }
 })();
