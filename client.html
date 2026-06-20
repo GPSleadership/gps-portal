@@ -6279,7 +6279,7 @@ function renderToolCard(t, unlocked, opts) {
   const ovfAttr   = opts.overflow ? ' data-ovf="1"' : '';
   const hideStyle = (opts.recHidden || opts.overflow || opts.hidden) ? 'display:none;' : '';
   return `<div class="tool-card"${recAttr}${ovfAttr} data-name="${escH(t.name).toLowerCase()}" data-desc="${escH(t.desc).toLowerCase()}" data-cat="${t.cat}" data-tags="${(t.tags||[]).join(' ')}" data-locked="${unlocked?'0':'1'}"
-      style="border:1px solid var(--gray-200);border-radius:10px;padding:14px;background:#fff;${unlocked?'':'opacity:.72;'}${hideStyle}display:flex;flex-direction:column;">
+      style="border:1px solid var(--gray-200);border-radius:10px;padding:14px;background:#fff;${unlocked?'':'opacity:.72;'}display:flex;flex-direction:column;${hideStyle}">
       <div style="display:flex;justify-content:${opts.hidePill?'flex-end':'space-between'};align-items:center;gap:6px;margin-bottom:6px;">${opts.hidePill?'':`<span style="font-size:10px;font-weight:700;color:#5a6b76;background:#eef3f6;border-radius:999px;padding:2px 8px;">${escH(catLabel)}</span>`}${rightCtl}</div>
       <div style="font-weight:700;color:var(--navy);font-size:14px;line-height:1.3;">${escH(t.name)}</div>
       <div style="font-size:12.5px;color:var(--gray-600);line-height:1.45;margin-top:5px;flex:1;">${escH(t.desc)}</div>
@@ -6708,7 +6708,7 @@ function showPortalTab(tab) {
       const rc = document.getElementById('resources-content');
       if (rc) {
         rc.innerHTML = '<div class="card" style="margin:16px;">Loading…</div>';
-        loadToolFavs().then(function(){ rc.innerHTML = renderResourcesPage(currentClient); });
+        loadToolFavs().then(function(){ rc.innerHTML = renderResourcesPage(currentClient); try { toolApplyFilters(); } catch(_) {} });
       }
     }
     if (tabRes) tabRes.classList.add('active');
