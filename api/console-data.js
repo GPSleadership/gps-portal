@@ -21,6 +21,8 @@ const TABLE_RE = /^\/rest\/v1\/(gps_settings|gps_notes|gps_coach_uploads)(\?|$)/
 
 // gps_settings keys that hold secrets — never exposed or written via passthrough.
 const SECRET_KEYS = new Set(['control_password', 'pw_hash', 'ea_console_settings', 'financial_strategy_note']);
+// Financial keys the EA role must never reach (only exec / master).
+const EXEC_ONLY_KEYS = new Set(['accounts']);
 
 function sha256(s) {
   return crypto.createHash('sha256').update(String(s), 'utf8').digest('hex');
@@ -151,6 +153,10 @@ module.exports = async (req, res) => {
     const touched = [pathKey, ...bodyKeys].filter(Boolean);
     if (touched.some(k => SECRET_KEYS.has(k))) {
       return res.status(403).json({ ok: false, status: 403, data: { error: 'Key not allowed' } });
+    }
+    // EA role cannot reach financial keys; the exec password (master) can.
+    if (authed === 'ea' && touched.some(k => EXEC_ONLY_KEYS.has(k))) {
+      return res.status(403).json({ ok: false, status: 403, data: { error: 'Key not allowed for this role' } });
     }
     // A read with no key filter could leak secret keys — require a key filter on GET.
     if (method === 'GET' && !pathKey) {
