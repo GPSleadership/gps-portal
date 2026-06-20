@@ -185,16 +185,23 @@
 </div>
 
 <script>
-const SUPABASE_URL = 'https://pbnkefuqpoztcxfagiod.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBibmtlZnVxcG96dGN4ZmFnaW9kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5OTkwMzEsImV4cCI6MjA5MjU3NTAzMX0.DxEMR2Ckt9QJlRMkFenEZn-gzsVoi8-6CFcAItTePjo';
-
-// Alex's master password — always grants access, never triggers force-change
-// Change this to something only you know
-const MASTER_PASSWORD = 'GPS-MASTER-2026';
-// Anna's initial default password — she will be required to change this on first login
-const DEFAULT_EA_PASSWORD = 'GPS-EA-2026';
-
+// SECURITY: no anon key and no hardcoded passwords live in the browser anymore.
+// All data flows through the authenticated /api/console-data endpoint (service key),
+// which validates the password server-side. Alex's executive-console password works
+// here as a master override. The password is held in memory only.
+const API_BASE = 'https://portal.gpsleadership.org';
+const CONSOLE_ROLE = 'ea';
+let AUTH_PW = '';
 let isMasterSession = false;
+
+async function consoleApi(payload) {
+  const res = await fetch(API_BASE + '/api/console-data', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role: CONSOLE_ROLE, password: AUTH_PW, ...payload })
+  });
+  return res.json().catch(() => ({ ok: false, status: res.status, data: null }));
+}
 
 async function checkPassword() {
   const val = document.getElementById('pwInput').value.trim();
@@ -203,48 +210,24 @@ async function checkPassword() {
   btn.textContent = 'Signing in...';
   btn.disabled = true;
 
-  // Master password — always works, skip force-change
-  if (val === MASTER_PASSWORD) {
-    isMasterSession = true;
-    showApp();
-    return;
-  }
-
-  // Load Anna's current password from Supabase
-  try {
-    const rows = await supaFetch('/rest/v1/gps_settings?key=eq.ea_console_settings&select=value');
-    let settings = { password: DEFAULT_EA_PASSWORD, passwordChanged: false };
-    if (rows && rows[0] && rows[0].value) {
-      settings = JSON.parse(rows[0].value);
-    }
-
-    if (val === settings.password) {
-      if (!settings.passwordChanged) {
-        // First login — force password change
-        document.getElementById('pwScreen').style.display = 'none';
-        document.getElementById('fcScreen').style.display = 'flex';
-      } else {
-        showApp();
-      }
-    } else {
-      document.getElementById('pwErr').style.display = 'block';
-      document.getElementById('pwInput').value = '';
-      document.getElementById('pwInput').focus();
-      btn.textContent = 'Sign In';
-      btn.disabled = false;
-    }
-  } catch(e) {
-    // Fallback: allow default password if Supabase unreachable
-    if (val === DEFAULT_EA_PASSWORD) {
+  AUTH_PW = val;
+  const out = await consoleApi({ op: 'auth' });
+  if (out && out.ok) {
+    isMasterSession = !!(out.data && out.data.role === 'master');
+    if (out.data && out.data.mustChange) {
+      // First login on the default password — force a change.
       document.getElementById('pwScreen').style.display = 'none';
       document.getElementById('fcScreen').style.display = 'flex';
     } else {
-      document.getElementById('pwErr').style.display = 'block';
-      document.getElementById('pwInput').value = '';
-      document.getElementById('pwInput').focus();
-      btn.textContent = 'Sign In';
-      btn.disabled = false;
+      showApp();
     }
+  } else {
+    AUTH_PW = '';
+    document.getElementById('pwErr').style.display = 'block';
+    document.getElementById('pwInput').value = '';
+    document.getElementById('pwInput').focus();
+    btn.textContent = 'Sign In';
+    btn.disabled = false;
   }
 }
 
@@ -264,19 +247,17 @@ async function saveNewPassword() {
   err.style.display = 'none';
   if (newPw.length < 8) { err.textContent = 'Password must be at least 8 characters.'; err.style.display = 'block'; return; }
   if (newPw !== confirm) { err.textContent = 'Passwords do not match.'; err.style.display = 'block'; return; }
-  if (newPw === DEFAULT_EA_PASSWORD) { err.textContent = 'Please choose a different password.'; err.style.display = 'block'; return; }
-  if (newPw === MASTER_PASSWORD) { err.textContent = 'Please choose a different password.'; err.style.display = 'block'; return; }
 
   btn.textContent = 'Saving...';
   btn.disabled = true;
-  try {
-    await supaFetch('/rest/v1/gps_settings', {
-      method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal',
-      body: JSON.stringify({ key: 'ea_console_settings', value: JSON.stringify({ password: newPw, passwordChanged: true }), updated_at: new Date().toISOString() })
-    });
+  // The password entered at login (AUTH_PW) is the current credential; the server
+  // verifies it and stores the new one hashed (no plaintext password is stored).
+  const out = await consoleApi({ op: 'change-password', password: AUTH_PW, newPassword: newPw });
+  if (out && out.ok) {
+    AUTH_PW = newPw;
     showApp();
-  } catch(e) {
-    err.textContent = 'Error saving password. Please try again.';
+  } else {
+    err.textContent = (out && out.data && out.data.error) ? out.data.error : 'Error saving password. Please try again.';
     err.style.display = 'block';
     btn.textContent = 'Set Password and Continue';
     btn.disabled = false;
@@ -289,11 +270,9 @@ document.addEventListener('keydown', e => {
 });
 
 async function supaFetch(path, opts = {}) {
-  const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', ...(opts.prefer ? { Prefer: opts.prefer } : {}) };
-  const res = await fetch(SUPABASE_URL + path, { method: opts.method || 'GET', headers, body: opts.body });
-  if (!res.ok) throw new Error(res.status);
-  const text = await res.text();
-  return text ? JSON.parse(text) : null;
+  const out = await consoleApi({ op: 'proxy', path, method: opts.method || 'GET', body: opts.body || null, prefer: opts.prefer || null });
+  if (!out.ok) throw new Error((out.data && out.data.error) || ('HTTP ' + out.status));
+  return out.data;
 }
 
 function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }

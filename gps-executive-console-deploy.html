@@ -826,37 +826,17 @@
 </div><!-- /consoleBody -->
 
 <script>
-// ─── PASSWORD GATE ────────────────────────────────────────────────────────────
-const FALLBACK_HASH = '16eb771d911a094add575974f8b0a53978f07159823ae14b0473f549c873892f';
-const SESSION_KEY = 'gps_console_auth';
+// ─── PASSWORD GATE (server-validated) ──────────────────────────────────────────
+// Auth is checked SERVER-SIDE via /api/console-data (op:auth). The anon key and the
+// client-side hash are gone; the password is held in memory only and entered each load.
 const SESSION_TS_KEY = 'gps_console_auth_ts';
-const SESSION_TTL = 8 * 60 * 60 * 1000; // 8 hours
-let LIVE_PW_HASH = FALLBACK_HASH;
+const SESSION_TTL = 8 * 60 * 60 * 1000; // idle timeout
 
 // ── Rate limiting ──
 let _loginAttempts = 0;
 let _lockUntil = 0;
 
-async function hashPassword(pw) {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
-}
-
-async function loadPwHash() {
-  try {
-    const rows = await supaFetch('/rest/v1/gps_settings?key=eq.pw_hash&select=value');
-    if (rows && rows[0]) LIVE_PW_HASH = rows[0].value;
-  } catch(e) { /* use fallback hash */ }
-}
-
 async function checkAuth() {
-  await loadPwHash();
-  const ts = parseInt(sessionStorage.getItem(SESSION_TS_KEY) || '0');
-  const token = sessionStorage.getItem(SESSION_KEY);
-  if (token === 'ok' && Date.now() - ts < SESSION_TTL) { showConsole(); return; }
-  // Clear expired session
-  sessionStorage.removeItem(SESSION_KEY);
-  sessionStorage.removeItem(SESSION_TS_KEY);
   showLoginScreen();
 }
 
@@ -903,13 +883,14 @@ async function submitLogin() {
   }
 
   btn.disabled = true; btn.textContent = 'Checking…';
-  const h = await hashPassword(pw);
-  if (h === LIVE_PW_HASH) {
+  AUTH_PW = pw;
+  const out = await consoleApi({ op: 'auth' });
+  if (out && out.ok) {
     _loginAttempts = 0;
-    sessionStorage.setItem(SESSION_KEY, 'ok');
     sessionStorage.setItem(SESSION_TS_KEY, Date.now());
     showConsole();
   } else {
+    AUTH_PW = '';
     _loginAttempts++;
     if (_loginAttempts >= 5) {
       _lockUntil = Date.now() + 15 * 60 * 1000;
@@ -930,7 +911,7 @@ function logout() {
   document.removeEventListener('click', resetIdleTimer);
   document.removeEventListener('keydown', resetIdleTimer);
   document.removeEventListener('touchstart', resetIdleTimer);
-  sessionStorage.removeItem(SESSION_KEY);
+  AUTH_PW = '';
   sessionStorage.removeItem(SESSION_TS_KEY);
   // Clear sensitive data from localStorage
   ['gps_accounts','gps_accounts_date','gps_action_done','gps_action_custom',
@@ -962,27 +943,18 @@ async function saveNewPassword() {
 
   msg.style.display = 'none';
   if (!cur || !nw || !cf) { showPwMsg('All fields are required.', 'error'); return; }
-  if (nw.length < 6) { showPwMsg('New password must be at least 6 characters.', 'error'); return; }
+  if (nw.length < 8) { showPwMsg('New password must be at least 8 characters.', 'error'); return; }
   if (nw !== cf) { showPwMsg('New passwords don\'t match.', 'error'); return; }
 
   btn.disabled = true; btn.textContent = 'Saving…';
-  const curHash = await hashPassword(cur);
-  if (curHash !== LIVE_PW_HASH) {
-    showPwMsg('Current password is incorrect.', 'error');
-    btn.disabled = false; btn.textContent = 'Update Password';
-    return;
-  }
-  const newHash = await hashPassword(nw);
-  try {
-    await supaFetch('/rest/v1/gps_settings?key=eq.pw_hash', {
-      method: 'PATCH', prefer: 'return=minimal',
-      body: JSON.stringify({value: newHash, updated_at: new Date().toISOString()})
-    });
-    LIVE_PW_HASH = newHash;
+  // Server verifies the current password and stores the new hash; no client-side hashing.
+  const out = await consoleApi({ op: 'change-password', password: cur, newPassword: nw });
+  if (out && out.ok) {
+    AUTH_PW = nw;
     showPwMsg('Password updated successfully!', 'success');
     setTimeout(closePwModal, 1800);
-  } catch(e) {
-    showPwMsg('Could not save. Try again.', 'error');
+  } else {
+    showPwMsg((out && out.data && out.data.error) ? out.data.error : 'Could not save. Check your current password.', 'error');
   }
   btn.disabled = false; btn.textContent = 'Update Password';
 }
@@ -1137,25 +1109,26 @@ async function loadCoachBadge() {
 }
 
 // ─── SUPABASE DIRECT API ────────────────────────────────────────────────────
-const SUPABASE_URL = 'https://pbnkefuqpoztcxfagiod.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBibmtlZnVxcG96dGN4ZmFnaW9kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5OTkwMzEsImV4cCI6MjA5MjU3NTAzMX0.DxEMR2Ckt9QJlRMkFenEZn-gzsVoi8-6CFcAItTePjo';
+// SECURITY: browser no longer uses the anon key. All reads/writes go through the
+// authenticated /api/console-data endpoint (service key); secret keys are blocked
+// server-side. Console password held in memory only.
+const API_BASE = 'https://portal.gpsleadership.org';
+const CONSOLE_ROLE = 'exec';
+let AUTH_PW = '';
+
+async function consoleApi(payload) {
+  const res = await fetch(API_BASE + '/api/console-data', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role: CONSOLE_ROLE, password: AUTH_PW, ...payload })
+  });
+  return res.json().catch(() => ({ ok: false, status: res.status, data: null }));
+}
 
 async function supaFetch(path, opts = {}) {
-  const res = await fetch(SUPABASE_URL + path, {
-    method: opts.method || 'GET',
-    headers: {
-      'apikey': SUPABASE_ANON,
-      'Authorization': 'Bearer ' + SUPABASE_ANON,
-      'Content-Type': 'application/json',
-      ...(opts.prefer ? {'Prefer': opts.prefer} : {}),
-      ...(opts.headers || {})
-    },
-    ...(opts.body ? {body: opts.body} : {})
-  });
-  if (!res.ok) throw new Error(res.statusText);
-  const text = await res.text();
-  if (!text || text.trim() === '') return null;
-  return JSON.parse(text);
+  const out = await consoleApi({ op: 'proxy', path, method: opts.method || 'GET', body: opts.body || null, prefer: opts.prefer || null });
+  if (!out.ok) throw new Error((out.data && out.data.error) || ('HTTP ' + out.status));
+  return out.data;
 }
 
 // ─── ACCOUNT DATA (synced via Supabase — updated by morning/midday/EOD sweeps) ───
