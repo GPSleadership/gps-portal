@@ -4294,6 +4294,15 @@ async function renderCoachInsights(){
   window._ciRevenue = { total:revenue, coachingRev:coachingRev, diagRev:diagRev, wsRev:wsRev, items:revItems, periodLabel:ciRangeLabel() };
   var renew90 = models.filter(function(m){return m.endDays!=null && m.endDays>=0 && m.endDays<=90;}).length;
   var renewAtRisk = models.filter(function(m){return m.endDays!=null && m.endDays>=0 && m.endDays<=90 && m.health<50;}).length;
+  // #113: store the underlying client lists so the Insights strip items can drill down.
+  (function(){
+    var mapItem = function(m){ return { name:(m.c&&m.c.name)||'(unknown)', org:(m.c&&m.c.organization)||'', endDays:m.endDays, health:Math.round(m.health||0), reason:m.reason||'' }; };
+    var inWindow = models.filter(function(m){ return m.endDays!=null && m.endDays>=0 && m.endDays<=90; }).sort(function(a,b){ return a.endDays-b.endDays; });
+    window._ciRenewals = {
+      all:    inWindow.map(mapItem),
+      atRisk: inWindow.filter(function(m){ return m.health<50; }).map(mapItem)
+    };
+  })();
   var avgRev = started.length ? Math.round(revenue/started.length) : 0;
   var fmt$ = function(v){ return '$'+(v||0).toLocaleString('en-US'); };
 
@@ -4333,8 +4342,8 @@ async function renderCoachInsights(){
   var strip = '<div style="display:flex;flex-wrap:wrap;gap:14px;background:#04243a;color:#fff;border-radius:12px;padding:14px 18px;margin-bottom:16px;">'
     + ciStripItem('Active clients', String(started.length), '#cfe3ea', notStartedCount ? (notStartedCount+' not started yet') : 'all started')
     + ciStripItem(inPeriod ? 'Revenue (period)' : 'Revenue to date', fmt$(revenue), '#cfe3ea', inPeriod ? (ciRangeLabel()+' · breakdown') : 'click for breakdown', 'ciShowRevenue()')
-    + ciStripItem('Renewals (90d)', String(renew90), renew90<=1?'#7ee0a1':renew90<=3?'#ffd76a':'#ff9aa9')
-    + ciStripItem('At-risk renewals', String(renewAtRisk), renewAtRisk>0?'#ff9aa9':'#7ee0a1')
+    + ciStripItem('Renewals (90d)', String(renew90), renew90<=1?'#7ee0a1':renew90<=3?'#ffd76a':'#ff9aa9', renew90>0?'click for list':'', renew90>0?"ciShowRenewals('all')":'')
+    + ciStripItem('At-risk renewals', String(renewAtRisk), renewAtRisk>0?'#ff9aa9':'#7ee0a1', renewAtRisk>0?'click for list':'', renewAtRisk>0?"ciShowRenewals('atrisk')":'')
     + ciStripItem('Avg rev / client', fmt$(avgRev), '#cfe3ea')
     + '</div>';
 
@@ -4417,6 +4426,36 @@ async function renderCoachInsights(){
     + '<div style="font-size:11px;color:#9aa7ad;margin-bottom:30px;">Health = average of available subscores (Engagement, Progress vs Plan, Risk Signals). Session Reliability is excluded until session data is captured; ⧗ marks clients whose Progress score is pending plan metrics. Thresholds: green ≥ 80, yellow 50–79, red &lt; 50.</div>';
 }
 
+function ciShowRenewals(kind){
+  var R = window._ciRenewals; if(!R) return;
+  var list  = kind==='atrisk' ? R.atRisk : R.all;
+  var title = kind==='atrisk' ? 'At-risk renewals (next 90 days)' : 'Renewals (next 90 days)';
+  var sub   = kind==='atrisk' ? 'Renewing within 90 days and health under 50 — open a renewal conversation now.' : 'Coaching engagements with an end date in the next 90 days.';
+  var ov = document.getElementById('ciRenewalsOverlay'); if(ov) ov.remove();
+  ov = document.createElement('div');
+  ov.id = 'ciRenewalsOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(4,36,58,.45);z-index:9500;display:flex;align-items:center;justify-content:center;padding:20px;';
+  ov.onclick = function(e){ if(e.target===ov) ov.remove(); };
+  var healthColor = function(h){ return h>=70?'#2e7d32':h>=50?'#f9a825':'#DB1F48'; };
+  var rows = list.length ? list.map(function(it){
+    return '<tr style="border-top:1px solid #eef1f2;">'
+      + '<td style="padding:8px;font-size:12px;color:#004369;font-weight:600;">'+esc(it.name)+'</td>'
+      + '<td style="padding:8px;font-size:12px;color:#5a6b76;">'+esc(it.org||'—')+'</td>'
+      + '<td style="padding:8px;font-size:12px;text-align:center;font-weight:700;white-space:nowrap;color:'+(it.endDays<=30?'#DB1F48':it.endDays<=60?'#f9a825':'#004369')+';">'+it.endDays+'d</td>'
+      + '<td style="padding:8px;font-size:12px;text-align:center;font-weight:700;color:'+healthColor(it.health)+';">'+it.health+'</td>'
+      + '<td style="padding:8px;font-size:11px;color:#8a99a0;">'+esc(it.reason||'')+'</td></tr>';
+  }).join('') : '<tr><td colspan="5" style="padding:14px;color:#9aa7ad;font-size:13px;">None right now.</td></tr>';
+  ov.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:640px;width:100%;max-height:85vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);">'
+    + '<div style="background:#04243a;color:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;"><div><div style="font-weight:800;font-family:Montserrat,sans-serif;">'+title+'</div><div style="font-size:12px;color:#9fc0d0;margin-top:3px;">'+esc(sub)+'</div></div><button onclick="document.getElementById(\'ciRenewalsOverlay\').remove()" style="background:none;border:none;color:#fff;font-size:24px;cursor:pointer;line-height:1;">&times;</button></div>'
+    + '<div style="padding:14px 18px;"><table style="width:100%;border-collapse:collapse;"><thead><tr style="text-align:left;">'
+    + '<th style="padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#8a99a0;">Client</th>'
+    + '<th style="padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#8a99a0;">Org</th>'
+    + '<th style="padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#8a99a0;text-align:center;">Renews</th>'
+    + '<th style="padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#8a99a0;text-align:center;">Health</th>'
+    + '<th style="padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#8a99a0;">Why</th>'
+    + '</tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+  document.body.appendChild(ov);
+}
 function ciStripItem(label, val, valColor, sub, onclick){
   var wrap = onclick ? 'min-width:120px;cursor:pointer;' : 'min-width:120px;';
   var attr = onclick ? ' onclick="'+onclick+'" title="Click for breakdown"' : '';
