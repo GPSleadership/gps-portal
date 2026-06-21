@@ -4629,7 +4629,7 @@ function renderPortal(client, checkins) {
         <div style="font-size:13px;font-weight:800;color:var(--navy,#004369);font-family:'Montserrat',sans-serif;">
           ${isEngagementComplete ? '90-Day Sprint Complete' : `Week ${flWeek} of 13`}
         </div>
-        <div style="font-size:12px;color:#666;">${flDone} check-in${flDone === 1 ? '' : 's'} logged${isEngagementComplete ? '' : ` · Day ${Math.min(90, Math.max(1, daysDiff + 1))} of 90`}${_streak >= 2 ? ` · <span style="color:#c2410c;font-weight:700;">🔥 ${_streak}-week streak</span>` : ''}</div>
+        <div style="font-size:12px;color:#666;">${flDone} check-in${flDone === 1 ? '' : 's'} logged${_streak >= 2 ? ` · <span style="color:#c2410c;font-weight:700;">🔥 ${_streak}-week streak</span>` : ''}</div>
       </div>
       <div style="height:8px;background:#eee8df;border-radius:4px;margin-top:8px;overflow:hidden;">
         <div style="height:100%;width:${isEngagementComplete ? 100 : flPct}%;background:linear-gradient(90deg,#004369,#01949A);border-radius:4px;transition:width .6s;"></div>
@@ -4699,6 +4699,7 @@ function renderPortal(client, checkins) {
     ${renderDesktopActionCard(client, mobileStatus, currentWeek, alreadyCheckedInThisWeek, isEngagementComplete, _dayN, _closeStr)}
     ${renderActionCenter(client, mobileStatus, currentWeek, checkins)}
     ${renderDiagnosticConversion(client, mobileStatus)}
+    ${!isEngagementComplete && !alreadyCheckedInThisWeek ? renderCheckinForm(client, checkins, currentWeek) : ''}
     ${finishLineHtml}
     ${renewalHtml}
     ${alreadyCheckedInThisWeek && !isEngagementComplete ? `
@@ -4768,8 +4769,8 @@ function renderPortal(client, checkins) {
     <!-- 90-DAY CLOSEOUT (week 13+) -->
     ${isEngagementComplete ? (closeoutDone ? renderCloseoutDone() : renderCloseoutForm(client)) : ''}
 
-    <!-- WEEKLY CHECK-IN (only during active sprint) -->
-    ${!isEngagementComplete && !alreadyCheckedInThisWeek ? renderCheckinForm(client, checkins, currentWeek) : ''}
+    <!-- WEEKLY CHECK-IN now renders at the top (under the action card) so the primary
+         weekly task sits where the action card promises it — not below the reference plan. -->
 
     <!-- HISTORY -->
     ${checkins.length > 0 ? renderHistory(checkins, client) : ''}
