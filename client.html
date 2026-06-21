@@ -1931,6 +1931,7 @@
 
   /* ── Mobile "My Plan" action-first elements (hidden on desktop) ── */
   .mobile-only { display: none; }
+  .desktop-only { display: block; }
   .action-center {
     background: #fff;
     border: 1px solid var(--gray-300);
@@ -1965,6 +1966,7 @@
   }
   @media (max-width: 767px) {
     .mobile-only { display: block; }
+    .desktop-only { display: none !important; }
     .ptab.mobile-only { display: inline-flex; }
     /* Toolkit + coach bio live in the Resources tab on mobile, not in My Plan.
        Scope to the My Plan column so the SAME toolkit still shows in the Resources tab. */
@@ -4464,6 +4466,31 @@ function renderActionCenter(client, status, currentWeek, checkins) {
   </div>`;
 }
 
+// Desktop-only action lead — surfaces the weekly check-in ABOVE the plan for coaching
+// clients who haven't checked in this week (mobile uses .action-center instead). The plan
+// is reference; this is the action. Fixes the "primary action buried below the fold" gap.
+function renderDesktopActionCard(client, status, currentWeek, alreadyDone, complete, dayN, closeStr) {
+  if (status !== 'coaching_client' || alreadyDone || complete) return '';
+  return `
+  <div class="desktop-only" style="background:#03314d;border-radius:12px;padding:18px 22px;color:#fff;margin-bottom:20px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+      <div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.7);letter-spacing:.04em;">WEEK ${currentWeek} &nbsp;·&nbsp; DAY ${dayN} OF 90</div>
+        <div style="font-size:19px;font-weight:800;font-family:'Montserrat',sans-serif;margin-top:4px;">Your check-in is open</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.85);margin-top:5px;">Under 3 minutes.${closeStr ? ` Closes ${closeStr}.` : ''}</div>
+      </div>
+      <span style="background:rgba(93,202,165,0.18);color:#9FE1CB;font-size:12px;font-weight:700;padding:5px 12px;border-radius:999px;white-space:nowrap;"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#5DCAA5;margin-right:6px;vertical-align:middle;"></span>Open now</span>
+    </div>
+    <div style="margin-top:16px;">
+      <button onclick="scrollToCheckin()" style="background:#01949A;color:#fff;border:none;font-size:15px;font-weight:700;font-family:'Montserrat',sans-serif;padding:12px 24px;border-radius:10px;cursor:pointer;">Start this week's check-in →</button>
+    </div>
+  </div>`;
+}
+function scrollToCheckin() {
+  const el = document.getElementById('checkinCard');
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 // Non-coaching "About Alex & 1:1 coaching" teaser (mobile, above resources link).
 function renderCoachingTeaser() {
   return `
@@ -4570,9 +4597,14 @@ function renderPortal(client, checkins) {
       <div style="font-size:12px;color:#555;margin-top:8px;">${flLine}</div>
     </div>` : '';
 
+  const _weekEnd = new Date(startDate); _weekEnd.setDate(startDate.getDate() + (currentWeek - 1) * 7 + 6);
+  const _closeStr = _weekEnd.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ' · 11:59 PM';
+  const _dayN = Math.min(90, Math.max(1, daysDiff + 1));
+
   document.getElementById('mainContent').innerHTML = `
     <div class="portal-layout">
     <div class="portal-main">
+    ${renderDesktopActionCard(client, mobileStatus, currentWeek, alreadyCheckedInThisWeek, isEngagementComplete, _dayN, _closeStr)}
     ${renderActionCenter(client, mobileStatus, currentWeek, checkins)}
     ${finishLineHtml}
     ${alreadyCheckedInThisWeek && !isEngagementComplete ? `
