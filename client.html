@@ -4531,6 +4531,7 @@ function toggleStakeholderCard(btn) {
 
 function renderPortal(client, checkins) {
   currentClient = client; // store for use in submitFormA
+  try { checkTestimonialPrompt(client); } catch (_) {} // testimonial flywheel (non-blocking)
   const mobileStatus = getClientStatus(client); // drives the mobile action-first layout
   const startDate  = parseLocalDate(client.plan_start_date);
   const today      = new Date();
@@ -4644,6 +4645,7 @@ function renderPortal(client, checkins) {
     ${renderDesktopActionCard(client, mobileStatus, currentWeek, alreadyCheckedInThisWeek, isEngagementComplete, _dayN, _closeStr)}
     ${renderActionCenter(client, mobileStatus, currentWeek, checkins)}
     ${finishLineHtml}
+    ${renewalHtml}
     ${alreadyCheckedInThisWeek && !isEngagementComplete ? `
       <div class="success-banner" style="margin-top:24px;">
         <div class="icon">✅</div>
@@ -5275,6 +5277,181 @@ function showCheckinSuccess(weekNumber, metricVal) {
       </button>
     </div>`;
   document.body.appendChild(overlay);
+}
+
+// ─────────────────────────────────────────────
+// TESTIMONIAL FLYWHEEL — client capture
+// ─────────────────────────────────────────────
+// Prompt copy lives here — edit freely. Engineered to pull a concrete, usable quote
+// (behavior change → outcome → the line another CEO needs to hear) instead of vague praise.
+const TQ = {
+  headline: 'You hit a real milestone. Mind capturing it while it’s fresh?',
+  sub: 'Three short questions. Two minutes. It helps Alex — and the next leader deciding whether to start.',
+  q1: 'What can you do now as a leader that you couldn’t (or didn’t) do before we started?',
+  q2: 'What changed for your team or your business as a result?',
+  q3: 'What would you tell another CEO who’s on the fence about working with Alex?',
+  nps: 'How likely are you to recommend Alex to another leader? (0–10)',
+  consent: 'GPS may share my response, with my name and title, publicly.',
+};
+
+async function checkTestimonialPrompt(client) {
+  if (sessionStorage.getItem('gps_testimonial_dismissed')) return;
+  if (!client || !window.token && !token) return;
+  const tok = (typeof token !== 'undefined' && token) || '';
+  let dayN = 0;
+  if (client.plan_start_date) {
+    const sd = parseLocalDate(client.plan_start_date);
+    dayN = Math.floor((new Date() - sd) / 86400000);
+  }
+  try {
+    const res = await fetch('/api/testimonial?action=get-pending-prompt', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_token: tok,
+        diagnostic_id: client.diagnostic_id_ref || '',
+        force_end_prompt: dayN >= 90 ? 'true' : 'false',
+      }),
+    });
+    if (!res.ok) return;
+    const { pending_source } = await res.json();
+    if (pending_source) setTimeout(() => showTestimonialModal(pending_source), 1200);
+  } catch (_) {}
+}
+
+function showTestimonialModal(source) {
+  if (document.getElementById('testimonialOverlay')) return;
+  const ta = (id, label) => `
+    <label style="display:block;font-size:13px;font-weight:700;color:var(--navy,#004369);margin:14px 0 5px;">${label}</label>
+    <textarea id="${id}" rows="2" style="width:100%;padding:10px 12px;border:1.5px solid #d8d2c6;border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;"></textarea>`;
+  const npsBtns = Array.from({ length: 11 }, (_, i) =>
+    `<button type="button" onclick="window._tNps=${i};document.querySelectorAll('.tnps').forEach(b=>b.style.background='#fff');this.style.background='#bfe3dd';"
+      class="tnps" style="flex:1;min-width:28px;padding:8px 0;border:1px solid #cfc9bd;background:#fff;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;">${i}</button>`).join('');
+  const overlay = document.createElement('div');
+  overlay.id = 'testimonialOverlay';
+  overlay.setAttribute('style', 'position:fixed;inset:0;background:rgba(0,33,55,0.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;overflow:auto;');
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;max-width:520px;width:100%;padding:26px 26px;box-shadow:0 20px 60px rgba(0,0,0,.3);max-height:92vh;overflow:auto;">
+      <div style="font-family:'Montserrat',sans-serif;color:var(--navy,#004369);font-size:19px;font-weight:800;">${TQ.headline}</div>
+      <p style="color:#555;font-size:13px;margin:6px 0 4px;line-height:1.45;">${TQ.sub}</p>
+      <div id="testimonialBody">
+        ${ta('tQ1', TQ.q1)}
+        ${ta('tQ2', TQ.q2)}
+        ${ta('tQ3', TQ.q3)}
+        <label style="display:block;font-size:13px;font-weight:700;color:var(--navy,#004369);margin:16px 0 6px;">${TQ.nps}</label>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;">${npsBtns}</div>
+        <label style="display:flex;align-items:flex-start;gap:8px;margin-top:16px;font-size:12.5px;color:#444;line-height:1.4;cursor:pointer;">
+          <input type="checkbox" id="tConsent" style="margin-top:2px;flex-shrink:0;"> <span>${TQ.consent}</span>
+        </label>
+        <div id="testimonialErr" style="color:#c0392b;font-size:12px;margin-top:8px;display:none;"></div>
+        <div style="display:flex;gap:10px;margin-top:18px;">
+          <button onclick="submitTestimonial('${source}')" id="tSubmitBtn"
+            style="flex:1;background:var(--navy,#004369);color:#fff;border:none;border-radius:10px;padding:12px;font-size:15px;font-weight:700;font-family:'Montserrat',sans-serif;cursor:pointer;">Share this</button>
+          <button onclick="dismissTestimonial()" style="background:none;border:none;color:#888;font-size:13px;cursor:pointer;padding:0 8px;">Maybe later</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  window._tNps = null;
+}
+
+function dismissTestimonial() {
+  sessionStorage.setItem('gps_testimonial_dismissed', '1');
+  const o = document.getElementById('testimonialOverlay'); if (o) o.remove();
+}
+
+async function submitTestimonial(source) {
+  const q1 = (document.getElementById('tQ1').value || '').trim();
+  const q2 = (document.getElementById('tQ2').value || '').trim();
+  const q3 = (document.getElementById('tQ3').value || '').trim();
+  const consent = !!document.getElementById('tConsent').checked;
+  const err = document.getElementById('testimonialErr');
+  if (!q1 && !q2 && !q3) { err.textContent = 'Add at least one answer so it’s useful.'; err.style.display = 'block'; return; }
+  const btn = document.getElementById('tSubmitBtn'); btn.disabled = true; btn.textContent = 'Sharing…';
+  try {
+    const tok = (typeof token !== 'undefined' && token) || '';
+    const res = await fetch('/api/testimonial?action=save-testimonial', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_token: tok, source, responses: { q1, q2, q3, _consent: consent }, rating_nps: window._tNps }),
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || 'failed');
+    sessionStorage.setItem('gps_testimonial_dismissed', '1');
+    if (d.eligible_for_referral && d.id) showReferralStep(d.id, consent);
+    else showTestimonialThanks();
+  } catch (e) {
+    err.textContent = 'Could not save — try again in a moment.'; err.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Share this';
+  }
+}
+
+function showTestimonialThanks() {
+  const body = document.getElementById('testimonialBody'); if (!body) return;
+  body.innerHTML = `<div style="text-align:center;padding:18px 4px;">
+    <div style="font-size:38px;">🙏</div>
+    <div style="font-family:'Montserrat',sans-serif;color:var(--navy,#004369);font-size:18px;font-weight:800;margin-top:8px;">Thank you.</div>
+    <p style="color:#555;font-size:13px;margin:8px 0 18px;">Alex reviews every note personally before anything is ever shared.</p>
+    <button onclick="document.getElementById('testimonialOverlay').remove();" style="background:var(--navy,#004369);color:#fff;border:none;border-radius:10px;padding:11px 26px;font-size:14px;font-weight:700;cursor:pointer;">Close</button>
+  </div>`;
+}
+
+// NPS 9–10 → invite up to 3 referrals. The server drafts the intro emails for the client to send.
+function showReferralStep(testimonialId, consent) {
+  const body = document.getElementById('testimonialBody'); if (!body) return;
+  const row = (n) => `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+      <input id="rfN${n}" placeholder="Name" style="padding:9px 11px;border:1.5px solid #d8d2c6;border-radius:7px;font-size:13px;">
+      <input id="rfE${n}" placeholder="Email" style="padding:9px 11px;border:1.5px solid #d8d2c6;border-radius:7px;font-size:13px;">
+      <input id="rfO${n}" placeholder="Their company (optional)" style="grid-column:1/3;padding:9px 11px;border:1.5px solid #d8d2c6;border-radius:7px;font-size:13px;">
+    </div>`;
+  body.innerHTML = `
+    <div style="font-family:'Montserrat',sans-serif;color:var(--navy,#004369);font-size:17px;font-weight:800;margin-bottom:4px;">One more thing — who else should know about this?</div>
+    <p style="color:#555;font-size:13px;margin:0 0 14px;line-height:1.45;">Know another leader who’s carrying too much? Add up to three and Alex will draft a warm intro you can review and send. No pressure.</p>
+    ${row(1)}${row(2)}${row(3)}
+    <div id="referralErr" style="color:#c0392b;font-size:12px;margin-top:4px;display:none;"></div>
+    <div style="display:flex;gap:10px;margin-top:14px;">
+      <button onclick="submitReferrals('${testimonialId}')" id="rfSubmit" style="flex:1;background:var(--navy,#004369);color:#fff;border:none;border-radius:10px;padding:12px;font-size:15px;font-weight:700;font-family:'Montserrat',sans-serif;cursor:pointer;">Draft the intros</button>
+      <button onclick="showTestimonialThanks()" style="background:none;border:none;color:#888;font-size:13px;cursor:pointer;padding:0 8px;">Skip</button>
+    </div>`;
+}
+
+async function submitReferrals(testimonialId) {
+  const refs = [1, 2, 3].map(n => ({
+    name: (document.getElementById('rfN' + n).value || '').trim(),
+    email: (document.getElementById('rfE' + n).value || '').trim(),
+    org: (document.getElementById('rfO' + n).value || '').trim(),
+  })).filter(r => r.name && r.email);
+  const err = document.getElementById('referralErr');
+  if (!refs.length) { showTestimonialThanks(); return; }
+  const btn = document.getElementById('rfSubmit'); btn.disabled = true; btn.textContent = 'Drafting…';
+  try {
+    const tok = (typeof token !== 'undefined' && token) || '';
+    const res = await fetch('/api/testimonial?action=save-referrals', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_token: tok, testimonial_id: testimonialId, referrals: refs }),
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || 'failed');
+    showReferralDrafts(d.referrals || []);
+  } catch (e) {
+    err.textContent = 'Could not save — try again.'; err.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Draft the intros';
+  }
+}
+
+function showReferralDrafts(refs) {
+  const body = document.getElementById('testimonialBody'); if (!body) return;
+  if (!refs.length) { showTestimonialThanks(); return; }
+  const cards = refs.map(r => `
+    <div style="border:1px solid #e2dccf;border-radius:10px;padding:12px;margin-bottom:10px;">
+      <div style="font-size:13px;font-weight:700;color:var(--navy,#004369);">${r.referral_name} · ${r.referral_email}</div>
+      <div style="font-size:12px;color:#666;margin:6px 0 2px;">Subject: ${r.email_subject || ''}</div>
+      <textarea readonly rows="5" style="width:100%;font-size:12px;border:1px solid #e2dccf;border-radius:6px;padding:8px;background:#faf8f3;resize:vertical;">${(r.email_body || '').replace(/</g,'&lt;')}</textarea>
+      <button onclick="navigator.clipboard.writeText(this.previousElementSibling.value); this.textContent='Copied ✓';" style="margin-top:6px;background:var(--teal,#01949A);color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;">Copy email</button>
+    </div>`).join('');
+  body.innerHTML = `
+    <div style="font-family:'Montserrat',sans-serif;color:var(--navy,#004369);font-size:17px;font-weight:800;margin-bottom:6px;">Your intros are drafted.</div>
+    <p style="color:#555;font-size:13px;margin:0 0 12px;">Copy each one, tweak anything you like, and send from your own email. That personal send lands far better than an automated one.</p>
+    ${cards}
+    <button onclick="document.getElementById('testimonialOverlay').remove();" style="width:100%;background:var(--navy,#004369);color:#fff;border:none;border-radius:10px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;margin-top:6px;">Done</button>`;
 }
 
 function renderWeekTimeline(client, checkins, currentWeek) {

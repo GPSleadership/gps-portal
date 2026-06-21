@@ -31,7 +31,7 @@ async function sb(path, method = 'GET', body = null, extra = {}) {
 async function authClient(token) {
   if (!token) return null;
   const r = await sb(
-    `/rest/v1/clients?token=eq.${encodeURIComponent(token)}&select=id,name,email,title,organization,engagement_type,first_big_win_flag,industry,sector_type&limit=1`
+    `/rest/v1/clients?token=eq.${encodeURIComponent(token)}&select=id,name,email,title,organization,engagement_type,first_big_win_flag,industry,sector_type,in_coaching_program,is_active_coaching,coaching_sessions_enabled&limit=1`
   );
   if (!r.ok) return null;
   const rows = await r.json();
@@ -173,10 +173,10 @@ async function handleGetPendingPrompt(req, res) {
     }
   }
 
-  // 2. Midpoint trigger (coaching only)
-  if (!existing.includes('coaching_midpoint') &&
-      client.engagement_type === 'diagnostic_plus_coaching' &&
-      client.first_big_win_flag) {
+  // 2. Big-win trigger (any coaching client whose coach flagged a milestone)
+  const isCoaching = client.engagement_type === 'diagnostic_plus_coaching' ||
+    client.in_coaching_program || client.is_active_coaching || client.coaching_sessions_enabled;
+  if (!existing.includes('coaching_midpoint') && isCoaching && client.first_big_win_flag) {
     return res.status(200).json({ pending_source: 'coaching_midpoint' });
   }
 
