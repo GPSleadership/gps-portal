@@ -4607,6 +4607,21 @@ function renderPortal(client, checkins) {
     : '';
   const showRenewal = mobileStatus === 'coaching_client' && client.plan_start_date &&
     (isEngagementComplete || flWeek >= 9);
+  // Score-aware messaging keyed to progress toward their goal. Low = supportive
+  // (more support is the lever, never discouraging); high = momentum (lock it in).
+  const _hasMetric = range !== 0;
+  const renewTier  = !_hasMetric ? 'mid' : progress >= 67 ? 'high' : progress < 34 ? 'low' : 'mid';
+  const renewalMsg = isEngagementComplete
+    ? (renewTier === 'high'
+        ? `You hit ${Math.round(progress)}% of your goal in 90 days. That kind of momentum compounds — if you keep building on it. Let's map the next 90 before it cools.`
+        : renewTier === 'low'
+        ? 'You did the hard part — you showed up for the full 90 days. The leaders who turn a tough first sprint into lasting change are the ones who keep support in place. Let\'s plan the next 90 together.'
+        : 'You proved the system works for you. The leaders who compound their gains don\'t stop when the habit finally sticks — they build on it. Let\'s map the next 90 days.')
+    : (renewTier === 'high'
+        ? `You're already ${Math.round(progress)}% of the way to your goal. This is exactly when leaders lock it in and go further — not ease off. Let's plan the next 90 before this one ends.`
+        : renewTier === 'low'
+        ? 'You\'ve been doing the hard part — showing up. Leaders who are right where you are now tend to make their biggest gains in the next stretch, with support in place. Let\'s keep it going.'
+        : 'Most leaders don\'t want to stop right when the habit is finally working. If you want to keep this going, the time to plan the next 90 is before this one ends.');
   // Proof at the decision point. Real, client-cleared quote from gpsleadership.org.
   // Swap freely — keep it short and renewal/expansion-relevant. (Once the testimonial
   // flywheel UI is wired, this can read an approved testimonial instead.)
@@ -4620,9 +4635,7 @@ function renderPortal(client, checkins) {
         ${isEngagementComplete ? 'You finished the 90 days. What\'s next?' : `Your 90 days wrap up ${_wrapDate}.`}
       </div>
       <div style="font-size:13px;color:#444;line-height:1.5;margin-bottom:14px;">
-        ${isEngagementComplete
-          ? 'You proved the system works for you. The leaders who compound their gains don\'t stop when the habit finally sticks — they build on it. Let\'s map the next 90 days before the momentum cools.'
-          : 'Most leaders don\'t want to stop right when the habit is finally working. If you want to keep this going, the time to plan the next 90 is before this one ends.'}
+        ${renewalMsg}
       </div>
       <div style="border-left:3px solid #e2dccf;padding:6px 0 6px 14px;margin:0 0 14px;font-style:italic;color:#555;font-size:12.5px;line-height:1.5;">
         “${RENEWAL_PROOF.quote}”
