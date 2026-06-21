@@ -4596,6 +4596,33 @@ function renderPortal(client, checkins) {
       <div style="font-size:12px;color:#555;margin-top:8px;">${flLine}</div>
     </div>` : '';
 
+  // ── Renewal / next-90 signpost (coaching clients only) ─────────────────────
+  // Highest-conversion moment is AFTER value is delivered: from week 9 onward,
+  // and especially at completion. Never shown early — a premature ask erodes
+  // trust with this buyer. Calm, value-framed, one clear next step.
+  const _wrapDate = client.plan_start_date
+    ? (() => { const d = new Date(startDate); d.setDate(startDate.getDate() + 13 * 7 - 1);
+        return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }); })()
+    : '';
+  const showRenewal = mobileStatus === 'coaching_client' && client.plan_start_date &&
+    (isEngagementComplete || flWeek >= 9);
+  const renewalHtml = showRenewal ? `
+    <div class="card" style="margin-top:24px;padding:20px 22px;border-left:4px solid var(--teal,#01949A);">
+      <div style="font-size:13px;font-weight:800;color:var(--navy,#004369);font-family:'Montserrat',sans-serif;margin-bottom:6px;">
+        ${isEngagementComplete ? 'You finished the 90 days. What\'s next?' : `Your 90 days wrap up ${_wrapDate}.`}
+      </div>
+      <div style="font-size:13px;color:#444;line-height:1.5;margin-bottom:14px;">
+        ${isEngagementComplete
+          ? 'You proved the system works for you. The leaders who compound their gains don\'t stop when the habit finally sticks — they build on it. Let\'s map the next 90 days before the momentum cools.'
+          : 'Most leaders don\'t want to stop right when the habit is finally working. If you want to keep this going, the time to plan the next 90 is before this one ends.'}
+      </div>
+      <a href="${COACHING_CALL_LINK}" target="_blank" rel="noopener noreferrer"
+        style="display:inline-block;background:var(--navy,#004369);color:#fff;text-decoration:none;font-weight:700;font-family:'Montserrat',sans-serif;padding:12px 24px;border-radius:10px;font-size:14px;">
+        ${isEngagementComplete ? 'Book your renewal conversation →' : 'Plan your next 90 with Alex →'}
+      </a>
+      <div style="font-size:11px;color:#777;margin-top:10px;">A 30-minute conversation. You pick the time.</div>
+    </div>` : '';
+
   const _weekEnd = new Date(startDate); _weekEnd.setDate(startDate.getDate() + (currentWeek - 1) * 7 + 6);
   const _closeStr = _weekEnd.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ' · 11:59 PM';
   const _dayN = Math.min(90, Math.max(1, daysDiff + 1));
@@ -5225,6 +5252,12 @@ function showCheckinSuccess(weekNumber, metricVal) {
         ${streak >= 2 ? stat('🔥 ' + streak, 'Week streak', '#c2410c') : stat(weeksDone + '/' + weeksElapsed, 'Weeks in', 'var(--teal,#01949A)')}
         ${goalPct !== null ? stat(goalPct + '%', 'To your goal', 'var(--navy,#004369)') : ''}
       </div>
+      ${weekNumber >= 9 ? `
+      <div style="margin-top:16px;padding:14px 14px;background:#f0f6f7;border-radius:12px;text-align:left;">
+        <div style="font-size:13px;color:#333;line-height:1.45;">This is what clients who renew look like — consistent, week after week. Your 90 days are almost up. Want to keep the momentum going?</div>
+        <a href="https://api.leadconnectorhq.com/widget/bookings/30-minute-coaching-discovery-call" target="_blank" rel="noopener noreferrer"
+          style="display:inline-block;margin-top:8px;font-size:13px;font-weight:700;color:var(--navy,#004369);text-decoration:underline;">Plan your next 90 with Alex →</a>
+      </div>` : ''}
       <button onclick="document.getElementById('checkinSuccessOverlay').remove(); window.location.reload();"
         style="margin-top:20px;background:var(--navy,#004369);color:#fff;border:none;border-radius:10px;padding:12px 28px;font-size:15px;font-weight:700;font-family:'Montserrat',sans-serif;cursor:pointer;width:100%;">
         Keep going →
