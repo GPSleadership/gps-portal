@@ -4630,8 +4630,9 @@ function renderPortal(client, checkins) {
     attribution: 'Jourdan Hathaway · Chief Business Officer, General Assembly',
   };
   const renewalHtml = showRenewal ? `
-    <div class="card" style="margin-top:24px;padding:20px 22px;border-left:4px solid var(--teal,#01949A);">
-      <div style="font-size:13px;font-weight:800;color:var(--navy,#004369);font-family:'Montserrat',sans-serif;margin-bottom:6px;">
+    <div style="margin-top:24px;padding:22px 24px;background:#fff8ea;border:2px solid #C09A2A;border-radius:14px;box-shadow:0 6px 18px rgba(192,154,42,0.18);">
+      <div style="display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#8a6d12;background:#f3e2b3;padding:3px 11px;border-radius:20px;margin-bottom:10px;font-family:'Montserrat',sans-serif;">Looking ahead</div>
+      <div style="font-size:15px;font-weight:800;color:var(--navy,#004369);font-family:'Montserrat',sans-serif;margin-bottom:6px;">
         ${isEngagementComplete ? 'You finished the 90 days. What\'s next?' : `Your 90 days wrap up ${_wrapDate}.`}
       </div>
       <div style="font-size:13px;color:#444;line-height:1.5;margin-bottom:14px;">
