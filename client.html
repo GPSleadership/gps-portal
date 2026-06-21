@@ -4501,6 +4501,11 @@ function renderDiagnosticConversion(client, status) {
   if (status !== 'diagnostic_only') return '';
   const raw = parseFloat(client.tp3_index_others) || parseFloat(client.tp3_index_self) || 0;
   if (!raw) return ''; // no completed diagnostic score yet
+  // The diagnostic client's 90-day clock starts at the debrief. Surface the convert-to-
+  // coaching ask at the ~day-60 decision point. If we have no debrief date, show it anyway.
+  const _deb = client.debrief_completed_at ? new Date(client.debrief_completed_at) : null;
+  const _daysSinceDebrief = _deb && !isNaN(_deb) ? Math.floor((Date.now() - _deb) / 86400000) : null;
+  if (_daysSinceDebrief !== null && _daysSinceDebrief < 60) return '';
   const pct = raw <= 5 ? raw * 20 : raw;           // normalize 1–5 or 0–100
   const tier = pct < 60 ? 'low' : pct >= 80 ? 'high' : 'mid';
   const pillar = client.tp3_pillar ? String(client.tp3_pillar) : '';
@@ -4514,7 +4519,7 @@ function renderDiagnosticConversion(client, status) {
     <div style="display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#8a6d12;background:#f3e2b3;padding:3px 11px;border-radius:20px;margin-bottom:10px;font-family:'Montserrat',sans-serif;">Your next step</div>
     <div style="font-size:15px;font-weight:800;color:var(--navy,#004369);font-family:'Montserrat',sans-serif;margin-bottom:6px;">Turn your diagnostic into real change.</div>
     <div style="font-size:13px;color:#444;line-height:1.5;margin-bottom:14px;">${msg}</div>
-    <div style="border-left:3px solid #e2dccf;padding:6px 0 6px 14px;margin:0 0 14px;font-style:italic;color:#555;font-size:12.5px;line-height:1.5;">
+    <div id="convProofBox" style="border-left:3px solid #e2dccf;padding:6px 0 6px 14px;margin:0 0 14px;font-style:italic;color:#555;font-size:12.5px;line-height:1.5;">
       “${CONVERSION_PROOF.quote}”
       <div style="font-style:normal;font-weight:700;color:var(--navy,#004369);margin-top:6px;font-size:11.5px;">${CONVERSION_PROOF.attribution}</div>
     </div>
@@ -4566,6 +4571,7 @@ function toggleStakeholderCard(btn) {
 function renderPortal(client, checkins) {
   currentClient = client; // store for use in submitFormA
   try { checkTestimonialPrompt(client); } catch (_) {} // testimonial flywheel (non-blocking)
+  try { loadDynamicProof(); } catch (_) {} // swap in real approved testimonials (non-blocking)
   const mobileStatus = getClientStatus(client); // drives the mobile action-first layout
   const startDate  = parseLocalDate(client.plan_start_date);
   const today      = new Date();
@@ -4672,7 +4678,7 @@ function renderPortal(client, checkins) {
       <div style="font-size:13px;color:#444;line-height:1.5;margin-bottom:14px;">
         ${renewalMsg}
       </div>
-      <div style="border-left:3px solid #e2dccf;padding:6px 0 6px 14px;margin:0 0 14px;font-style:italic;color:#555;font-size:12.5px;line-height:1.5;">
+      <div id="renewalProofBox" style="border-left:3px solid #e2dccf;padding:6px 0 6px 14px;margin:0 0 14px;font-style:italic;color:#555;font-size:12.5px;line-height:1.5;">
         “${RENEWAL_PROOF.quote}”
         <div style="font-style:normal;font-weight:700;color:var(--navy,#004369);margin-top:6px;font-size:11.5px;">${RENEWAL_PROOF.attribution}</div>
       </div>
@@ -5342,6 +5348,26 @@ const TQ = {
   nps: 'How likely are you to recommend Alex to another leader? (0–10)',
   consent: 'GPS may share my response, with my name and title, publicly.',
 };
+
+// Swap the hardcoded proof quotes for real approved+consented testimonials when any
+// exist. Picks one at random so it varies. Silently leaves the fallback if none yet.
+async function loadDynamicProof() {
+  const boxes = [document.getElementById('renewalProofBox'), document.getElementById('convProofBox')].filter(Boolean);
+  if (!boxes.length) return;
+  try {
+    const res = await fetch('/api/testimonial?action=public-quotes', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+    });
+    if (!res.ok) return;
+    const { quotes } = await res.json();
+    if (!quotes || !quotes.length) return;
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+    boxes.forEach(box => {
+      const q = quotes[Math.floor(Math.random() * quotes.length)];
+      box.innerHTML = `“${esc(q.quote)}”<div style="font-style:normal;font-weight:700;color:var(--navy,#004369);margin-top:6px;font-size:11.5px;">${esc(q.attribution)}</div>`;
+    });
+  } catch (_) {}
+}
 
 async function checkTestimonialPrompt(client) {
   if (sessionStorage.getItem('gps_testimonial_dismissed')) return;

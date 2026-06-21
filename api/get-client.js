@@ -366,5 +366,19 @@ export default async function handler(req, res) {
     }
   }
 
+  // Latest diagnostic debrief date — the diagnostic client's 90-day clock starts here.
+  // Used by the portal to time the convert-to-coaching prompt (~day 60). Non-blocking.
+  try {
+    const debR = await sbSecret(
+      `/rest/v1/diagnostics?client_id=eq.${encodeURIComponent(client.id)}&debrief_completed_at=not.is.null&order=debrief_completed_at.desc&limit=1&select=debrief_completed_at`
+    );
+    if (debR.ok) {
+      const drows = await debR.json();
+      if (Array.isArray(drows) && drows[0] && drows[0].debrief_completed_at) {
+        client.debrief_completed_at = drows[0].debrief_completed_at;
+      }
+    }
+  } catch (_) { /* optional */ }
+
   return res.status(200).json(client);
 }

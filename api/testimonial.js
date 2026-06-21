@@ -125,6 +125,7 @@ export default async function handler(req, res) {
   try {
     switch (action) {
       case 'get-referral-config':       return handleGetConfig(req, res);
+      case 'public-quotes':             return handlePublicQuotes(req, res);
       case 'get-pending-prompt':        return handleGetPendingPrompt(req, res);
       case 'save-testimonial':          return handleSaveTestimonial(req, res);
       case 'get-testimonials':          return handleGetTestimonials(req, res);
@@ -143,6 +144,31 @@ export default async function handler(req, res) {
     console.error('[testimonial]', action, err);
     return res.status(500).json({ error: err.message });
   }
+}
+
+// Public, no-auth: approved + client-consented testimonials for display at decision
+// points in the portal. Returns only a short quote + name/title — exactly what the
+// coach approved and the client agreed to share. Capped and read-only.
+async function handlePublicQuotes(req, res) {
+  const tr = await sb(`/rest/v1/testimonials?permission_public_use=eq.true&review_status=eq.approved&select=client_id,responses,created_at&order=created_at.desc&limit=12`);
+  if (!tr.ok) return res.status(200).json({ quotes: [] });
+  const rows = (await tr.json()).filter(t => t && t.responses && t.responses._consent === true);
+  if (!rows.length) return res.status(200).json({ quotes: [] });
+  const ids = Array.from(new Set(rows.map(r => r.client_id).filter(Boolean)));
+  let names = {};
+  if (ids.length) {
+    const cr = await sb(`/rest/v1/clients?id=in.(${ids.join(',')})&select=id,name,title,organization`);
+    if (cr.ok) (await cr.json()).forEach(c => { names[c.id] = c; });
+  }
+  const quotes = rows.map(r => {
+    const resp = r.responses || {};
+    const quote = (resp.q3 || resp.q1 || resp.q2 || '').trim();
+    if (!quote) return null;
+    const c = names[r.client_id] || {};
+    const attribution = [c.name, c.title || c.organization].filter(Boolean).join(' · ');
+    return { quote: quote.slice(0, 280), attribution };
+  }).filter(Boolean);
+  return res.status(200).json({ quotes });
 }
 
 async function handleGetConfig(req, res) {
