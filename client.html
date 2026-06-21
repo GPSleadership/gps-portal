@@ -4490,6 +4490,40 @@ function scrollToCheckin() {
   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+// Score-aware convert-to-coaching panel for diagnostic-only clients. They got results
+// but no ongoing support — this is their decision point. Keyed to their TP3 index:
+// low = supportive (support is the lever, never discouraging); high = compound strengths.
+const CONVERSION_PROOF = {
+  quote: 'In a landscape where speed is everything, Alex has been my anchor — guiding me to slow down, gain clarity, and approach critical decisions with confidence.',
+  attribution: 'Jonathan Kurljac · CEO, iBallistix',
+};
+function renderDiagnosticConversion(client, status) {
+  if (status !== 'diagnostic_only') return '';
+  const raw = parseFloat(client.tp3_index_others) || parseFloat(client.tp3_index_self) || 0;
+  if (!raw) return ''; // no completed diagnostic score yet
+  const pct = raw <= 5 ? raw * 20 : raw;           // normalize 1–5 or 0–100
+  const tier = pct < 60 ? 'low' : pct >= 80 ? 'high' : 'mid';
+  const pillar = client.tp3_pillar ? String(client.tp3_pillar) : '';
+  const msg = tier === 'low'
+    ? `Your diagnostic surfaced real gaps${pillar ? ` — especially around ${wizEsc(pillar)}` : ''}. Leaders rarely close gaps like these alone; the ones who change fastest put support in place. Here's what coaching looks like for someone in your spot.`
+    : tier === 'high'
+    ? `Your diagnostic shows genuine strengths${pillar ? ` in ${wizEsc(pillar)}` : ''}. The leaders who turn strong into exceptional use a coach to compound what's already working — here's what that looks like.`
+    : 'You have your diagnostic results. The next move is turning that insight into habit — which is exactly where coaching comes in.';
+  return `
+  <div style="margin-bottom:22px;padding:22px 24px;background:#fff8ea;border:2px solid #C09A2A;border-radius:14px;box-shadow:0 6px 18px rgba(192,154,42,0.18);">
+    <div style="display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#8a6d12;background:#f3e2b3;padding:3px 11px;border-radius:20px;margin-bottom:10px;font-family:'Montserrat',sans-serif;">Your next step</div>
+    <div style="font-size:15px;font-weight:800;color:var(--navy,#004369);font-family:'Montserrat',sans-serif;margin-bottom:6px;">Turn your diagnostic into real change.</div>
+    <div style="font-size:13px;color:#444;line-height:1.5;margin-bottom:14px;">${msg}</div>
+    <div style="border-left:3px solid #e2dccf;padding:6px 0 6px 14px;margin:0 0 14px;font-style:italic;color:#555;font-size:12.5px;line-height:1.5;">
+      “${CONVERSION_PROOF.quote}”
+      <div style="font-style:normal;font-weight:700;color:var(--navy,#004369);margin-top:6px;font-size:11.5px;">${CONVERSION_PROOF.attribution}</div>
+    </div>
+    <a href="${COACHING_CALL_LINK}" target="_blank" rel="noopener noreferrer"
+      style="display:inline-block;background:var(--navy,#004369);color:#fff;text-decoration:none;font-weight:700;font-family:'Montserrat',sans-serif;padding:12px 24px;border-radius:10px;font-size:14px;">Explore coaching with Alex →</a>
+    <div style="font-size:11px;color:#777;margin-top:10px;">A 30-minute conversation. You pick the time.</div>
+  </div>`;
+}
+
 // Non-coaching "About Alex & 1:1 coaching" teaser (mobile, above resources link).
 function renderCoachingTeaser() {
   return `
@@ -4658,6 +4692,7 @@ function renderPortal(client, checkins) {
     <div class="portal-main">
     ${renderDesktopActionCard(client, mobileStatus, currentWeek, alreadyCheckedInThisWeek, isEngagementComplete, _dayN, _closeStr)}
     ${renderActionCenter(client, mobileStatus, currentWeek, checkins)}
+    ${renderDiagnosticConversion(client, mobileStatus)}
     ${finishLineHtml}
     ${renewalHtml}
     ${alreadyCheckedInThisWeek && !isEngagementComplete ? `
