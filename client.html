@@ -216,8 +216,7 @@
       font-size: 16px;
       font-weight: 800;
       color: var(--navy);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.2px;
       margin-bottom: 4px;
     }
     .card-subtitle {
@@ -1905,10 +1904,10 @@
     align-items: flex-start;
   }
   .portal-main { flex: 1; min-width: 0; }
-  .portal-sidebar { width: 272px; flex-shrink: 0; }
+  .portal-sidebar { width: 272px; flex-shrink: 0; position: sticky; top: 20px; }
   @media (max-width: 900px) {
     .portal-layout { flex-direction: column; }
-    .portal-sidebar { width: 100%; }
+    .portal-sidebar { width: 100%; position: static; }
   }
 
   /* ── MEET YOUR COACH CARD ── */
@@ -4658,7 +4657,7 @@ function renderPortal(client, checkins) {
         </div>
         <div class="metric-numbers" style="margin-top:4px;">
           <span>Baseline: ${baseline}</span>
-          <span>${Math.round(progress)}% of target</span>
+          <span>${progress > 0 ? Math.round(progress) + '% of target' : 'Baseline set'}</span>
           <span>Target: ${target}</span>
         </div>
       </div>

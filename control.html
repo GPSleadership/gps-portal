@@ -319,6 +319,7 @@
   <div class="header-right" id="headerRight" style="display:none">
     <span class="last-refresh" id="lastRefresh"></span>
     <button class="btn-refresh" onclick="loadAll()">Refresh</button>
+    <button class="btn-logout" onclick="changeControlPassword()">Change password</button>
     <button class="btn-logout" onclick="logout()">Sign out</button>
   </div>
 </div>
@@ -507,19 +508,42 @@
     if (!pw) return;
     document.getElementById('loginError').textContent = '';
     try {
-      // Check against gps_settings control_password key
-      const res = await sbFetch('/rest/v1/gps_settings?key=eq.control_password&select=value');
-      const data = await res.json();
-      const stored = data[0]?.value?.password || data[0]?.value;
-      if (!stored || pw !== stored) {
+      // Validate the password SERVER-SIDE via the ops-data endpoint (op:auth).
+      // gps_settings is locked, so the browser never reads control_password directly.
+      const r = await fetch(OPS_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw, op: 'auth' })
+      }).then(x => x.json()).catch(() => ({ ok: false }));
+      if (!r || !r.ok) {
         document.getElementById('loginError').textContent = 'Incorrect password.';
         return;
       }
       sessionStorage.setItem(SESSION_KEY, '1');
-      sessionStorage.setItem(PW_KEY, pw); // needed to authenticate ops-data calls for locked tables
+      sessionStorage.setItem(PW_KEY, pw); // authenticates subsequent ops-data calls
       showApp();
     } catch (e) {
       document.getElementById('loginError').textContent = 'Connection error. Try again.';
+    }
+  }
+
+  // Self-service rotation of the control-panel password (stored hashed server-side).
+  async function changeControlPassword() {
+    const np = (prompt('New control-panel password (min 8 characters):') || '').trim();
+    if (!np) return;
+    if (np.length < 8) { alert('Password must be at least 8 characters.'); return; }
+    if (np !== (prompt('Re-enter the new password to confirm:') || '').trim()) { alert('Passwords did not match.'); return; }
+    const cur = sessionStorage.getItem(PW_KEY) || '';
+    const r = await fetch(OPS_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: cur, op: 'change-password', newPassword: np })
+    }).then(x => x.json()).catch(() => ({ ok: false }));
+    if (r && r.ok) {
+      sessionStorage.setItem(PW_KEY, np);
+      alert('Control-panel password updated.');
+    } else {
+      alert('Could not update password: ' + ((r && r.data && r.data.error) || 'error'));
     }
   }
 
