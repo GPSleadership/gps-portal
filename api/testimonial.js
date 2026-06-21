@@ -132,6 +132,7 @@ export default async function handler(req, res) {
       case 'mark-referral-sent':        return handleMarkReferralSent(req, res);
       case 'coach-get-testimonials':    return handleCoachGetTestimonials(req, res);
       case 'coach-get-referrals':       return handleCoachGetReferrals(req, res);
+      case 'coach-list-pending':        return handleCoachListPending(req, res);
       case 'coach-toggle-permission':   return handleTogglePermission(req, res);
       case 'coach-set-win-flag':        return handleSetWinFlag(req, res);
       case 'coach-set-engagement-type': return handleSetEngagementType(req, res);
@@ -288,11 +289,28 @@ async function handleCoachGetReferrals(req, res) {
   return res.status(200).json({ referrals: await r.json() });
 }
 
+// Pending approval queue for the Today view: testimonials the client submitted with
+// consent that the coach hasn't acted on yet. Joins the client name/title/org for display.
+async function handleCoachListPending(req, res) {
+  if (!verifyCoachSession((req.body || {}).session)) return res.status(403).json({ error: 'Unauthorized' });
+  const r = await sb(`/rest/v1/testimonials?review_status=eq.pending&select=id,client_id,source,rating_nps,responses,created_at&order=created_at.desc`);
+  if (!r.ok) return res.status(500).json({ error: 'Fetch failed' });
+  const rows = await r.json();
+  // Only surface ones where the client consented to public use (responses._consent).
+  const pending = (Array.isArray(rows) ? rows : []).filter(t => t && t.responses && t.responses._consent === true);
+  return res.status(200).json({ pending });
+}
+
 async function handleTogglePermission(req, res) {
   const { coach_password, testimonial_id, permission_public_use } = req.body || {};
   if (!verifyCoachSession((req.body || {}).session)) return res.status(403).json({ error: 'Unauthorized' });
   if (!testimonial_id) return res.status(400).json({ error: 'testimonial_id required' });
-  const r = await sb(`/rest/v1/testimonials?id=eq.${testimonial_id}`, 'PATCH', { permission_public_use: !!permission_public_use }, { Prefer: 'return=minimal' });
+  const approve = !!permission_public_use;
+  const r = await sb(`/rest/v1/testimonials?id=eq.${testimonial_id}`, 'PATCH', {
+    permission_public_use: approve,
+    review_status: approve ? 'approved' : 'declined',
+    reviewed_at: new Date().toISOString(),
+  }, { Prefer: 'return=minimal' });
   if (!r.ok) return res.status(500).json({ error: 'Update failed' });
   return res.status(200).json({ ok: true });
 }

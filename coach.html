@@ -2628,6 +2628,19 @@ function renderProfileSection(section, client, checkins) {
           ${client.coaching_sessions_enabled ? 'Disable Coaching Client' : 'Enable Coaching Client'}
         </button>
       </div>
+      <div class="detail-section" id="bigwin-section-${client.id}">
+        <h4>Client Win</h4>
+        <p style="font-size:12px;color:var(--gray-600);margin-bottom:10px;">
+          ${client.first_big_win_flag
+            ? 'A big win is flagged. Their portal will invite them to capture a short testimonial.'
+            : 'Mark a big win when this client hits a real milestone. It triggers a testimonial request in their portal — the best moment to ask.'}
+        </p>
+        <button onclick="markBigWin('${client.id}', ${!client.first_big_win_flag})" id="bigWinBtn-${client.id}"
+          style="padding:8px 18px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;border:none;
+            background:${client.first_big_win_flag ? 'var(--gray-300)' : 'var(--navy)'};color:${client.first_big_win_flag ? 'var(--gray-700,#444)' : '#fff'};">
+          ${client.first_big_win_flag ? 'Big win flagged ✓ — clear it' : '★ Mark a big win'}
+        </button>
+      </div>
       <div class="detail-section" id="aa-section-${client.id}">
         <h4>Ask Alex Usage</h4>
         ${client.ask_alex_enabled ? `
@@ -6252,6 +6265,8 @@ function renderDiagHome() {
 
   ${needsSection}
 
+  <div id="testimonialApprovalFlags"></div>
+
   <div id="emailFailFlags"></div>
 
   <div class="card" style="margin-bottom:22px;">
@@ -6267,6 +6282,82 @@ function renderDiagHome() {
   </div>`;
 
   loadEmailFailureFlags();
+  loadTestimonialApprovalFlags();
+}
+
+// ── Testimonial flywheel: pending approvals as an Action Required card on Today ──
+// Nothing goes public until Alex approves it here. Approve → permission_public_use=true
+// (shows at client decision points). Decline → hidden. Either way it leaves this queue.
+async function loadTestimonialApprovalFlags() {
+  const box = document.getElementById('testimonialApprovalFlags');
+  if (!box) return;
+  try {
+    const session = localStorage.getItem('gps_coach_session') || '';
+    const res = await fetch('/api/testimonial?action=coach-list-pending', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session }),
+    });
+    if (!res.ok) { box.innerHTML = ''; return; }
+    const { pending } = await res.json();
+    if (!pending || !pending.length) { box.innerHTML = ''; return; }
+    const nameOf = (cid) => {
+      const c = (typeof allClients !== 'undefined' ? allClients : []).find(x => x.id === cid);
+      return c ? (c.name + (c.organization ? ' · ' + c.organization : '')) : 'A client';
+    };
+    const rows = pending.map(t => {
+      const r = t.responses || {};
+      const quote = r.q3 || r.q1 || r.q2 || '(see full response)';
+      const nps = t.rating_nps != null ? `NPS ${t.rating_nps}/10` : '';
+      return `<div style="padding:12px 0;border-bottom:1px solid #f0ebe3;">
+        <div style="font-size:13px;font-weight:700;color:var(--d-dark);">${esc(nameOf(t.client_id))} ${nps ? `<span style="font-weight:500;color:var(--d-mid);">· ${nps}</span>` : ''}</div>
+        <div style="font-size:12.5px;color:var(--d-mid);font-style:italic;margin:6px 0;line-height:1.5;">“${esc(String(quote).slice(0, 240))}”</div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="reviewTestimonial('${t.id}', true, this)" style="padding:6px 14px;background:var(--d-green,#2e7d32);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Approve for public use</button>
+          <button onclick="reviewTestimonial('${t.id}', false, this)" style="padding:6px 14px;background:none;border:1px solid #c0392b;color:#c0392b;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Decline</button>
+        </div>
+      </div>`;
+    }).join('');
+    box.innerHTML = `<div class="card" style="margin-bottom:20px;border-left:4px solid var(--d-amber,#C47A30);">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <div class="card-title">★ Testimonials awaiting your approval (${pending.length})</div>
+      </div>
+      <div style="font-size:12px;color:var(--d-mid);margin-bottom:6px;">Clients consented to share these. Nothing is public until you approve it.</div>
+      ${rows}
+    </div>`;
+  } catch (_) { box.innerHTML = ''; }
+}
+
+async function reviewTestimonial(id, approve, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = approve ? 'Approving…' : 'Declining…'; }
+  try {
+    const session = localStorage.getItem('gps_coach_session') || '';
+    const res = await fetch('/api/testimonial?action=coach-toggle-permission', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session, testimonial_id: id, permission_public_use: approve }),
+    });
+    if (!res.ok) throw new Error('failed');
+    if (typeof toast === 'function') toast(approve ? 'Approved — it can now appear at client decision points.' : 'Declined — hidden.');
+    loadTestimonialApprovalFlags();
+  } catch (_) {
+    if (btn) { btn.disabled = false; btn.textContent = approve ? 'Approve for public use' : 'Decline'; }
+    alert('Could not update — the endpoint may be deploying. Try again in 30 seconds.');
+  }
+}
+
+// Coach: flag (or clear) a client's "big win" — triggers the testimonial request in their portal.
+async function markBigWin(clientId, makeWin) {
+  try {
+    const session = localStorage.getItem('gps_coach_session') || '';
+    const res = await fetch('/api/testimonial?action=coach-set-win-flag', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session, client_id: clientId, first_big_win_flag: makeWin }),
+    });
+    if (!res.ok) throw new Error('failed');
+    if (typeof allClients !== 'undefined') allClients = allClients.map(c => c.id === clientId ? { ...c, first_big_win_flag: makeWin } : c);
+    if (typeof toast === 'function') toast(makeWin ? 'Big win flagged — their portal will invite a testimonial.' : 'Big win cleared.');
+    if (typeof openClientProfile === 'function') openClientProfile(clientId);
+  } catch (_) {
+    alert('Could not update — the endpoint may be deploying. Try again in 30 seconds.');
+  }
 }
 
 // ── P1 #6: surface email delivery failures (last 7 days) on the Today view ──
