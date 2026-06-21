@@ -3231,6 +3231,13 @@ async function togglePlanEdit(clientId, currentState) {
 
 async function toggleCoachingSessions(clientId, currentState) {
   const newState  = !currentState;
+  // EA-safety: disabling changes the client's portal (hides the coaching-session
+  // check-in question and the coaching surfaces). Confirm before turning it off.
+  if (!newState) {
+    const _c = (typeof allClients !== 'undefined' ? allClients : []).find(x => x.id === clientId);
+    const _nm = _c && _c.name ? _c.name : 'this client';
+    if (!confirm('Disable coaching for ' + _nm + '?\n\nTheir weekly check-in will drop the coaching-session question and the coaching surfaces in their portal change. You can re-enable any time.')) return;
+  }
   const btn       = document.getElementById('coachingSessionBtn-' + clientId);
   const statusEl  = document.getElementById('coachingSessionStatus-' + clientId);
   btn.textContent = 'Saving…';
