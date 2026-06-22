@@ -1097,6 +1097,10 @@ I'm taking part in a leadership assessment run by GPS Leadership Solutions. Thei
         <strong>Review before activating.</strong> These templates control the emails sent to stakeholders. Edit the subject and body as needed, then toggle <strong>Approved</strong> to activate each one. Unapproved templates fall back to the system default. Placeholders like <code>[ClientFirstName]</code> and <code>[SurveyLink]</code> are replaced automatically.
       </div>
 
+      <div id="ccSettingsPanel" style="background:var(--white);border-radius:8px;padding:16px 18px;margin-bottom:16px;border:1px solid var(--gray-200);">
+        <div class="spinner"></div>
+      </div>
+
       <div id="templatesContent">
         <div class="spinner"></div>
       </div>
@@ -2641,6 +2645,12 @@ function renderProfileSection(section, client, checkins) {
           ${client.first_big_win_flag ? 'Big win flagged ✓ — clear it' : '★ Mark a big win'}
         </button>
       </div>
+      <div class="detail-section" id="projcc-section-${client.id}">
+        <h4>Project CC (this client only)</h4>
+        <p style="font-size:12px;color:var(--gray-600);margin-bottom:8px;">Extra people CC'd on THIS client's survey emails — e.g., a project sponsor. Comma-separated. The global CC settings (Communications → Templates) still apply on top of this.</p>
+        <input type="text" id="projcc-${client.id}" value="${(Array.isArray(client.project_cc_emails) ? client.project_cc_emails.join(', ') : '').replace(/"/g,'&quot;')}" placeholder="sponsor@example.com" style="width:100%;max-width:420px;padding:7px 10px;border:1px solid var(--gray-300);border-radius:6px;font-size:13px;">
+        <div style="margin-top:8px;"><button onclick="saveProjectCc('${client.id}')" style="background:var(--navy);color:#fff;border:none;border-radius:6px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;">Save project CC</button></div>
+      </div>
       <div class="detail-section" id="aa-section-${client.id}">
         <h4>Ask Alex Usage</h4>
         ${client.ask_alex_enabled ? `
@@ -4122,7 +4132,7 @@ function showSection(name, skipHooks) {
   if (name === 'emails')      loadEmailLog();
   if (name === 'messages')    loadCoachInbox();
   if (name === 'admins')      loadAdminAccounts();
-  if (name === 'templates')   loadEmailTemplates();
+  if (name === 'templates')   { loadEmailTemplates(); loadCcSettingsPanel(); }
   if (name === 'dashboard')   { _actionItemsLoaded = false; renderDiagHome(); refreshMsgBadge(); }
   if (name === 'diagnostics') { diagBoot(); renderDiagTable(); }
   if (name === 'organizations') renderOrganizations();
@@ -4665,6 +4675,31 @@ function tplGroup(t){
   if (/remind|check.?in|sprint|welcome|coach|plan|closeout|testimonial|referral|debrief|report/.test(s)) return 'Coaching Sprint';
   return 'Other';
 }
+// Global CC settings — who gets CC'd on survey + diagnostic emails. Editable here so
+// recipients can be added/removed any time (e.g., turn off alex@ later).
+async function loadCcSettingsPanel(){
+  const box = document.getElementById('ccSettingsPanel'); if (!box) return;
+  let cfg = { cc_leader:true, cc_team:true, cc_alex:true, extra_cc:[] };
+  try { const rows = await cdSelect('email_cc_settings', { eq:{ id:1 }, limit:1 }); if (rows && rows[0]) cfg = rows[0]; } catch(_){}
+  const extra = Array.isArray(cfg.extra_cc) ? cfg.extra_cc.join(', ') : '';
+  const chk = (k,label,desc) => `<label style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;font-size:13px;cursor:pointer;"><input type="checkbox" id="cc-${k}" ${cfg[k]?'checked':''} style="margin-top:3px;"><span><b>${label}</b><br><span style="color:var(--gray-600);font-size:12px;">${desc}</span></span></label>`;
+  box.innerHTML = `
+    <div style="font-weight:800;color:var(--navy);font-size:14px;margin-bottom:4px;">Who gets CC'd on survey &amp; diagnostic emails</div>
+    <div style="font-size:12px;color:var(--gray-600);margin-bottom:12px;line-height:1.5;">Applies to stakeholder surveys and diagnostic rater invites. Per-client extra CCs are set on each client's profile. Note: the leader is never CC'd on <b>anonymous</b> diagnostics regardless of this setting (protects rater candor).</div>
+    ${chk('cc_leader','CC the leader / subject','The person being rated, where appropriate.')}
+    ${chk('cc_team','CC team@gpsleadership.org','Your team inbox.')}
+    ${chk('cc_alex','CC alex@gpsleadership.org','You. Turn this off here whenever you no longer want to be copied.')}
+    <label style="display:block;font-size:13px;font-weight:700;color:var(--navy);margin:12px 0 4px;">Always-CC these addresses (comma-separated)</label>
+    <input type="text" id="cc-extra" value="${(extra||'').replace(/"/g,'&quot;')}" placeholder="name@example.com, name2@example.com" style="width:100%;max-width:520px;padding:7px 10px;border:1px solid var(--gray-300);border-radius:6px;font-size:13px;">
+    <div style="margin-top:12px;"><button onclick="saveCcSettings()" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;">Save CC settings</button></div>`;
+}
+async function saveCcSettings(){
+  const extraRaw = (document.getElementById('cc-extra').value || '').split(',').map(s => s.trim()).filter(Boolean);
+  const payload = { cc_leader: document.getElementById('cc-leader').checked, cc_team: document.getElementById('cc-team').checked, cc_alex: document.getElementById('cc-alex').checked, extra_cc: extraRaw, updated_at: new Date().toISOString() };
+  try { await cdUpdate('email_cc_settings', payload, { eq:{ id:1 } }); if (typeof toast === 'function') toast('CC settings saved.'); }
+  catch(e){ alert('Could not save CC settings: ' + e.message); }
+}
+
 async function loadEmailTemplates() {
   const el = document.getElementById('templatesContent');
   el.innerHTML = '<div class="spinner"></div>';
@@ -6395,6 +6430,16 @@ async function reviewTestimonial(id, approve, btn) {
     if (btn) { btn.disabled = false; btn.textContent = approve ? 'Approve for public use' : 'Decline'; }
     alert('Could not update — the endpoint may be deploying. Try again in 30 seconds.');
   }
+}
+
+// Per-client project CC — extra addresses CC'd on this client's survey emails.
+async function saveProjectCc(clientId){
+  const raw = (document.getElementById('projcc-' + clientId).value || '').split(',').map(s => s.trim()).filter(Boolean);
+  try {
+    await cdUpdate('clients', { project_cc_emails: raw }, { eq:{ id: clientId } });
+    if (typeof allClients !== 'undefined') allClients = allClients.map(c => c.id === clientId ? { ...c, project_cc_emails: raw } : c);
+    if (typeof toast === 'function') toast('Project CC saved.');
+  } catch (e) { alert('Could not save project CC: ' + e.message); }
 }
 
 // Coach: flag (or clear) a client's "big win" — triggers the testimonial request in their portal.

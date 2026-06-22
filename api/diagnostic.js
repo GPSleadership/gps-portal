@@ -150,6 +150,25 @@ function htmlToText(html) {
     .trim();
 }
 
+// Configurable CC for diagnostic emails. Reads the global email_cc_settings and honors
+// the Option A rule: the leader is never CC'd on anonymous diagnostics, even if the
+// "CC leader" toggle is on (protects rater candor). Falls back to leader+team+alex.
+async function loadCcConfig() {
+  try {
+    const r = await sb('/rest/v1/email_cc_settings?id=eq.1&select=cc_leader,cc_team,cc_alex,extra_cc&limit=1');
+    if (r.ok) { const rows = await r.json(); if (Array.isArray(rows) && rows[0]) return rows[0]; }
+  } catch (_) {}
+  return { cc_leader: true, cc_team: true, cc_alex: true, extra_cc: [] };
+}
+function buildDiagCc(cfg, diag) {
+  const out = [];
+  if (cfg.cc_leader && !diag.anonymous_feedback && diag.client_email) out.push(diag.client_email);
+  if (cfg.cc_team) out.push('team@gpsleadership.org');
+  if (cfg.cc_alex) out.push('alex@gpsleadership.org');
+  if (Array.isArray(cfg.extra_cc)) cfg.extra_cc.forEach(e => out.push(e));
+  return out.filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+}
+
 async function sendEmail({ to, subject, html, text, emailType, recipientName, cc, client, brandUrl }) {
   if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY not configured');
   // Auto-link the first "GPS Leadership Solutions" mention to the segment-appropriate page.
@@ -295,7 +314,7 @@ async function handleResendRater(req, res) {
       raterName: rater.name, leaderName: diag.client_name, leaderTitle: diag.client_title,
       leaderOrg: diag.client_org, surveyLink, closeDate: closeDateDisp, calendarLink, bodyHtml,
     });
-    const cc = (diag.anonymous_feedback ? [] : [diag.client_email]).concat('team@gpsleadership.org', 'alex@gpsleadership.org').filter(Boolean);
+    const cc = buildDiagCc(await loadCcConfig(), diag);
     await sendEmail({ to: rater.email, subject, html, emailType: 'diagnostic_invite', recipientName: rater.name, cc });
     if (!rater.invited_at) {
       await sb(`/rest/v1/diagnostic_raters?id=eq.${rater.id}`, 'PATCH', { invited_at: now.toISOString() }, { Prefer: 'return=minimal' });
@@ -458,7 +477,7 @@ async function sendInvitesForDiagnostic(diagnostic_id) {
     // On an anonymous diagnostic, never CC the leader — doing so reveals the full
     // rater roster to them and shows raters their leader is copied, breaking the
     // anonymity promise. Internal team@ still gets a copy either way.
-    const inviteCc = (diag.anonymous_feedback ? [] : [diag.client_email]).concat('team@gpsleadership.org', 'alex@gpsleadership.org').filter(Boolean);
+    const inviteCc = buildDiagCc(await loadCcConfig(), diag);
     try {
       await sendEmail({ to: rater.email, subject, html, emailType: 'diagnostic_invite', recipientName: rater.name, cc: inviteCc });
       await sb(`/rest/v1/diagnostic_raters?id=eq.${rater.id}`, 'PATCH', { invited_at: nowISO }, { Prefer: 'return=minimal' });
@@ -2632,7 +2651,7 @@ async function handleReminders(req, res) {
         const daysSinceInvite = daysBetween(new Date(rater.invited_at), now);
         const surveyLink = `${PORTAL_BASE}/diagnostic-survey?token=${rater.token}`;
 
-        const reminderCc = (diag.anonymous_feedback ? [] : [diag.client_email]).concat('team@gpsleadership.org', 'alex@gpsleadership.org').filter(Boolean);
+        const reminderCc = buildDiagCc(await loadCcConfig(), diag);
 
         const closeFmt = diag.close_date
           ? new Date(diag.close_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })

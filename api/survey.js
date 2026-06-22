@@ -42,6 +42,25 @@ function sbFetch(path, method = 'GET', body = null, extraHeaders = {}) {
   });
 }
 
+// Configurable CC for survey emails — global toggles (email_cc_settings) + per-client
+// project CCs. Falls back to leader+team+alex if the config can't be read.
+async function loadCcConfig() {
+  try {
+    const r = await sbFetch('/rest/v1/email_cc_settings?id=eq.1&select=cc_leader,cc_team,cc_alex,extra_cc&limit=1');
+    if (r.ok) { const rows = await r.json(); if (Array.isArray(rows) && rows[0]) return rows[0]; }
+  } catch (_) {}
+  return { cc_leader: true, cc_team: true, cc_alex: true, extra_cc: [] };
+}
+function buildCcList(cfg, leaderEmail, projectCc) {
+  const out = [];
+  if (cfg.cc_leader && leaderEmail) out.push(leaderEmail);
+  if (cfg.cc_team) out.push('team@gpsleadership.org');
+  if (cfg.cc_alex) out.push('alex@gpsleadership.org');
+  if (Array.isArray(cfg.extra_cc)) cfg.extra_cc.forEach(e => out.push(e));
+  if (Array.isArray(projectCc)) projectCc.forEach(e => out.push(e));
+  return out.filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+}
+
 // ── Main handler ─────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {
@@ -270,11 +289,12 @@ async function handleSend(req, res) {
 // Core stakeholder send — shared by handleSend (manual) and handleSendScheduled (cron).
 // Returns { ok:true, results } or { ok:false, status, error }. No HTTP here.
 async function performSend(client_id, checkpoint) {
-  const clientRes = await sbFetch(`/rest/v1/clients?id=eq.${client_id}&select=id,name,email,behavior_1,start_behavior,current_sprint_number,observable_measure,organization,industry,gs_grade`);
+  const clientRes = await sbFetch(`/rest/v1/clients?id=eq.${client_id}&select=id,name,email,behavior_1,start_behavior,current_sprint_number,observable_measure,organization,industry,gs_grade,project_cc_emails`);
   if (!clientRes.ok) return { ok:false, status:500, error:'Failed to load client' };
   const clients = await clientRes.json();
   if (!clients || clients.length === 0) return { ok:false, status:404, error:'Client not found' };
   const client = clients[0];
+  const ccCfg = await loadCcConfig();
 
   const priorityBehavior = (client.observable_measure || client.behavior_1 || client.start_behavior || '').trim();
   if (!priorityBehavior) {
@@ -320,8 +340,8 @@ async function performSend(client_id, checkpoint) {
     }
 
     const surveyLink = `${SITE_URL}/survey?t=${token}`;
-    // CC the leader/subject + Alex + team on every stakeholder survey email.
-    const ccAddresses = [client.email, 'alex@gpsleadership.org', 'team@gpsleadership.org'].filter(Boolean);
+    // CC per the configurable global toggles + this client's project CCs.
+    const ccAddresses = buildCcList(ccCfg, client.email, client.project_cc_emails);
     const _bl = require('./brand-link');
     const _html = _bl.autoLinkBrand(buildSendEmailHtml(stakeholder.name, client.name, checkpoint, priorityBehavior, surveyLink), _bl.gpsDiagnosticLink(client));
     const emailRes = await fetch('https://api.resend.com/emails', {
@@ -448,10 +468,11 @@ async function handleResend(req, res) {
     if (!authOk) return res.status(401).json({ error: 'Not authorized' });
 
     // Load client
-    const clientRes = await sbFetch(`/rest/v1/clients?id=eq.${client_id}&select=id,name,email,behavior_1,start_behavior,current_sprint_number,observable_measure,organization,industry,gs_grade`);
+    const clientRes = await sbFetch(`/rest/v1/clients?id=eq.${client_id}&select=id,name,email,behavior_1,start_behavior,current_sprint_number,observable_measure,organization,industry,gs_grade,project_cc_emails`);
     const clients = clientRes.ok ? await clientRes.json() : [];
     if (!clients.length) return res.status(404).json({ error: 'Client not found' });
     const client = clients[0];
+    const ccCfg = await loadCcConfig();
     const priorityBehavior = (client.observable_measure || client.behavior_1 || client.start_behavior || '').trim();
     if (!priorityBehavior) return res.status(400).json({ error: 'No priority behavior on file for this client' });
     const sprintNumber = client.current_sprint_number || 1;
@@ -489,7 +510,7 @@ async function handleResend(req, res) {
       body: JSON.stringify({
         from:    `${FROM_NAME} <${FROM_EMAIL}>`,
         to:      [stakeholder.email],
-        cc:      [client.email, 'alex@gpsleadership.org', 'team@gpsleadership.org'].filter(Boolean),
+        cc:      buildCcList(ccCfg, client.email, client.project_cc_emails),
         subject: buildSendSubjectLine(client.name, checkpoint),
         html:    _html2,
         text:    htmlToText(_html2),

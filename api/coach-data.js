@@ -71,7 +71,7 @@ const READ_TABLES = new Set([
   'diagnostics', 'diagnostic_raters', 'diagnostic_responses',
   'diagnostic_report_drafts', 'diagnostic_question_overrides', 'diagnostic_team_reports',
   'stakeholders', 'survey_responses', 'survey_tokens', 'survey_schedules',
-  'ask_alex_usage', 'ask_alex_log', 'email_log', 'email_templates', 'client_errors',
+  'ask_alex_usage', 'ask_alex_log', 'email_log', 'email_templates', 'email_cc_settings', 'client_errors',
   'testimonials', 'referrals',
   // Decision Room (v27)
   'teams', 'team_members', 'sponsors', 'sponsor_teams', 'recommendations', 'external_signals', 'external_feedback_invites',
@@ -85,7 +85,7 @@ const WRITE_TABLES = new Set([
   'clients', 'checkins', 'sprints', 'sprint_closeouts',
   'diagnostics', 'diagnostic_raters', 'diagnostic_responses',
   'diagnostic_report_drafts', 'diagnostic_question_overrides', 'diagnostic_team_reports',
-  'stakeholders', 'survey_responses', 'testimonials', 'referrals',
+  'stakeholders', 'survey_responses', 'testimonials', 'referrals', 'email_cc_settings',
   // Decision Room (v27) — coach CRUD for teams, membership, recs, signals, sponsors
   'teams', 'team_members', 'sponsors', 'sponsor_teams', 'recommendations', 'external_signals',
   // Workshop Module (v35) — coach CRUD for workshops, participants, questions, responses
