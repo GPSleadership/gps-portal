@@ -770,7 +770,7 @@ function buildLeaderOnboardingEmail({ leaderName, leaderTitle, leaderOrg, portal
           <strong>If the link won't open:</strong> some organizations' security tools block or rewrite outside links. If that happens, forward this note to your IT team:<br /><br />
           <em>"Please allowlist the website portal.gpsleadership.org (and gpsleadership.org) and emails from gpsleadership.org, and exclude them from link rewriting/sandboxing. It is a standard, confidential assessment site with no downloads or attachments."</em>
         </div>
-        <p style="margin-top:24px;">Once you complete the self-assessment, I'll reach out about next steps — including finalizing the list of people who will provide feedback on your leadership.</p>
+        <p style="margin-top:24px;">Once you complete the self-assessment, I'll reach out about next steps — including finalizing the list of people who will provide feedback on your leadership. When that time comes, adding them is easy: type them in one at a time, upload a spreadsheet (we provide a template), or just send us the list and our team will upload it for you.</p>
         <p>${contactLine}</p>
         <p>– Alex Tremble<br /><span style="color:#666;font-size:13px;">GPS Leadership Solutions</span></p>
         <div style="margin-top:32px;padding-top:20px;border-top:1px solid #eee;font-size:11px;color:#999;">

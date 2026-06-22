@@ -236,8 +236,8 @@ input:focus,select:focus{outline:none;border-color:var(--blue);}
       </div>
       <div id="add-rater-msg" style="margin-top:10px;font-size:12px;color:var(--red);"></div>
       <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--border);">
-        <div style="font-size:13px;font-weight:700;margin-bottom:4px;">Add many at once</div>
-        <div style="font-size:12px;color:#555;margin-bottom:8px;">Upload a spreadsheet (.xlsx or .csv) with columns Name, Email, Relationship — or paste one person per line as <code>name, email, relationship</code>. Duplicates are skipped.</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:4px;">Add many at once — three easy ways</div>
+        <div style="font-size:12px;color:#555;margin-bottom:8px;">Type or paste one person per line as <code>name, email, relationship</code> below, <strong>or</strong> upload a spreadsheet (.xlsx or .csv) with columns Name, Email, Relationship — <a href="#" onclick="downloadRaterTemplate();return false;" style="color:var(--blue);font-weight:700;">download the template</a>. Duplicates are skipped.</div>
         <textarea id="bulk-raters" rows="3" placeholder="Jane Doe, jane@co.com, Direct Report&#10;Sam Lee, sam@co.com, Peer" style="width:100%;box-sizing:border-box;font-size:12px;padding:8px;border:1.5px solid var(--border);border-radius:6px;font-family:monospace;"></textarea>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;">
           <button class="btn btn-primary" style="font-size:13px;padding:8px 16px;" onclick="bulkAddRatersFromText()">Add all from text</button>
@@ -245,6 +245,7 @@ input:focus,select:focus{outline:none;border-color:var(--blue);}
           <input type="file" id="bulk-raters-file" accept=".xlsx,.xls,.csv,.ods" onchange="bulkAddRatersFromFile(this)" style="font-size:12px;">
         </div>
         <div id="bulk-raters-msg" style="font-size:12px;color:#555;margin-top:6px;"></div>
+        <div style="font-size:12px;color:#555;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);">Prefer not to enter them yourself? <a href="#" onclick="sendRaterListToTeam();return false;" style="color:var(--blue);font-weight:700;">Send your list to our team</a> and we'll upload it for you.</div>
       </div>
     </div>
     <div id="rater-submit-section" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);"></div>
@@ -442,13 +443,17 @@ const PIPELINE_STEPS = [
     detail: d => d.self_assessment_completed_at
       ? `Completed ${formatDate(d.self_assessment_completed_at)}`
       : 'Your self-view is needed before rater invites go out (~15 min)' },
-  { n:3, label:'Stakeholder list & rater invitations',
+  { n:3, label:'Build your stakeholder (rater) list',
     detail: d => d.invites_sent_at
-      ? `${RATERS.length} raters invited · Surveys sent ${formatDate(d.invites_sent_at)}`
+      ? `${RATERS.length} raters finalized · Surveys sent ${formatDate(d.invites_sent_at)}`
       : RATERS.length > 0
-        ? `${RATERS.length} rater${RATERS.length !== 1 ? 's' : ''} added — Alex will review and send invitations`
-        : 'Identify the people you want feedback from in the section below' },
-  { n:4, label:'Rater surveys in progress',
+        ? `${RATERS.length} rater${RATERS.length !== 1 ? 's' : ''} added — type them in, upload a spreadsheet, or send the list to our team`
+        : 'Identify the people you want feedback from below — type them in, upload a spreadsheet, or send the list to our team' },
+  { n:4, label:'Send your raters a quick heads-up',
+    detail: d => d.invites_sent_at
+      ? 'Done — your raters were notified'
+      : 'Once your list is set, send your people the ready-to-send intro so the survey isn\'t a surprise (team@ and alex@ are copied). We send the official survey link after a quick review.' },
+  { n:5, label:'Rater surveys in progress',
     detail: d => {
       const done  = RATERS.filter(r => r.completed_at).length;
       const total = RATERS.length;
@@ -456,17 +461,17 @@ const PIPELINE_STEPS = [
         ? `${done} of ${total} invited raters have responded${d.close_date ? ' · Closes ' + formatDate(d.close_date) : ''}`
         : d.close_date ? `Survey closes ${formatDate(d.close_date)}` : 'Survey window active';
     }},
-  { n:5, label:'Survey window closed & data locked',
+  { n:6, label:'Survey window closed & data locked',
     detail: d => d.survey_closed_at ? `Closed ${formatDate(d.survey_closed_at)}` : 'Follows automatically when the survey window ends' },
-  { n:6, label:'Diagnostic report finalized',
+  { n:7, label:'Diagnostic report finalized',
     detail: d => d.report_finalized_at ? `Report available ${formatDate(d.report_finalized_at)}` : 'Alex reviews and finalizes your report' },
-  { n:7, label:'Debrief session',
+  { n:8, label:'Debrief session',
     detail: d => d.debrief_completed_at
       ? `Completed ${formatDate(d.debrief_completed_at)}`
       : d.debrief_date
         ? `Scheduled for ${formatDate(d.debrief_date)}`
         : 'Session date to be confirmed — Alex will share the details' },
-  { n:8, label:'90-Day implementation plan locked & active',
+  { n:9, label:'90-Day implementation plan locked & active',
     detail: () => 'You\'ll have 24 hours after the debrief to finalize — then it locks automatically.' },
 ];
 
@@ -476,16 +481,24 @@ function currentStep(status) {
     'intake_complete': 2,          // intake done → self-assessment is next
     'self_assessment_pending': 2,
     'self_assessment_complete': 3,
-    'survey_open': 4,
-    'survey_closed': 5,
-    'report_draft': 6, 'report_final': 6,
-    'debrief_complete': 7,
-    'plan_active': 8,
+    'survey_open': 5,              // step 4 (send heads-up) sits between list and surveys
+    'survey_closed': 6,
+    'report_draft': 7, 'report_final': 7,
+    'debrief_complete': 8,
+    'plan_active': 9,
   };
   return map[status] || 1;
 }
 
 function stepState(stepN, curStep, status) {
+  // Step 4 (send your raters a heads-up) is a leader action that lives between
+  // finalizing the list and the official invites going out — drive it off
+  // invites_sent_at, not strict status order.
+  if (stepN === 4) {
+    if (DIAGNOSTIC.invites_sent_at) return 'done';
+    if (status === 'self_assessment_complete' && RATERS.length > 0) return 'action';
+    return stepN < curStep ? 'done' : 'future';
+  }
   if (stepN < curStep)  return 'done';
   if (stepN === curStep) {
     // Step 2: action if self-assessment not yet done
@@ -918,6 +931,23 @@ async function addRater() {
   const otherWrap = document.getElementById('add-rel-other-wrap');
   if (otherWrap) otherWrap.style.display = 'none';
   renderPendingRaters();
+}
+
+// Download a ready-to-fill rater list template (.csv — opens in Excel/Sheets).
+function downloadRaterTemplate(){
+  const csv = 'Name,Email,Relationship\nJane Doe,jane@example.com,Direct Report\nSam Lee,sam@example.com,Peer\n';
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'GPS_Rater_List_Template.csv';
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// Hand the rater list to the GPS team to upload (opens a pre-filled email).
+function sendRaterListToTeam(){
+  const who = (typeof DIAGNOSTIC !== 'undefined' && DIAGNOSTIC && DIAGNOSTIC.client_name) ? DIAGNOSTIC.client_name : 'my';
+  const subj = encodeURIComponent('Rater list for ' + who + ' — please upload');
+  const body = encodeURIComponent('Hi team,\n\nPlease add these people to my rater list (Name, Email, Relationship):\n\n1.\n2.\n3.\n\nThank you.');
+  window.location.href = 'mailto:team@gpsleadership.org?subject=' + subj + '&body=' + body;
 }
 
 // ── Bulk add raters (paste or spreadsheet upload) ────────────────────────────
