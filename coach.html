@@ -5469,10 +5469,57 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
         ${sendBtnLabel}
       </button>
     </div>
+    ${(!baselineSent && activeStakeholders.length > 0) ? `
+    <div style="display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap;">
+      <span style="font-size:12px;color:var(--gray-600);">Or schedule it:</span>
+      <input type="datetime-local" id="sh-sched-input-${clientId}" style="font-size:12px;padding:4px 6px;border:1px solid var(--gray-300);border-radius:5px;">
+      <button onclick="scheduleBaselineSurvey('${clientId}')" style="font-size:12px;background:none;border:1px solid var(--teal);color:var(--teal);border-radius:5px;padding:5px 12px;cursor:pointer;font-weight:700;">Schedule send</button>
+    </div>` : ''}
+    <div id="sh-sched-${clientId}" style="margin-top:6px;font-size:12px;"></div>
     ${addFormHtml}
     ${scoreboardHtml}
   `;
   loadObservableMeasure(clientId);
+  loadStakeholderSchedule(clientId);
+}
+
+// Time-release for the stakeholder baseline survey (mirrors the diagnostic schedule).
+async function scheduleBaselineSurvey(clientId){
+  const inp = document.getElementById('sh-sched-input-' + clientId);
+  if (!inp || !inp.value) { alert('Pick a date and time first.'); return; }
+  const when = new Date(inp.value);
+  if (isNaN(when.getTime()) || when.getTime() < Date.now()) { alert('Pick a future date and time.'); return; }
+  if (!confirm('Schedule the Baseline Survey to send ' + when.toLocaleString() + '?\n\nEach active stakeholder gets their link then. You (alex@) and team@ are CC\'d.')) return;
+  const session = getCoachSessionToken();
+  try {
+    const res = await fetch('/api/survey?action=schedule-send', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ client_id: clientId, checkpoint:'baseline', scheduled_at: when.toISOString(), session }) });
+    const j = await res.json();
+    if (!res.ok || j.error) throw new Error(j.error || ('HTTP ' + res.status));
+    if (typeof toast === 'function') toast('Baseline survey scheduled for ' + when.toLocaleString());
+    loadStakeholderSchedule(clientId);
+  } catch (e) { alert('Could not schedule: ' + e.message); }
+}
+
+async function cancelBaselineSchedule(clientId){
+  const session = getCoachSessionToken();
+  try {
+    const res = await fetch('/api/survey?action=schedule-send', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ client_id: clientId, checkpoint:'baseline', scheduled_at: null, session }) });
+    const j = await res.json();
+    if (!res.ok || j.error) throw new Error(j.error || ('HTTP ' + res.status));
+    if (typeof toast === 'function') toast('Scheduled send canceled.');
+    loadStakeholderSchedule(clientId);
+  } catch (e) { alert('Could not cancel: ' + e.message); }
+}
+
+async function loadStakeholderSchedule(clientId){
+  const box = document.getElementById('sh-sched-' + clientId); if (!box) return;
+  try {
+    const rows = await cdSelect('survey_schedules', { eq: { client_id: clientId, checkpoint: 'baseline' }, select: 'id,scheduled_at,sent_at' });
+    const pending = (rows || []).find(r => !r.sent_at);
+    box.innerHTML = pending
+      ? '⏳ Baseline scheduled for <b>' + new Date(pending.scheduled_at).toLocaleString() + '</b> · <a href="#" onclick="cancelBaselineSchedule(\'' + clientId + '\');return false;" style="color:var(--red);font-weight:700;">Cancel</a>'
+      : '';
+  } catch (_) { box.innerHTML = ''; }
 }
 
 // The observable outcome stakeholders actually rate. Stored on the client; survey

@@ -295,7 +295,7 @@ async function handleResendRater(req, res) {
       raterName: rater.name, leaderName: diag.client_name, leaderTitle: diag.client_title,
       leaderOrg: diag.client_org, surveyLink, closeDate: closeDateDisp, calendarLink, bodyHtml,
     });
-    const cc = (diag.anonymous_feedback ? [] : [diag.client_email]).concat('team@gpsleadership.org').filter(Boolean);
+    const cc = (diag.anonymous_feedback ? [] : [diag.client_email]).concat('team@gpsleadership.org', 'alex@gpsleadership.org').filter(Boolean);
     await sendEmail({ to: rater.email, subject, html, emailType: 'diagnostic_invite', recipientName: rater.name, cc });
     if (!rater.invited_at) {
       await sb(`/rest/v1/diagnostic_raters?id=eq.${rater.id}`, 'PATCH', { invited_at: now.toISOString() }, { Prefer: 'return=minimal' });
@@ -458,7 +458,7 @@ async function sendInvitesForDiagnostic(diagnostic_id) {
     // On an anonymous diagnostic, never CC the leader — doing so reveals the full
     // rater roster to them and shows raters their leader is copied, breaking the
     // anonymity promise. Internal team@ still gets a copy either way.
-    const inviteCc = (diag.anonymous_feedback ? [] : [diag.client_email]).concat('team@gpsleadership.org').filter(Boolean);
+    const inviteCc = (diag.anonymous_feedback ? [] : [diag.client_email]).concat('team@gpsleadership.org', 'alex@gpsleadership.org').filter(Boolean);
     try {
       await sendEmail({ to: rater.email, subject, html, emailType: 'diagnostic_invite', recipientName: rater.name, cc: inviteCc });
       await sb(`/rest/v1/diagnostic_raters?id=eq.${rater.id}`, 'PATCH', { invited_at: nowISO }, { Prefer: 'return=minimal' });
@@ -2632,7 +2632,7 @@ async function handleReminders(req, res) {
         const daysSinceInvite = daysBetween(new Date(rater.invited_at), now);
         const surveyLink = `${PORTAL_BASE}/diagnostic-survey?token=${rater.token}`;
 
-        const reminderCc = (diag.anonymous_feedback ? [] : [diag.client_email]).concat('team@gpsleadership.org').filter(Boolean);
+        const reminderCc = (diag.anonymous_feedback ? [] : [diag.client_email]).concat('team@gpsleadership.org', 'alex@gpsleadership.org').filter(Boolean);
 
         const closeFmt = diag.close_date
           ? new Date(diag.close_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })

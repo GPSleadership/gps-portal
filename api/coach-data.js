@@ -70,7 +70,7 @@ const READ_TABLES = new Set([
   'clients', 'checkins', 'sprints', 'sprint_closeouts', 'self_checks',
   'diagnostics', 'diagnostic_raters', 'diagnostic_responses',
   'diagnostic_report_drafts', 'diagnostic_question_overrides', 'diagnostic_team_reports',
-  'stakeholders', 'survey_responses', 'survey_tokens',
+  'stakeholders', 'survey_responses', 'survey_tokens', 'survey_schedules',
   'ask_alex_usage', 'ask_alex_log', 'email_log', 'email_templates', 'client_errors',
   'testimonials', 'referrals',
   // Decision Room (v27)

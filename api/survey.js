@@ -14,6 +14,7 @@ const SUPABASE_URL    = process.env.SUPABASE_URL    || 'https://pbnkefuqpoztcxfa
 const SUPABASE_SECRET = process.env.SUPABASE_SECRET_KEY;
 const RESEND_API_KEY  = process.env.RESEND_API_KEY;
 const SITE_URL        = process.env.SITE_URL        || 'https://portal.gpsleadership.org';
+const CRON_SECRET     = process.env.CRON_SECRET || '';
 const FROM_EMAIL      = process.env.RESEND_FROM_EMAIL || 'noreply@portal.gpsleadership.org';
 const FROM_NAME       = 'Alex Tremble | GPS Leadership Solutions';
 const ALEX_EMAIL      = 'alex@gpsleadership.org';
@@ -57,10 +58,12 @@ export default async function handler(req, res) {
   switch (action) {
     case 'get':    return handleGet(req, res);
     case 'send':   return handleSend(req, res);
+    case 'schedule-send':  return handleScheduleSend(req, res);
+    case 'send-scheduled': return handleSendScheduled(req, res);
     case 'resend': return handleResend(req, res);
     case 'submit': return handleSubmit(req, res);
     default:
-      return res.status(400).json({ error: `Unknown action: "${action}". Valid: get, send, resend, submit` });
+      return res.status(400).json({ error: `Unknown action: "${action}". Valid: get, send, schedule-send, send-scheduled, resend, submit` });
   }
 }
 
@@ -255,86 +258,172 @@ async function handleSend(req, res) {
     const authOk = !!verifyCoachSession(req.body.session) || await verifyPassword(password);
     if (!authOk) return res.status(401).json({ error: 'Not authorized' });
 
-    const clientRes = await sbFetch(`/rest/v1/clients?id=eq.${client_id}&select=id,name,email,behavior_1,start_behavior,current_sprint_number,observable_measure,organization,industry,gs_grade`);
-    if (!clientRes.ok) return res.status(500).json({ error: 'Failed to load client' });
-    const clients = await clientRes.json();
-    if (!clients || clients.length === 0) return res.status(404).json({ error: 'Client not found' });
-    const client = clients[0];
+    const r = await performSend(client_id, checkpoint);
+    if (!r.ok) return res.status(r.status || 500).json({ error: r.error });
+    return res.status(200).json(r.results);
 
-    const priorityBehavior = (client.observable_measure || client.behavior_1 || client.start_behavior || '').trim();
-    if (!priorityBehavior) {
-      return res.status(400).json({ error: 'This client has no priority behavior on file. Have them complete their 90-day plan before sending surveys.' });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+// Core stakeholder send — shared by handleSend (manual) and handleSendScheduled (cron).
+// Returns { ok:true, results } or { ok:false, status, error }. No HTTP here.
+async function performSend(client_id, checkpoint) {
+  const clientRes = await sbFetch(`/rest/v1/clients?id=eq.${client_id}&select=id,name,email,behavior_1,start_behavior,current_sprint_number,observable_measure,organization,industry,gs_grade`);
+  if (!clientRes.ok) return { ok:false, status:500, error:'Failed to load client' };
+  const clients = await clientRes.json();
+  if (!clients || clients.length === 0) return { ok:false, status:404, error:'Client not found' };
+  const client = clients[0];
+
+  const priorityBehavior = (client.observable_measure || client.behavior_1 || client.start_behavior || '').trim();
+  if (!priorityBehavior) {
+    return { ok:false, status:400, error:'This client has no priority behavior on file. Have them complete their 90-day plan before sending surveys.' };
+  }
+
+  const clientFirstName = (client.name || '').split(' ')[0];
+  const sprintNumber    = client.current_sprint_number || 1;
+
+  const stakeholderRes = await sbFetch(`/rest/v1/stakeholders?client_id=eq.${client_id}&is_active=eq.true&select=*`);
+  if (!stakeholderRes.ok) return { ok:false, status:500, error:'Failed to load stakeholders' };
+  const stakeholders = await stakeholderRes.json();
+  if (!stakeholders || stakeholders.length === 0) {
+    return { ok:false, status:400, error:'No active stakeholders found for this client' };
+  }
+
+  const existingRes    = await sbFetch(`/rest/v1/survey_tokens?client_id=eq.${client_id}&checkpoint=eq.${checkpoint}&sprint_number=eq.${sprintNumber}&select=stakeholder_id`);
+  const existing       = existingRes.ok ? await existingRes.json() : [];
+  const alreadySentIds = new Set((existing || []).map(t => t.stakeholder_id));
+
+  const results = { sent: [], skipped: [], errors: [] };
+
+  for (const stakeholder of stakeholders) {
+    if (alreadySentIds.has(stakeholder.id)) {
+      results.skipped.push({ name: stakeholder.name, reason: 'Already sent for this checkpoint' });
+      continue;
     }
 
-    const clientFirstName = (client.name || '').split(' ')[0];
-    const sprintNumber    = client.current_sprint_number || 1;
+    const token   = generateToken();
+    const now     = new Date().toISOString();
+    const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-    const stakeholderRes = await sbFetch(`/rest/v1/stakeholders?client_id=eq.${client_id}&is_active=eq.true&select=*`);
-    if (!stakeholderRes.ok) return res.status(500).json({ error: 'Failed to load stakeholders' });
-    const stakeholders = await stakeholderRes.json();
-    if (!stakeholders || stakeholders.length === 0) {
-      return res.status(400).json({ error: 'No active stakeholders found for this client' });
+    const tokenInsert = await sbFetch('/rest/v1/survey_tokens', 'POST', {
+      token, client_id, stakeholder_id: stakeholder.id, checkpoint,
+      priority_behavior: priorityBehavior, client_first_name: clientFirstName,
+      sprint_number: sprintNumber, sent_at: now, expires_at: expires, is_used: false
+    }, { 'Prefer': 'return=minimal' });
+
+    if (!tokenInsert.ok) {
+      const errText = await tokenInsert.text();
+      results.errors.push({ name: stakeholder.name, error: 'Failed to create token: ' + errText.slice(0, 200) });
+      continue;
     }
 
-    const existingRes    = await sbFetch(`/rest/v1/survey_tokens?client_id=eq.${client_id}&checkpoint=eq.${checkpoint}&sprint_number=eq.${sprintNumber}&select=stakeholder_id`);
-    const existing       = existingRes.ok ? await existingRes.json() : [];
-    const alreadySentIds = new Set((existing || []).map(t => t.stakeholder_id));
+    const surveyLink = `${SITE_URL}/survey?t=${token}`;
+    // CC the leader/subject + Alex + team on every stakeholder survey email.
+    const ccAddresses = [client.email, 'alex@gpsleadership.org', 'team@gpsleadership.org'].filter(Boolean);
+    const _bl = require('./brand-link');
+    const _html = _bl.autoLinkBrand(buildSendEmailHtml(stakeholder.name, client.name, checkpoint, priorityBehavior, surveyLink), _bl.gpsDiagnosticLink(client));
+    const emailRes = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from:    `${FROM_NAME} <${FROM_EMAIL}>`,
+        to:      [stakeholder.email],
+        cc:      ccAddresses,
+        subject: buildSendSubjectLine(client.name, checkpoint),
+        html:    _html,
+        text:    htmlToText(_html),
+        reply_to: ALEX_EMAIL
+      })
+    });
 
-    const results = { sent: [], skipped: [], errors: [] };
+    if (emailRes.ok) {
+      const emailData = await emailRes.json();
+      await logEmail({ client_id, recipient_email: stakeholder.email, recipient_name: stakeholder.name, email_type: `survey_${checkpoint}`, subject: buildSendSubjectLine(client.name, checkpoint), status: 'sent', resend_id: emailData.id || null });
+      results.sent.push({ name: stakeholder.name, email: stakeholder.email });
+    } else {
+      const errText = await emailRes.text();
+      await logEmail({ client_id, recipient_email: stakeholder.email, recipient_name: stakeholder.name, email_type: `survey_${checkpoint}`, subject: buildSendSubjectLine(client.name, checkpoint), status: 'error', error_details: errText.slice(0, 500) });
+      results.errors.push({ name: stakeholder.name, error: 'Email delivery failed' });
+    }
+  }
 
-    for (const stakeholder of stakeholders) {
-      if (alreadySentIds.has(stakeholder.id)) {
-        results.skipped.push({ name: stakeholder.name, reason: 'Already sent for this checkpoint' });
-        continue;
-      }
+  return { ok:true, results };
+}
 
-      const token   = generateToken();
-      const now     = new Date().toISOString();
-      const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+// ═══════════════════════════════════════════════════════════════════════════════
+// ACTION: schedule-send (coach session auth) — set or cancel a future stakeholder send.
+// Body: { client_id, checkpoint='baseline', scheduled_at (ISO | null to cancel), session }
+// Replaces any existing pending schedule for this client+checkpoint.
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleScheduleSend(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  try {
+    const { client_id, checkpoint = 'baseline', scheduled_at, password } = req.body || {};
+    if (!client_id) return res.status(400).json({ error: 'client_id is required' });
+    const validCheckpoints = ['baseline', 'day30', 'day90'];
+    if (!validCheckpoints.includes(checkpoint)) return res.status(400).json({ error: 'invalid checkpoint' });
+    const authOk = !!verifyCoachSession(req.body.session) || await verifyPassword(password);
+    if (!authOk) return res.status(401).json({ error: 'Not authorized' });
 
-      const tokenInsert = await sbFetch('/rest/v1/survey_tokens', 'POST', {
-        token, client_id, stakeholder_id: stakeholder.id, checkpoint,
-        priority_behavior: priorityBehavior, client_first_name: clientFirstName,
-        sprint_number: sprintNumber, sent_at: now, expires_at: expires, is_used: false
-      }, { 'Prefer': 'return=minimal' });
+    // Replace semantics: clear any existing pending schedule first.
+    await sbFetch(`/rest/v1/survey_schedules?client_id=eq.${client_id}&checkpoint=eq.${checkpoint}&sent_at=is.null`, 'DELETE', null, { Prefer: 'return=minimal' });
 
-      if (!tokenInsert.ok) {
-        const errText = await tokenInsert.text();
-        results.errors.push({ name: stakeholder.name, error: 'Failed to create token: ' + errText.slice(0, 200) });
-        continue;
-      }
+    if (!scheduled_at) return res.status(200).json({ ok: true, scheduled_at: null });
 
-      const surveyLink = `${SITE_URL}/survey?t=${token}`;
-      const ccAddresses = client.email ? [client.email] : [];
-      const _bl = require('./brand-link');
-      const _html = _bl.autoLinkBrand(buildSendEmailHtml(stakeholder.name, client.name, checkpoint, priorityBehavior, surveyLink), _bl.gpsDiagnosticLink(client));
-      const emailRes = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from:    `${FROM_NAME} <${FROM_EMAIL}>`,
-          to:      [stakeholder.email],
-          cc:      ccAddresses,
-          subject: buildSendSubjectLine(client.name, checkpoint),
-          html:    _html,
-          text:    htmlToText(_html),
-          reply_to: ALEX_EMAIL
-        })
-      });
+    const when = new Date(scheduled_at);
+    if (isNaN(when.getTime())) return res.status(400).json({ error: 'invalid scheduled_at' });
+    if (when.getTime() < Date.now() - 60000) return res.status(400).json({ error: 'scheduled_at must be in the future' });
 
-      if (emailRes.ok) {
-        const emailData = await emailRes.json();
-        await logEmail({ client_id, recipient_email: stakeholder.email, recipient_name: stakeholder.name, email_type: `survey_${checkpoint}`, subject: buildSendSubjectLine(client.name, checkpoint), status: 'sent', resend_id: emailData.id || null });
-        results.sent.push({ name: stakeholder.name, email: stakeholder.email });
-      } else {
-        const errText = await emailRes.text();
-        await logEmail({ client_id, recipient_email: stakeholder.email, recipient_name: stakeholder.name, email_type: `survey_${checkpoint}`, subject: buildSendSubjectLine(client.name, checkpoint), status: 'error', error_details: errText.slice(0, 500) });
-        results.errors.push({ name: stakeholder.name, error: 'Email delivery failed' });
+    const ins = await sbFetch('/rest/v1/survey_schedules', 'POST',
+      { client_id, checkpoint, scheduled_at: when.toISOString() },
+      { Prefer: 'return=minimal' });
+    if (!ins.ok) { const e = await ins.text(); return res.status(500).json({ error: e.slice(0, 200) }); }
+    return res.status(200).json({ ok: true, scheduled_at: when.toISOString() });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ACTION: send-scheduled (cron auth: x-vercel-cron / CRON_SECRET / coach session)
+// Dispatches any stakeholder surveys whose scheduled time has passed. Claim column
+// prevents overlapping runs; the per-stakeholder already-sent guard in performSend
+// prevents double emails even if a claim is released for retry.
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleSendScheduled(req, res) {
+  if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const isVercelCron = req.headers['x-vercel-cron'] === '1';
+  const isManual     = req.method === 'POST' && !!verifyCoachSession(req.body?.session);
+  const authHeader   = req.headers['authorization'] || '';
+  const hasSecret    = CRON_SECRET && authHeader === `Bearer ${CRON_SECRET}`;
+  if (!isVercelCron && !isManual && !hasSecret) return res.status(401).json({ error: 'Unauthorized' });
+
+  const nowISO = new Date().toISOString();
+  const log = { processed: [], skipped: [], errors: [] };
+  try {
+    const dueRes = await sbFetch(`/rest/v1/survey_schedules?scheduled_at=lte.${nowISO}&sent_at=is.null&claimed_at=is.null&select=id,client_id,checkpoint&order=scheduled_at.asc&limit=50`);
+    const due = dueRes.ok ? (await dueRes.json() || []) : [];
+    for (const s of due) {
+      const claimRes = await sbFetch(`/rest/v1/survey_schedules?id=eq.${s.id}&claimed_at=is.null`, 'PATCH', { claimed_at: new Date().toISOString() }, { Prefer: 'return=representation' });
+      const claimed = claimRes.ok ? await claimRes.json() : [];
+      if (!Array.isArray(claimed) || claimed.length === 0) { log.skipped.push({ id: s.id, reason: 'already claimed' }); continue; }
+      try {
+        const r = await performSend(s.client_id, s.checkpoint);
+        if (r.ok) {
+          await sbFetch(`/rest/v1/survey_schedules?id=eq.${s.id}`, 'PATCH', { sent_at: new Date().toISOString() }, { Prefer: 'return=minimal' });
+          log.processed.push({ id: s.id, client_id: s.client_id, sent: (r.results.sent || []).length });
+        } else {
+          await sbFetch(`/rest/v1/survey_schedules?id=eq.${s.id}`, 'PATCH', { claimed_at: null }, { Prefer: 'return=minimal' });
+          log.skipped.push({ id: s.id, reason: r.error });
+        }
+      } catch (err) {
+        await sbFetch(`/rest/v1/survey_schedules?id=eq.${s.id}`, 'PATCH', { claimed_at: null }, { Prefer: 'return=minimal' });
+        log.errors.push({ id: s.id, error: err.message });
       }
     }
-
-    return res.status(200).json(results);
-
+    return res.status(200).json({ ok: true, due: due.length, ...log });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -400,7 +489,7 @@ async function handleResend(req, res) {
       body: JSON.stringify({
         from:    `${FROM_NAME} <${FROM_EMAIL}>`,
         to:      [stakeholder.email],
-        cc:      client.email ? [client.email] : [],
+        cc:      [client.email, 'alex@gpsleadership.org', 'team@gpsleadership.org'].filter(Boolean),
         subject: buildSendSubjectLine(client.name, checkpoint),
         html:    _html2,
         text:    htmlToText(_html2),

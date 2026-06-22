@@ -75,6 +75,10 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/survey?action=send-scheduled",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/diagnostic?action=trial-sweep",
       "schedule": "30 13 * * *"
     }
@@ -172,7 +176,7 @@
       "maxDuration": 30
     },
     "api/survey.js": {
-      "maxDuration": 15
+      "maxDuration": 60
     },
     "api/accept-terms.js": {
       "maxDuration": 15
