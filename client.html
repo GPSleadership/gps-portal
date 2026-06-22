@@ -2767,7 +2767,10 @@ function diagCurrentStep(d) {
 
 function diagFormatDateClient(iso) {
   if (!iso) return '';
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  // Date-only values (e.g. close_date "2026-06-22") must parse as local noon, not UTC
+  // midnight, or they render a day early in US timezones. Timestamps pass through.
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? new Date(iso + 'T12:00:00') : new Date(iso);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function escD(t) {
@@ -5805,7 +5808,7 @@ function renderWorkshopTab(workshops) {
       + statusBadge
       + '</div>'
       + (w.client_org_name ? '<div style="color:#6b7280;font-size:13px;margin-bottom:4px;">' + w.client_org_name + '</div>' : '')
-      + (w.workshop_date ? '<div style="color:#9ca3af;font-size:12px;margin-bottom:10px;">' + new Date(w.workshop_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) + '</div>' : '<div style="margin-bottom:10px;"></div>')
+      + (w.workshop_date ? '<div style="color:#9ca3af;font-size:12px;margin-bottom:10px;">' + new Date(/^\d{4}-\d{2}-\d{2}$/.test(w.workshop_date) ? w.workshop_date + 'T12:00:00' : w.workshop_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) + '</div>' : '<div style="margin-bottom:10px;"></div>')
       + dashboardBtn
       + participantLine
       + uploadSection

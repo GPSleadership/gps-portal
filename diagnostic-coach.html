@@ -1178,7 +1178,9 @@ function daysUntil(dateStr) {
 
 function formatDate(str) {
   if (!str) return '';
-  return new Date(str).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+  // Date-only values (YYYY-MM-DD) parse as local noon so they don't render a day early.
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(str) ? new Date(str + 'T12:00:00') : new Date(str);
+  return d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
 }
 
 function statusBadge(status) {
