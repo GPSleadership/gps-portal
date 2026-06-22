@@ -2635,15 +2635,13 @@ function renderProfileSection(section, client, checkins) {
       <div class="detail-section" id="bigwin-section-${client.id}">
         <h4>Client Win</h4>
         <p style="font-size:12px;color:var(--gray-600);margin-bottom:10px;">
-          ${client.first_big_win_flag
-            ? 'A big win is flagged. Their portal will invite them to capture a short testimonial.'
-            : 'Mark a big win when this client hits a real milestone. It triggers a testimonial request in their portal — the best moment to ask.'}
+          Mark a big win when this client hits a real milestone — you can mark several over the engagement. It invites a testimonial in their portal; once they submit one, we stop asking.${client.first_big_win_flag ? '<br><strong style="color:var(--navy);">✓ A win is currently flagged.</strong>' : ''}
         </p>
-        <button onclick="markBigWin('${client.id}', ${!client.first_big_win_flag})" id="bigWinBtn-${client.id}"
-          style="padding:8px 18px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;border:none;
-            background:${client.first_big_win_flag ? 'var(--gray-300)' : 'var(--navy)'};color:${client.first_big_win_flag ? 'var(--gray-700,#444)' : '#fff'};">
-          ${client.first_big_win_flag ? 'Big win flagged ✓ — clear it' : '★ Mark a big win'}
+        <button onclick="markBigWin('${client.id}')" id="bigWinBtn-${client.id}"
+          style="padding:8px 18px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;border:none;background:var(--navy);color:#fff;">
+          ★ Mark a big win
         </button>
+        ${client.first_big_win_flag ? `<a href="#" onclick="markBigWin('${client.id}', false);return false;" style="font-size:12px;color:var(--gray-600);margin-left:12px;">Clear flag</a>` : ''}
       </div>
       <div class="detail-section" id="projcc-section-${client.id}">
         <h4>Project CC (this client only)</h4>
@@ -6442,20 +6440,25 @@ async function saveProjectCc(clientId){
   } catch (e) { alert('Could not save project CC: ' + e.message); }
 }
 
-// Coach: flag (or clear) a client's "big win" — triggers the testimonial request in their portal.
+// Coach: flag (or clear) a client's "big win" — triggers the testimonial request in
+// their portal. Repeatable: a coach can mark multiple wins across the engagement; the
+// testimonial ask itself only fires until the client submits one (handled server-side).
 async function markBigWin(clientId, makeWin) {
+  if (makeWin === undefined) makeWin = true;
+  const session = getCoachSessionToken();
   try {
-    const session = localStorage.getItem('gps_coach_session') || '';
     const res = await fetch('/api/testimonial?action=coach-set-win-flag', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session, client_id: clientId, first_big_win_flag: makeWin }),
     });
-    if (!res.ok) throw new Error('failed');
+    const txt = await res.text();
+    let j = {}; try { j = JSON.parse(txt); } catch (_) {}
+    if (!res.ok) throw new Error((j && j.error) ? j.error : ('HTTP ' + res.status + (txt ? ' — ' + txt.slice(0, 140) : '')));
     if (typeof allClients !== 'undefined') allClients = allClients.map(c => c.id === clientId ? { ...c, first_big_win_flag: makeWin } : c);
-    if (typeof toast === 'function') toast(makeWin ? 'Big win flagged — their portal will invite a testimonial.' : 'Big win cleared.');
+    if (typeof toast === 'function') toast(makeWin ? 'Big win marked — their portal will invite a testimonial. Mark another any time.' : 'Win flag cleared.');
     if (typeof openClientProfile === 'function') openClientProfile(clientId);
-  } catch (_) {
-    alert('Could not update — the endpoint may be deploying. Try again in 30 seconds.');
+  } catch (e) {
+    alert('Could not mark the win: ' + e.message);
   }
 }
 
