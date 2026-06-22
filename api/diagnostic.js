@@ -582,7 +582,24 @@ async function handleSendScheduled(req, res) {
   }
 
   const nowISO = new Date().toISOString();
-  const log = { processed: [], skipped: [], errors: [] };
+  const log = { processed: [], skipped: [], errors: [], auto_closed: [] };
+
+  // ── Auto-close: any survey_open diagnostic whose close_date has passed flips to
+  // survey_closed (stamps survey_closed_at). This is what the leader page already
+  // promises ("follows automatically when the survey window ends") — previously it
+  // never happened, so surveys sat open past their date. Runs every 15 min via this
+  // cron. The status=eq.survey_open guard on the PATCH makes it safe + idempotent.
+  try {
+    const todayStr = nowISO.split('T')[0];
+    const ocRes = await sb(`/rest/v1/diagnostics?status=eq.survey_open&close_date=lt.${todayStr}&select=id,client_name`);
+    const overdue = ocRes.ok ? (await ocRes.json() || []) : [];
+    for (const od of overdue) {
+      const r = await sb(`/rest/v1/diagnostics?id=eq.${od.id}&status=eq.survey_open`, 'PATCH',
+        { status: 'survey_closed', survey_closed_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+        { Prefer: 'return=minimal' });
+      if (r.ok) log.auto_closed.push({ id: od.id, client: od.client_name });
+    }
+  } catch (e) { log.errors.push({ stage: 'auto-close', error: e.message }); }
 
   try {
     const dueRes = await sb(

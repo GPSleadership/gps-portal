@@ -9127,7 +9127,11 @@ function diagDaysUntil(dateStr) {
 
 function diagFormatDate(str) {
   if (!str) return '';
-  return new Date(str).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+  // Date-only values (YYYY-MM-DD) must parse as LOCAL noon, not UTC midnight, or they
+  // render a day early in US timezones (e.g. "2026-06-22" showed as Jun 21). Full
+  // timestamps already carry zone info and pass through unchanged.
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(str) ? new Date(str + 'T12:00:00') : new Date(str);
+  return d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
 }
 
 function diagFormatDateTime(str) {

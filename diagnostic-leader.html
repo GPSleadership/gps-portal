@@ -1067,7 +1067,9 @@ function renderPlanCard() {
 // ─────────────────────────────────────────────────────────────────────────────
 function formatDate(str) {
   if (!str) return '';
-  const d = new Date(str);
+  // Date-only values (YYYY-MM-DD) parse as LOCAL noon, not UTC midnight, so a close
+  // date like "2026-06-22" doesn't render a day early in US timezones.
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(str) ? new Date(str + 'T12:00:00') : new Date(str);
   return d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
 }
 
