@@ -131,6 +131,7 @@ export default async function handler(req, res) {
       case 'get-testimonials':          return handleGetTestimonials(req, res);
       case 'save-referrals':            return handleSaveReferrals(req, res);
       case 'mark-referral-sent':        return handleMarkReferralSent(req, res);
+      case 'client-flag-win':           return handleClientFlagWin(req, res);
       case 'coach-get-testimonials':    return handleCoachGetTestimonials(req, res);
       case 'coach-get-referrals':       return handleCoachGetReferrals(req, res);
       case 'coach-list-pending':        return handleCoachListPending(req, res);
@@ -346,6 +347,20 @@ async function handleSetWinFlag(req, res) {
   if (!verifyCoachSession((req.body || {}).session)) return res.status(403).json({ error: 'Unauthorized' });
   if (!client_id) return res.status(400).json({ error: 'client_id required' });
   const r = await sb(`/rest/v1/clients?id=eq.${client_id}`, 'PATCH', { first_big_win_flag: !!first_big_win_flag, updated_at: new Date().toISOString() }, { Prefer: 'return=minimal' });
+  if (!r.ok) return res.status(500).json({ error: 'Update failed' });
+  return res.status(200).json({ ok: true });
+}
+
+// Client self-service: a coaching client flags their own big win during a check-in.
+// Token-auth (no coach session), coaching clients only. Sets the same flag the coach
+// would set, so it surfaces in the coach's Today approval queue.
+async function handleClientFlagWin(req, res) {
+  const { client_token } = req.body || {};
+  const client = await authClient(client_token);
+  if (!client) return res.status(401).json({ error: 'Invalid client token' });
+  const isCoaching = !!(client.in_coaching_program || client.is_active_coaching || client.coaching_sessions_enabled);
+  if (!isCoaching) return res.status(403).json({ error: 'Not a coaching client' });
+  const r = await sb(`/rest/v1/clients?id=eq.${client.id}`, 'PATCH', { first_big_win_flag: true, updated_at: new Date().toISOString() }, { Prefer: 'return=minimal' });
   if (!r.ok) return res.status(500).json({ error: 'Update failed' });
   return res.status(200).json({ ok: true });
 }
