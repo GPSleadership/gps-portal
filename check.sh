@@ -100,6 +100,36 @@ PYEOF
   fi
 done
 
+# ── 1b. Serverless function syntax (node --check on every api/*.js) ───────────
+# Catches load-time errors in serverless functions (e.g. duplicate top-level
+# declarations from a bad merge) that the HTML-only check above would miss.
+# Each file is checked as a module (.mjs) so module-only early errors are caught.
+echo ""
+echo "▸ API function syntax (api/*.js)"
+if [ "$NODE" = "SKIP" ]; then
+  echo "  ⚠  skipped (node not found)"
+  WARNINGS=$((WARNINGS + 1))
+elif [ -d api ]; then
+  API_OK=0
+  for f in api/*.js; do
+    [ -f "$f" ] || continue
+    cp "$f" /tmp/gps_api_check.mjs 2>/dev/null
+    RESULT=$("$NODE" --check /tmp/gps_api_check.mjs 2>&1)
+    if [ $? -ne 0 ]; then
+      CLEAN=$(echo "$RESULT" | sed 's|/tmp/gps_api_check.mjs|'"$f"'|g')
+      echo "  ✗ $f"
+      echo "    $CLEAN"
+      ERRORS=$((ERRORS + 1))
+    else
+      API_OK=$((API_OK + 1))
+    fi
+  done
+  echo "  ✓ $API_OK api/*.js file(s) parsed cleanly"
+else
+  echo "  ⚠  no api/ directory found"
+  WARNINGS=$((WARNINGS + 1))
+fi
+
 # ── 2. Backslash-backtick scan (the bug that broke login) ─────────────────────
 # Known-safe baseline: legitimate escaped backticks inside template literals.
 # Only flag if the count EXCEEDS the baseline for that file.
