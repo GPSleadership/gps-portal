@@ -1076,7 +1076,7 @@ function toggleRaterIntro(){
   const box = document.getElementById('rater-intro-box'); if (!box) return;
   if (box.style.display === 'none' || !box.style.display) {
     const leader = (typeof DIAGNOSTIC !== 'undefined' && DIAGNOSTIC && DIAGNOSTIC.client_name) ? DIAGNOSTIC.client_name : '';
-    const msg = "Hi [name],\n\nI've asked GPS Leadership Solutions to run a short, confidential leadership feedback survey as part of my development, and I'd value your honest input. You'll receive a separate email from GPS with your own private link — it takes about 10 minutes. Your candid perspective genuinely helps.\n\nThank you,\n" + (leader || '');
+    const msg = "Hi [name],\n\nI've asked GPS Leadership Solutions to run a short, confidential leadership feedback survey as part of my development, and I'd value your honest input. You'll receive a separate email from GPS with your own private link — it takes about 10 minutes. Your candid perspective makes a real difference.\n\nThank you,\n" + (leader || '');
     box.innerHTML = '<textarea readonly rows="8" style="width:100%;box-sizing:border-box;font-size:12px;padding:8px;border:1.5px solid var(--border);border-radius:6px;">' + msg.replace(/</g, '&lt;') + '</textarea>'
       + '<button class="btn btn-primary btn-sm" style="margin-top:6px;" type="button" onclick="navigator.clipboard.writeText(this.previousElementSibling.value);this.textContent=\'Copied \\u2713\';">Copy message</button>'
       + '<div style="font-size:11px;color:var(--mid);margin-top:6px;">This same message is also emailed to you automatically once your self-assessment and rater list are in.</div>';

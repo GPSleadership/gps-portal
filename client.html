@@ -4699,7 +4699,6 @@ function renderPortal(client, checkins) {
   document.getElementById('mainContent').innerHTML = `
     <div class="portal-layout">
     <div class="portal-main">
-    ${renderDesktopActionCard(client, mobileStatus, currentWeek, alreadyCheckedInThisWeek, isEngagementComplete, _dayN, _closeStr)}
     ${renderActionCenter(client, mobileStatus, currentWeek, checkins)}
     ${renderDiagnosticConversion(client, mobileStatus)}
     ${!isEngagementComplete && !alreadyCheckedInThisWeek ? renderCheckinForm(client, checkins, currentWeek) : ''}
