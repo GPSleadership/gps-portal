@@ -4,7 +4,7 @@
 
 import crypto from 'node:crypto';
 
-const SB_URL    = process.env.SUPABASE_URL;
+const SB_URL    = process.env.SUPABASE_URL || 'https://pbnkefuqpoztcxfagiod.supabase.co';
 const SB_SECRET = process.env.SUPABASE_SECRET_KEY;
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 const COACH_SESSION_SECRET = process.env.COACH_SESSION_SECRET || '';
