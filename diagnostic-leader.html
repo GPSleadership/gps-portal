@@ -566,9 +566,14 @@ function renderPipeline() {
         ? 'background:#FFF8E7;padding:10px 12px;border-radius:var(--radius);border:1.5px solid #F5C842;margin-left:-12px;margin-right:-12px;'
         : '';
 
-    const actionBtn = (state === 'action' && SELF_TOKEN)
+    // Step 2 = the self-assessment CTA. Step 4 = the heads-up; no self-assessment button
+    // there (it's already done) — just an optional "show the language" reveal. The intro
+    // is also auto-emailed to the leader when their self-assessment + rater list are in.
+    const actionBtn = (state === 'action' && step.n === 2 && SELF_TOKEN)
       ? `<div style="margin-top:8px;"><a href="diagnostic-survey.html?token=${SELF_TOKEN}" class="btn btn-primary btn-sm">Complete Self-Assessment →</a></div>`
-      : '';
+      : (step.n === 4 && state === 'action')
+        ? `<div style="margin-top:8px;"><button class="btn btn-outline btn-sm" type="button" onclick="toggleRaterIntro()">Show the message you can send →</button><div id="rater-intro-box" style="display:none;margin-top:10px;"></div></div>`
+        : '';
 
     const titleColor = state === 'action' ? 'color:var(--amber);'
       : state === 'current' ? 'color:var(--blue);'
@@ -1065,6 +1070,20 @@ function renderPlanCard() {
 // ─────────────────────────────────────────────────────────────────────────────
 //  UTILITIES
 // ─────────────────────────────────────────────────────────────────────────────
+// Step 4: reveal a ready-to-send intro the leader can forward to their raters. (Same
+// language is also auto-emailed to them once their self-assessment + rater list are in.)
+function toggleRaterIntro(){
+  const box = document.getElementById('rater-intro-box'); if (!box) return;
+  if (box.style.display === 'none' || !box.style.display) {
+    const leader = (typeof DIAGNOSTIC !== 'undefined' && DIAGNOSTIC && DIAGNOSTIC.client_name) ? DIAGNOSTIC.client_name : '';
+    const msg = "Hi [name],\n\nI've asked GPS Leadership Solutions to run a short, confidential leadership feedback survey as part of my development, and I'd value your honest input. You'll receive a separate email from GPS with your own private link — it takes about 10 minutes. Your candid perspective genuinely helps.\n\nThank you,\n" + (leader || '');
+    box.innerHTML = '<textarea readonly rows="8" style="width:100%;box-sizing:border-box;font-size:12px;padding:8px;border:1.5px solid var(--border);border-radius:6px;">' + msg.replace(/</g, '&lt;') + '</textarea>'
+      + '<button class="btn btn-primary btn-sm" style="margin-top:6px;" type="button" onclick="navigator.clipboard.writeText(this.previousElementSibling.value);this.textContent=\'Copied \\u2713\';">Copy message</button>'
+      + '<div style="font-size:11px;color:var(--mid);margin-top:6px;">This same message is also emailed to you automatically once your self-assessment and rater list are in.</div>';
+    box.style.display = 'block';
+  } else { box.style.display = 'none'; }
+}
+
 function formatDate(str) {
   if (!str) return '';
   // Date-only values (YYYY-MM-DD) parse as LOCAL noon, not UTC midnight, so a close

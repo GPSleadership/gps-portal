@@ -127,6 +127,7 @@ export default async function handler(req, res) {
       case 'get-referral-config':       return handleGetConfig(req, res);
       case 'public-quotes':             return handlePublicQuotes(req, res);
       case 'get-pending-prompt':        return handleGetPendingPrompt(req, res);
+      case 'client-flag-win':           return handleClientFlagWin(req, res);
       case 'save-testimonial':          return handleSaveTestimonial(req, res);
       case 'get-testimonials':          return handleGetTestimonials(req, res);
       case 'save-referrals':            return handleSaveReferrals(req, res);
@@ -212,6 +213,21 @@ async function handleGetPendingPrompt(req, res) {
   }
 
   return res.status(200).json({ pending_source: null });
+}
+
+// Client self-service: the coaching client flags their own big win from the portal
+// (e.g. during a weekly check-in). Sets first_big_win_flag so the testimonial prompt arms.
+async function handleClientFlagWin(req, res) {
+  const { client_token } = req.body || {};
+  const client = await authClient(client_token);
+  if (!client) return res.status(401).json({ error: 'Invalid client token' });
+  const isCoaching = client.engagement_type === 'diagnostic_plus_coaching' ||
+    client.in_coaching_program || client.is_active_coaching || client.coaching_sessions_enabled;
+  if (!isCoaching) return res.status(403).json({ error: 'Not a coaching client' });
+  const r = await sb(`/rest/v1/clients?id=eq.${client.id}`, 'PATCH',
+    { first_big_win_flag: true, updated_at: new Date().toISOString() }, { Prefer: 'return=minimal' });
+  if (!r.ok) return res.status(500).json({ error: 'Update failed' });
+  return res.status(200).json({ ok: true });
 }
 
 async function handleSaveTestimonial(req, res) {

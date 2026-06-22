@@ -4703,6 +4703,11 @@ function renderPortal(client, checkins) {
     ${renderActionCenter(client, mobileStatus, currentWeek, checkins)}
     ${renderDiagnosticConversion(client, mobileStatus)}
     ${!isEngagementComplete && !alreadyCheckedInThisWeek ? renderCheckinForm(client, checkins, currentWeek) : ''}
+    ${mobileStatus === 'coaching_client' ? `
+      <div style="margin-top:16px;padding:12px 16px;background:#f0f6f7;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <div style="font-size:13px;color:#333;">Had a real win this week? Capture it while it's fresh.</div>
+        <button onclick="clientFlagBigWin()" style="background:var(--teal,#01949A);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">★ I had a big win</button>
+      </div>` : ''}
     ${finishLineHtml}
     ${renewalHtml}
     ${alreadyCheckedInThisWeek && !isEngagementComplete ? `
@@ -5371,6 +5376,19 @@ async function loadDynamicProof() {
       box.innerHTML = `“${esc(q.quote)}”<div style="font-style:normal;font-weight:700;color:var(--navy,#004369);margin-top:6px;font-size:11.5px;">${esc(q.attribution)}</div>`;
     });
   } catch (_) {}
+}
+
+// Client self-service big win: flag it server-side (arms the prompt for later too) and
+// immediately invite them to capture the testimonial while it's fresh.
+async function clientFlagBigWin() {
+  const tok = (typeof token !== 'undefined' && token) || '';
+  try {
+    await fetch('/api/testimonial?action=client-flag-win', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ client_token: tok }),
+    });
+  } catch (_) {}
+  try { sessionStorage.removeItem('gps_testimonial_dismissed'); } catch (_) {}
+  showTestimonialModal('coaching_midpoint');
 }
 
 async function checkTestimonialPrompt(client) {
