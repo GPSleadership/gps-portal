@@ -15,6 +15,7 @@
   <meta name="apple-mobile-web-app-title" content="GPS Coach" />
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/results-visual.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     :root {
@@ -7390,6 +7391,7 @@ function renderReportTab() {
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
       ${done>=1 ? `<button class="dbtn dbtn-outline" onclick="viewCurrentScores()">📊 View current scores (numbers only)</button>` : ''}
       ${d.report_generated_at ? `<button class="dbtn dbtn-outline" onclick="previewResultsPage()">👁 Preview client results page (private)</button>` : ''}
+      ${d.report_generated_at ? `<button class="dbtn dbtn-outline" onclick="openResultsNarrativeEditor()">✍️ Edit results-page words</button>` : ''}
       <button class="dbtn dbtn-primary" ${canGenerate?'':'disabled'} onclick="generateReport(event)">
         ⚙ Generate Draft Report (Claude)
       </button>
@@ -7948,15 +7950,78 @@ async function previewResultsPage(){
   const ov=document.createElement('div'); ov.id='crs-overlay';
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:40px 16px;';
   ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
-  ov.innerHTML=`<div style="background:#fff;border-radius:12px;max-width:520px;width:100%;padding:22px 24px;box-shadow:0 10px 40px rgba(0,0,0,.2);">
+  // Render the EXACT same page the leader sees, via the shared renderer.
+  let pageHtml;
+  if(typeof renderGpsResults==='function'){
+    pageHtml = sc ? renderGpsResults(sc, { diag: d, raters: [] })
+                  : '<p style="color:#6b7280;text-align:center;padding:24px 0;">No scores yet. Generate the draft report first, then preview here.</p>';
+  } else {
+    pageHtml = _crsVisual(sc); // fallback if the shared script failed to load
+  }
+  ov.innerHTML=`<div style="background:#F4F6F8;border-radius:12px;max-width:920px;width:100%;padding:18px 18px 26px;box-shadow:0 10px 40px rgba(0,0,0,.2);">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:6px;">
       <div style="font-family:Montserrat,sans-serif;font-size:17px;font-weight:800;color:#004369;">Client results page — private preview</div>
       <button onclick="document.getElementById('crs-overlay').remove()" style="background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#888;">&times;</button>
     </div>
-    <div style="background:#fff8e1;border:1px solid #ffd76a;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#7a5b00;"><strong>Only you can see this.</strong> Exactly what ${d.client_name||'the leader'} (and, when enabled, their manager) will see on their results page. They have no access yet.</div>
-    ${_crsVisual(sc)}
+    <div style="background:#fff8e1;border:1px solid #ffd76a;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#7a5b00;"><strong>Only you can see this.</strong> Exactly what ${esc(d.client_name||'the leader')} will see on their results page once released. They have no access yet. Use “Edit results-page words” to set the headline, the honest read, and the two quotes.</div>
+    ${pageHtml}
   </div>`;
   document.body.appendChild(ov);
+}
+
+// ── Coach editor for the WORDS on the leader results page (headline, honest read,
+//    supervisor quote, team quote). Numbers are always from the portal; this only
+//    edits narrative. Saved to diagnostics.results_narrative via the coach endpoint. ──
+function openResultsNarrativeEditor(){
+  const d=DIAG_SEL; if(!d) return;
+  const n=(d.results_narrative)||{};
+  const old=document.getElementById('rn-overlay'); if(old) old.remove();
+  const ov=document.createElement('div'); ov.id='rn-overlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:40px 16px;';
+  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  const fld=(id,label,val,ph,rows)=>`<label style="display:block;font-size:12px;font-weight:700;color:#04243a;margin:14px 0 4px;">${label}</label>`+
+    (rows?`<textarea id="${id}" rows="${rows}" placeholder="${ph}" style="width:100%;border:1px solid #d3dde3;border-radius:8px;padding:9px 11px;font-size:13px;font-family:inherit;resize:vertical;">${esc(val||'')}</textarea>`
+         :`<input id="${id}" value="${esc(val||'')}" placeholder="${ph}" style="width:100%;border:1px solid #d3dde3;border-radius:8px;padding:9px 11px;font-size:13px;font-family:inherit;" />`);
+  ov.innerHTML=`<div style="background:#fff;border-radius:12px;max-width:600px;width:100%;padding:22px 24px;box-shadow:0 10px 40px rgba(0,0,0,.2);">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:4px;">
+      <div style="font-family:Montserrat,sans-serif;font-size:17px;font-weight:800;color:#004369;">Results-page words — ${esc(d.client_name||'')}</div>
+      <button onclick="document.getElementById('rn-overlay').remove()" style="background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#888;">&times;</button>
+    </div>
+    <div style="font-size:12px;color:#5a6b76;margin-bottom:6px;">All optional. The numbers, bars, and group table come from the portal automatically — these just set the prose and the two real quotes. Leave blank to use the auto-generated wording.</div>
+    ${fld('rn-headline','Headline (one line)',n.headline,'e.g. Solid with your team; a trust problem with your boss.')}
+    ${fld('rn-honest','The honest read',n.honest_read,'2–4 sentences of straight-talk framing.',4)}
+    ${fld('rn-sup','Supervisor quote',n.supervisor_quote,'A short, real quote from the supervisor open-ended responses.',3)}
+    ${fld('rn-team','Team quote',n.team_quote,'A short, real quote from a direct report.',3)}
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;">
+      <button class="dbtn dbtn-outline" onclick="document.getElementById('rn-overlay').remove()">Cancel</button>
+      <button class="dbtn dbtn-primary" id="rn-save" onclick="saveResultsNarrative(event)">Save words</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+}
+async function saveResultsNarrative(e){
+  const d=DIAG_SEL; if(!d) return;
+  const btn=e?e.currentTarget:null; if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+  const narrative={
+    headline:        (document.getElementById('rn-headline').value||'').trim(),
+    honest_read:     (document.getElementById('rn-honest').value||'').trim(),
+    supervisor_quote:(document.getElementById('rn-sup').value||'').trim(),
+    team_quote:      (document.getElementById('rn-team').value||'').trim(),
+  };
+  try{
+    const r=await fetch('/api/diagnostic?action=save-results-narrative',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ diagnostic_id:d.id, narrative, session:getCoachSessionToken() }),
+    });
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(j.error||('Save failed ('+r.status+')'));
+    d.results_narrative=j.narrative||narrative;   // update in-memory so preview reflects it
+    const ov=document.getElementById('rn-overlay'); if(ov) ov.remove();
+    alert('Saved. Open “Preview client results page” to see it.');
+  }catch(ex){
+    alert('Could not save: '+ex.message);
+    if(btn){ btn.disabled=false; btn.textContent='Save words'; }
+  }
 }
 
 // Numbers-only scores view. Computes the TP3 averages from responses in the browser —

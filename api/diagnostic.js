@@ -253,6 +253,7 @@ export default async function handler(req, res) {
     case 'finalize-report':      return handleFinalizeReport(req, res);
     case 'sign-report-upload':   return handleSignReportUpload(req, res);
     case 'sign-team-report-upload': return handleSignTeamReportUpload(req, res);
+    case 'save-results-narrative':  return handleSaveResultsNarrative(req, res);
     case 'generate-dr-content':  return handleGenerateDRContent(req, res);
     case 'generate-recommendations': return handleGenerateRecommendations(req, res);
     case 'nudge-checkin':        return handleNudgeCheckin(req, res);
@@ -2180,6 +2181,42 @@ async function handleSignTeamReportUpload(req, res) {
     if (!token) return res.status(502).json({ error: 'No upload token returned by Storage' });
     const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/diagnostic-reports/${path}`;
     return res.status(200).json({ token, path, publicUrl });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ACTION: save-results-narrative
+// POST /api/diagnostic?action=save-results-narrative
+//   Body: { diagnostic_id, narrative:{headline,honest_read,supervisor_quote,team_quote}, session }
+// Stores the coach-authored WORDS for the leader visual results page on
+// diagnostics.results_narrative (numbers are never stored here — they come from the
+// report draft's scores_json). Coach-session gated, service-key write. Survives
+// report regeneration because it lives on the diagnostic, not the draft.
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleSaveResultsNarrative(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const { diagnostic_id, narrative, session } = req.body || {};
+  if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
+  if (!diagnostic_id)               return res.status(400).json({ error: 'diagnostic_id required' });
+
+  const clean = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+  const n = narrative || {};
+  const payload = {
+    headline:         clean(n.headline, 200),
+    honest_read:      clean(n.honest_read, 1200),
+    supervisor_quote: clean(n.supervisor_quote, 600),
+    team_quote:       clean(n.team_quote, 600),
+    updated_at:       new Date().toISOString(),
+  };
+  try {
+    const r = await sb(
+      `/rest/v1/diagnostics?id=eq.${encodeURIComponent(diagnostic_id)}`,
+      'PATCH', { results_narrative: payload }, { Prefer: 'return=minimal' }
+    );
+    if (!r.ok) { const t = await r.text(); return res.status(502).json({ error: `Save failed (${r.status}): ${t.slice(0, 200)}` }); }
+    return res.status(200).json({ ok: true, narrative: payload });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
