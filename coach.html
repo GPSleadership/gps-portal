@@ -7389,6 +7389,7 @@ function renderReportTab() {
     </div>` : ''}
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
       ${done>=1 ? `<button class="dbtn dbtn-outline" onclick="viewCurrentScores()">📊 View current scores (numbers only)</button>` : ''}
+      ${d.report_generated_at ? `<button class="dbtn dbtn-outline" onclick="previewResultsPage()">👁 Preview client results page (private)</button>` : ''}
       <button class="dbtn dbtn-primary" ${canGenerate?'':'disabled'} onclick="generateReport(event)">
         ⚙ Generate Draft Report (Claude)
       </button>
@@ -7929,6 +7930,33 @@ async function generateReportOverride() {
   }
   // Proceed — generateReport expects an event; pass null and call directly
   await generateReport(null);
+}
+
+// ── Coach-only PRIVATE preview of the client-facing visual results page. Renders the
+//    same color-coded view the leader (and, when enabled, their manager) will see — but
+//    only the coach can open it, and the client has no access until you finalize/share. ──
+function _crsColor(v){ if(v==null||isNaN(v)) return '#888780'; if(v>=4) return '#0F6E56'; if(v>=3) return '#BA7517'; return '#A32D2D'; }
+function _crsFmt(v){ return (v==null||isNaN(v))?'—':Number(v).toFixed(2); }
+function _crsBar(label,v){ const c=_crsColor(v); const pct=(v==null||isNaN(v))?0:Math.max(0,Math.min(100,(Number(v)/5)*100)); return `<div style="margin:10px 0;"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;"><span style="font-weight:600;">${label}</span><span style="color:${c};font-weight:800;">${_crsFmt(v)}<span style="color:#9aa7ad;font-weight:400;font-size:11px;"> /5</span></span></div><div style="background:#EEF1F4;border-radius:20px;height:10px;overflow:hidden;"><div style="width:${pct}%;height:100%;background:${c};border-radius:20px;"></div></div></div>`; }
+function _crsVisual(sc){ if(!sc) return '<p style="color:#6b7280;text-align:center;padding:24px 0;">No scores yet. Generate the draft report first, then preview here.</p>'; const tp3=sc.tp3_index, tc=_crsColor(tp3); const bg=sc.by_group||{}; const selfTp3=(bg.self&&bg.self.tp3!=null)?bg.self.tp3:null; const selfVs=(selfTp3!=null&&tp3!=null)?`<div style="margin-top:14px;padding-top:14px;border-top:1px solid #e3e8ee;"><div style="font-size:12px;color:#5F6B7A;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Self vs. others</div><div style="display:flex;justify-content:space-between;font-size:13px;"><span style="color:#5F6B7A;">Self-rating</span><span style="font-weight:700;color:${_crsColor(selfTp3)};">${_crsFmt(selfTp3)} /5</span></div><div style="display:flex;justify-content:space-between;font-size:13px;margin-top:4px;"><span style="color:#5F6B7A;">How others rate</span><span style="font-weight:700;color:${tc};">${_crsFmt(tp3)} /5</span></div></div>`:''; return `<div style="display:flex;align-items:baseline;gap:10px;margin:6px 0 8px;"><div style="font-size:42px;font-weight:800;color:${tc};line-height:1;">${_crsFmt(tp3)}</div><div style="font-size:13px;color:#5F6B7A;">TP3 Index <span style="color:#9aa7ad;">/ 5</span></div></div>${_crsBar('Trust',sc.trust)}${_crsBar('Proactivity',sc.proactivity)}${_crsBar('Productivity',sc.productivity)}${sc.impact!=null?_crsBar('Overall Impact',sc.impact):''}${sc.bench!=null?_crsBar('Bench Strength',sc.bench):''}<div style="margin-top:12px;font-size:12px;color:#5F6B7A;">Green ≥ 4.0 · Amber 3.0–3.9 · Red &lt; 3.0 (1–5 scale)</div>${selfVs}`; }
+async function previewResultsPage(){
+  const d=DIAG_SEL; if(!d) return;
+  let sc=null;
+  try{ const drafts=await cdSelect('diagnostic_report_drafts',{eq:{diagnostic_id:d.id},order:{col:'generated_at',asc:false},limit:1}); if(drafts&&drafts[0]) sc=drafts[0].scores_json; }
+  catch(e){ alert('Could not load scores: '+e.message); return; }
+  const old=document.getElementById('crs-overlay'); if(old) old.remove();
+  const ov=document.createElement('div'); ov.id='crs-overlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:40px 16px;';
+  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  ov.innerHTML=`<div style="background:#fff;border-radius:12px;max-width:520px;width:100%;padding:22px 24px;box-shadow:0 10px 40px rgba(0,0,0,.2);">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:6px;">
+      <div style="font-family:Montserrat,sans-serif;font-size:17px;font-weight:800;color:#004369;">Client results page — private preview</div>
+      <button onclick="document.getElementById('crs-overlay').remove()" style="background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#888;">&times;</button>
+    </div>
+    <div style="background:#fff8e1;border:1px solid #ffd76a;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#7a5b00;"><strong>Only you can see this.</strong> Exactly what ${d.client_name||'the leader'} (and, when enabled, their manager) will see on their results page. They have no access yet.</div>
+    ${_crsVisual(sc)}
+  </div>`;
+  document.body.appendChild(ov);
 }
 
 // Numbers-only scores view. Computes the TP3 averages from responses in the browser —
