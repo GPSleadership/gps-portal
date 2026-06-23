@@ -108,20 +108,29 @@
   // n-weighted-merged into "Other colleagues" (shown only if the merge reaches n>=3)
   // so no individual can be identified.
   function _rvGroupTable(bg){
-    const LBL={direct_report:'Direct reports',peer:'Peers',internal_partner:'Internal partners',supervisor:'Supervisor'};
-    const rows=[]; const merge=[];
-    ['direct_report','peer','internal_partner','supervisor'].forEach(k=>{
+    const LBL={direct_report:'Direct reports',peer:'Peers',internal_partner:'Internal partners'};
+    const named=[]; const merge=[];
+    // Named peer-type groups show individually at n>=3; smaller ones fold into the pool.
+    ['direct_report','peer','internal_partner'].forEach(k=>{
       const g=bg[k]; if(!g||!g.n) return;
-      if(k==='supervisor'||g.n>=3) rows.push({k,label:LBL[k],g});
+      if(g.n>=3) named.push({k,label:LBL[k],g});
       else merge.push(g);
     });
-    let suppressed=0;
+    // The engine's uncategorized cohort ("Other") always joins the combined pool.
+    if(bg.other_colleagues && bg.other_colleagues.n) merge.push(bg.other_colleagues);
+    let suppressed=0; let otherRow=null;
     if(merge.length){
       const sumN=merge.reduce((a,g)=>a+(g.n||0),0);
       const wavg=(f)=>{ let s=0,n=0; merge.forEach(g=>{ if(g[f]!=null){ s+=g[f]*g.n; n+=g.n; } }); return n?s/n:null; };
-      if(sumN>=3) rows.push({k:'other',label:'Other colleagues',g:{n:sumN,trust:wavg('trust'),proactivity:wavg('proactivity'),productivity:wavg('productivity'),tp3:wavg('tp3')}});
+      if(sumN>=3) otherRow={k:'other',label:'Other colleagues',g:{n:sumN,trust:wavg('trust'),proactivity:wavg('proactivity'),productivity:wavg('productivity'),tp3:wavg('tp3')}};
       else suppressed=sumN;
     }
+    // Supervisor is never anonymous — always its own row.
+    const sup = (bg.supervisor && bg.supervisor.n) ? {k:'supervisor',label:'Supervisor',g:bg.supervisor} : null;
+    // Order: your team → broad colleagues → your boss → self.
+    const rows=[...named];
+    if(otherRow) rows.push(otherRow);
+    if(sup) rows.push(sup);
     const cell=(v,lbl)=>`<td data-label="${lbl}" class="${_rvCls(v)}">${_rvFmt(v)}</td>`;
     let body=rows.map(r=>{
       const flag=(r.k==='supervisor' && ((r.g.tp3!=null&&r.g.tp3<=2.9)||(r.g.trust!=null&&r.g.trust<=2.9)))?' class="rowflag"':'';
@@ -157,14 +166,30 @@
     const lowP=pills.slice(0,2).map(p=>p[0]);
     const topPill=pills.length?pills[pills.length-1]:null;
     const isSup = lowG && lowG.k==='supervisor';
+    const tier = (tp3>=4)?'strong':((tp3>=3)?'develop':'serious');
+    const gapPills = pills.filter(p=>p[1]<4).map(p=>p[0]);   // pillars below the 4.0 standard
+    const hasGap = (lowG && lowG.tp3!=null && lowG.tp3<4) || gapPills.length>0;
 
     // ── 1. Three summary cards ──────────────────────────────────────────────
     const headline = N.headline ? `<div class="txt" style="font-weight:800;margin-bottom:4px;">${_rvEsc(N.headline)}</div>` : '';
     const allDev = (sc.trust<4 && sc.proactivity<4 && sc.productivity<4);
-    const foundation = allDev ? 'Workable foundation, but not yet at the 4.0 standard on any pillar.'
-      : 'A solid base, with at least one pillar already at the 4.0 standard.';
-    const focus1 = lowG ? `<li>Rebuild trust with your <b>${lowG.label}</b> <b class="${_rvCls(lowG.trust!=null?lowG.trust:lowG.tp3)}">(${_rvFmt(lowG.trust!=null?lowG.trust:lowG.tp3)} — ${_rvBand(lowG.trust!=null?lowG.trust:lowG.tp3)})</b>.</li>` : '';
-    const focus2 = lowP.length ? `<li>Raise <b>${lowP.join('</b> and <b>')}</b> toward the <b>4.0 standard</b>.</li>` : '';
+    const foundation = tier==='strong'
+      ? 'You’re at or above the 4.0 standard. The focus now is sustaining it and taking on more scope.'
+      : tier==='serious'
+      ? 'Several areas are below the develop range — this calls for a focused 90-day plan, starting now.'
+      : (allDev ? 'Workable foundation, but not yet at the 4.0 standard on any pillar.'
+                : 'A solid base, with at least one pillar already at the 4.0 standard.');
+    let focus1, focus2;
+    if(tier==='strong' && !hasGap){
+      focus1 = '<li>Take on more scope — you’re at the standard across the board.</li>';
+      focus2 = topPill ? `<li>Push <b>${topPill[0]}</b> from strong to exceptional.</li>` : '';
+    } else {
+      const lv = lowG ? (lowG.trust!=null?lowG.trust:lowG.tp3) : null;
+      const verb = (lv!=null && lv<3) ? 'Rebuild' : 'Strengthen';
+      focus1 = lowG ? `<li>${verb} trust with your <b>${lowG.label}</b> <b class="${_rvCls(lv)}">(${_rvFmt(lv)} — ${_rvBand(lv)})</b>.</li>` : '';
+      const fp = (gapPills.length?gapPills:lowP).slice(0,2);
+      focus2 = fp.length ? `<li>Raise <b>${fp.join('</b> and <b>')}</b> toward the <b>4.0 standard</b>.</li>` : '';
+    }
     const debriefWhen = _rvDate(D.debrief_date, D.debrief_time);
     const summary = `
       <div class="rvsummary">
@@ -189,9 +214,15 @@
       </div>`;
 
     // ── 2. The numbers (honest bars) ────────────────────────────────────────
-    const honest = N.honest_read
-      ? _rvEsc(N.honest_read)
-      : `You sit in the 3-range on ${allDev?'every pillar':'most pillars'} — a workable foundation, but ${allDev?'none are':'not all are'} at the 4.0 standard yet. On the GPS scale that means a real plan, not a victory lap.${lowG?` Your most urgent gap is your ${lowG.label}.`:''}`;
+    let honestAuto;
+    if(tier==='strong'){
+      honestAuto = `Your raters put you at or above the 4.0 standard across the board.${topG?` Your ${topG.label} rate you highest (${_rvFmt(topG.tp3)}).`:''} The opportunity now is scope and consistency, not repair.`;
+    } else if(tier==='serious'){
+      honestAuto = `Multiple groups rate you below the develop range.${lowG?` The most urgent gap is your ${lowG.label} (${_rvFmt(lowG.tp3)}).`:''} On the GPS scale this calls for a direct, focused 90-day plan.`;
+    } else {
+      honestAuto = `You sit in the 3-range on ${allDev?'every pillar':'most pillars'} — a workable foundation, but ${allDev?'none are':'not all are'} at the 4.0 standard yet. On the GPS scale that means a real plan, not a victory lap.${lowG?` Your most urgent gap is your ${lowG.label}.`:''}`;
+    }
+    const honest = N.honest_read ? _rvEsc(N.honest_read) : honestAuto;
     const numbers = `
       <div class="rvlabel">The numbers</div>
       <div class="rvcard">
@@ -227,7 +258,9 @@
 
     // ── 4. How others experience you (group table + strengths/work) ─────────
     const gt = _rvGroupTable(bg);
-    const sowhat = lowG ? `<div class="sowhat"><b>So what this means:</b> you’re seen as capable, but your ${lowG.label} ${isSup?'questions whether they can fully rely on you when stakes are high':'experiences you differently than your strongest group'}.</div>` : '';
+    const sowhat = (lowG && lowG.tp3!=null && lowG.tp3<4)
+      ? `<div class="sowhat"><b>So what this means:</b> you’re seen as capable, but your ${lowG.label} ${isSup?'questions whether they can fully rely on you when stakes are high':'experiences you differently than your strongest group'}.</div>`
+      : (tier==='strong' ? `<div class="sowhat"><b>So what this means:</b> your groups see you consistently at the standard — the conversation is about more scope, not repair.</div>` : '');
     const teamQuote = N.team_quote ? `
       <div class="qlabel">In their words — your team</div>
       <div class="quote" style="margin-top:6px;"><p>“${_rvEsc(N.team_quote)}”</p><div class="by">— A direct report</div></div>` : '';
@@ -236,10 +269,12 @@
         ${topPill?`<div class="item"><span class="dot" style="background:${_rvCol(topPill[1])}"></span><span><b>${topPill[0]}</b> — your strongest pillar (${_rvFmt(topPill[1])}).</span></div>`:''}
         ${topG?`<div class="item"><span class="dot" style="background:${_rvCol(topG.tp3)}"></span><span>Your <b>${topG.label}</b> rate you ${_rvFmt(topG.tp3)} overall — your highest group.</span></div>`:''}
       </div>${teamQuote}`;
+    const workItems=[];
+    if(lowG && lowG.tp3!=null && lowG.tp3<4){ const lv=lowG.trust!=null?lowG.trust:lowG.tp3; workItems.push(`<div class="item"><span class="dot" style="background:${_rvCol(lv)}"></span><span><b>Trust with your ${lowG.label}</b> (${_rvFmt(lv)})${lv<=2.9?' — serious; fix first.':'.'}</span></div>`); }
+    if(gapPills.length){ const gp=gapPills[0]; workItems.push(`<div class="item"><span class="dot" style="background:${_rvCol(sc[gp.toLowerCase()])}"></span><span><b>${gp}</b> — below the 4.0 standard; bring it up.</span></div>`); }
     const work = `
       <div class="mini g"><h3>Where the work is</h3>
-        ${lowG?`<div class="item"><span class="dot" style="background:${_rvCol(lowG.trust!=null?lowG.trust:lowG.tp3)}"></span><span><b>Trust with your ${lowG.label}</b> (${_rvFmt(lowG.trust!=null?lowG.trust:lowG.tp3)})${(lowG.trust!=null?lowG.trust:lowG.tp3)<=2.9?' — serious; fix first.':'.'}</span></div>`:''}
-        ${lowP.length?`<div class="item"><span class="dot" style="background:${_rvCol(sc[lowP[0].toLowerCase()])}"></span><span><b>${lowP[0]}</b> — your lowest pillar; bring it toward 4.0.</span></div>`:''}
+        ${workItems.length?workItems.join(''):'<div class="item"><span class="dot" style="background:var(--rvgreen)"></span><span>No pressing gaps — pick one stretch goal to go from strong to exceptional.</span></div>'}
       </div>`;
     const band = gt.hasRows ? `
       <div class="rvlabel">How others experience you</div>

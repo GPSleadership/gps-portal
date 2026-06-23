@@ -1225,6 +1225,9 @@ function buildRaterGroupData(responses, allRaters) {
     internal_partner: mkBucket(),
     self:             mkBucket(),
     all_others:       mkBucket(),
+    // Uncategorized non-self raters ("Other", "Driver", any unmapped label) — surfaced
+    // as one "Other colleagues" row so no rater is silently dropped from the group table.
+    other_colleagues: mkBucket(),
   };
 
   for (const resp of responses) {
@@ -1245,32 +1248,38 @@ function buildRaterGroupData(responses, allRaters) {
     // Other, …) still count toward All Others — their feedback must not
     // silently vanish from the report.
     if (!key && rowIsSelf) continue;
+    const ocl = (!key && !rowIsSelf);  // uncategorized colleague — no named group
     if (resp.rater_id != null) {
       if (key) buckets[key].raterIds.add(resp.rater_id);
+      if (ocl) buckets.other_colleagues.raterIds.add(resp.rater_id);
       if (!rowIsSelf) buckets.all_others.raterIds.add(resp.rater_id);
     }
     if (resp.score != null && RATED.includes(resp.question_code)) {
       if (key) buckets[key].scores[resp.question_code].push(Number(resp.score));
+      if (ocl) buckets.other_colleagues.scores[resp.question_code].push(Number(resp.score));
       if (!rowIsSelf) buckets.all_others.scores[resp.question_code].push(Number(resp.score));
     }
     if (resp.text_response?.trim() && OPEN.includes(resp.question_code)) {
       if (key) buckets[key].verbatims[resp.question_code].push(resp.text_response.trim());
+      if (ocl) buckets.other_colleagues.verbatims[resp.question_code].push(resp.text_response.trim());
       if (!rowIsSelf) buckets.all_others.verbatims[resp.question_code].push(resp.text_response.trim());
     }
   }
 
   // Rater counts (n) come from the completed-raters list, not from response
   // rows — anonymous rows carry no rater identity to count distinctly.
-  const completedCounts = { direct_report: 0, peer: 0, supervisor: 0, internal_partner: 0, self: 0, all_others: 0 };
+  const completedCounts = { direct_report: 0, peer: 0, supervisor: 0, internal_partner: 0, self: 0, all_others: 0, other_colleagues: 0 };
   for (const r of allRaters) {
     const k = r.is_self ? 'self' : normalizeRel(r.relationship);
     if (k) completedCounts[k]++;
+    else if (!r.is_self) completedCounts.other_colleagues++;  // uncategorized colleague
     if (!r.is_self) completedCounts.all_others++;  // every non-self rater counts here, bucketed or not
   }
 
   const GROUP_LABELS = {
     direct_report: 'Direct Reports', peer: 'Peers', supervisor: 'Supervisors',
     internal_partner: 'Internal Partners', self: 'Self', all_others: 'All Others',
+    other_colleagues: 'Other Colleagues',
   };
 
   const result = {};
