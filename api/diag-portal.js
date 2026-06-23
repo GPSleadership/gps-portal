@@ -156,6 +156,16 @@ export default async function handler(req, res) {
             if (orows[0] && orows[0].logo_url) diag.org_logo_url = orows[0].logo_url;
           } catch (_) { /* logo is optional */ }
         }
+        // When the report is finalized, attach the latest draft's numeric scores so the
+        // leader sees their color-coded visual results page (TP3, pillars, impact, bench,
+        // self-vs-others). Gated to finalized states; never exposes the AI narrative here.
+        if (['report_final','debrief_complete','plan_active'].includes(diag.status)) {
+          try {
+            const sr = await sb(`/rest/v1/diagnostic_report_drafts?diagnostic_id=eq.${diag.id}&select=scores_json,generated_at&order=generated_at.desc&limit=1`);
+            const srows = sr.ok ? await sr.json() : [];
+            if (srows[0] && srows[0].scores_json) diag.scores = srows[0].scores_json;
+          } catch (_) { /* scores are optional */ }
+        }
         return res.status(200).json({ ok: true, diagnostic: diag, raters });
       }
       case 'leader-add-rater': {
