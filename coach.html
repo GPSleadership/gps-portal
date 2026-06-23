@@ -8037,7 +8037,9 @@ async function openReportPreview(opts) {
 
     const draft   = drafts[0];
     const report  = draft.content_json || {};
-    const narrative = report.full_narrative || null;
+    // The generated report HTML lives in raw_markdown (html_v2). Older/edge cases may
+    // have put it in content_json.full_narrative — fall back to that, then to sections.
+    const narrative = draft.raw_markdown || report.full_narrative || null;
 
     var _previewBanner = previewMode
       ? '<div style="background:#fff8e1;border:1px solid #ffd76a;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:13px;color:#7a5b00;"><strong>Private preview.</strong> Generated from the responses received so far while the survey is still open. The leader and sponsor cannot see this. Finalizing and sending stay locked until you close the survey.</div>'
