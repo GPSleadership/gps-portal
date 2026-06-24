@@ -15,7 +15,10 @@ const SUPABASE_URL    = process.env.SUPABASE_URL    || 'https://pbnkefuqpoztcxfa
 const SUPABASE_SECRET = process.env.SUPABASE_SECRET_KEY;
 const RESEND_API_KEY  = process.env.RESEND_API_KEY;
 const SITE_URL        = process.env.SITE_URL        || 'https://portal.gpsleadership.org';
-const FROM_EMAIL      = 'alex@gpsleadership.org';
+// Must send from the VERIFIED Resend domain (portal.gpsleadership.org). The apex
+// gpsleadership.org is NOT verified in Resend, so sending from it 403s every reminder.
+// Replies still route to Alex via reply_to below. (Matches all other portal senders.)
+const FROM_EMAIL      = process.env.RESEND_FROM_EMAIL || 'noreply@portal.gpsleadership.org';
 const FROM_NAME       = 'Alex Tremble | GPS Leadership Solutions';
 const CRON_SECRET     = process.env.CRON_SECRET;
 const COACH_SESSION_SECRET = process.env.COACH_SESSION_SECRET || '';

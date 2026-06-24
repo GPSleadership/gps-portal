@@ -6,7 +6,7 @@
 const SUPABASE_URL    = process.env.SUPABASE_URL    || 'https://pbnkefuqpoztcxfagiod.supabase.co';
 const SUPABASE_SECRET = process.env.SUPABASE_SECRET_KEY;
 const RESEND_API_KEY  = process.env.RESEND_API_KEY;
-const FROM_EMAIL      = 'alex@gpsleadership.org';
+const FROM_EMAIL      = process.env.RESEND_FROM_EMAIL || 'noreply@portal.gpsleadership.org'; // verified Resend domain; apex is unverified
 const FROM_NAME       = 'Alex Tremble | GPS Leadership Solutions';
 const ALEX_EMAIL      = 'alex@gpsleadership.org';
 

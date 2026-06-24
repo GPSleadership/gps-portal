@@ -215,7 +215,7 @@ export default async function handler(req, res) {
         { password: hashPassword(newPw) }, { Prefer: 'return=minimal' });
       if (!pr.ok) return res.status(500).json({ error: 'Could not set the new password' });
       const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
-      const RESEND_FROM = process.env.RESEND_FROM_EMAIL || 'alex@gpsleadership.org';
+      const RESEND_FROM = process.env.RESEND_FROM_EMAIL || 'noreply@portal.gpsleadership.org'; // verified Resend domain; apex is unverified
       if (!RESEND_API_KEY) return res.status(500).json({ error: 'Email is not configured (RESEND_API_KEY missing)' });
       const first = (acct.name || 'there').split(' ')[0];
       const er = await fetch('https://api.resend.com/emails', {
