@@ -4767,7 +4767,7 @@ function renderPortal(client, checkins) {
 
       <!-- Mobile collapsed summary: the headline outcomes + expand toggle -->
       <div class="plan-collapsed-summary">
-        ${client.business_outcome_goal ? `<div class="plan-item full-width" style="border-left:3px solid var(--navy);margin-bottom:8px;"><label>Business Outcome This Ladders Up To</label><div class="value">${escD(client.business_outcome_goal)}</div></div>` : ''}
+        ${(client.sponsor_outcome_focus && client.business_outcome_goal) ? `<div class="plan-item full-width" style="border-left:3px solid var(--navy);margin-bottom:8px;"><label>Business Outcome This Ladders Up To</label><div class="value">${escD(client.business_outcome_goal)}</div></div>` : ''}
         <div class="plan-item full-width"><label>90-Day Goal</label><div class="value">${client.goal_statement || '—'}</div></div>
         ${client.goal_30_day ? `<div class="plan-item full-width" style="border-left:3px solid var(--teal);margin-top:8px;"><label>30-Day Goal</label><div class="value">${client.goal_30_day}</div></div>` : ''}
         <button class="plan-toggle-btn" onclick="togglePlanCard(this)">Show full plan ▾</button>
@@ -4778,7 +4778,7 @@ function renderPortal(client, checkins) {
         <span class="pillar-badge ${pillarClass}">${pillarLabel}</span>
       </div>
 
-      ${client.business_outcome_goal ? `<div class="plan-item full-width" style="border-left:3px solid var(--navy);margin-bottom:14px;"><label>Business Outcome This Ladders Up To</label><div class="value">${escD(client.business_outcome_goal)}</div></div>` : ''}
+      ${(client.sponsor_outcome_focus && client.business_outcome_goal) ? `<div class="plan-item full-width" style="border-left:3px solid var(--navy);margin-bottom:14px;"><label>Business Outcome This Ladders Up To</label><div class="value">${escD(client.business_outcome_goal)}</div></div>` : ''}
 
       <div class="plan-grid">
         <div class="plan-item full-width">

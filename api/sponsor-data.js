@@ -153,8 +153,10 @@ async function buildMemberReport(m, confidential) {
   // annual revenue growth"). Shown to the sponsor regardless of whether the leader
   // has built their 90-day plan yet. Not confidential — it's the business target.
   try {
-    const bo = await sbGet(`/rest/v1/clients?id=eq.${enc(m.client_id)}&select=business_outcome_goal&limit=1`);
-    report.business_outcome_goal = (bo && bo[0] && bo[0].business_outcome_goal) || null;
+    const bo = await sbGet(`/rest/v1/clients?id=eq.${enc(m.client_id)}&select=business_outcome_goal,sponsor_outcome_focus&limit=1`);
+    const boRow = bo && bo[0];
+    // Only sponsor-driven engagements expose a business outcome (omit server-side otherwise).
+    report.business_outcome_goal = (boRow && boRow.sponsor_outcome_focus && boRow.business_outcome_goal) ? boRow.business_outcome_goal : null;
   } catch (_) { report.business_outcome_goal = null; }
 
   if (!confidential) {
