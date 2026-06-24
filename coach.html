@@ -8141,6 +8141,10 @@ function renderPlanPrefillEditor(){
     +'<button onclick="document.getElementById(\'pp-overlay\').remove()" style="background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#888;">&times;</button></div>'
     +'<div style="margin:6px 0 12px;"><button class="dbtn dbtn-outline" id="pp-gen" onclick="generatePlanPrefillDraft(event)">⚙ Generate draft from diagnostic</button></div>'
     +ppField('Key theme','pp-theme',PLAN_PREFILL.key_theme,'central development theme')
+    +'<div style="margin:8px 0;"><label for="pp-pillar" style="display:block;font-weight:700;color:#004369;font-size:12px;margin-bottom:4px;">Recommended focus pillar <span style="font-weight:600;color:#9aa7ad;">(auto-recommended; change if needed)</span></label>'
+    +'<select id="pp-pillar" style="width:100%;border:1px solid #d3dde3;border-radius:8px;padding:8px 10px;font-size:12.5px;font-family:inherit;box-sizing:border-box;background:#fff;">'
+    +['','Trust','Proactivity','Productivity'].map(function(o){ return '<option value="'+o+'"'+(((s.pillar||'')===o)?' selected':'')+'>'+(o||'— select —')+'</option>'; }).join('')
+    +'</select></div>'
     +ppArea('90-day goal','pp-goal90',s.goal90,'one specific 90-day goal')
     +ppArea('30-day milestone','pp-goal30',s.goal30,'30-day milestone')
     +ppArea('Behavior 1 (primary)','pp-beh1',s.behavior1,'specific, observable behavior')
@@ -8173,6 +8177,7 @@ async function savePlanPrefill(e){
     key_theme: ppVal('pp-theme'),
     scores: prev.scores||{},
     suggested:{
+      pillar: ((document.getElementById('pp-pillar')||{}).value)||'',
       goal90: ppVal('pp-goal90'),
       goal30: ppVal('pp-goal30'),
       behavior1: ppVal('pp-beh1'),

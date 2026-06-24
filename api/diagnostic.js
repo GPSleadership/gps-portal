@@ -2318,14 +2318,14 @@ async function handleGenerateReportSection(req, res) {
   if (!diagnostic_id || !section_key) return res.status(400).json({ error: 'diagnostic_id and section_key required' });
   const meta = REPORT_SECTIONS.find(function(s){ return s.key === section_key; }) || { key:section_key, title:section_key };
   try {
-    const dr = await sb(`/rest/v1/diagnostics?id=eq.${encodeURIComponent(diagnostic_id)}&select=client_name,client_role,report_doc`);
+    const dr = await sb(`/rest/v1/diagnostics?id=eq.${encodeURIComponent(diagnostic_id)}&select=client_name,client_title,report_doc`);
     const diag = (await dr.json())[0] || {};
     const sr = await sb(`/rest/v1/diagnostic_report_drafts?diagnostic_id=eq.${encodeURIComponent(diagnostic_id)}&select=scores_json&order=generated_at.desc&limit=1`);
     const scores = ((await sr.json())[0] || {}).scores_json || {};
     const exemplar = (diag.report_doc && Array.isArray(diag.report_doc.sections))
       ? ((diag.report_doc.sections.find(function(s){ return s.key === section_key; }) || {}).body || '') : '';
     const dataSummary = {
-      leader: diag.client_name || 'the leader', role: diag.client_role || '',
+      leader: diag.client_name || 'the leader', role: diag.client_title || '',
       tp3_index: scores.tp3_index, trust: scores.trust, proactivity: scores.proactivity,
       productivity: scores.productivity, impact: scores.impact, bench: scores.bench,
       by_group: scores.by_group || {},
@@ -2352,6 +2352,7 @@ const PLAN_PREFILL_SYSTEM = `You are an executive leadership coach for GPS Leade
   "key_theme": "one short phrase naming the central development theme",
   "scores": { "trust": <number|null>, "proactivity": <number|null>, "productivity": <number|null> },
   "suggested": {
+    "pillar": "Trust | Proactivity | Productivity — the single recommended focus pillar for the next 90 days",
     "goal90": "one specific 90-day leadership goal statement",
     "goal30": "the 30-day milestone toward that goal",
     "behavior1": "the primary behavior to practice (specific, observable)",
@@ -2360,7 +2361,7 @@ const PLAN_PREFILL_SYSTEM = `You are an executive leadership coach for GPS Leade
     "metric2": { "question": "a single behavior stakeholders can rate 1-5", "targetAvg": 4.0 }
   }
 }
-Rules: target the leader's weakest area first. Keep every field to one tight sentence. metric1 baseline/target are numbers only when the data supports them, else null. Do not include stakeholder names or any people.`;
+Rules: "pillar" must be exactly one of Trust, Proactivity, or Productivity — the area most worth focusing on for the next 90 days (usually the lowest-scoring, but use the report context to judge), and the goal/behaviors must target that pillar first. Keep every field to one tight sentence. metric1 baseline/target are numbers only when the data supports them, else null. Do not include stakeholder names or any people.`;
 
 async function handleGeneratePlanPrefill(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -2368,7 +2369,7 @@ async function handleGeneratePlanPrefill(req, res) {
   if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
   if (!diagnostic_id) return res.status(400).json({ error: 'diagnostic_id required' });
   try {
-    const dr = await sb(`/rest/v1/diagnostics?id=eq.${encodeURIComponent(diagnostic_id)}&select=client_name,client_role,report_doc`);
+    const dr = await sb(`/rest/v1/diagnostics?id=eq.${encodeURIComponent(diagnostic_id)}&select=client_name,client_title,report_doc`);
     const diag = (await dr.json())[0] || {};
     const sr = await sb(`/rest/v1/diagnostic_report_drafts?diagnostic_id=eq.${encodeURIComponent(diagnostic_id)}&select=scores_json&order=generated_at.desc&limit=1`);
     const scores = ((await sr.json())[0] || {}).scores_json || {};
@@ -2382,7 +2383,7 @@ async function handleGeneratePlanPrefill(req, res) {
         .join('\n\n');
     }
     const dataSummary = {
-      leader: diag.client_name || 'the leader', role: diag.client_role || '',
+      leader: diag.client_name || 'the leader', role: diag.client_title || '',
       tp3_index: scores.tp3_index, trust: scores.trust, proactivity: scores.proactivity,
       productivity: scores.productivity, impact: scores.impact, bench: scores.bench,
     };
@@ -2390,11 +2391,24 @@ async function handleGeneratePlanPrefill(req, res) {
     const raw = await callClaude(PLAN_PREFILL_SYSTEM, user, 1500, { model: CLAUDE_REPORT_MODEL, timeoutMs: 110000, temperature: 0, retries: 1 });
     const parsed = parseJsonLoose(raw);
     if (!parsed || !parsed.suggested) return res.status(502).json({ error: 'Could not parse plan draft from the model. Try again.' });
-    // Normalize: backfill TP3 sub-scores from the data when the model omits them.
-    parsed.scores = parsed.scores || {};
-    if (parsed.scores.trust == null && scores.trust != null) parsed.scores.trust = scores.trust;
-    if (parsed.scores.proactivity == null && scores.proactivity != null) parsed.scores.proactivity = scores.proactivity;
-    if (parsed.scores.productivity == null && scores.productivity != null) parsed.scores.productivity = scores.productivity;
+    // The client wizard keys scores and the focus pillar by CAPITALIZED TP3 names
+    // ('Trust'|'Proactivity'|'Productivity'). Emit that shape so the pillar card
+    // auto-selects and the per-pillar diagnostic score badges render.
+    const ms = parsed.scores || {};
+    const tp3 = {
+      Trust:        (scores.trust        != null ? scores.trust        : (ms.Trust        != null ? ms.Trust        : ms.trust)),
+      Proactivity:  (scores.proactivity  != null ? scores.proactivity  : (ms.Proactivity  != null ? ms.Proactivity  : ms.proactivity)),
+      Productivity: (scores.productivity != null ? scores.productivity : (ms.Productivity != null ? ms.Productivity : ms.productivity)),
+    };
+    parsed.scores = tp3;
+    // Focus pillar: honor a valid model suggestion, else the lowest-scoring pillar.
+    const VALID_PILLARS = ['Trust', 'Proactivity', 'Productivity'];
+    let pillar = (parsed.suggested && VALID_PILLARS.indexOf(parsed.suggested.pillar) >= 0) ? parsed.suggested.pillar : null;
+    if (!pillar) {
+      const pairs = VALID_PILLARS.map(function (k) { return [k, tp3[k]]; }).filter(function (p) { return p[1] != null; });
+      if (pairs.length) pillar = pairs.reduce(function (a, b) { return b[1] < a[1] ? b : a; })[0];
+    }
+    parsed.suggested.pillar = pillar || '';
     // Never invent people — the coach/leader add stakeholders in the wizard.
     parsed.suggested.stakeholders = [];
     if (!parsed.suggested.metric2 || typeof parsed.suggested.metric2 !== 'object') parsed.suggested.metric2 = { question: '', targetAvg: 4.0 };

@@ -3543,10 +3543,14 @@ function initWizard(client) {
   if (scores) {
     weakest = Object.entries(scores).reduce((a, b) => scores[a] <= b[1] ? a : b[0], Object.keys(scores)[0]);
   }
+  // If the coach recommended a focus pillar in the prefill, honor it (capitalized to
+  // match the wizard's pillar cards). The leader can still change it.
+  const prefillPillar = (p && p.suggested && p.suggested.pillar) ? p.suggested.pillar : null;
+  if (prefillPillar) weakest = prefillPillar;
 
   // Build plan state — prefill from diagnostic or from existing client data (edit mode)
   wizPlan = {
-    pillar:    wizIsEdit ? (client.tp3_pillar || weakest || '') : (weakest || ''),
+    pillar:    wizIsEdit ? (client.tp3_pillar || weakest || '') : (prefillPillar || weakest || ''),
     goal90:    wizIsEdit ? (client.goal_statement || '') : (p?.suggested?.goal90 || ''),
     goal30:    wizIsEdit ? (client.goal_30_day    || '') : (p?.suggested?.goal30 || ''),
     behavior1: wizIsEdit ? (client.behavior_1 || client.start_behavior || '') : (p?.suggested?.behavior1 || ''),
