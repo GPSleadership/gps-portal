@@ -1,5 +1,5 @@
 # GPS Leadership Portal — Complete State Document
-**Last updated:** June 2, 2026 — git HEAD `15ec7ad`  
+**Last updated:** June 24, 2026 — git HEAD `8fbc0ac`  
 **Purpose:** This document is the authoritative reference for everything built in the GPS Leadership portal. Before making ANY changes to the portal, read this document in full. Do not rebuild, replace, or modify anything described here unless explicitly instructed by Alex Tremble.
 
 ---
@@ -598,3 +598,29 @@ A full engagement engine for two products: **Workshops** (pre + post survey arou
 - No new env vars. Scheduling CTA: `coach_settings.workshop_cta_url`. Workshop emails send via Resend directly from `workshop-data.js`.
 - Deploys ONLY from `main`. (June 5 incident: commits on `coach-nav-refactor` never deployed until merged; that branch is now merged — delete it, and review the old stash holding unexplained `api/get-client.js`/`api/sponsor-data.js` edits.)
 - Anonymous room-survey responses count toward theme/NPS aggregates but not participation %.
+
+---
+
+## 17. report_doc consumers + coach-approved 90-day plan prefill (June 24, 2026 — LIVE on main, commit `8fbc0ac`)
+
+Wired the v66 structured report (`diagnostics.report_doc`) into its consumers and built the coach-approved plan prefill. Migration v66 (`report_doc` jsonb on diagnostics, `business_outcome_goal` text on clients) was already applied; no new migration this session. Post-v26 security model preserved throughout (browser never touches Supabase; all access via token/session-gated endpoints).
+
+### Client report snapshot (leader-facing)
+- `api/portal-data.js` `diag-get` now strips `report_doc.sections` to `audience in (client|all)` **with non-empty body, server-side** before returning. Never rely on the UI to hide non-leader sections.
+- `client.html` `renderDiagReportMode` → new `buildReportFromDoc(doc)` renders authored sections (title + prose, blank lines → paragraphs) as the canonical report; falls back to the legacy `full_narrative` / `buildReportFromJson` / PDF when `report_doc` has no authored sections. Still gated by the existing `report_finalized_at` visibility rule.
+
+### Coach-approved 90-day plan prefill
+- New endpoint `api/diagnostic?action=generate-plan-prefill` (Claude, `CLAUDE_REPORT_MODEL`, temp 0, coach-session gated). Inputs: latest `diagnostic_report_drafts.scores_json` + the authored `report_doc` plan/strengths/blind-spot sections. Output: the `wizard_prefill_data` shape, **recommending the focus pillar** and goal/behaviors/metrics.
+- `wizard_prefill_data` shape (what the wizard reads): `{ key_theme, scores:{Trust,Proactivity,Productivity}, suggested:{ pillar, goal90, goal30, behavior1, behavior2, metric1:{name,baseline,target}, metric2:{question,targetAvg}, stakeholders:[] } }`. **Scores + pillar are CAPITALIZED TP3 names** — the wizard pillar cards key off this; do not revert to lowercase.
+- Coach UI in `coach.html`: `openPlanPrefillEditor()` modal — "🎯 Draft 90-day plan" button on the diagnostic Report actions (shown when `DIAG_SEL.client_id`). Generate → edit (incl. a "Recommended focus pillar" dropdown) → **Save & prefill client** writes `diagnostics.wizard_prefill_data` via `cdUpdate('diagnostics', …)`. Drafts are coach-reviewed before the client sees them.
+- `client.html` `initWizard` reads `p.suggested.pillar` to auto-select the focus pillar card (Step 2). Prefill only applies before `clients.plan_submitted_at` (per `get-client.js`).
+
+### business_outcome_goal (Option A — sponsor keeps its curated view)
+- Coach sets it in the report editor modal (`coach.html`, saved to `clients.business_outcome_goal` via `cdUpdate('clients', …)`).
+- `api/sponsor-data.js` `buildMemberReport` returns `business_outcome_goal`; `decision-room.html` shows it on the focus card and the sponsor plan-review card. The sponsor still reads its own `generate-dr-content` curated view — `report_doc` is **not** fed to the sponsor.
+
+### Bug fixed
+- `generate-report-section` (and the new `generate-plan-prefill`) queried a non-existent `diagnostics.client_role`; the role column is `client_title`. A bad PostgREST `select` 400s and silently drops `report_doc` too. Fixed both to `client_title`.
+
+### Verified
+- Tested live on `portal.gpsleadership.org` with a labeled TEST diagnostic (since deleted): leader sections rendered with the coach-only section correctly stripped; the wizard auto-selected the recommended pillar (Proactivity) with diagnostic scores shown.
