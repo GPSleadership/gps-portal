@@ -81,6 +81,10 @@
     {
       "path": "/api/diagnostic?action=trial-sweep",
       "schedule": "30 13 * * *"
+    },
+    {
+      "path": "/api/ops-monitor",
+      "schedule": "0 */6 * * *"
     }
   ],
   "headers": [
@@ -204,6 +208,9 @@
     },
     "api/health.js": {
       "maxDuration": 10
+    },
+    "api/ops-monitor.js": {
+      "maxDuration": 30
     },
     "api/import-clients.js": {
       "maxDuration": 30
