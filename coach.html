@@ -8055,7 +8055,7 @@ function renderReportDocEditor(){
   const rows=secs.map(function(s,i){
     return '<div style="border:1px solid #e6ebf0;border-radius:9px;padding:12px 14px;margin:10px 0;">'
      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">'
-     +'<div style="font-weight:800;color:#004369;font-size:13.5px;">'+esc(s.title||s.key)+' <span style="font-weight:600;color:#9aa7ad;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;">'+esc(s.audience||'client')+'</span></div>'
+     +'<div style="font-weight:800;color:#004369;font-size:13.5px;">'+esc(s.title||s.key)+'</div>'
      +'<button class="dbtn dbtn-outline" style="font-size:12px;padding:5px 10px;" onclick="genReportSection('+i+',event)">⚙ Generate draft</button>'
      +'</div>'
      +'<textarea id="rd-sec-'+i+'" rows="6" style="width:100%;border:1px solid #d3dde3;border-radius:8px;padding:9px 11px;font-size:12.5px;font-family:inherit;line-height:1.5;resize:vertical;">'+esc(s.body||'')+'</textarea>'
@@ -8070,9 +8070,10 @@ function renderReportDocEditor(){
     +'<label for="rd-biz-goal" style="display:block;font-weight:800;color:#004369;font-size:12.5px;margin-bottom:5px;">Business outcome goal <span style="font-weight:600;color:#9aa7ad;">(engagement-level; shown to the sponsor and on the leader plan)</span></label>'
     +'<input id="rd-biz-goal" type="text" value="'+esc(REPORT_BIZ_GOAL)+'" placeholder="e.g., Drive 3-5% annual revenue growth" style="width:100%;border:1px solid #d3dde3;border-radius:8px;padding:9px 11px;font-size:12.5px;font-family:inherit;box-sizing:border-box;">'
     +'</div>'
-    +'<div style="display:flex;align-items:center;gap:10px;margin:12px 0 2px;flex-wrap:wrap;">'
+    +'<div style="display:flex;align-items:center;gap:12px;margin:12px 0 2px;flex-wrap:wrap;">'
     +'<button class="dbtn dbtn-primary" id="rd-gen-all" onclick="genAllReportSections(event)">⚡ Generate full report</button>'
-    +'<span style="font-size:11.5px;color:#8a98a0;">Drafts every section from the diagnostic data, in order. Review each, then Save all sections.</span>'
+    +'<label style="font-size:11.5px;color:#5a6b76;display:inline-flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="rd-gen-empty-only"> Only blank sections</label>'
+    +'<span style="font-size:11.5px;color:#8a98a0;">Drafts each section from the diagnostic data, in order. Review, then Save all sections.</span>'
     +'</div>'
     +rows
     +'<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;position:sticky;bottom:-1px;background:#fff;padding:10px 0;border-top:1px solid #eef1f2;">'
@@ -8104,17 +8105,20 @@ async function genAllReportSections(e){
   const d=DIAG_SEL; if(!d) return;
   if(!REPORT_DOC||!Array.isArray(REPORT_DOC.sections)||!REPORT_DOC.sections.length){ alert('No sections to generate.'); return; }
   const secs=REPORT_DOC.sections;
-  const anyContent=secs.some(function(s){ return (s.body||'').trim(); });
-  if(anyContent && !confirm('Draft all '+secs.length+' sections from the diagnostic data? Existing section text will be replaced (the business outcome goal is untouched).')) return;
-  const btn=e?e.currentTarget:null;
-  // Keep any in-flight edits before overwriting.
+  // Keep any in-flight edits before deciding what is "blank" or overwriting.
   secs.forEach(function(s,i){ const el=document.getElementById('rd-sec-'+i); if(el) s.body=el.value; });
+  const emptyOnly=!!((document.getElementById('rd-gen-empty-only')||{}).checked);
+  const targets=[]; for(let i=0;i<secs.length;i++){ if(!emptyOnly || !(secs[i].body||'').trim()) targets.push(i); }
+  if(!targets.length){ alert(emptyOnly ? 'No blank sections to fill — every section already has text.' : 'No sections to generate.'); return; }
+  const anyContent=secs.some(function(s){ return (s.body||'').trim(); });
+  if(!emptyOnly && anyContent && !confirm('Draft all '+secs.length+' sections from the diagnostic data? Existing section text will be replaced (the business outcome goal is untouched).')) return;
+  const btn=e?e.currentTarget:null;
   const saveBtn=document.getElementById('rd-save'); if(saveBtn) saveBtn.disabled=true;
   if(btn) btn.disabled=true;
   let failed=0;
-  for(let i=0;i<secs.length;i++){
-    const s=secs[i]; const ta=document.getElementById('rd-sec-'+i);
-    if(btn) btn.textContent='Generating '+(i+1)+' of '+secs.length+'…';
+  for(let n=0;n<targets.length;n++){
+    const i=targets[n]; const s=secs[i]; const ta=document.getElementById('rd-sec-'+i);
+    if(btn) btn.textContent='Generating '+(n+1)+' of '+targets.length+'…';
     if(ta){ ta.style.opacity='0.5'; }
     try{
       const r=await fetch('/api/diagnostic?action=generate-report-section',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({diagnostic_id:d.id,section_key:s.key,session:getCoachSessionToken()})});
@@ -8125,7 +8129,7 @@ async function genAllReportSections(e){
   }
   if(btn){ btn.disabled=false; btn.textContent='⚡ Generate full report'; }
   if(saveBtn) saveBtn.disabled=false;
-  alert(failed ? (failed+' of '+secs.length+' section(s) failed — regenerate those individually with their ⚙ button. Review the rest, then Save all sections.') : 'All '+secs.length+' sections drafted. Review each, then Save all sections.');
+  alert(failed ? (failed+' of '+targets.length+' section(s) failed — regenerate those individually with their ⚙ button. Review the rest, then Save all sections.') : (targets.length+' section(s) drafted. Review each, then Save all sections.'));
 }
 async function saveReportDoc(e){
   const d=DIAG_SEL; const btn=e?e.currentTarget:null; if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
