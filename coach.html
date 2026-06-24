@@ -8070,6 +8070,10 @@ function renderReportDocEditor(){
     +'<label for="rd-biz-goal" style="display:block;font-weight:800;color:#004369;font-size:12.5px;margin-bottom:5px;">Business outcome goal <span style="font-weight:600;color:#9aa7ad;">(engagement-level; shown to the sponsor and on the leader plan)</span></label>'
     +'<input id="rd-biz-goal" type="text" value="'+esc(REPORT_BIZ_GOAL)+'" placeholder="e.g., Drive 3-5% annual revenue growth" style="width:100%;border:1px solid #d3dde3;border-radius:8px;padding:9px 11px;font-size:12.5px;font-family:inherit;box-sizing:border-box;">'
     +'</div>'
+    +'<div style="display:flex;align-items:center;gap:10px;margin:12px 0 2px;flex-wrap:wrap;">'
+    +'<button class="dbtn dbtn-primary" id="rd-gen-all" onclick="genAllReportSections(event)">⚡ Generate full report</button>'
+    +'<span style="font-size:11.5px;color:#8a98a0;">Drafts every section from the diagnostic data, in order. Review each, then Save all sections.</span>'
+    +'</div>'
     +rows
     +'<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;position:sticky;bottom:-1px;background:#fff;padding:10px 0;border-top:1px solid #eef1f2;">'
     +'<button class="dbtn dbtn-outline" onclick="document.getElementById(\'rd-overlay\').remove()">Close</button>'
@@ -8091,6 +8095,37 @@ async function genReportSection(i,e){
     s.body=j.body||''; const ta=document.getElementById('rd-sec-'+i); if(ta) ta.value=s.body;
   }catch(ex){ alert('Could not generate: '+ex.message); }
   if(btn){ btn.disabled=false; btn.textContent='⚙ Generate draft'; }
+}
+// Generate every section in one click. Orchestrated from the browser (one request
+// per section) so no single serverless call risks a timeout, progress is visible,
+// and one failed section never kills the rest. Does NOT auto-save — coach reviews
+// then clicks Save all sections.
+async function genAllReportSections(e){
+  const d=DIAG_SEL; if(!d) return;
+  if(!REPORT_DOC||!Array.isArray(REPORT_DOC.sections)||!REPORT_DOC.sections.length){ alert('No sections to generate.'); return; }
+  const secs=REPORT_DOC.sections;
+  const anyContent=secs.some(function(s){ return (s.body||'').trim(); });
+  if(anyContent && !confirm('Draft all '+secs.length+' sections from the diagnostic data? Existing section text will be replaced (the business outcome goal is untouched).')) return;
+  const btn=e?e.currentTarget:null;
+  // Keep any in-flight edits before overwriting.
+  secs.forEach(function(s,i){ const el=document.getElementById('rd-sec-'+i); if(el) s.body=el.value; });
+  const saveBtn=document.getElementById('rd-save'); if(saveBtn) saveBtn.disabled=true;
+  if(btn) btn.disabled=true;
+  let failed=0;
+  for(let i=0;i<secs.length;i++){
+    const s=secs[i]; const ta=document.getElementById('rd-sec-'+i);
+    if(btn) btn.textContent='Generating '+(i+1)+' of '+secs.length+'…';
+    if(ta){ ta.style.opacity='0.5'; }
+    try{
+      const r=await fetch('/api/diagnostic?action=generate-report-section',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({diagnostic_id:d.id,section_key:s.key,session:getCoachSessionToken()})});
+      const j=await r.json(); if(!r.ok) throw new Error(j.error||'Generate failed');
+      s.body=j.body||''; if(ta) ta.value=s.body;
+    }catch(ex){ failed++; }
+    if(ta){ ta.style.opacity='1'; }
+  }
+  if(btn){ btn.disabled=false; btn.textContent='⚡ Generate full report'; }
+  if(saveBtn) saveBtn.disabled=false;
+  alert(failed ? (failed+' of '+secs.length+' section(s) failed — regenerate those individually with their ⚙ button. Review the rest, then Save all sections.') : 'All '+secs.length+' sections drafted. Review each, then Save all sections.');
 }
 async function saveReportDoc(e){
   const d=DIAG_SEL; const btn=e?e.currentTarget:null; if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
