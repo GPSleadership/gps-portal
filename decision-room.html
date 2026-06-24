@@ -518,8 +518,8 @@ function memberReportHtml(m){
   var sLine = m.coach_summary || (m.report_json&&m.report_json.summaryLine) || '';
   var out = '<div class="card"><div class="ind-header"><div class="ind-avatar">'+esc(initials(name))+'</div><div><div class="ind-name">'+esc(name)+'</div>'
     + '<div class="ind-role">'+esc(m.role||'')+' &middot; '+esc(t.client_org_name||t.name)+' '+engBadge+'</div></div></div>'+(sLine?'<div class="ind-summary">'+esc(sLine)+'</div>':'')+'</div>';
-  out += sponsorReadoutCards(m);
-  if(!m.sponsorReadout) out += attentionBanner(m, first);
+  if(m.sponsorReadout){ out += sponsorReadoutCards(m); return out; }  // full manager-view flow is self-contained — don't double up the generic cards
+  out += attentionBanner(m, first);
   out += pipelineCard(m);
   out += progressCard(m);
   // Confidential 360 detail only if the endpoint included it (omitted server-side in private mode)
@@ -640,57 +640,142 @@ function sponsorReadoutCards(m){
   var r = m.sponsorReadout; if(!r || !r.scores) return '';
   var sc = r.scores, bg = sc.by_group || {};
   var name = m.name || m.role || 'This leader', first = String(name).split(' ')[0];
+  var C={navy:'#004369',teal:'#01949A',sand:'#FDF6EC',green:'#0F6E56',amber:'#8A560F',amberbar:'#C8962F',red:'#A32D2D',redbg:'#FCEBEB',line:'#E6EBF0',mid:'#5F6B7A',ink:'#1B2A3A'};
   function fnum(v){ return (v==null||isNaN(v))?'—':Number(v).toFixed(2); }
-  function scol(v){ return v==null?'#7a8a95':(v>=4?'#0F6E56':(v>=3?'#8A560F':'#A32D2D')); }
+  function scol(v){ return v==null?'#7a8a95':(v>=4?C.green:(v>=3?C.amber:C.red)); }
   function sband(v){ return v==null?'':(v>=4?'Strong':(v>=3?'Develop':'Serious')); }
   function gget(k){ return (bg[k] && bg[k].n) ? bg[k] : null; }
+  function wpct(v){ return v==null?0:Math.max(2,Math.min(100,(v-1)/4*100)); }
   function wmerge(list){ var n=0,acc={},cnt={}; ['trust','proactivity','productivity','tp3'].forEach(function(f){acc[f]=0;cnt[f]=0;}); list.forEach(function(x){ if(!x||!x.n) return; n+=x.n; ['trust','proactivity','productivity','tp3'].forEach(function(f){ if(x[f]!=null){ acc[f]+=x[f]*x.n; cnt[f]+=x.n; } }); }); if(!n) return null; var o={n:n}; ['trust','proactivity','productivity','tp3'].forEach(function(f){ o[f]=cnt[f]?acc[f]/cnt[f]:null; }); return o; }
   var dr = gget('direct_report'), sup = gget('supervisor');
   var other = wmerge([gget('peer'), gget('internal_partner'), gget('other_colleagues')]);
   var tp3 = sc.tp3_index;
+  var totalRaters=(dr?dr.n:0)+(other?other.n:0)+(sup?sup.n:0);
   var glance = 'Develop and monitor (90 days).';
   if(sup && sup.tp3!=null){ if(sup.tp3<=2.5) glance='Reset the role conversation.'; else if(sup.tp3<=2.9 && dr && dr.tp3>=4) glance='Develop and invest (90 days).'; }
   var headline = (dr && sup) ? 'Strong with the team. A serious gap with you.' : 'The read across groups.';
   var split = (dr && sup) ? (' — the team rates them '+fnum(dr.tp3)+', you rate them '+fnum(sup.tp3)+'. That split is the story; the decision is yours.') : '.';
+  var pa = r.plan_approval || {};
+  var planStatus = pa.requires ? (pa.status==='approved'?'Approved':(pa.status==='changes_requested'?'Changes requested':'Awaiting review')) : 'In coaching plan';
+  var succ = r.succession || {};
+  var successor = succ.candidates ? String(succ.candidates) : 'None yet';
   var out = '';
-  // verdict
-  out += '<div class="card" style="border-left:4px solid #01949A;">'
-    + '<div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#5F6B7A;">What the data shows</div>'
-    + '<div style="font-size:18px;font-weight:800;color:#004369;margin:5px 0 6px;">'+esc(headline)+'</div>'
-    + '<div style="font-size:13.5px;color:#23303d;line-height:1.5;">'+esc(first)+' scores <b>'+fnum(tp3)+' / 5 ('+sband(tp3)+')</b> overall'+esc(split)+'</div>'
-    + '<div style="margin-top:12px;display:inline-block;background:#01949A;color:#fff;font-size:12.5px;font-weight:800;padding:6px 12px;border-radius:7px;">Decision at a glance: '+esc(glance)+'</div>'
+
+  // ── context note ──
+  out += '<div style="font-size:11.5px;letter-spacing:.05em;color:'+C.mid+';font-weight:700;margin:2px 0 1px;">MANAGER VIEW · CONFIDENTIAL · '+totalRaters+' raters</div>'
+    + '<div style="font-size:12px;color:'+C.mid+';margin-bottom:6px;">Aggregate scores and your own input only. Individual peer and direct-report comments stay in '+esc(first)+'’s confidential coaching debrief.</div>';
+
+  // ── WHAT THE DATA SHOWS (navy hero) ──
+  out += '<div style="background:'+C.navy+';color:#fff;border-radius:14px;padding:22px 24px;margin-top:6px;">'
+    + '<div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#9FC0D6;font-weight:700;">What the data shows</div>'
+    + '<div style="font-size:21px;font-weight:800;font-family:Georgia,serif;margin:6px 0 8px;">'+esc(headline)+'</div>'
+    + '<div style="font-size:14px;color:#eaf2f7;line-height:1.55;">'+esc(first)+' scores <b style="color:#fff;">'+fnum(tp3)+' / 5 ('+sband(tp3)+')</b> overall'+esc(split)+'</div>'
+    + '<div style="margin-top:14px;display:inline-block;background:'+C.teal+';color:#fff;font-size:13px;font-weight:800;padding:6px 13px;border-radius:7px;">Decision at a glance: '+esc(glance)+'</div>'
     + '</div>';
-  // group table + the sponsor's own comments
-  function trow(label,gp,flag){ if(!gp) return ''; var f=flag && gp.tp3!=null && gp.tp3<=2.9; return '<tr'+(f?' style="background:#FCEBEB;"':'')+'><td style="text-align:left;padding:7px 6px;border-bottom:1px solid #E6EBF0;">'+esc(label)+' ('+gp.n+')</td>'+['trust','proactivity','productivity','tp3'].map(function(k){ return '<td style="text-align:right;padding:7px 6px;border-bottom:1px solid #E6EBF0;color:'+scol(gp[k])+';font-weight:700;">'+fnum(gp[k])+'</td>'; }).join('')+'</tr>'; }
-  var th='text-align:right;color:#5F6B7A;font-weight:600;border-bottom:2px solid #E6EBF0;padding:6px;';
-  var quotes=(r.sponsor_verbatims||[]).map(function(q){ return '<div style="font-style:italic;font-family:Georgia,serif;color:#3a2e16;margin:6px 0;">“'+esc(q)+'”</div>'; }).join('');
-  out += '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>How the groups rated '+esc(first)+'</div></div>'
-    + '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr><th style="text-align:left;color:#5F6B7A;font-weight:600;border-bottom:2px solid #E6EBF0;padding:6px;">Group</th><th style="'+th+'">Trust</th><th style="'+th+'">Proact.</th><th style="'+th+'">Prod.</th><th style="'+th+'">TP3</th></tr></thead><tbody>'
+
+  // ── KPIs ──
+  function kpi(l,vHtml,s){ return '<div style="background:#fff;border:1px solid '+C.line+';border-radius:12px;padding:14px 16px;"><div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:'+C.mid+';font-weight:700;">'+l+'</div><div style="font-size:23px;font-weight:800;margin-top:4px;font-family:Georgia,serif;">'+vHtml+'</div><div style="font-size:11.5px;color:'+C.mid+';margin-top:2px;">'+s+'</div></div>'; }
+  out += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-top:14px;">'
+    + kpi('Overall TP3','<span style="color:'+scol(tp3)+';">'+fnum(tp3)+'</span>',sband(tp3)+' · 1–5 scale')
+    + kpi('You vs. their team','<span style="color:'+scol(sup&&sup.tp3)+';">'+fnum(sup&&sup.tp3)+'</span> <span style="font-size:13px;color:'+C.mid+';font-family:inherit;">vs</span> <span style="color:'+scol(dr&&dr.tp3)+';">'+fnum(dr&&dr.tp3)+'</span>','your TP3 vs direct reports')
+    + kpi('Bench & succession','<span style="color:'+scol(sc.bench)+';">'+fnum(sc.bench)+'</span>','Successor: '+esc(successor))
+    + kpi('90-day plan','<span style="font-size:16px;color:'+C.amber+';">'+esc(planStatus)+'</span>','see plan review below')
+    + '</div>';
+
+  // ── TOP-LEVEL SCORE BARS (3.0 grey · 4.0 green reference lines) ──
+  function bar(lbl,v){ return '<div style="margin:12px 0;"><div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:5px;"><span>'+lbl+'</span><b style="color:'+scol(v)+';">'+fnum(v)+'</b></div><div style="position:relative;background:#EEF1F4;border-radius:30px;height:14px;overflow:hidden;"><div style="height:100%;border-radius:30px;width:'+wpct(v)+'%;background:'+scol(v)+';"></div><div style="position:absolute;top:-3px;bottom:-3px;left:50%;width:2px;background:#6b7682;"></div><div style="position:absolute;top:-3px;bottom:-3px;left:75%;width:2px;background:'+C.green+';"></div></div></div>'; }
+  out += '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>How '+esc(first)+'’s '+totalRaters+' raters scored '+esc(first)+'</div></div>'
+    + '<div style="font-size:13px;color:'+C.mid+';margin-bottom:2px;">'+fnum(tp3)+' / 5 overall · TP3 index</div>'
+    + bar('Trust',sc.trust)+bar('Proactivity',sc.proactivity)+bar('Productivity',sc.productivity)+bar('Overall impact',sc.impact)+bar('Bench strength',sc.bench)
+    + '<div style="font-size:12px;color:'+C.mid+';text-align:right;margin-top:6px;">grey line = 3.0 · green line = 4.0 standard</div>'
+    + '</div>';
+
+  // ── THE ONE THING (red-flag panel) ──
+  if(sup){
+    var dims=[['Trust','trust'],['Proactivity','proactivity'],['Productivity','productivity']];
+    var lowest=null; dims.forEach(function(d){ var v=sup[d[1]]; if(v!=null && (lowest==null || v<lowest.v)) lowest={n:d[0],v:v}; });
+    if(lowest && lowest.v<3){
+      out += '<div style="background:'+C.redbg+';border:1px solid #f0b9b9;border-left:5px solid '+C.red+';border-radius:12px;padding:20px 24px;margin-top:14px;">'
+        + '<div style="color:'+C.red+';font-size:17px;font-weight:800;font-family:Georgia,serif;margin-bottom:8px;">'+lowest.n+' with you, '+esc(first)+'’s supervisor: '+fnum(lowest.v)+' / 5 (Serious)</div>'
+        + '<div style="font-size:14px;margin:6px 0;">This is the gap that decides whether more investment pays off.'+(dr?(' Direct reports rate '+esc(first)+' <b>'+fnum(dr.tp3)+'</b> overall — the split is specifically the working relationship with you, not the ability to lead a team.'):'')+'</div>'
+        + '<div style="font-size:14px;font-weight:700;color:#8c2020;border-top:1px solid #f0b9b9;padding-top:10px;margin-top:8px;">This is the number the 90-day plan is built to move. We’ll show you the change at day 45 and 90 — how far to invest from there is your call.</div>'
+        + '</div>';
+    }
+  }
+
+  // ── GROUP TABLE + the sponsor's OWN words ──
+  function trow(label,gp,flag){ if(!gp) return ''; var f=flag && gp.tp3!=null && gp.tp3<=2.9; return '<tr'+(f?' style="background:#EEF4F8;"':'')+'><td style="text-align:left;padding:8px 6px;border-bottom:1px solid '+C.line+';font-weight:600;">'+esc(label)+' ('+gp.n+')</td>'+['trust','proactivity','productivity','tp3'].map(function(k){ return '<td style="text-align:right;padding:8px 6px;border-bottom:1px solid '+C.line+';color:'+scol(gp[k])+';font-weight:700;">'+fnum(gp[k])+'</td>'; }).join('')+'</tr>'; }
+  var th='text-align:right;color:'+C.mid+';font-weight:600;border-bottom:2px solid '+C.line+';padding:7px 6px;';
+  var quotes=(r.sponsor_verbatims||[]).map(function(q){ return '<p style="margin:6px 0;font-style:italic;font-family:Georgia,serif;color:#3a2e16;font-size:14px;">“'+esc(q)+'”</p>'; }).join('');
+  out += '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>How you rated '+esc(first)+' vs. how the team did</div></div>'
+    + '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;"><thead><tr><th style="text-align:left;color:'+C.mid+';font-weight:600;border-bottom:2px solid '+C.line+';padding:7px 6px;">Rater</th><th style="'+th+'">Trust</th><th style="'+th+'">Proact.</th><th style="'+th+'">Prod.</th><th style="'+th+'">TP3</th></tr></thead><tbody>'
     + trow('Direct reports',dr,false) + trow('Other colleagues',other,false) + trow('You (supervisor)',sup,true)
     + '</tbody></table>'
-    + '<div style="font-size:12px;color:#5F6B7A;margin-top:8px;">Groups under 3 raters are combined to protect confidentiality. Individual peer and direct-report comments stay in '+esc(first)+'’s confidential debrief.</div>'
-    + (quotes?'<div style="margin-top:12px;border-top:1px solid #E6EBF0;padding-top:10px;"><div style="font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#5F6B7A;margin-bottom:4px;">In your words — what you wrote about '+esc(first)+'</div>'+quotes+'</div>':'')
+    + '<div style="font-size:12px;color:'+C.mid+';margin-top:8px;">Peers are folded into “Other colleagues” — groups under 3 raters aren’t broken out, to protect confidentiality. Individual comments stay in '+esc(first)+'’s confidential debrief.</div>'
+    + (quotes?'<div style="background:'+C.sand+';border-radius:10px;padding:14px 18px;margin-top:14px;"><div style="font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:'+C.mid+';font-weight:700;margin-bottom:6px;">In your words — what you wrote about '+esc(first)+'</div>'+quotes+'</div>':'')
     + '</div>';
-  // options
-  function optRow(t,d,when){ return '<div style="border:1px solid #E6EBF0;border-radius:10px;padding:12px 14px;margin:8px 0;"><div style="font-weight:800;color:#004369;font-size:14px;">'+esc(t)+'</div><div style="font-size:13px;color:#23303d;margin-top:3px;">'+esc(d)+'</div><div style="font-size:13px;color:#004369;font-weight:600;margin-top:5px;">Choose this if: '+esc(when)+'</div></div>'; }
+
+  // ── NINE-BOX (talent placement) ──
+  (function(){
+    var xv=tp3, yv=sc.bench; if(xv==null||yv==null) return;
+    function band(v){ return v<3?0:(v<4?1:2); }
+    function frac(v,b){ var lo=(b===0?1:(b===1?3:4)), hi=(b===0?3:(b===1?4:5)); return Math.max(0,Math.min(1,(v-lo)/(hi-lo))); }
+    var cb=band(xv), rb=band(yv);
+    var xPct=(cb+frac(xv,cb))*(100/3), yPct=(rb+frac(yv,rb))*(100/3);
+    var labels=[['Low eff · high potential','Developing · high potential','Strong · high potential'],['Low eff · solid','Core player · solid','Strong · solid'],['Low eff · emerging','Developing · emerging','Strong · emerging']];
+    var hotRowTop=2-rb, hotCol=cb, cells='';
+    for(var rTop=0;rTop<3;rTop++){ for(var c=0;c<3;c++){ var hot=(rTop===hotRowTop&&c===hotCol); cells+='<div style="border:1px solid #eef1f4;font-size:10px;padding:5px;display:flex;align-items:flex-start;'+(hot?'background:#EAF5F0;color:'+C.green+';font-weight:700;':'color:#90a0ad;')+'">'+labels[rTop][c]+(hot?'<br>'+esc(first)+' is here':'')+'</div>'; } }
+    out += '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Talent placement (nine-box)</div></div>'
+      + '<div style="font-size:13px;color:'+C.mid+';margin-bottom:10px;">Leadership effectiveness (TP3) across · bench / readiness up. Built from the data we have — combine with performance and HR input before any move.</div>'
+      + '<div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start;">'
+      + '<div><div style="position:relative;width:300px;max-width:100%;height:300px;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);border:1px solid '+C.line+';border-radius:8px;overflow:hidden;">'+cells
+      + '<div style="position:absolute;width:20px;height:20px;border-radius:50%;background:'+C.amberbar+';border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3);transform:translate(-50%,50%);z-index:5;left:'+xPct.toFixed(0)+'%;bottom:'+yPct.toFixed(0)+'%;" title="'+esc(first)+'"></div>'
+      + '</div><div style="font-size:11px;color:'+C.mid+';font-weight:700;text-align:center;margin-top:6px;">Leadership effectiveness (TP3) →</div></div>'
+      + '<div style="flex:1;min-width:200px;font-size:13px;color:'+C.ink+';line-height:1.55;"><b style="color:'+C.navy+';">'+labels[2-rb][cb]+'.</b> Effectiveness '+fnum(xv)+' and bench '+fnum(yv)+' place '+esc(first)+' in this band. The lever that moves '+esc(first)+' up and to the right is the supervisor-trust gap. We show where '+esc(first)+' sits today and what would shift it; where you take it is your decision.</div>'
+      + '</div></div>';
+  })();
+
+  // ── BENCH & SUCCESSION ──
+  out += '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Bench &amp; succession</div></div>'
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;">'
+    + '<div style="background:'+C.sand+';border-radius:10px;padding:12px 14px;"><div style="font-size:12.5px;color:'+C.mid+';">Bench strength (raters)</div><div style="font-size:20px;font-weight:800;margin-top:4px;color:'+scol(sc.bench)+';">'+fnum(sc.bench)+' / 5</div></div>'
+    + '<div style="background:'+C.sand+';border-radius:10px;padding:12px 14px;"><div style="font-size:12.5px;color:'+C.mid+';">Formal successor</div><div style="font-size:20px;font-weight:800;margin-top:4px;color:'+(successor==='None yet'?C.red:C.green)+';">'+esc(successor)+'</div></div>'
+    + '</div>'
+    + (succ.vision?'<div style="font-size:13px;color:'+C.mid+';margin-top:12px;">'+esc(first)+'’s stated direction: '+esc(succ.vision)+'</div>':'<div style="font-size:13px;color:'+C.mid+';margin-top:12px;">Note: based on perception data — combine with performance and HR input before promotion decisions.</div>')
+    + '</div>';
+
+  // ── OPTIONS ──
+  function optRow(t,d,when){ return '<div style="border:1px solid '+C.line+';border-radius:10px;padding:12px 14px;margin:8px 0;"><div style="font-weight:800;color:'+C.navy+';font-size:14px;">'+esc(t)+'</div><div style="font-size:13px;color:'+C.ink+';margin-top:3px;">'+esc(d)+'</div><div style="font-size:13px;color:'+C.navy+';font-weight:600;margin-top:5px;">Choose this if: '+esc(when)+'</div></div>'; }
   out += '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Options to weigh — your call</div></div>'
+    + '<div style="font-size:13px;color:'+C.mid+';margin-bottom:4px;">We present the data and the realistic options. Choosing among them is yours; we’ll support whichever you pick.</div>'
     + optRow('1 · Invest behind the plan','Back the 90-day plan and re-measure the gap at day 45 and 90.','you see a long-term role for '+first+' and read the gap as behavior, not values.')
     + optRow('2 · Hold and re-measure','Set expectations now without a formal coaching investment, and re-run the read in 90 days.','you want proof of movement before committing budget.')
     + optRow('3 · Reset the role conversation','If the gap points to a deeper fit question, have a direct expectations conversation first.','the gap reads as fit or values, not a fixable behavior.')
     + '</div>';
-  // 90-day plan approval decision (only when the coach turned the gate on)
-  var pa = r.plan_approval || {};
-  if(pa.requires){
-    var box;
-    if(pa.status==='approved'){ box='<div style="background:#EAF5F0;border:1px solid #b7ddc9;border-radius:8px;padding:12px 14px;color:#0F6E56;font-weight:700;">You approved this plan'+(pa.decided_at?' on '+fmtDate(pa.decided_at):'')+'. '+esc(first)+'’s coaching is running against it.</div>'; }
-    else if(pa.status==='changes_requested'){ box='<div style="background:#FCEBEB;border:1px solid #f0b9b9;border-radius:8px;padding:12px 14px;color:#8c2020;"><b>Changes requested.</b>'+(pa.note?' “'+esc(pa.note)+'”':'')+' We’ll adjust with you before anything starts.</div>'; }
-    else { box='<div style="font-size:13px;color:#23303d;margin-bottom:10px;">'+esc(first)+' has proposed the 90-day plan shown below. Approve it as-is, or request changes. Once you sign off, we lock it and '+esc(first)+'’s coaching runs against it.</div>'
-      + '<div style="display:flex;gap:10px;flex-wrap:wrap;">'
-      + '<button onclick="sponsorDecide(\''+esc(m.client_id)+'\',\'approve\')" style="background:#0F6E56;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-weight:700;font-size:13px;cursor:pointer;">Approve this plan</button>'
-      + '<button onclick="sponsorDecide(\''+esc(m.client_id)+'\',\'changes\')" style="background:#fff;border:1px solid #C8962F;color:#8A560F;border-radius:8px;padding:10px 18px;font-weight:700;font-size:13px;cursor:pointer;">Request changes</button>'
-      + '</div>'; }
-    out += '<div class="card" style="border-left:4px solid #01949A;"><div class="card-head"><div class="card-title"><span class="dot"></span>Your decision on the 90-day plan</div></div>'+box+'</div>';
+
+  // ── 90-DAY PLAN REVIEW (with the actual focus + approve/request) ──
+  var f=m.report_json&&m.report_json.focus, planBody='';
+  if(f){
+    planBody += '<div style="border:1px solid '+C.line+';border-radius:10px;padding:14px 16px;margin:10px 0;"><div style="font-weight:800;color:'+C.navy+';font-size:14px;">Goal</div><div style="font-size:13px;color:'+C.ink+';margin-top:4px;">'+esc(f.goal90||'')+'</div>';
+    if(f.behaviors&&f.behaviors.length){ planBody += '<div style="font-size:12.5px;color:'+C.mid+';margin-top:8px;font-weight:700;">Behaviors being practiced</div><ul style="margin:6px 0 0 17px;font-size:13px;color:'+C.ink+';line-height:1.5;">'+f.behaviors.map(function(b){return '<li>'+esc(b)+'</li>';}).join('')+'</ul>'; }
+    planBody += '</div>';
   }
+  var pbtns='';
+  if(pa.requires){
+    if(pa.status==='approved'){ pbtns='<div style="background:#EAF5F0;border:1px solid #b7ddc9;border-radius:8px;padding:12px 14px;color:'+C.green+';font-weight:700;">You approved this plan'+(pa.decided_at?' on '+fmtDate(pa.decided_at):'')+'. '+esc(first)+'’s coaching is running against it.</div>'; }
+    else if(pa.status==='changes_requested'){ pbtns='<div style="background:'+C.redbg+';border:1px solid #f0b9b9;border-radius:8px;padding:12px 14px;color:#8c2020;"><b>Changes requested.</b>'+(pa.note?' “'+esc(pa.note)+'”':'')+' We’ll adjust with you before anything starts.</div>'; }
+    else { pbtns='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;">'
+      + '<button onclick="sponsorDecide(\''+esc(m.client_id)+'\',\'approve\')" style="background:'+C.green+';color:#fff;border:none;border-radius:8px;padding:10px 18px;font-weight:700;font-size:13px;cursor:pointer;">Approve this plan</button>'
+      + '<button onclick="sponsorDecide(\''+esc(m.client_id)+'\',\'changes\')" style="background:#fff;border:1px solid '+C.amberbar+';color:'+C.amber+';border-radius:8px;padding:10px 18px;font-weight:700;font-size:13px;cursor:pointer;">Request changes</button>'
+      + '</div><div style="font-size:12px;color:'+C.mid+';margin-top:8px;"><b style="color:'+C.ink+';">Approve and we lock the plan.</b> Request changes and we’ll adjust with you before anything starts.</div>'; }
+  } else {
+    pbtns='<div style="font-size:13px;color:'+C.mid+';">This plan runs as part of '+esc(first)+'’s coaching. Your sign-off isn’t required to start.</div>';
+  }
+  out += '<div class="card" style="border-top:4px solid '+C.teal+';"><div class="card-head"><div class="card-title"><span class="dot"></span>'+esc(first)+'’s proposed 90-day plan — your review</div></div>'
+    + '<div style="font-size:13.5px;color:'+C.ink+';background:#F7F9FA;border-radius:8px;padding:12px 14px;margin:6px 0 4px;line-height:1.55;">'+esc(first)+' has proposed the plan below. Before we lock it, you weigh in: does this target what you need and where the business is going? Approve it as-is, or request changes.</div>'
+    + planBody + pbtns
+    + '</div>';
+
   return out;
 }
 function sponsorDecide(clientId, kind){
