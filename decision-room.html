@@ -518,7 +518,8 @@ function memberReportHtml(m){
   var sLine = m.coach_summary || (m.report_json&&m.report_json.summaryLine) || '';
   var out = '<div class="card"><div class="ind-header"><div class="ind-avatar">'+esc(initials(name))+'</div><div><div class="ind-name">'+esc(name)+'</div>'
     + '<div class="ind-role">'+esc(m.role||'')+' &middot; '+esc(t.client_org_name||t.name)+' '+engBadge+'</div></div></div>'+(sLine?'<div class="ind-summary">'+esc(sLine)+'</div>':'')+'</div>';
-  out += attentionBanner(m, first);
+  out += sponsorReadoutCards(m);
+  if(!m.sponsorReadout) out += attentionBanner(m, first);
   out += pipelineCard(m);
   out += progressCard(m);
   // Confidential 360 detail only if the endpoint included it (omitted server-side in private mode)
@@ -629,6 +630,74 @@ function successionCard(m){
   return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Succession &amp; Bench</div>'+badge+'</div>'
     +'<div style="font-size:11px;color:var(--gray-600);margin-bottom:8px;">Note: based on perception data — combine with performance and HR input before promotion decisions.</div>'
     +(s.readiness?'<div class="succ-line"><b>Readiness for more:</b> '+esc(s.readiness)+'</div>':'')+(s.benchNote?'<div class="succ-line">'+esc(s.benchNote)+'</div>':'')+benchTable+'</div>';
+}
+
+// ── Sponsor manager-view sections: verdict, group table + the sponsor's OWN
+//    comments, options, and the 90-day plan approval decision. Rendered only when
+//    the endpoint included sponsorReadout (non-private supervisor view). Aggregate
+//    numbers + the sponsor's own words only — never peer/direct-report verbatims. ──
+function sponsorReadoutCards(m){
+  var r = m.sponsorReadout; if(!r || !r.scores) return '';
+  var sc = r.scores, bg = sc.by_group || {};
+  var name = m.name || m.role || 'This leader', first = String(name).split(' ')[0];
+  function fnum(v){ return (v==null||isNaN(v))?'—':Number(v).toFixed(2); }
+  function scol(v){ return v==null?'#7a8a95':(v>=4?'#0F6E56':(v>=3?'#8A560F':'#A32D2D')); }
+  function sband(v){ return v==null?'':(v>=4?'Strong':(v>=3?'Develop':'Serious')); }
+  function gget(k){ return (bg[k] && bg[k].n) ? bg[k] : null; }
+  function wmerge(list){ var n=0,acc={},cnt={}; ['trust','proactivity','productivity','tp3'].forEach(function(f){acc[f]=0;cnt[f]=0;}); list.forEach(function(x){ if(!x||!x.n) return; n+=x.n; ['trust','proactivity','productivity','tp3'].forEach(function(f){ if(x[f]!=null){ acc[f]+=x[f]*x.n; cnt[f]+=x.n; } }); }); if(!n) return null; var o={n:n}; ['trust','proactivity','productivity','tp3'].forEach(function(f){ o[f]=cnt[f]?acc[f]/cnt[f]:null; }); return o; }
+  var dr = gget('direct_report'), sup = gget('supervisor');
+  var other = wmerge([gget('peer'), gget('internal_partner'), gget('other_colleagues')]);
+  var tp3 = sc.tp3_index;
+  var glance = 'Develop and monitor (90 days).';
+  if(sup && sup.tp3!=null){ if(sup.tp3<=2.5) glance='Reset the role conversation.'; else if(sup.tp3<=2.9 && dr && dr.tp3>=4) glance='Develop and invest (90 days).'; }
+  var headline = (dr && sup) ? 'Strong with the team. A serious gap with you.' : 'The read across groups.';
+  var split = (dr && sup) ? (' — the team rates them '+fnum(dr.tp3)+', you rate them '+fnum(sup.tp3)+'. That split is the story; the decision is yours.') : '.';
+  var out = '';
+  // verdict
+  out += '<div class="card" style="border-left:4px solid #01949A;">'
+    + '<div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#5F6B7A;">What the data shows</div>'
+    + '<div style="font-size:18px;font-weight:800;color:#004369;margin:5px 0 6px;">'+esc(headline)+'</div>'
+    + '<div style="font-size:13.5px;color:#23303d;line-height:1.5;">'+esc(first)+' scores <b>'+fnum(tp3)+' / 5 ('+sband(tp3)+')</b> overall'+esc(split)+'</div>'
+    + '<div style="margin-top:12px;display:inline-block;background:#01949A;color:#fff;font-size:12.5px;font-weight:800;padding:6px 12px;border-radius:7px;">Decision at a glance: '+esc(glance)+'</div>'
+    + '</div>';
+  // group table + the sponsor's own comments
+  function trow(label,gp,flag){ if(!gp) return ''; var f=flag && gp.tp3!=null && gp.tp3<=2.9; return '<tr'+(f?' style="background:#FCEBEB;"':'')+'><td style="text-align:left;padding:7px 6px;border-bottom:1px solid #E6EBF0;">'+esc(label)+' ('+gp.n+')</td>'+['trust','proactivity','productivity','tp3'].map(function(k){ return '<td style="text-align:right;padding:7px 6px;border-bottom:1px solid #E6EBF0;color:'+scol(gp[k])+';font-weight:700;">'+fnum(gp[k])+'</td>'; }).join('')+'</tr>'; }
+  var th='text-align:right;color:#5F6B7A;font-weight:600;border-bottom:2px solid #E6EBF0;padding:6px;';
+  var quotes=(r.sponsor_verbatims||[]).map(function(q){ return '<div style="font-style:italic;font-family:Georgia,serif;color:#3a2e16;margin:6px 0;">“'+esc(q)+'”</div>'; }).join('');
+  out += '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>How the groups rated '+esc(first)+'</div></div>'
+    + '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr><th style="text-align:left;color:#5F6B7A;font-weight:600;border-bottom:2px solid #E6EBF0;padding:6px;">Group</th><th style="'+th+'">Trust</th><th style="'+th+'">Proact.</th><th style="'+th+'">Prod.</th><th style="'+th+'">TP3</th></tr></thead><tbody>'
+    + trow('Direct reports',dr,false) + trow('Other colleagues',other,false) + trow('You (supervisor)',sup,true)
+    + '</tbody></table>'
+    + '<div style="font-size:12px;color:#5F6B7A;margin-top:8px;">Groups under 3 raters are combined to protect confidentiality. Individual peer and direct-report comments stay in '+esc(first)+'’s confidential debrief.</div>'
+    + (quotes?'<div style="margin-top:12px;border-top:1px solid #E6EBF0;padding-top:10px;"><div style="font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#5F6B7A;margin-bottom:4px;">In your words — what you wrote about '+esc(first)+'</div>'+quotes+'</div>':'')
+    + '</div>';
+  // options
+  function optRow(t,d,when){ return '<div style="border:1px solid #E6EBF0;border-radius:10px;padding:12px 14px;margin:8px 0;"><div style="font-weight:800;color:#004369;font-size:14px;">'+esc(t)+'</div><div style="font-size:13px;color:#23303d;margin-top:3px;">'+esc(d)+'</div><div style="font-size:13px;color:#004369;font-weight:600;margin-top:5px;">Choose this if: '+esc(when)+'</div></div>'; }
+  out += '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Options to weigh — your call</div></div>'
+    + optRow('1 · Invest behind the plan','Back the 90-day plan and re-measure the gap at day 45 and 90.','you see a long-term role for '+first+' and read the gap as behavior, not values.')
+    + optRow('2 · Hold and re-measure','Set expectations now without a formal coaching investment, and re-run the read in 90 days.','you want proof of movement before committing budget.')
+    + optRow('3 · Reset the role conversation','If the gap points to a deeper fit question, have a direct expectations conversation first.','the gap reads as fit or values, not a fixable behavior.')
+    + '</div>';
+  // 90-day plan approval decision (only when the coach turned the gate on)
+  var pa = r.plan_approval || {};
+  if(pa.requires){
+    var box;
+    if(pa.status==='approved'){ box='<div style="background:#EAF5F0;border:1px solid #b7ddc9;border-radius:8px;padding:12px 14px;color:#0F6E56;font-weight:700;">You approved this plan'+(pa.decided_at?' on '+fmtDate(pa.decided_at):'')+'. '+esc(first)+'’s coaching is running against it.</div>'; }
+    else if(pa.status==='changes_requested'){ box='<div style="background:#FCEBEB;border:1px solid #f0b9b9;border-radius:8px;padding:12px 14px;color:#8c2020;"><b>Changes requested.</b>'+(pa.note?' “'+esc(pa.note)+'”':'')+' We’ll adjust with you before anything starts.</div>'; }
+    else { box='<div style="font-size:13px;color:#23303d;margin-bottom:10px;">'+esc(first)+' has proposed the 90-day plan shown below. Approve it as-is, or request changes. Once you sign off, we lock it and '+esc(first)+'’s coaching runs against it.</div>'
+      + '<div style="display:flex;gap:10px;flex-wrap:wrap;">'
+      + '<button onclick="sponsorDecide(\''+esc(m.client_id)+'\',\'approve\')" style="background:#0F6E56;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-weight:700;font-size:13px;cursor:pointer;">Approve this plan</button>'
+      + '<button onclick="sponsorDecide(\''+esc(m.client_id)+'\',\'changes\')" style="background:#fff;border:1px solid #C8962F;color:#8A560F;border-radius:8px;padding:10px 18px;font-weight:700;font-size:13px;cursor:pointer;">Request changes</button>'
+      + '</div>'; }
+    out += '<div class="card" style="border-left:4px solid #01949A;"><div class="card-head"><div class="card-title"><span class="dot"></span>Your decision on the 90-day plan</div></div>'+box+'</div>';
+  }
+  return out;
+}
+function sponsorDecide(clientId, kind){
+  var action = (kind==='approve') ? 'approve-plan' : 'request-changes';
+  var note = null;
+  if(kind==='changes'){ note = prompt('What would you like changed before the plan is locked? (optional)') || ''; }
+  api(action, { client_id:clientId, note:note }).then(function(){ loadTeam(CURRENT_TEAM); }).catch(showError);
 }
 
 init();

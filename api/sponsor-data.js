@@ -152,9 +152,52 @@ async function buildMemberReport(m, confidential) {
   if (!confidential) {
     // Confidential 360 detail — ONLY assembled for non-private engagements.
     report.selfVsRaters = await buildSelfVsRaters(m.client_id);
+    // Sponsor manager-view readout: aggregate by-group scores (incl "Other colleagues"),
+    // the sponsor's OWN written comments (they wrote them), bench/succession, plan-approval
+    // state, debrief. Peer/direct-report verbatims are NEVER fetched here — confidentiality.
+    report.sponsorReadout = await buildSponsorReadout(m.client_id);
   }
-  // In private mode selfVsRaters is never set, so the browser never receives it.
+  // In private mode selfVsRaters/sponsorReadout are never set, so the browser never receives them.
   return report;
+}
+
+// Manager/sponsor readout for one leader: aggregate scores + sponsor's own input only.
+// Numbers come from the latest report draft's scores_json (by_group includes the
+// "Other colleagues" cohort). Verbatims are restricted to the SUPERVISOR's own
+// comments — peer and direct-report open-ended responses are never queried here.
+async function buildSponsorReadout(clientId) {
+  let d = null;
+  try {
+    const r = await sbGet(`/rest/v1/diagnostics?client_id=eq.${enc(clientId)}&is_archived=eq.false&select=id,debrief_date,debrief_time,plan_requires_sponsor_approval,plan_sponsor_status,plan_sponsor_decided_at,plan_sponsor_note,self_three_year_vision,self_successor_candidates,self_successor_development_actions,custom_g1_question,custom_g2_question&order=created_at.desc&limit=1`);
+    d = r && r[0];
+  } catch (_) { /* no diagnostic */ }
+  if (!d) return null;
+
+  let scores = null;
+  try {
+    const sr = await sbGet(`/rest/v1/diagnostic_report_drafts?diagnostic_id=eq.${enc(d.id)}&select=scores_json,generated_at&order=generated_at.desc&limit=1`);
+    if (sr && sr[0] && sr[0].scores_json) scores = sr[0].scores_json;
+  } catch (_) { /* scores optional */ }
+
+  let sponsorVerbatims = [];
+  try {
+    const vr = await sbGet(`/rest/v1/diagnostic_responses?diagnostic_id=eq.${enc(d.id)}&rater_relationship=ilike.*supervisor*&text_response=not.is.null&select=text_response&limit=40`);
+    sponsorVerbatims = (vr || []).map(x => String(x.text_response || '').trim()).filter(t => t.length > 15).slice(0, 4);
+  } catch (_) { /* verbatims optional */ }
+
+  return {
+    scores,                                   // tp3_index, trust/proactivity/productivity, impact, bench, by_group{...}
+    sponsor_verbatims: sponsorVerbatims,      // supervisor's OWN comments only
+    custom_questions: [d.custom_g1_question, d.custom_g2_question].filter(Boolean),
+    succession: { vision: d.self_three_year_vision || null, candidates: d.self_successor_candidates || null, development: d.self_successor_development_actions || null },
+    debrief: { date: d.debrief_date || null, time: d.debrief_time || null },
+    plan_approval: {
+      requires:    !!d.plan_requires_sponsor_approval,
+      status:      d.plan_sponsor_status || 'none',
+      decided_at:  d.plan_sponsor_decided_at || null,
+      note:        d.plan_sponsor_note || null,
+    },
+  };
 }
 
 // Status-only row for a 'progress' POC. Returns NAME + role + where this person
@@ -426,6 +469,28 @@ export default async function handler(req, res) {
         signals: signalsRaw,
         team_report: teamReport,
       });
+    }
+
+    // ── Sponsor decision on a leader's 90-day plan ───────────────────────────
+    // Scoped: the leader's client_id must belong to a team this sponsor is linked to.
+    if (body.action === 'approve-plan' || body.action === 'request-changes') {
+      const clientId = body.client_id;
+      if (!clientId) return res.status(400).json({ error: 'client_id required' });
+      let authorized = false;
+      for (const tId of teamIds) {
+        const tm = await sbGet(`/rest/v1/team_members?team_id=eq.${enc(tId)}&client_id=eq.${enc(clientId)}&select=id&limit=1`);
+        if (tm && tm[0]) { authorized = true; break; }
+      }
+      if (!authorized) return res.status(403).json({ error: 'Not authorized for this leader' });
+      const dr = await sbGet(`/rest/v1/diagnostics?client_id=eq.${enc(clientId)}&is_archived=eq.false&select=id&order=created_at.desc&limit=1`);
+      const diag = dr && dr[0];
+      if (!diag) return res.status(404).json({ error: 'No diagnostic for this leader' });
+      const status = body.action === 'approve-plan' ? 'approved' : 'changes_requested';
+      const note = (body.action === 'request-changes' && typeof body.note === 'string') ? body.note.trim().slice(0, 1000) : null;
+      await sb(`/rest/v1/diagnostics?id=eq.${enc(diag.id)}`, 'PATCH',
+        { plan_sponsor_status: status, plan_sponsor_decided_at: new Date().toISOString(), plan_sponsor_note: note, updated_at: new Date().toISOString() },
+        { Prefer: 'return=minimal' });
+      return res.status(200).json({ ok: true, status });
     }
 
     return res.status(400).json({ error: 'Unknown action: ' + body.action });

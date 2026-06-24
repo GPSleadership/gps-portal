@@ -7404,6 +7404,10 @@ function renderReportTab() {
       ${d.debrief_completed_at ? '' : d.report_finalized_at ? `
       <button class="dbtn dbtn-outline" onclick="markDebriefComplete()">Mark Debrief Complete →</button>` : ''}
     </div>
+    <label style="display:flex;align-items:flex-start;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--d-border);font-size:13px;cursor:pointer;">
+      <input type="checkbox" id="plan-sponsor-approval" ${d.plan_requires_sponsor_approval ? 'checked' : ''} onchange="toggleSponsorApproval(this.checked)" style="width:16px;height:16px;margin-top:1px;accent-color:var(--d-blue);">
+      <span>Require the sponsor to review &amp; approve this leader's 90-day plan before it launches.<br><span style="color:var(--d-mid);font-size:12px;">When on, the plan appears in the sponsor's Decision Room as "awaiting approval," with Approve / Request-changes. Leave off for sponsors who don't review plans.</span></span>
+    </label>
   </div>
   <div class="card" style="margin-top:16px;">
     <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:4px;">Upload Final Report PDF</div>
@@ -8754,8 +8758,15 @@ async function exportDiagData(format = 'csv') {
     ];
 
     if (format === 'excel') {
+      // Excel caps any single cell at 32,767 characters — a long coaching/interview
+      // note or a huge pasted response will exceed it and abort the whole export.
+      // Clamp over-long string cells (with a visible marker) so the workbook always
+      // builds. The CSV export keeps the full, untruncated text.
+      const XLSX_CELL_MAX = 32767;
+      const _clampCell = v => (typeof v === 'string' && v.length > XLSX_CELL_MAX) ? (v.slice(0, XLSX_CELL_MAX - 16) + '… [truncated]') : v;
+      const _xlsxSafe = rows => rows.map(r => { const o = {}; for (const k in r) o[k] = _clampCell(r[k]); return o; });
       // Excel export via SheetJS (already loaded for client import)
-      const ws = XLSX.utils.json_to_sheet(dataRows);
+      const ws = XLSX.utils.json_to_sheet(_xlsxSafe(dataRows));
       // Set column widths
       ws['!cols'] = [
         { wch: 22 }, { wch: 18 }, { wch: 8 }, { wch: 14 },
@@ -8773,11 +8784,11 @@ async function exportDiagData(format = 'csv') {
         { Field: 'Completed', Value: DIAG_RATERS.filter(r => !r.is_self && r.completed_at).length },
         { Field: 'Exported', Value: date },
       ];
-      const wsMeta = XLSX.utils.json_to_sheet(meta);
+      const wsMeta = XLSX.utils.json_to_sheet(_xlsxSafe(meta));
       wsMeta['!cols'] = [{ wch: 18 }, { wch: 40 }];
       XLSX.utils.book_append_sheet(wb, wsMeta, 'Diagnostic Info');
       // Notes & Context sheet (coaching notes, interview notes, self narrative)
-      const wsCtx = XLSX.utils.json_to_sheet(contextRows);
+      const wsCtx = XLSX.utils.json_to_sheet(_xlsxSafe(contextRows));
       wsCtx['!cols'] = [{ wch: 32 }, { wch: 90 }];
       XLSX.utils.book_append_sheet(wb, wsCtx, 'Notes & Context');
       XLSX.writeFile(wb, `${filename}.xlsx`);
@@ -8969,6 +8980,12 @@ async function updateDiag(fields) {
       ALL_DIAGS = ALL_DIAGS.map(d => d.id === DIAG_SEL.id ? DIAG_SEL : d);
     }
   } catch (e) { /* non-fatal: keep prior DIAG_SEL */ }
+}
+
+// Coach toggle: require the sponsor to approve this leader's 90-day plan before launch.
+// Writes via the same allowlisted diagnostics update path as the other diagnostic toggles.
+async function toggleSponsorApproval(on){
+  await updateDiag({ plan_requires_sponsor_approval: !!on });
 }
 
 async function refreshSelected() {
