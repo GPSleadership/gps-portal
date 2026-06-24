@@ -340,6 +340,19 @@ export default async function handler(req, res) {
           const drows = dr.ok ? await dr.json() : [];
           report = drows[0] || null;
         }
+        // report_doc is the coach-authored structured report. Only LEADER-facing
+        // sections (audience client|all) may reach the client browser; any
+        // sponsor/coach-only sections are stripped server-side (never rely on the
+        // UI to hide them). Empty-body sections are dropped so the snapshot only
+        // shows authored content.
+        if (diag.report_doc && Array.isArray(diag.report_doc.sections)) {
+          diag.report_doc = Object.assign({}, diag.report_doc, {
+            sections: diag.report_doc.sections.filter(function (s) {
+              const aud = (s && s.audience) || 'client';
+              return (aud === 'client' || aud === 'all') && s && typeof s.body === 'string' && s.body.trim().length > 0;
+            }),
+          });
+        }
         return res.status(200).json({ ok: true, diagnostic: diag, raters, report });
       }
       case 'diag-get-raters': {

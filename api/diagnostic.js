@@ -257,6 +257,7 @@ export default async function handler(req, res) {
     case 'get-report-doc':          return handleGetReportDoc(req, res);
     case 'save-report-doc':         return handleSaveReportDoc(req, res);
     case 'generate-report-section': return handleGenerateReportSection(req, res);
+    case 'generate-plan-prefill':   return handleGeneratePlanPrefill(req, res);
     case 'generate-dr-content':  return handleGenerateDRContent(req, res);
     case 'generate-recommendations': return handleGenerateRecommendations(req, res);
     case 'nudge-checkin':        return handleNudgeCheckin(req, res);
@@ -2332,6 +2333,75 @@ async function handleGenerateReportSection(req, res) {
     const user = `SECTION TO WRITE: "${meta.title}" (key: ${meta.key}).\n\nLEADER DATA (1-5 scale; use these exact numbers, do not invent):\n${JSON.stringify(dataSummary, null, 1)}\n\n${exemplar ? 'STYLE/STRUCTURE EXEMPLAR for this section (match this voice and shape; rewrite using THIS leader data):\n"""\n' + exemplar.slice(0,4000) + '\n"""\n\n' : ''}Write the "${meta.title}" section now. Plain text only.`;
     const body = await callClaude(REPORT_SECTION_SYSTEM, user, 1600, { model: CLAUDE_REPORT_MODEL, timeoutMs: 110000, retries: 1 });
     return res.status(200).json({ ok:true, section_key: meta.key, body: (body || '').slice(0, SECTION_MAX) });
+  } catch (e) { return res.status(500).json({ error: e.message }); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ACTION: generate-plan-prefill
+// POST /api/diagnostic?action=generate-plan-prefill   Body: { diagnostic_id, session }
+//
+// Drafts the leader's recommended 90-day plan as the STRUCTURED wizard_prefill_data
+// shape the client onboarding wizard already consumes. Generated coach-side from the
+// diagnostic scores + the authored report_doc. The coach reviews/edits and approves;
+// the approved object is saved to diagnostics.wizard_prefill_data (via the coach
+// data proxy), so the leader opens an already-filled, editable plan. This endpoint
+// only DRAFTS — it does not persist. Coach-session gated.
+// ═══════════════════════════════════════════════════════════════════════════════
+const PLAN_PREFILL_SYSTEM = `You are an executive leadership coach for GPS Leadership Solutions drafting a recommended 90-day development plan for a leader, based on their 14-Day Executive Leadership Diagnostic. Write in Alex D. Tremble's voice: direct, candid, plain, specific, no hype, no emoji. The plan must be concrete and behavior-based, grounded ONLY in the diagnostic data and report provided. Never invent metric numbers. Return ONLY a single JSON object, no prose, no code fences, exactly this shape:
+{
+  "key_theme": "one short phrase naming the central development theme",
+  "scores": { "trust": <number|null>, "proactivity": <number|null>, "productivity": <number|null> },
+  "suggested": {
+    "goal90": "one specific 90-day leadership goal statement",
+    "goal30": "the 30-day milestone toward that goal",
+    "behavior1": "the primary behavior to practice (specific, observable)",
+    "behavior2": "an optional secondary behavior, or empty string",
+    "metric1": { "name": "a self-tracked metric name", "baseline": <number|null>, "target": <number|null> },
+    "metric2": { "question": "a single behavior stakeholders can rate 1-5", "targetAvg": 4.0 }
+  }
+}
+Rules: target the leader's weakest area first. Keep every field to one tight sentence. metric1 baseline/target are numbers only when the data supports them, else null. Do not include stakeholder names or any people.`;
+
+async function handleGeneratePlanPrefill(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const { diagnostic_id, session } = req.body || {};
+  if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
+  if (!diagnostic_id) return res.status(400).json({ error: 'diagnostic_id required' });
+  try {
+    const dr = await sb(`/rest/v1/diagnostics?id=eq.${encodeURIComponent(diagnostic_id)}&select=client_name,client_role,report_doc`);
+    const diag = (await dr.json())[0] || {};
+    const sr = await sb(`/rest/v1/diagnostic_report_drafts?diagnostic_id=eq.${encodeURIComponent(diagnostic_id)}&select=scores_json&order=generated_at.desc&limit=1`);
+    const scores = ((await sr.json())[0] || {}).scores_json || {};
+    // Leader-facing narrative sections that inform a plan, if authored.
+    const wantKeys = ['key_strengths', 'blind_spots', 'start_stop_continue', 'plan_90day', 'org_impact', 'succession_future'];
+    let narrative = '';
+    if (diag.report_doc && Array.isArray(diag.report_doc.sections)) {
+      narrative = diag.report_doc.sections
+        .filter(function (s) { return wantKeys.indexOf(s.key) >= 0 && s.body; })
+        .map(function (s) { return (s.title || s.key) + ':\n' + String(s.body).slice(0, 1500); })
+        .join('\n\n');
+    }
+    const dataSummary = {
+      leader: diag.client_name || 'the leader', role: diag.client_role || '',
+      tp3_index: scores.tp3_index, trust: scores.trust, proactivity: scores.proactivity,
+      productivity: scores.productivity, impact: scores.impact, bench: scores.bench,
+    };
+    const user = `LEADER DIAGNOSTIC DATA (1-5 scale; use these exact numbers, do not invent):\n${JSON.stringify(dataSummary, null, 1)}\n\n${narrative ? 'AUTHORED REPORT SECTIONS (base the plan on these):\n"""\n' + narrative.slice(0, 6000) + '\n"""\n\n' : ''}Draft the recommended 90-day plan JSON now.`;
+    const raw = await callClaude(PLAN_PREFILL_SYSTEM, user, 1500, { model: CLAUDE_REPORT_MODEL, timeoutMs: 110000, temperature: 0, retries: 1 });
+    const parsed = parseJsonLoose(raw);
+    if (!parsed || !parsed.suggested) return res.status(502).json({ error: 'Could not parse plan draft from the model. Try again.' });
+    // Normalize: backfill TP3 sub-scores from the data when the model omits them.
+    parsed.scores = parsed.scores || {};
+    if (parsed.scores.trust == null && scores.trust != null) parsed.scores.trust = scores.trust;
+    if (parsed.scores.proactivity == null && scores.proactivity != null) parsed.scores.proactivity = scores.proactivity;
+    if (parsed.scores.productivity == null && scores.productivity != null) parsed.scores.productivity = scores.productivity;
+    // Never invent people — the coach/leader add stakeholders in the wizard.
+    parsed.suggested.stakeholders = [];
+    if (!parsed.suggested.metric2 || typeof parsed.suggested.metric2 !== 'object') parsed.suggested.metric2 = { question: '', targetAvg: 4.0 };
+    if (parsed.suggested.metric2.targetAvg == null) parsed.suggested.metric2.targetAvg = 4.0;
+    parsed.source = 'coach-generated';
+    parsed.generated_at = new Date().toISOString();
+    return res.status(200).json({ ok: true, prefill: parsed });
   } catch (e) { return res.status(500).json({ error: e.message }); }
 }
 

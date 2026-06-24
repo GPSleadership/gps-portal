@@ -593,6 +593,7 @@ function focusCard(m, first){
   var f=m.report_json&&m.report_json.focus; if(!f) return '';
   var beh=(f.behaviors||[]).map(function(b){return '<li>'+esc(b)+'</li>';}).join('');
   return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>90-Day Focus</div></div>'
+    +(m.business_outcome_goal?'<span class="focus-label">Business outcome this ladders up to</span><div class="focus-goal" style="margin-bottom:14px;">'+esc(m.business_outcome_goal)+'</div>':'')
     +'<span class="focus-label">Goal</span><div class="focus-goal">'+esc(f.goal90)+'</div>'
     +(beh?'<span class="focus-label" style="margin-top:14px;">Behaviors being practiced</span><ul class="focus-list">'+beh+'</ul>':'')
     +(f.stakeholderMetric?'<span class="focus-label" style="margin-top:14px;">Primary metric &mdash; how stakeholders rate the behavior</span>'+metricBar(f.stakeholderMetric,true):'')
@@ -773,6 +774,7 @@ function sponsorReadoutCards(m){
   }
   out += '<div class="card" style="border-top:4px solid '+C.teal+';"><div class="card-head"><div class="card-title"><span class="dot"></span>'+esc(first)+'’s proposed 90-day plan — your review</div></div>'
     + '<div style="font-size:13.5px;color:'+C.ink+';background:#F7F9FA;border-radius:8px;padding:12px 14px;margin:6px 0 4px;line-height:1.55;">'+esc(first)+' has proposed the plan below. Before we lock it, you weigh in: does this target what you need and where the business is going? Approve it as-is, or request changes.</div>'
+    + (m.business_outcome_goal?'<div style="border:1px solid '+C.line+';border-radius:10px;padding:14px 16px;margin:10px 0;"><div style="font-weight:800;color:'+C.navy+';font-size:14px;">Business outcome this ladders up to</div><div style="font-size:13px;color:'+C.ink+';margin-top:4px;">'+esc(m.business_outcome_goal)+'</div></div>':'')
     + planBody + pbtns
     + '</div>';
 

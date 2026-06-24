@@ -7393,6 +7393,7 @@ function renderReportTab() {
       ${d.report_generated_at ? `<button class="dbtn dbtn-outline" onclick="previewResultsPage()">👁 Preview client results page (private)</button>` : ''}
       ${d.report_generated_at ? `<button class="dbtn dbtn-outline" onclick="openResultsNarrativeEditor()">✍️ Edit results-page words</button>` : ''}
       <button class="dbtn dbtn-outline" onclick="openReportDocEditor()">🧱 Edit structured report (sections)</button>
+      ${d.client_id ? `<button class="dbtn dbtn-outline" onclick="openPlanPrefillEditor()">🎯 Draft 90-day plan (prefill client)</button>` : ''}
       <button class="dbtn dbtn-primary" ${canGenerate?'':'disabled'} onclick="generateReport(event)">
         ⚙ Generate Draft Report (Claude)
       </button>
@@ -8031,6 +8032,7 @@ async function saveResultsNarrative(e){
 
 // ── Structured report editor (report_doc) — section-by-section authoring + Claude draft ──
 let REPORT_DOC = null;
+let REPORT_BIZ_GOAL = '';  // clients.business_outcome_goal for the linked client (engagement-level)
 async function openReportDocEditor(){
   const d=DIAG_SEL; if(!d) return;
   const old=document.getElementById('rd-overlay'); if(old) old.remove();
@@ -8042,7 +8044,10 @@ async function openReportDocEditor(){
   try{
     const r=await fetch('/api/diagnostic?action=get-report-doc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({diagnostic_id:d.id,session:getCoachSessionToken()})});
     const j=await r.json(); if(!r.ok) throw new Error(j.error||'Load failed');
-    REPORT_DOC=j.report_doc||{sections:[]}; renderReportDocEditor();
+    REPORT_DOC=j.report_doc||{sections:[]};
+    REPORT_BIZ_GOAL='';
+    if(d.client_id){ try{ const _c=await cdSelect('clients',{eq:{id:d.client_id},select:'business_outcome_goal',limit:1}); REPORT_BIZ_GOAL=(_c&&_c[0]&&_c[0].business_outcome_goal)||''; }catch(_){} }
+    renderReportDocEditor();
   }catch(ex){ const b=document.getElementById('rd-body'); if(b) b.innerHTML='<div style="color:#a3261d;">Could not load: '+esc(ex.message)+'</div>'; }
 }
 function renderReportDocEditor(){
@@ -8061,6 +8066,10 @@ function renderReportDocEditor(){
     +'<div><div style="font-family:Montserrat,sans-serif;font-size:17px;font-weight:800;color:#004369;">Structured report — '+esc(d.client_name||'')+'</div>'
     +'<div style="font-size:12px;color:#5a6b76;margin-top:2px;max-width:560px;">Edit each section, or Generate a draft from the diagnostic data in your voice. The client results snapshot and the 90-day plan prefill draw from this. The sponsor sees their own Decision Room page, not these sections.</div></div>'
     +'<button onclick="document.getElementById(\'rd-overlay\').remove()" style="background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#888;">&times;</button></div>'
+    +'<div style="border:1px solid #e6ebf0;border-radius:9px;padding:12px 14px;margin:6px 0 4px;background:#f7fafc;">'
+    +'<label for="rd-biz-goal" style="display:block;font-weight:800;color:#004369;font-size:12.5px;margin-bottom:5px;">Business outcome goal <span style="font-weight:600;color:#9aa7ad;">(engagement-level; shown to the sponsor and on the leader plan)</span></label>'
+    +'<input id="rd-biz-goal" type="text" value="'+esc(REPORT_BIZ_GOAL)+'" placeholder="e.g., Drive 3-5% annual revenue growth" style="width:100%;border:1px solid #d3dde3;border-radius:8px;padding:9px 11px;font-size:12.5px;font-family:inherit;box-sizing:border-box;">'
+    +'</div>'
     +rows
     +'<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;position:sticky;bottom:-1px;background:#fff;padding:10px 0;border-top:1px solid #eef1f2;">'
     +'<button class="dbtn dbtn-outline" onclick="document.getElementById(\'rd-overlay\').remove()">Close</button>'
@@ -8089,9 +8098,99 @@ async function saveReportDoc(e){
   try{
     const r=await fetch('/api/diagnostic?action=save-report-doc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({diagnostic_id:d.id,report_doc:doc,session:getCoachSessionToken()})});
     const j=await r.json(); if(!r.ok) throw new Error(j.error||'Save failed');
-    REPORT_DOC=j.report_doc||doc; alert('Saved.');
+    REPORT_DOC=j.report_doc||doc;
+    // Persist the engagement-level business outcome goal on the linked client.
+    const bizEl=document.getElementById('rd-biz-goal'); const biz=bizEl?bizEl.value.trim():'';
+    if(d.client_id && biz!==REPORT_BIZ_GOAL){ await cdUpdate('clients',{ business_outcome_goal: biz||null },{ eq:{ id:d.client_id } }); REPORT_BIZ_GOAL=biz; }
+    alert('Saved.');
   }catch(ex){ alert('Could not save: '+ex.message); }
   if(btn){ btn.disabled=false; btn.textContent='Save all sections'; }
+}
+
+// ── 90-day plan prefill editor ───────────────────────────────────────────────
+// Coach drafts (AI), reviews, edits, and approves the STRUCTURED plan that pre-fills
+// the client's onboarding wizard. Saved to diagnostics.wizard_prefill_data — the
+// exact shape get-client.js reads and the wizard already renders (filled + editable).
+let PLAN_PREFILL = null;
+async function openPlanPrefillEditor(){
+  const d=DIAG_SEL; if(!d||!d.client_id){ alert('Link a client to this diagnostic first.'); return; }
+  const old=document.getElementById('pp-overlay'); if(old) old.remove();
+  const ov=document.createElement('div'); ov.id='pp-overlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:30px 16px;';
+  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:720px;width:100%;padding:22px 24px;box-shadow:0 10px 40px rgba(0,0,0,.2);"><div id="pp-body" style="font-size:13px;color:#5a6b76;">Loading…</div></div>';
+  document.body.appendChild(ov);
+  try{
+    const rows=await cdSelect('diagnostics',{eq:{id:d.id},select:'wizard_prefill_data',limit:1});
+    PLAN_PREFILL=(rows&&rows[0]&&rows[0].wizard_prefill_data) || { key_theme:'', scores:{}, suggested:{ goal90:'',goal30:'',behavior1:'',behavior2:'',metric1:{name:'',baseline:'',target:''},metric2:{question:'',targetAvg:4.0},stakeholders:[] } };
+    renderPlanPrefillEditor();
+  }catch(ex){ const b=document.getElementById('pp-body'); if(b) b.innerHTML='<div style="color:#a3261d;">Could not load: '+esc(ex.message)+'</div>'; }
+}
+function ppField(label,id,val,ph){
+  return '<div style="margin:8px 0;"><label for="'+id+'" style="display:block;font-weight:700;color:#004369;font-size:12px;margin-bottom:4px;">'+esc(label)+'</label><input id="'+id+'" type="text" value="'+esc(val==null?'':String(val))+'" placeholder="'+esc(ph||'')+'" style="width:100%;border:1px solid #d3dde3;border-radius:8px;padding:8px 10px;font-size:12.5px;font-family:inherit;box-sizing:border-box;"></div>';
+}
+function ppArea(label,id,val,ph){
+  return '<div style="margin:8px 0;"><label for="'+id+'" style="display:block;font-weight:700;color:#004369;font-size:12px;margin-bottom:4px;">'+esc(label)+'</label><textarea id="'+id+'" rows="2" placeholder="'+esc(ph||'')+'" style="width:100%;border:1px solid #d3dde3;border-radius:8px;padding:8px 10px;font-size:12.5px;font-family:inherit;line-height:1.5;resize:vertical;box-sizing:border-box;">'+esc(val==null?'':String(val))+'</textarea></div>';
+}
+function renderPlanPrefillEditor(){
+  const d=DIAG_SEL; const s=(PLAN_PREFILL&&PLAN_PREFILL.suggested)||{}; const m1=s.metric1||{}; const m2=s.metric2||{};
+  document.getElementById('pp-body').innerHTML=
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px;">'
+    +'<div><div style="font-family:Montserrat,sans-serif;font-size:17px;font-weight:800;color:#004369;">90-day plan draft — '+esc(d.client_name||'')+'</div>'
+    +'<div style="font-size:12px;color:#5a6b76;margin-top:2px;max-width:560px;">Generate a recommended plan from the diagnostic + report, edit it, then save. The client opens their plan already filled in with these values and can still edit every field. Only applies until the client submits their plan.</div></div>'
+    +'<button onclick="document.getElementById(\'pp-overlay\').remove()" style="background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#888;">&times;</button></div>'
+    +'<div style="margin:6px 0 12px;"><button class="dbtn dbtn-outline" id="pp-gen" onclick="generatePlanPrefillDraft(event)">⚙ Generate draft from diagnostic</button></div>'
+    +ppField('Key theme','pp-theme',PLAN_PREFILL.key_theme,'central development theme')
+    +ppArea('90-day goal','pp-goal90',s.goal90,'one specific 90-day goal')
+    +ppArea('30-day milestone','pp-goal30',s.goal30,'30-day milestone')
+    +ppArea('Behavior 1 (primary)','pp-beh1',s.behavior1,'specific, observable behavior')
+    +ppArea('Behavior 2 (optional)','pp-beh2',s.behavior2,'optional second behavior')
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap;">'
+    +'<div style="flex:2;min-width:160px;">'+ppField('Metric 1 name','pp-m1n',m1.name,'self-tracked metric')+'</div>'
+    +'<div style="flex:1;min-width:90px;">'+ppField('Baseline','pp-m1b',m1.baseline,'#')+'</div>'
+    +'<div style="flex:1;min-width:90px;">'+ppField('Target','pp-m1t',m1.target,'#')+'</div>'
+    +'</div>'
+    +ppArea('Metric 2 — stakeholder-rated behavior (1-5)','pp-m2q',m2.question,'a behavior stakeholders rate 1-5')
+    +'<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;position:sticky;bottom:-1px;background:#fff;padding:10px 0;border-top:1px solid #eef1f2;">'
+    +'<button class="dbtn dbtn-outline" onclick="document.getElementById(\'pp-overlay\').remove()">Close</button>'
+    +'<button class="dbtn dbtn-primary" id="pp-save" onclick="savePlanPrefill(event)">Save &amp; prefill client</button></div>';
+}
+async function generatePlanPrefillDraft(e){
+  const d=DIAG_SEL; const btn=e?e.currentTarget:null; if(btn){ btn.disabled=true; btn.textContent='Generating… (up to ~30s)'; }
+  // Keep any in-flight edits so a generate doesn't silently wipe them on failure.
+  try{
+    const r=await fetch('/api/diagnostic?action=generate-plan-prefill',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({diagnostic_id:d.id,session:getCoachSessionToken()})});
+    const j=await r.json(); if(!r.ok) throw new Error(j.error||'Generate failed');
+    PLAN_PREFILL=j.prefill||PLAN_PREFILL; renderPlanPrefillEditor();
+  }catch(ex){ alert('Could not generate: '+ex.message); if(btn){ btn.disabled=false; btn.textContent='⚙ Generate draft from diagnostic'; } }
+}
+function ppVal(id){ const el=document.getElementById(id); return el?el.value.trim():''; }
+function ppNum(id){ const v=ppVal(id); if(v==='') return null; const n=Number(v); return isNaN(n)?null:n; }
+async function savePlanPrefill(e){
+  const d=DIAG_SEL; const btn=e?e.currentTarget:null; if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+  const prev=PLAN_PREFILL||{};
+  const obj={
+    key_theme: ppVal('pp-theme'),
+    scores: prev.scores||{},
+    suggested:{
+      goal90: ppVal('pp-goal90'),
+      goal30: ppVal('pp-goal30'),
+      behavior1: ppVal('pp-beh1'),
+      behavior2: ppVal('pp-beh2'),
+      metric1:{ name: ppVal('pp-m1n'), baseline: ppNum('pp-m1b'), target: ppNum('pp-m1t') },
+      metric2:{ question: ppVal('pp-m2q'), targetAvg: (prev.suggested&&prev.suggested.metric2&&prev.suggested.metric2.targetAvg!=null)?prev.suggested.metric2.targetAvg:4.0 },
+      stakeholders: (prev.suggested&&prev.suggested.stakeholders)||[]
+    },
+    source:'coach-approved',
+    generated_at: prev.generated_at || new Date().toISOString(),
+    approved_at: new Date().toISOString()
+  };
+  if(!obj.suggested.goal90){ alert('Add a 90-day goal before saving (the wizard keys off it).'); if(btn){ btn.disabled=false; btn.textContent='Save & prefill client'; } return; }
+  try{
+    await cdUpdate('diagnostics',{ wizard_prefill_data: obj },{ eq:{ id:d.id } });
+    PLAN_PREFILL=obj; alert('Saved. The client will see this plan pre-filled (and editable) when they open their plan.');
+  }catch(ex){ alert('Could not save: '+ex.message); }
+  if(btn){ btn.disabled=false; btn.textContent='Save & prefill client'; }
 }
 
 // Numbers-only scores view. Computes the TP3 averages from responses in the browser —

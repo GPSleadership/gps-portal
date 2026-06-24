@@ -3116,6 +3116,24 @@ function renderDiagReportMode(d, reportDraft) {
   const leaderName = d.leader_name || (currentClient && currentClient.name) || '';
   const finDate    = diagFormatDateClient(d.report_finalized_at);
 
+  // Coach-authored structured report (report_doc) is the canonical on-portal report
+  // when it has authored leader-facing sections. The server (diag-get) has already
+  // stripped non-leader and empty sections, so anything here is meant for the leader.
+  const docHtml = buildReportFromDoc(d.report_doc);
+  if (docHtml) {
+    el.innerHTML = `
+      <div class="dc-report-header">
+        <h2>TP3™ Leadership Diagnostic Report</h2>
+        <div class="dc-rh-meta">${escD(leaderName)}${finDate ? ' · Finalized ' + finDate : ''}</div>
+      </div>
+      <div class="dc-report-body">${docHtml}</div>
+      <div style="text-align:center;padding-bottom:32px;">
+        <p style="font-size:13px;color:#6b7280;">Questions about your results? Reach out to Alex directly.</p>
+        <a href="mailto:alex@gpsleadership.org" class="dc-btn dc-btn-outline" style="text-decoration:none;display:inline-block;">Contact Alex →</a>
+      </div>`;
+    return;
+  }
+
   if (isPdfUpload) {
     el.innerHTML = `
       <div class="dc-report-header">
@@ -3180,6 +3198,25 @@ function buildReportFromJson(r) {
     html += `<h2>90-Day Priorities</h2><ul>${r.priorities_90_day.map(p => `<li>${escD(p)}</li>`).join('')}</ul>`;
   }
   return html || '<p>Report content unavailable.</p>';
+}
+
+// Render the coach-authored structured report (report_doc) into the leader's report
+// view. Sections arrive already filtered to leader-facing, non-empty content by the
+// server (diag-get). Bodies are plain text in Alex's voice — blank lines become
+// paragraph breaks, single newlines become <br>. Returns '' when there is nothing
+// authored, so the caller can fall back to the legacy narrative/PDF renderer.
+function buildReportFromDoc(doc) {
+  if (!doc || !Array.isArray(doc.sections) || !doc.sections.length) return '';
+  const html = doc.sections.map(function (s) {
+    const body = String((s && s.body) || '').trim();
+    if (!body) return '';
+    const paras = body.split(/\n{2,}/).map(function (p) {
+      return '<p>' + escD(p).replace(/\n/g, '<br>') + '</p>';
+    }).join('');
+    const title = (s && s.title) ? '<h2>' + escD(s.title) + '</h2>' : '';
+    return title + paras;
+  }).join('');
+  return html.trim();
 }
 
 async function addRaterFromPortal() {

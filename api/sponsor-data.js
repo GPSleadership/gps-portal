@@ -149,6 +149,14 @@ async function buildMemberReport(m, confidential) {
   const planFocus = await buildPlanFocus(m.client_id, report.scoreboard);
   if (planFocus) report.report_json.focus = planFocus;
 
+  // Engagement-level business outcome the dev plan ladders up to (e.g. "Drive 3-5%
+  // annual revenue growth"). Shown to the sponsor regardless of whether the leader
+  // has built their 90-day plan yet. Not confidential — it's the business target.
+  try {
+    const bo = await sbGet(`/rest/v1/clients?id=eq.${enc(m.client_id)}&select=business_outcome_goal&limit=1`);
+    report.business_outcome_goal = (bo && bo[0] && bo[0].business_outcome_goal) || null;
+  } catch (_) { report.business_outcome_goal = null; }
+
   if (!confidential) {
     // Confidential 360 detail — ONLY assembled for non-private engagements.
     report.selfVsRaters = await buildSelfVsRaters(m.client_id);
