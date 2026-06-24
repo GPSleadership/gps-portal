@@ -254,6 +254,9 @@ export default async function handler(req, res) {
     case 'sign-report-upload':   return handleSignReportUpload(req, res);
     case 'sign-team-report-upload': return handleSignTeamReportUpload(req, res);
     case 'save-results-narrative':  return handleSaveResultsNarrative(req, res);
+    case 'get-report-doc':          return handleGetReportDoc(req, res);
+    case 'save-report-doc':         return handleSaveReportDoc(req, res);
+    case 'generate-report-section': return handleGenerateReportSection(req, res);
     case 'generate-dr-content':  return handleGenerateDRContent(req, res);
     case 'generate-recommendations': return handleGenerateRecommendations(req, res);
     case 'nudge-checkin':        return handleNudgeCheckin(req, res);
@@ -2229,6 +2232,107 @@ async function handleSaveResultsNarrative(req, res) {
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ACTIONS: structured report document (report_doc) — the single source of truth
+// get-report-doc / save-report-doc / generate-report-section
+// report_doc = { version, template, generated_at, source, sections:[{key,title,
+//   audience,page_break_after,body}] }. The client snapshot, the 30/90-day plan
+// prefill, and the sponsor page all draw from this. Coach-session gated; the
+// sponsor never reads it (the Decision Room renders its own curated view).
+// ═══════════════════════════════════════════════════════════════════════════════
+const REPORT_SECTIONS = [
+  { key:'cover',                title:'Cover',                                audience:'client' },
+  { key:'exec_summary',         title:'Executive Summary',                    audience:'client' },
+  { key:'how_to_read',          title:'How to Read This Diagnostic',          audience:'client' },
+  { key:'overview_tp3',         title:'Overview & TP3 Leadership Outcomes',   audience:'client' },
+  { key:'layered_perspectives', title:'Layered Perspectives',                 audience:'client' },
+  { key:'intent_vs_impact',     title:'Intent vs. Impact',                    audience:'client' },
+  { key:'key_strengths',        title:'Key Strengths',                        audience:'client' },
+  { key:'blind_spots',          title:'Blind Spots & Opportunities',          audience:'client' },
+  { key:'org_impact',           title:'Organizational & Team Impact',         audience:'client' },
+  { key:'succession_future',    title:'Succession & Future Self',             audience:'client' },
+  { key:'start_stop_continue',  title:'Start / Stop / Continue',              audience:'client' },
+  { key:'plan_90day',           title:'90-Day Leadership Impact Plan',        audience:'client' },
+  { key:'about_gps',            title:'About GPS Leadership Solutions',       audience:'client' },
+  { key:'appendix_verbatim',    title:'Appendix: Selected Verbatim Feedback', audience:'client' },
+];
+const SECTION_MAX = 24000;
+function reportScaffold() {
+  return { version:1, template:'gps-14day-diagnostic-v1', generated_at:null, source:'scaffold',
+    sections: REPORT_SECTIONS.map(function(s){ return { key:s.key, title:s.title, audience:s.audience, page_break_after:true, body:'' }; }) };
+}
+
+async function handleGetReportDoc(req, res) {
+  const session = (req.body && req.body.session) || (req.query && req.query.session);
+  const diagnostic_id = (req.body && req.body.diagnostic_id) || (req.query && req.query.diagnostic_id);
+  if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
+  if (!diagnostic_id)               return res.status(400).json({ error: 'diagnostic_id required' });
+  try {
+    const r = await sb(`/rest/v1/diagnostics?id=eq.${encodeURIComponent(diagnostic_id)}&select=report_doc`);
+    const rows = await r.json();
+    const doc = (rows && rows[0] && rows[0].report_doc) ? rows[0].report_doc : reportScaffold();
+    return res.status(200).json({ ok:true, report_doc: doc, template: REPORT_SECTIONS });
+  } catch (e) { return res.status(500).json({ error: e.message }); }
+}
+
+async function handleSaveReportDoc(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const { diagnostic_id, report_doc, session } = req.body || {};
+  if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
+  if (!diagnostic_id)               return res.status(400).json({ error: 'diagnostic_id required' });
+  if (!report_doc || !Array.isArray(report_doc.sections)) return res.status(400).json({ error: 'report_doc.sections required' });
+  const clean = (v,max)=> (typeof v==='string' ? v.slice(0,max) : '');
+  const payload = {
+    version: 1,
+    template: clean(report_doc.template, 80) || 'gps-14day-diagnostic-v1',
+    generated_at: report_doc.generated_at || null,
+    source: clean(report_doc.source, 40) || 'coach-authored',
+    updated_at: new Date().toISOString(),
+    sections: report_doc.sections.slice(0, 40).map(function(s){
+      return {
+        key:   clean(s.key, 60),
+        title: clean(s.title, 200),
+        audience: (['client','sponsor','coach','all'].indexOf(s.audience) >= 0 ? s.audience : 'client'),
+        page_break_after: s.page_break_after !== false,
+        body:  clean(s.body, SECTION_MAX),
+      };
+    }),
+  };
+  try {
+    const r = await sb(`/rest/v1/diagnostics?id=eq.${encodeURIComponent(diagnostic_id)}`,
+      'PATCH', { report_doc: payload }, { Prefer:'return=minimal' });
+    if (!r.ok) { const t = await r.text(); return res.status(502).json({ error:`Save failed (${r.status}): ${t.slice(0,200)}` }); }
+    return res.status(200).json({ ok:true, report_doc: payload });
+  } catch (e) { return res.status(500).json({ error: e.message }); }
+}
+
+const REPORT_SECTION_SYSTEM = `You are an executive leadership assessment specialist for GPS Leadership Solutions, drafting ONE section of a 14-Day Executive Leadership Diagnostic report in Alex D. Tremble's voice: direct, candid, calm, plain language, short sentences, no hype, no motivational filler, no emoji. Address the leader as "you". Ground every claim in the rater data provided; never invent numbers. Describe behavior and observable impact, never personality labels. Return ONLY the section body text (plain text with simple line breaks; no markdown headers, no code fences, no preamble).`;
+
+async function handleGenerateReportSection(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const { diagnostic_id, section_key, session } = req.body || {};
+  if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
+  if (!diagnostic_id || !section_key) return res.status(400).json({ error: 'diagnostic_id and section_key required' });
+  const meta = REPORT_SECTIONS.find(function(s){ return s.key === section_key; }) || { key:section_key, title:section_key };
+  try {
+    const dr = await sb(`/rest/v1/diagnostics?id=eq.${encodeURIComponent(diagnostic_id)}&select=client_name,client_role,report_doc`);
+    const diag = (await dr.json())[0] || {};
+    const sr = await sb(`/rest/v1/diagnostic_report_drafts?diagnostic_id=eq.${encodeURIComponent(diagnostic_id)}&select=scores_json&order=generated_at.desc&limit=1`);
+    const scores = ((await sr.json())[0] || {}).scores_json || {};
+    const exemplar = (diag.report_doc && Array.isArray(diag.report_doc.sections))
+      ? ((diag.report_doc.sections.find(function(s){ return s.key === section_key; }) || {}).body || '') : '';
+    const dataSummary = {
+      leader: diag.client_name || 'the leader', role: diag.client_role || '',
+      tp3_index: scores.tp3_index, trust: scores.trust, proactivity: scores.proactivity,
+      productivity: scores.productivity, impact: scores.impact, bench: scores.bench,
+      by_group: scores.by_group || {},
+    };
+    const user = `SECTION TO WRITE: "${meta.title}" (key: ${meta.key}).\n\nLEADER DATA (1-5 scale; use these exact numbers, do not invent):\n${JSON.stringify(dataSummary, null, 1)}\n\n${exemplar ? 'STYLE/STRUCTURE EXEMPLAR for this section (match this voice and shape; rewrite using THIS leader data):\n"""\n' + exemplar.slice(0,4000) + '\n"""\n\n' : ''}Write the "${meta.title}" section now. Plain text only.`;
+    const body = await callClaude(REPORT_SECTION_SYSTEM, user, 1600, { model: CLAUDE_REPORT_MODEL, timeoutMs: 110000, retries: 1 });
+    return res.status(200).json({ ok:true, section_key: meta.key, body: (body || '').slice(0, SECTION_MAX) });
+  } catch (e) { return res.status(500).json({ error: e.message }); }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

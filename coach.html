@@ -7392,6 +7392,7 @@ function renderReportTab() {
       ${done>=1 ? `<button class="dbtn dbtn-outline" onclick="viewCurrentScores()">📊 View current scores (numbers only)</button>` : ''}
       ${d.report_generated_at ? `<button class="dbtn dbtn-outline" onclick="previewResultsPage()">👁 Preview client results page (private)</button>` : ''}
       ${d.report_generated_at ? `<button class="dbtn dbtn-outline" onclick="openResultsNarrativeEditor()">✍️ Edit results-page words</button>` : ''}
+      <button class="dbtn dbtn-outline" onclick="openReportDocEditor()">🧱 Edit structured report (sections)</button>
       <button class="dbtn dbtn-primary" ${canGenerate?'':'disabled'} onclick="generateReport(event)">
         ⚙ Generate Draft Report (Claude)
       </button>
@@ -8026,6 +8027,71 @@ async function saveResultsNarrative(e){
     alert('Could not save: '+ex.message);
     if(btn){ btn.disabled=false; btn.textContent='Save words'; }
   }
+}
+
+// ── Structured report editor (report_doc) — section-by-section authoring + Claude draft ──
+let REPORT_DOC = null;
+async function openReportDocEditor(){
+  const d=DIAG_SEL; if(!d) return;
+  const old=document.getElementById('rd-overlay'); if(old) old.remove();
+  const ov=document.createElement('div'); ov.id='rd-overlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:30px 16px;';
+  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:800px;width:100%;padding:22px 24px;box-shadow:0 10px 40px rgba(0,0,0,.2);"><div id="rd-body" style="font-size:13px;color:#5a6b76;">Loading sections…</div></div>';
+  document.body.appendChild(ov);
+  try{
+    const r=await fetch('/api/diagnostic?action=get-report-doc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({diagnostic_id:d.id,session:getCoachSessionToken()})});
+    const j=await r.json(); if(!r.ok) throw new Error(j.error||'Load failed');
+    REPORT_DOC=j.report_doc||{sections:[]}; renderReportDocEditor();
+  }catch(ex){ const b=document.getElementById('rd-body'); if(b) b.innerHTML='<div style="color:#a3261d;">Could not load: '+esc(ex.message)+'</div>'; }
+}
+function renderReportDocEditor(){
+  const d=DIAG_SEL; const secs=(REPORT_DOC&&REPORT_DOC.sections)||[];
+  const rows=secs.map(function(s,i){
+    return '<div style="border:1px solid #e6ebf0;border-radius:9px;padding:12px 14px;margin:10px 0;">'
+     +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">'
+     +'<div style="font-weight:800;color:#004369;font-size:13.5px;">'+esc(s.title||s.key)+' <span style="font-weight:600;color:#9aa7ad;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;">'+esc(s.audience||'client')+'</span></div>'
+     +'<button class="dbtn dbtn-outline" style="font-size:12px;padding:5px 10px;" onclick="genReportSection('+i+',event)">⚙ Generate draft</button>'
+     +'</div>'
+     +'<textarea id="rd-sec-'+i+'" rows="6" style="width:100%;border:1px solid #d3dde3;border-radius:8px;padding:9px 11px;font-size:12.5px;font-family:inherit;line-height:1.5;resize:vertical;">'+esc(s.body||'')+'</textarea>'
+     +'</div>';
+  }).join('');
+  document.getElementById('rd-body').innerHTML=
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px;">'
+    +'<div><div style="font-family:Montserrat,sans-serif;font-size:17px;font-weight:800;color:#004369;">Structured report — '+esc(d.client_name||'')+'</div>'
+    +'<div style="font-size:12px;color:#5a6b76;margin-top:2px;max-width:560px;">Edit each section, or Generate a draft from the diagnostic data in your voice. The client results snapshot and the 90-day plan prefill draw from this. The sponsor sees their own Decision Room page, not these sections.</div></div>'
+    +'<button onclick="document.getElementById(\'rd-overlay\').remove()" style="background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#888;">&times;</button></div>'
+    +rows
+    +'<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;position:sticky;bottom:-1px;background:#fff;padding:10px 0;border-top:1px solid #eef1f2;">'
+    +'<button class="dbtn dbtn-outline" onclick="document.getElementById(\'rd-overlay\').remove()">Close</button>'
+    +'<button class="dbtn dbtn-primary" id="rd-save" onclick="saveReportDoc(event)">Save all sections</button></div>';
+}
+function rdCollect(){
+  const doc=REPORT_DOC||{sections:[]};
+  (doc.sections||[]).forEach(function(s,i){ const el=document.getElementById('rd-sec-'+i); if(el) s.body=el.value; });
+  doc.source='coach-authored'; doc.generated_at=doc.generated_at||new Date().toISOString();
+  return doc;
+}
+async function genReportSection(i,e){
+  const d=DIAG_SEL; if(!REPORT_DOC||!REPORT_DOC.sections) return; const s=REPORT_DOC.sections[i]; if(!s) return;
+  const cur=document.getElementById('rd-sec-'+i); if(cur) s.body=cur.value;   // keep any edits in flight
+  const btn=e?e.currentTarget:null; if(btn){ btn.disabled=true; btn.textContent='Generating…'; }
+  try{
+    const r=await fetch('/api/diagnostic?action=generate-report-section',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({diagnostic_id:d.id,section_key:s.key,session:getCoachSessionToken()})});
+    const j=await r.json(); if(!r.ok) throw new Error(j.error||'Generate failed');
+    s.body=j.body||''; const ta=document.getElementById('rd-sec-'+i); if(ta) ta.value=s.body;
+  }catch(ex){ alert('Could not generate: '+ex.message); }
+  if(btn){ btn.disabled=false; btn.textContent='⚙ Generate draft'; }
+}
+async function saveReportDoc(e){
+  const d=DIAG_SEL; const btn=e?e.currentTarget:null; if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+  const doc=rdCollect();
+  try{
+    const r=await fetch('/api/diagnostic?action=save-report-doc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({diagnostic_id:d.id,report_doc:doc,session:getCoachSessionToken()})});
+    const j=await r.json(); if(!r.ok) throw new Error(j.error||'Save failed');
+    REPORT_DOC=j.report_doc||doc; alert('Saved.');
+  }catch(ex){ alert('Could not save: '+ex.message); }
+  if(btn){ btn.disabled=false; btn.textContent='Save all sections'; }
 }
 
 // Numbers-only scores view. Computes the TP3 averages from responses in the browser —
