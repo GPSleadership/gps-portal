@@ -74,7 +74,54 @@ function buildAskContext(c) {
   };
 }
 
-function qaBuildSystemPrompt(ctx) {
+// Fetch the leader's most recent weekly check-ins so Ask Alex can ground advice
+// in how their last few weeks actually went (not just their static plan).
+async function fetchRecentCheckins(clientId, limit = 5) {
+  if (!clientId || !SUPABASE_SECRET) return [];
+  const sel = 'week_number,completion_status,completion_barrier,metric_value,metric_2_value,metric_3_value,behavior_1_note,behavior_2_note,notes,attended_coaching,submitted_at';
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/checkins?client_id=eq.${encodeURIComponent(clientId)}&order=submitted_at.desc.nullslast&limit=${limit}&select=${sel}`,
+    { headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}` } });
+  if (!r.ok) return [];
+  const rows = await r.json();
+  return Array.isArray(rows) ? rows : [];
+}
+
+// Turn recent check-ins into a sanitized "recent reality" block for the prompt.
+function buildProgressBlock(ctx, checkins) {
+  const s = sanitizeCtxValue;
+  if (!Array.isArray(checkins) || checkins.length === 0) {
+    return `RECENT PROGRESS: This leader has not logged any weekly check-ins yet, so you do not have data on how their last few weeks went. Do not assume progress or struggle. If it fits naturally, gently encourage them to start logging weekly check-ins so their progress is tracked — never nag.`;
+  }
+  const weekLines = checkins.map(ck => {
+    const wk      = (ck.week_number != null) ? `Week ${ck.week_number}` : 'Recent week';
+    const status  = s(ck.completion_status) || 'no status reported';
+    const barrier = ck.completion_barrier ? ` Barrier: ${s(ck.completion_barrier, 140)}.` : '';
+    const b1      = ck.behavior_1_note ? ` Primary behavior: ${s(ck.behavior_1_note, 180)}.` : '';
+    const b2      = ck.behavior_2_note ? ` Secondary behavior: ${s(ck.behavior_2_note, 180)}.` : '';
+    const coach   = (ck.attended_coaching === false) ? ' Did not attend coaching this week.' : '';
+    return `- ${wk}: ${status}.${barrier}${b1}${b2}${coach}`;
+  }).join('\n');
+
+  const latest = checkins[0] || {};
+  const metricLines = [];
+  const pushMetric = (name, baseline, target, current) => {
+    if (name && current !== null && current !== undefined) {
+      const base = (baseline !== '' && baseline != null) ? `baseline ${baseline}` : 'no baseline';
+      const tgt  = (target  !== '' && target  != null) ? `target ${target}`     : 'no target';
+      metricLines.push(`${name}: most recent reading ${current} (${base} → ${tgt})`);
+    }
+  };
+  pushMetric(ctx.metric_1_name, ctx.metric_1_baseline, ctx.metric_1_target, latest.metric_value);
+  pushMetric(ctx.metric_2_name, ctx.metric_2_baseline, ctx.metric_2_target, latest.metric_2_value);
+  pushMetric(ctx.metric_3_name, ctx.metric_3_baseline, ctx.metric_3_target, latest.metric_3_value);
+
+  return `RECENT PROGRESS (the leader's own weekly check-ins, most recent first):
+${weekLines}${metricLines.length ? '\n\nMETRIC PROGRESS:\n' + metricLines.join('\n') : ''}
+
+USE THIS RECENT REALITY: Ground your advice in how their last few weeks actually went, not just their plan. If they have stalled, missed check-ins, or keep hitting the same barrier, name it directly and supportively, and make your action steps fit where they actually are. If they are making progress, acknowledge it briefly and build on it. Never invent progress data beyond what is shown here.`;
+}
+
+function qaBuildSystemPrompt(ctx, progressBlock) {
   const hasCtx = ctx.full_name || ctx.organization || ctx.focus_pillar;
   const metricLines = [
     ctx.metric_1_name ? `Primary Metric: ${ctx.metric_1_name} | Baseline: ${ctx.metric_1_baseline} → Target: ${ctx.metric_1_target}` : '',
@@ -129,6 +176,8 @@ GOVERNMENT CONTEXT: This client works in state or local government. Anchor advic
   return `You are Claude, the AI assistant inside the GPS Leadership Solutions client portal, answering on behalf of Alex Tremble.
 
 ${ctxBlock}
+
+${progressBlock || ''}
 
 WHO YOU SERVE: Every user has already completed their own 14-Day Executive Leadership Diagnostic with Alex. They are in a 90-Day Executive Reset or ongoing 1:1 coaching. They know the GPS system. Never recommend a diagnostic ON the portal user. You MAY suggest the 14-Day Executive Leadership Diagnostic for a direct report or team member they are concerned about. When you do, be explicit it is for others not them.
 
@@ -316,6 +365,52 @@ Otherwise return:
         return res.status(200).json({ prefill: JSON.parse(jsonStr) });
       } catch {
         return res.status(200).json({ prefill: {} });
+      }
+    }
+
+    // ── Weekly check-in feedback route ──────────────────────────────────────
+    // Called right after a client submits their weekly check-in. Returns a short,
+    // personalized reflection in Alex's voice grounded in their plan + recent trend.
+    // Always best-effort: any failure returns { feedback: null } so the UI degrades
+    // gracefully and the check-in itself is never blocked.
+    if (req.body.action === 'checkin-feedback') {
+      res.setHeader('Access-Control-Allow-Origin', PORTAL_ORIGIN);
+      const fbClient = await getClientByToken(req.body.token);
+      if (!fbClient) return res.status(401).json({ error: 'Invalid or missing token' });
+      if (fbClient.ask_alex_enabled === false) return res.status(200).json({ feedback: null });
+      const fbCtx      = buildAskContext(fbClient);
+      const fbCheckins = await fetchRecentCheckins(fbClient.id).catch(() => []);
+      const fbProgress = buildProgressBlock(fbCtx, fbCheckins);
+      const fbPrompt = `A leader just submitted their weekly check-in in the GPS Leadership portal. Using their plan and their recent check-ins below, write a SHORT personalized reflection in Alex Tremble's voice: direct, candid, calm. No empty praise, no "great job," no buzzwords. Address them as "you."
+
+${fbProgress}
+
+THEIR PLAN:
+Focus pillar: ${fbCtx.focus_pillar || 'n/a'}
+Primary committed behavior: ${fbCtx.behavior_1 || 'n/a'}
+Secondary committed behavior: ${fbCtx.behavior_2 || 'n/a'}
+90-day goal: ${fbCtx.goal_description || fbCtx.goal_90_day_statement || 'n/a'}
+
+Return ONLY valid JSON, no markdown, ASCII only:
+{
+  "win": "One specific thing they actually did well this week, tied to what they reported. One sentence. If they reported very little, name the value of showing up honestly without empty praise.",
+  "watch": "One honest observation: a barrier they named, a pattern across weeks, or a risk worth watching. One sentence, direct but supportive.",
+  "next_step": "ONE concrete action for the coming week, specific and doable, tied to their primary behavior or the barrier. One sentence starting with a verb."
+}`;
+      try {
+        const fr = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify({ model: CLAUDE_FAST, max_tokens: 500, messages: [{ role: 'user', content: fbPrompt }] })
+        });
+        const fd  = await fr.json();
+        const raw = fd?.content?.[0]?.text || '{}';
+        const jsonStr = raw.replace(/^```json?\n?/, '').replace(/\n?```$/, '').trim();
+        let parsed = null;
+        try { parsed = JSON.parse(jsonStr); } catch { parsed = null; }
+        return res.status(200).json({ feedback: parsed });
+      } catch (_) {
+        return res.status(200).json({ feedback: null });
       }
     }
 

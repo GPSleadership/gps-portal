@@ -5439,12 +5439,48 @@ function showCheckinSuccess(weekNumber, metricVal) {
         <a href="https://api.leadconnectorhq.com/widget/bookings/30-minute-coaching-discovery-call" target="_blank" rel="noopener noreferrer"
           style="display:inline-block;margin-top:8px;font-size:13px;font-weight:700;color:var(--navy,#004369);text-decoration:underline;">Plan your next 90 with Alex →</a>
       </div>` : ''}
+      <div id="checkinAiLoading" style="margin-top:16px;font-size:12.5px;color:#8a97a0;text-align:center;">Alex is reading your week…</div>
+      <div id="checkinAiRead" style="text-align:left;display:none;"></div>
       <button onclick="document.getElementById('checkinSuccessOverlay').remove(); window.location.reload();"
         style="margin-top:20px;background:var(--navy,#004369);color:#fff;border:none;border-radius:10px;padding:12px 28px;font-size:15px;font-weight:700;font-family:'Montserrat',sans-serif;cursor:pointer;width:100%;">
         Keep going →
       </button>
     </div>`;
   document.body.appendChild(overlay);
+  loadCheckinAiRead();
+}
+
+// Fetch a short, personalized reflection on the week just submitted and inject it
+// into the success popup. Best-effort: if it fails or is disabled, the popup is
+// unchanged (the loading line just disappears). Reuses the Ask Alex engine.
+async function loadCheckinAiRead() {
+  const loadingEl = () => document.getElementById('checkinAiLoading');
+  try {
+    const resp = await fetch('/api/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'checkin-feedback', token })
+    });
+    const data = await resp.json().catch(() => ({}));
+    const fb   = data && data.feedback;
+    if (loadingEl()) loadingEl().remove();
+    const box = document.getElementById('checkinAiRead');
+    if (!fb || !box) return;
+    const row = (label, text, color) => text
+      ? `<div style="margin:0 0 9px;"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:${color};margin-bottom:2px;">${label}</div><div style="font-size:13px;color:#333;line-height:1.45;">${escHtmlResults(text)}</div></div>`
+      : '';
+    const body = row('What worked', fb.win, '#01949A')
+               + row('Watch this', fb.watch, '#c2410c')
+               + row('This week', fb.next_step, 'var(--navy,#004369)');
+    if (!body) return;
+    box.innerHTML =
+      '<div style="margin-top:16px;border-top:1px solid #eef1f2;padding-top:14px;background:#f9f8f5;border-radius:12px;padding:14px 14px 6px;">'
+      + '<div style="font-size:12px;font-weight:700;color:var(--navy,#004369);margin-bottom:9px;">Alex’s quick read on your week</div>'
+      + body + '</div>';
+    box.style.display = 'block';
+  } catch (_) {
+    if (loadingEl()) loadingEl().remove();
+  }
 }
 
 // ─────────────────────────────────────────────
