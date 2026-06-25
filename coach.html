@@ -6982,12 +6982,13 @@ function renderOverviewTab() {
   const hasSuccession = !!(d.self_three_year_vision);
   const succHtml = hasSuccession ? `
   <div class="card" style="margin-bottom:16px;">
-    <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:10px;">Self-Report — Succession Responses</div>
-    ${succRow('3-Year Vision', d.self_three_year_vision)}
-    ${succRow('Future Self Capabilities', d.self_future_self_capabilities)}
-    ${succRow('Immediate Successor View', d.self_immediate_successor_view)}
-    ${succRow('Successor Candidates', d.self_successor_candidates)}
-    ${succRow('Successor Development Actions', d.self_successor_development_actions)}
+    <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:3px;">Self-Report — Succession Responses</div>
+    <div style="font-size:11px;color:var(--d-mid);margin-bottom:10px;">✏️ Editable — clean up the wording as needed; each box saves automatically when you click out of it.</div>
+    ${succEditRow('3-Year Vision', 'self_three_year_vision', d.self_three_year_vision)}
+    ${succEditRow('Future Self Capabilities', 'self_future_self_capabilities', d.self_future_self_capabilities)}
+    ${succEditRow('Immediate Successor View', 'self_immediate_successor_view', d.self_immediate_successor_view)}
+    ${succEditRow('Successor Candidates', 'self_successor_candidates', d.self_successor_candidates)}
+    ${succEditRow('Successor Development Actions', 'self_successor_development_actions', d.self_successor_development_actions)}
     ${d.custom_g1_question ? `
     <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--d-border);">
       <div style="font-size:11px;font-weight:700;color:var(--d-gold);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">AI-Generated Rater Question (G1)</div>
@@ -7113,6 +7114,23 @@ function succRow(label, val) {
     <div style="font-size:11px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px;">${label}</div>
     <div style="font-size:13px;color:var(--d-dark);line-height:1.55;">${val}</div>
   </div>`;
+}
+
+// Editable version of succRow — the coach can clean up the leader's self-report
+// wording inline; each box auto-saves to the diagnostic when it loses focus.
+const SUCC_EDIT_FIELDS = ['self_three_year_vision','self_future_self_capabilities','self_immediate_successor_view','self_successor_candidates','self_successor_development_actions'];
+function succEditRow(label, field, val) {
+  const safe = (val == null ? '' : String(val)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return `<div style="margin-bottom:10px;">
+    <div style="font-size:11px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px;">${label}</div>
+    <textarea data-succfield="${field}" oninput="this.style.borderColor='#dbe3e6';" onblur="saveSuccField('${field}', this)" style="width:100%;box-sizing:border-box;min-height:52px;font-size:13px;color:var(--d-dark);line-height:1.55;border:1px solid var(--d-border,#dbe3e6);border-radius:6px;padding:8px 10px;resize:vertical;font-family:inherit;">${safe}</textarea>
+  </div>`;
+}
+async function saveSuccField(field, el) {
+  if (SUCC_EDIT_FIELDS.indexOf(field) < 0) return;
+  const val = (el.value || '').trim() || null;
+  try { await updateDiag({ [field]: val }); el.style.borderColor = '#0F6E56'; setTimeout(function(){ el.style.borderColor = 'var(--d-border,#dbe3e6)'; }, 1200); }
+  catch (e) { el.style.borderColor = '#dc2626'; }
 }
 
 // ── Tab: Raters ───────────────────────────────────────────────────────────────
