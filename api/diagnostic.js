@@ -1595,6 +1595,9 @@ Write the complete report now. Every heading above is required — output them a
 async function handleGenerateReport(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured' });
+  // Coach-session gate: this endpoint returns a report built from the leader's
+  // private self-assessment + coaching/interview notes — never expose it anon.
+  if (!verifyCoachSession(req.body?.session)) return res.status(401).json({ error: 'Unauthorized' });
 
   const { diagnostic_id } = req.body || {};
   if (!diagnostic_id) return res.status(400).json({ error: 'diagnostic_id is required' });
@@ -2600,11 +2603,19 @@ async function handleGenerateDRContent(req, res) {
 
     const byClient = {};
     (parsed.members || []).forEach(mm => { if (mm.client_id) byClient[mm.client_id] = mm; });
+    // Preserve coach-edited summary lines: if a member's summaryLine was locked by
+    // the coach (drSaveMemberSummary), keep it instead of overwriting with the AI value.
+    const existRows = await (await sb(`/rest/v1/team_members?team_id=eq.${team_id}&select=id,report_json`)).json();
+    const existById = {};
+    (Array.isArray(existRows) ? existRows : []).forEach(r => { existById[r.id] = (r.report_json && typeof r.report_json === 'object') ? r.report_json : {}; });
     for (const s of scored) {
       const mm = byClient[s.client_id] || {};
+      const prior = existById[s.id] || {};
+      const keepLine = !!(prior.summaryLine_locked && prior.summaryLine);
       const report_json = {
         name:           s.name,
-        summaryLine:    mm.summaryLine || null,
+        summaryLine:    keepLine ? prior.summaryLine : (mm.summaryLine || null),
+        summaryLine_locked: keepLine,
         focus:          mm.focus || null,
         succession:     mm.succession || null,
         readinessLevel: mm.readinessLevel || 'developing',
@@ -3492,6 +3503,9 @@ async function handleImportSurveyData(req, res) {
 async function handleGenerateTeamReport(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
+  // Coach-session gate: this endpoint now feeds coaching + interview notes into the
+  // prompt, so it must never be reachable anonymously.
+  if (!verifyCoachSession(req.body?.session)) return res.status(401).json({ error: 'Unauthorized' });
 
   const { diagnostic_ids, org_name, team_name, prepared_for_name, prepared_for_title, assessment_date_range, sector_type, team_id, roster } = req.body || {};
   const rosterList = Array.isArray(roster) ? roster : [];

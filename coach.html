@@ -8152,7 +8152,7 @@ async function generateReport(e) {
   try {
     const resp = await fetch('/api/diagnostic?action=generate-report', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ diagnostic_id: DIAG_SEL.id }),
+      body: JSON.stringify({ diagnostic_id: DIAG_SEL.id, session: getCoachSessionToken() }),
     });
     if (!resp.ok) throw new Error(await resp.text());
     await updateDiag({ status: 'report_draft', report_generated_at: new Date().toISOString() });
@@ -8541,7 +8541,7 @@ async function generateReportPreview(e) {
   try {
     const resp = await fetch('/api/diagnostic?action=generate-report', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ diagnostic_id: DIAG_SEL.id, preview: true }),
+      body: JSON.stringify({ diagnostic_id: DIAG_SEL.id, preview: true, session: getCoachSessionToken() }),
     });
     if (!resp.ok) throw new Error(await resp.text());
     await updateDiag({ report_preview_at: new Date().toISOString() });
@@ -9578,6 +9578,7 @@ async function generateTeamReport() {
         diagnostic_ids: [...TEAM_RPT_SELECTED],
         org_name, team_name, prepared_for_name, prepared_for_title,
         assessment_date_range, sector_type,
+        session: getCoachSessionToken(),
       }),
     });
     const data = await resp.json();
@@ -9916,6 +9917,7 @@ async function drSaveMemberSummary(memberId, teamId){
     var rj=(rows&&rows[0]&&rows[0].report_json)||{};
     if(typeof rj==='string'){ try{rj=JSON.parse(rj);}catch(_){rj={};} }
     rj.summaryLine=val;
+    rj.summaryLine_locked=!!val; // protect coach-edited line from "Generate from diagnostics"
     await cdUpdate('team_members',{ report_json:rj },{ eq:{id:memberId} });
     el.style.borderColor='#0F6E56'; setTimeout(function(){ el.style.borderColor='#d0d0d0'; },1200);
   }catch(e){ el.style.borderColor='#dc2626'; alert('Save failed: '+e.message); }
@@ -10092,7 +10094,8 @@ async function drGenerateTeamReport(teamId){
     var resp=await fetch('/api/diagnostic?action=generate-team-report',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
       team_id:teamId, diagnostic_ids:diagnostic_ids, roster:roster,
       team_name:team.name||'', org_name:team.client_org_name||'',
-      assessment_date_range:String(new Date().getFullYear()), sector_type:'private'
+      assessment_date_range:String(new Date().getFullYear()), sector_type:'private',
+      session:getCoachSessionToken()
     }) });
     var j=await resp.json().catch(function(){return{};});
     if(!resp.ok) throw new Error(j.error||('HTTP '+resp.status));

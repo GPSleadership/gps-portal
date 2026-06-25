@@ -430,10 +430,15 @@ export default async function handler(req, res) {
       // manual reveal toggle (private/standard) still overrides at any time.
       let autoReveal = false;
       if (link.sponsor_debrief_date) {
-        const dbd = new Date(link.sponsor_debrief_date + 'T00:00:00');
+        // Reveal on the day BEFORE the sponsor's debrief, by CALENDAR DATE in the org's
+        // local timezone (ET). Anchor at noon UTC to dodge DST/rollover; compare YYYY-MM-DD
+        // strings so we never reveal hours early off a UTC-parsed midnight.
+        const dbd = new Date(link.sponsor_debrief_date + 'T12:00:00Z');
         if (!isNaN(dbd.getTime())) {
-          const revealAt = new Date(dbd.getTime() - 24 * 3600 * 1000); // the day before
-          autoReveal = new Date() >= revealAt;
+          dbd.setUTCDate(dbd.getUTCDate() - 1);
+          const revealDate = dbd.toISOString().slice(0, 10);
+          const todayET    = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+          autoReveal = todayET >= revealDate;
         }
       }
       const isProgress = (link.confidentiality_mode === 'progress') && !autoReveal;
