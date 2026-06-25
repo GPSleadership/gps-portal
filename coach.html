@@ -1701,7 +1701,15 @@ async function coachData(payload) {
   });
   let json = {};
   try { json = await res.json(); } catch (_) {}
-  if (!res.ok) throw new Error(json.error || ('Request failed (' + res.status + ')'));
+  if (!res.ok) {
+    const msg = json.error || ('Request failed (' + res.status + ')');
+    // Session expired or secret rotated mid-flight: return to login cleanly instead of
+    // throwing repeatedly (which spammed unhandledrejection errors on a dead dashboard).
+    if (res.status === 401 || isSessionError({ message: msg })) {
+      showLoginScreen('Your session expired. Please log in again.');
+    }
+    throw new Error(msg);
+  }
   return json;
 }
 async function cdSelect(table, opts)            { const r = await coachData(Object.assign({ op: 'select', table }, opts || {})); return r.rows || []; }

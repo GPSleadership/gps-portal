@@ -128,7 +128,10 @@ async function sendEmail(to, subject, html, ctx) {
     const data = await r.json().catch(() => ({}));
     // Best-effort email log (table exists; ignore failures).
     sb('/rest/v1/email_log', 'POST', {
-      sent_at: isoNow(), recipient_email: to, email_type: subject.slice(0, 60),
+      // Stable email_type so the breakage detector groups workshop failures into ONE
+      // finding (was the per-email subject, which fragmented counts). Readable subject
+      // is preserved in its own column.
+      sent_at: isoNow(), recipient_email: to, email_type: 'workshop_email', subject: subject,
       status: r.ok ? 'sent' : 'error', error_details: r.ok ? null : JSON.stringify(data), resend_id: data.id || null,
     }, { Prefer: 'return=minimal' }).catch(() => {});
     return { ok: r.ok, id: data.id, error: r.ok ? null : (data.message || 'send failed') };
