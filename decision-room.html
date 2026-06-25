@@ -659,7 +659,8 @@ function sponsorReadoutCards(m){
   var pa = r.plan_approval || {};
   var planStatus = pa.requires ? (pa.status==='approved'?'Approved':(pa.status==='changes_requested'?'Changes requested':'Awaiting review')) : 'In coaching plan';
   var succ = r.succession || {};
-  var successor = succ.candidates ? String(succ.candidates) : 'None yet';
+  var successorIdentified = !!(succ && succ.successor_identified);
+  var successorLabel = successorIdentified ? 'Yes' : 'Not yet';
   var out = '';
 
   // ── context note ──
@@ -679,7 +680,7 @@ function sponsorReadoutCards(m){
   out += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-top:14px;">'
     + kpi('Overall TP3','<span style="color:'+scol(tp3)+';">'+fnum(tp3)+'</span>',sband(tp3)+' · 1–5 scale')
     + kpi('You vs. their team','<span style="color:'+scol(sup&&sup.tp3)+';">'+fnum(sup&&sup.tp3)+'</span> <span style="font-size:13px;color:'+C.mid+';font-family:inherit;">vs</span> <span style="color:'+scol(dr&&dr.tp3)+';">'+fnum(dr&&dr.tp3)+'</span>','your TP3 vs direct reports')
-    + kpi('Bench & succession','<span style="color:'+scol(sc.bench)+';">'+fnum(sc.bench)+'</span>','Successor: '+esc(successor))
+    + kpi('Bench & succession','<span style="color:'+scol(sc.bench)+';">'+fnum(sc.bench)+'</span>','Successor identified: '+successorLabel)
     + kpi('90-day plan','<span style="font-size:16px;color:'+C.amber+';">'+esc(planStatus)+'</span>','see plan review below')
     + '</div>';
 
@@ -740,9 +741,9 @@ function sponsorReadoutCards(m){
   out += '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Bench &amp; succession</div></div>'
     + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;">'
     + '<div style="background:'+C.sand+';border-radius:10px;padding:12px 14px;"><div style="font-size:12.5px;color:'+C.mid+';">Bench strength (raters)</div><div style="font-size:20px;font-weight:800;margin-top:4px;color:'+scol(sc.bench)+';">'+fnum(sc.bench)+' / 5</div></div>'
-    + '<div style="background:'+C.sand+';border-radius:10px;padding:12px 14px;"><div style="font-size:12.5px;color:'+C.mid+';">Formal successor</div><div style="font-size:20px;font-weight:800;margin-top:4px;color:'+(successor==='None yet'?C.red:C.green)+';">'+esc(successor)+'</div></div>'
+    + '<div style="background:'+C.sand+';border-radius:10px;padding:12px 14px;"><div style="font-size:12.5px;color:'+C.mid+';">Successor identified</div><div style="font-size:20px;font-weight:800;margin-top:4px;color:'+(successorIdentified?C.green:C.red)+';">'+successorLabel+'</div></div>'
     + '</div>'
-    + (succ.vision?'<div style="font-size:13px;color:'+C.mid+';margin-top:12px;">'+esc(first)+'’s stated direction: '+esc(succ.vision)+'</div>':'<div style="font-size:13px;color:'+C.mid+';margin-top:12px;">Note: based on perception data — combine with performance and HR input before promotion decisions.</div>')
+    + '<div style="font-size:13px;color:'+C.mid+';margin-top:12px;">Note: based on perception data — combine with performance and HR input before promotion decisions.</div>'
     + '</div>';
 
   // ── OPTIONS ──

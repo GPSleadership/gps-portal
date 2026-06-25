@@ -1601,7 +1601,7 @@ async function handleGenerateReport(req, res) {
 
   try {
     const diagRes = await sb(
-      `/rest/v1/diagnostics?id=eq.${diagnostic_id}&select=id,client_id,client_name,client_title,client_org,close_date,tier,custom_g1_question,custom_g2_question,custom_g3_question,self_three_year_vision,self_future_self_capabilities,self_immediate_successor_view,self_successor_candidates,self_successor_development_actions,intake_notes,coaching_notes,interview_notes,impact_scale&limit=1`
+      `/rest/v1/diagnostics?id=eq.${diagnostic_id}&select=id,client_id,client_name,client_title,client_org,close_date,tier,custom_g1_question,custom_g2_question,custom_g3_question,self_three_year_vision,self_future_self_capabilities,self_immediate_successor_view,self_successor_candidates,self_successor_development_actions,intake_notes,coaching_notes,interview_notes,interview_notes_json,impact_scale&limit=1`
     );
     const diags = await diagRes.json();
     if (!Array.isArray(diags) || diags.length === 0) return res.status(404).json({ error: 'Diagnostic not found' });
@@ -1680,9 +1680,19 @@ async function handleGenerateReport(req, res) {
       ? `\nNote — question text overrides in effect: ${Object.entries(overrideMap).map(([k,v]) => `${k}: "${v}"`).join('; ')}`
       : '';
 
-    const coachNotesSection = (diag.intake_notes || diag.coaching_notes || diag.interview_notes)
+    // Per-interview write-ups live in interview_notes_json [{name,date,notes}],
+    // NOT the legacy interview_notes text field. Serialize them so the 1:1
+    // interviews actually inform the report.
+    const interviewEntries = Array.isArray(diag.interview_notes_json) ? diag.interview_notes_json : [];
+    const interviewsText = interviewEntries.map((iv, i) => {
+      const nm = (iv && iv.name) ? String(iv.name).trim() : `Interview ${i + 1}`;
+      const dt = (iv && iv.date) ? ` (${iv.date})` : '';
+      const nt = (iv && iv.notes) ? String(iv.notes).trim() : '';
+      return nt ? `--- 1:1 Interview: ${nm}${dt} ---\n${nt}` : '';
+    }).filter(Boolean).join('\n\n');
+    const coachNotesSection = (diag.intake_notes || diag.coaching_notes || diag.interview_notes || interviewsText)
       ? `\n=== COACH NOTES (CONFIDENTIAL — FOR REPORT CONTEXT ONLY) ===
-${diag.intake_notes    ? `Kick-off / Intake Notes:\n${diag.intake_notes}\n`    : ''}${diag.coaching_notes  ? `Coaching Notes:\n${diag.coaching_notes}\n`        : ''}${diag.interview_notes ? `Interview Notes:\n${diag.interview_notes}\n`      : ''}`.trimEnd()
+${diag.intake_notes    ? `Kick-off / Intake Notes:\n${diag.intake_notes}\n`    : ''}${diag.coaching_notes  ? `Coaching Notes:\n${diag.coaching_notes}\n`        : ''}${diag.interview_notes ? `General Interview Notes:\n${diag.interview_notes}\n`      : ''}${interviewsText ? `\n1:1 INTERVIEW WRITE-UPS:\n${interviewsText}\n` : ''}`.trimEnd()
       : '';
 
     const userPrompt = `LEADER: ${diag.client_name}${diag.client_title ? `, ${diag.client_title}` : ''}${diag.client_org ? ` — ${diag.client_org}` : ''}
@@ -3398,6 +3408,24 @@ function buildTeamReportPrompt({ org_name, team_name, prepared_for_name, prepare
     }
   }
 
+  // Confidential qualitative context: coaching notes + 1:1 interview themes. The
+  // sponsor requested these interviews and is entitled to the THEMES — never the
+  // raw notes, verbatim quotes, or anything traceable to a named individual.
+  const qualBlocks = leaders.filter(l => l.qualitative && (l.qualitative.coaching || l.qualitative.interviews));
+  if (qualBlocks.length > 0) {
+    lines.push('', '=== CONFIDENTIAL QUALITATIVE CONTEXT — THEMES ONLY ===');
+    lines.push('The sponsor commissioned these 1:1 interviews and coaching conversations and is entitled to the PATTERNS. STRICT RULES, no exceptions:');
+    lines.push('- Synthesize THEMES and PATTERNS only. Never quote any sentence verbatim or near-verbatim.');
+    lines.push('- Never name, number, or otherwise identify an interviewee or make any observation traceable to one person. Aggregate (e.g., "those interviewed consistently describe…").');
+    lines.push('- Do NOT reproduce or lightly paraphrase the raw notes below; distill them into a few high-level themes that align with the quantitative findings.');
+    lines.push('- If a theme appears in only one interview and would expose who said it, generalize it or leave it out.');
+    for (const l of qualBlocks) {
+      lines.push('', `Leader: ${l.name}`);
+      if (l.qualitative.coaching)   lines.push(`Coaching notes (extract themes only):\n${l.qualitative.coaching}`);
+      if (l.qualitative.interviews) lines.push(`1:1 interview notes (extract themes only; do NOT name or number interviewees in the report):\n${l.qualitative.interviews}`);
+    }
+  }
+
   lines.push('', 'Generate the full team diagnostic report following the section format above.');
   return lines.join('\n');
 }
@@ -3479,7 +3507,7 @@ async function handleGenerateTeamReport(req, res) {
     // ── 1. Fetch all selected diagnostics ──────────────────────────────────────
     const idFilter = diagnostic_ids.map(id => `"${id}"`).join(',');
     const diagsRes = await sb(
-      `/rest/v1/diagnostics?id=in.(${idFilter})&select=id,client_name,client_title,client_org`
+      `/rest/v1/diagnostics?id=in.(${idFilter})&select=id,client_name,client_title,client_org,coaching_notes,interview_notes_json`
     );
     const diags = await diagsRes.json();
     if (!Array.isArray(diags) || diags.length < 1) {
@@ -3551,11 +3579,23 @@ async function handleGenerateTeamReport(req, res) {
         allVerbatims.push({ leader: diag.client_name, code, texts });
       }
 
+      // Qualitative themes context (sponsor commissioned the interviews, so they
+      // get the THEMES). Interviewee names are deliberately omitted here; the
+      // prompt enforces themes-only, no quotes, no attribution.
+      const coachingNotesText = (diag.coaching_notes || '').trim();
+      const ivEntries = Array.isArray(diag.interview_notes_json) ? diag.interview_notes_json : [];
+      const interviewsThemeText = ivEntries.map((iv, i) => {
+        const nt = (iv && iv.notes) ? String(iv.notes).trim() : '';
+        const dt = (iv && iv.date) ? iv.date : 'n/a';
+        return nt ? `Interview ${i + 1} (${dt}):\n${nt}` : '';
+      }).filter(Boolean).join('\n\n');
+
       leaders.push({
         name:  diag.client_name,
         title: diag.client_title || '',
         org:   diag.client_org   || '',
         raterCount: (othersRaters || []).length,
+        qualitative: { coaching: coachingNotesText, interviews: interviewsThemeText },
         selfScores: {
           trust:        selfTrust,
           proactivity:  selfProactivity,

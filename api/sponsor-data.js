@@ -199,11 +199,11 @@ async function buildSponsorReadout(clientId) {
     scores,                                   // tp3_index, trust/proactivity/productivity, impact, bench, by_group{...}
     sponsor_verbatims: sponsorVerbatims,      // supervisor's OWN comments only
     custom_questions: [d.custom_g1_question, d.custom_g2_question].filter(Boolean),
-    // PRIVACY: the leader's self-assessment 3-year vision is personal/confidential
-    // (career, financial, ownership aspirations) and must NOT reach the sponsor.
-    // It stays in the coach/leader context only. Sponsor sees bench + (optionally)
-    // a clean successor signal — never the leader's private direction.
-    succession: { vision: null, candidates: d.self_successor_candidates || null, development: d.self_successor_development_actions || null },
+    // PRIVACY: the leader's self-assessment (3-year vision, named successor, and
+    // development plan) is personal/confidential and must NOT reach the sponsor.
+    // The sponsor sees ONLY a clean boolean signal — whether a successor has been
+    // identified — never the leader's private direction or free-text.
+    succession: { successor_identified: !!(d.self_successor_candidates && String(d.self_successor_candidates).trim()) },
     debrief: { date: d.debrief_date || null, time: d.debrief_time || null },
     plan_approval: {
       requires:    !!d.plan_requires_sponsor_approval,
