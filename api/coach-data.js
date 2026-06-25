@@ -321,6 +321,52 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
+    // ── Contact Your Coach: COACH starts a new message to a client (owner only) ──
+    // Reply-only left no way to reach out first; this finds-or-creates the client's
+    // conversation, posts the coach message (unread by client), badges their portal,
+    // and emails them — same delivery as coach-msg-reply.
+    if (action === 'coach-msg-start') {
+      if (!isOwner) return res.status(403).json({ error: 'Messaging is owner-only for now.' });
+      const targetClient = body.client_id;
+      const text = (body.message_text || '').toString().trim();
+      if (!targetClient || !text) return res.status(400).json({ error: 'client_id and message_text required' });
+      if (text.length > 5000) return res.status(400).json({ error: 'Message is too long (5000 character max).' });
+      const now = new Date().toISOString();
+      const cr = await sb(`/rest/v1/coach_conversations?client_id=eq.${encodeURIComponent(targetClient)}&select=id&order=last_message_at.desc.nullslast&limit=1`);
+      const convs = cr.ok ? await cr.json() : [];
+      let cid = convs[0] && convs[0].id;
+      if (cid) {
+        await sb(`/rest/v1/coach_conversations?id=eq.${encodeURIComponent(cid)}`, 'PATCH', { status: 'waiting_on_client', last_message_at: now, updated_at: now }, { Prefer: 'return=minimal' });
+      } else {
+        const insC = await sb('/rest/v1/coach_conversations', 'POST', { client_id: targetClient, status: 'waiting_on_client', last_message_at: now }, { Prefer: 'return=representation' });
+        if (!insC.ok) { const d = await insC.json().catch(() => ({})); return res.status(500).json({ error: 'Could not start conversation', detail: d }); }
+        const rows = await insC.json(); cid = (Array.isArray(rows) ? rows[0] : rows).id;
+      }
+      const insM = await sb('/rest/v1/coach_messages', 'POST', {
+        conversation_id: cid, client_id: targetClient, sender_role: 'coach',
+        message_type: 'progress_update', message_text: text, read_by_coach: true, read_by_client: false, created_at: now,
+      }, { Prefer: 'return=minimal' });
+      if (!insM.ok) { const d = await insM.json().catch(() => ({})); return res.status(500).json({ error: 'Could not send message', detail: d }); }
+      try {
+        const clr = await sb(`/rest/v1/clients?id=eq.${encodeURIComponent(targetClient)}&select=name,email,token&limit=1`);
+        const cl = (clr.ok ? await clr.json() : [])[0];
+        if (cl && cl.email && RESEND_API_KEY) {
+          const first = (cl.name || 'there').split(' ')[0];
+          const url = `${PORTAL_BASE}/client?token=${encodeURIComponent(cl.token || '')}`;
+          await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              from: `Alex Tremble - GPS Leadership <${RESEND_FROM}>`, to: [cl.email], reply_to: 'alex@gpsleadership.org',
+              subject: 'You have a new message from Alex',
+              html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1a1a1a;"><p>Hi ${first},</p><p>You have a new message from Alex in your GPS coaching portal.</p><p style="margin:22px 0;"><a href="${url}" style="background:#1A3D6E;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:700;">Open your portal</a></p><p style="font-size:13px;color:#666;">Or copy this link: <a href="${url}" style="color:#1A3D6E;">${url}</a></p><p style="font-size:13px;color:#666;">- GPS Leadership Solutions</p></div>`,
+            }),
+          }).catch(() => {});
+        }
+      } catch (_) { /* email is best-effort */ }
+      return res.status(200).json({ ok: true, conversation_id: cid });
+    }
+
     // ── Contact Your Coach: change conversation status (owner only) ───────────
     if (action === 'coach-msg-status') {
       if (!isOwner) return ownerOnly();

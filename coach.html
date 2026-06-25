@@ -1073,6 +1073,7 @@ I'm taking part in a leadership assessment run by GPS Leadership Solutions. Thei
         <div class="toolbar-title">Client Messages</div>
         <div class="toolbar-right">
           <label style="font-size:12px;color:#5a6b76;margin-right:6px;"><input type="checkbox" id="msgNeedsReplyOnly" onchange="renderCoachInbox()" style="vertical-align:middle;" /> Needs reply only</label>
+          <button class="btn-primary" onclick="openNewClientMessage()" style="margin-right:6px;">✉️ New message</button>
           <button class="btn-secondary" onclick="loadCoachInbox()">↻ Refresh</button>
         </div>
       </div>
@@ -4168,6 +4169,45 @@ async function sendCoachReply(convId){
 async function setCoachConvStatus(convId, status){
   try { await coachData({ action:'coach-msg-status', conversation_id: convId, status: status }); await loadCoachInbox(); }
   catch(e){ alert('Could not update status: ' + e.message); }
+}
+// Coach starts a NEW message to a client (reply-only left no way to reach out first).
+function openNewClientMessage(preselectId){
+  var old = document.getElementById('nm-overlay'); if (old) old.remove();
+  var clients = (allClients || []).filter(function(c){ return !c.is_archived; })
+    .sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); });
+  var opts = clients.map(function(c){
+    return '<option value="'+c.id+'"'+(c.id===preselectId?' selected':'')+'>'+esc(c.name||'(no name)')+(c.organization?' — '+esc(c.organization):'')+'</option>';
+  }).join('');
+  var ov = document.createElement('div'); ov.id = 'nm-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:40px 16px;';
+  ov.onclick = function(e){ if (e.target===ov) ov.remove(); };
+  ov.innerHTML = '<div style="background:#fff;border-radius:12px;max-width:560px;width:100%;padding:22px 24px;box-shadow:0 10px 40px rgba(0,0,0,.2);">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><div style="font-family:Montserrat,sans-serif;font-size:17px;font-weight:800;color:#004369;">New message to a client</div>'
+    + '<button onclick="document.getElementById(\'nm-overlay\').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#888;line-height:1;">&times;</button></div>'
+    + '<label style="display:block;font-size:12px;font-weight:700;color:#5a6b76;margin-bottom:4px;">Client</label>'
+    + '<select id="nm-client" style="width:100%;padding:8px 10px;border:1px solid #d3dde3;border-radius:8px;font-size:13px;margin-bottom:12px;box-sizing:border-box;background:#fff;">'+opts+'</select>'
+    + '<label style="display:block;font-size:12px;font-weight:700;color:#5a6b76;margin-bottom:4px;">Message</label>'
+    + '<textarea id="nm-text" rows="5" placeholder="Write your message…" style="width:100%;padding:10px 12px;border:1px solid #d3dde3;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;"></textarea>'
+    + '<div style="font-size:11.5px;color:#8a98a0;margin-top:6px;">They will see it in their portal under Contact Your Coach, and get an email notification.</div>'
+    + '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;"><button class="dbtn dbtn-outline" onclick="document.getElementById(\'nm-overlay\').remove()">Cancel</button>'
+    + '<button class="dbtn dbtn-primary" id="nm-send" onclick="sendNewClientMessage()">Send message</button></div></div>';
+  document.body.appendChild(ov);
+}
+async function sendNewClientMessage(){
+  var cid = (document.getElementById('nm-client')||{}).value;
+  var text = ((document.getElementById('nm-text')||{}).value||'').trim();
+  if (!cid) { alert('Pick a client.'); return; }
+  if (!text) { alert('Write a message.'); return; }
+  var btn = document.getElementById('nm-send'); if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  try {
+    await coachData({ action:'coach-msg-start', client_id: cid, message_text: text });
+    var ov = document.getElementById('nm-overlay'); if (ov) ov.remove();
+    try { toast('Message sent. The client will see it in their portal and get an email.'); } catch(_) { alert('Message sent.'); }
+    if (_currentSection === 'messages') { await loadCoachInbox(); }
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Send message'; }
+    alert('Could not send: ' + e.message);
+  }
 }
 
 function showSection(name, skipHooks) {
