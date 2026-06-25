@@ -140,6 +140,12 @@ export default async function handler(req, res) {
   const lvl = session.lvl || 'owner';
   const isOwner = lvl === 'owner';
   const ownerOnly = () => res.status(403).json({ error: 'Owner-only action. Ask Alex to make this change.' });
+  // Sender identity for message attribution. Legacy sessions (issued before
+  // identity stamping) carry no name → default to Alex/owner.
+  const senderName  = session.nm || 'Alex Tremble';
+  const senderEmail = session.em || 'alex@gpsleadership.org';
+  const senderAid   = (session.aid != null) ? session.aid : null;
+  const senderFirst = String(senderName).split(' ')[0] || 'GPS Leadership';
   // Global IP / templates / automation: assistants may READ but never WRITE.
   const OWNER_ONLY_WRITE = new Set(['email_templates', 'coach_settings', 'diagnostic_question_overrides', 'workshop_questions']);
   // Permanent deletion of core records: owner only (assistants run ops, not nukes).
@@ -249,7 +255,7 @@ export default async function handler(req, res) {
       const clients = clr.ok ? await clr.json() : [];
       const cmap = {}; clients.forEach(c => { cmap[c.id] = c; });
       const convIds = convs.map(c => c.id);
-      const mr = await sb(`/rest/v1/coach_messages?conversation_id=in.(${convIds.map(encodeURIComponent).join(',')})&select=conversation_id,sender_role,read_by_coach,message_text,created_at&order=created_at.asc`);
+      const mr = await sb(`/rest/v1/coach_messages?conversation_id=in.(${convIds.map(encodeURIComponent).join(',')})&select=conversation_id,sender_role,sender_name,read_by_coach,message_text,created_at&order=created_at.asc`);
       const msgs = mr.ok ? await mr.json() : [];
       const byConv = {}; msgs.forEach(m => { (byConv[m.conversation_id] = byConv[m.conversation_id] || []).push(m); });
       const conversations = convs.map(c => {
@@ -264,6 +270,7 @@ export default async function handler(req, res) {
           organization: cl.organization || '', status: c.status, last_message_at: c.last_message_at,
           last_preview: last ? String(last.message_text || '').slice(0, 140) : '',
           last_sender: last ? last.sender_role : null,
+          last_sender_name: (last && last.sender_role === 'coach') ? (last.sender_name || 'Alex') : null,
           unread, needs_reply: needsReply, overdue: needsReply && overdueDays >= 1, overdue_days: overdueDays,
         };
       });
@@ -274,7 +281,7 @@ export default async function handler(req, res) {
     if (action === 'coach-msg-thread') {
       const cid = body.conversation_id;
       if (!cid) return res.status(400).json({ error: 'conversation_id required' });
-      const mr = await sb(`/rest/v1/coach_messages?conversation_id=eq.${encodeURIComponent(cid)}&select=id,sender_role,message_type,message_text,created_at,read_by_coach,read_by_client&order=created_at.asc`);
+      const mr = await sb(`/rest/v1/coach_messages?conversation_id=eq.${encodeURIComponent(cid)}&select=id,sender_role,sender_name,message_type,message_text,created_at,read_by_coach,read_by_client&order=created_at.asc`);
       const messages = mr.ok ? await mr.json() : [];
       await sb(`/rest/v1/coach_messages?conversation_id=eq.${encodeURIComponent(cid)}&sender_role=eq.client&read_by_coach=eq.false`, 'PATCH', { read_by_coach: true }, { Prefer: 'return=minimal' }).catch(() => {});
       return res.status(200).json({ ok: true, messages });
@@ -282,7 +289,8 @@ export default async function handler(req, res) {
 
     // ── Contact Your Coach: coach reply (owner only) ──────────────────────────
     if (action === 'coach-msg-reply') {
-      if (!isOwner) return res.status(403).json({ error: 'Replying is owner-only for now.' });
+      // Any authenticated coach (owner or assistant) may reply; the message is
+      // attributed to whoever is signed in.
       const cid  = body.conversation_id;
       const text = (body.message_text || '').toString().trim();
       if (!cid || !text) return res.status(400).json({ error: 'conversation_id and message_text required' });
@@ -293,6 +301,7 @@ export default async function handler(req, res) {
       const now = new Date().toISOString();
       const ins = await sb('/rest/v1/coach_messages', 'POST', {
         conversation_id: cid, client_id: conv.client_id, sender_role: 'coach',
+        sender_name: senderName, sender_admin_id: senderAid,
         message_type: 'progress_update', message_text: text, read_by_coach: true, read_by_client: false, created_at: now,
       }, { Prefer: 'return=minimal' });
       if (!ins.ok) { const d = await ins.json().catch(() => ({})); return res.status(500).json({ error: 'Could not send reply', detail: d }); }
@@ -309,11 +318,11 @@ export default async function handler(req, res) {
             method: 'POST',
             headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              from: `Alex Tremble - GPS Leadership <${RESEND_FROM}>`,
+              from: `${senderName} - GPS Leadership <${RESEND_FROM}>`,
               to: [cl.email],
-              reply_to: 'alex@gpsleadership.org',
-              subject: 'You have a new message from Alex',
-              html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1a1a1a;"><p>Hi ${first},</p><p>You have a new message from Alex in your GPS coaching portal.</p><p style="margin:22px 0;"><a href="${url}" style="background:#1A3D6E;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:700;">Open your portal</a></p><p style="font-size:13px;color:#666;">Or copy this link: <a href="${url}" style="color:#1A3D6E;">${url}</a></p><p style="font-size:13px;color:#666;">- GPS Leadership Solutions</p></div>`,
+              reply_to: senderEmail,
+              subject: `You have a new message from ${senderFirst}`,
+              html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1a1a1a;"><p>Hi ${first},</p><p>You have a new message from ${senderFirst} in your GPS coaching portal.</p><p style="margin:22px 0;"><a href="${url}" style="background:#1A3D6E;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:700;">Open your portal</a></p><p style="font-size:13px;color:#666;">Or copy this link: <a href="${url}" style="color:#1A3D6E;">${url}</a></p><p style="font-size:13px;color:#666;">- GPS Leadership Solutions</p></div>`,
             }),
           }).catch(() => {});
         }
@@ -326,7 +335,7 @@ export default async function handler(req, res) {
     // conversation, posts the coach message (unread by client), badges their portal,
     // and emails them — same delivery as coach-msg-reply.
     if (action === 'coach-msg-start') {
-      if (!isOwner) return res.status(403).json({ error: 'Messaging is owner-only for now.' });
+      // Owner or assistant may start a message; attributed to whoever is signed in.
       const targetClient = body.client_id;
       const text = (body.message_text || '').toString().trim();
       if (!targetClient || !text) return res.status(400).json({ error: 'client_id and message_text required' });
@@ -351,6 +360,7 @@ export default async function handler(req, res) {
       }
       const insM = await sb('/rest/v1/coach_messages', 'POST', {
         conversation_id: cid, client_id: targetClient, sender_role: 'coach',
+        sender_name: senderName, sender_admin_id: senderAid,
         message_type: 'progress_update', message_text: text, read_by_coach: true, read_by_client: false, created_at: now,
       }, { Prefer: 'return=minimal' });
       if (!insM.ok) { const d = await insM.json().catch(() => ({})); return res.status(500).json({ error: 'Could not send message', detail: d }); }
@@ -364,9 +374,9 @@ export default async function handler(req, res) {
             method: 'POST',
             headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              from: `Alex Tremble - GPS Leadership <${RESEND_FROM}>`, to: [cl.email], reply_to: 'alex@gpsleadership.org',
-              subject: 'You have a new message from Alex',
-              html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1a1a1a;"><p>Hi ${first},</p><p>You have a new message from Alex in your GPS coaching portal.</p><p style="margin:22px 0;"><a href="${url}" style="background:#1A3D6E;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:700;">Open your portal</a></p><p style="font-size:13px;color:#666;">Or copy this link: <a href="${url}" style="color:#1A3D6E;">${url}</a></p><p style="font-size:13px;color:#666;">- GPS Leadership Solutions</p></div>`,
+              from: `${senderName} - GPS Leadership <${RESEND_FROM}>`, to: [cl.email], reply_to: senderEmail,
+              subject: `You have a new message from ${senderFirst}`,
+              html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1a1a1a;"><p>Hi ${first},</p><p>You have a new message from ${senderFirst} in your GPS coaching portal.</p><p style="margin:22px 0;"><a href="${url}" style="background:#1A3D6E;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:700;">Open your portal</a></p><p style="font-size:13px;color:#666;">Or copy this link: <a href="${url}" style="color:#1A3D6E;">${url}</a></p><p style="font-size:13px;color:#666;">- GPS Leadership Solutions</p></div>`,
             }),
           }).catch(() => {});
         }

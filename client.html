@@ -2709,7 +2709,7 @@ function renderCoachThread(messages) {
   }
   thread.innerHTML = messages.map(function (m) {
     const mine = m.sender_role === 'client';
-    const who  = mine ? 'You' : 'Alex';
+    const who  = mine ? 'You' : (m.sender_name || 'Alex');
     const body = escHtmlResults(m.message_text || '').replace(/\n/g, '<br>');
     return '<div class="cmsg ' + (mine ? 'cmsg-client' : 'cmsg-coach') + '">' + body + '</div>'
       + '<div class="cmsg-meta" style="text-align:' + (mine ? 'right' : 'left') + ';">' + who + ' · ' + coachMsgTypeLabel(m.message_type) + ' · ' + coachFmtTime(m.created_at) + '</div>';

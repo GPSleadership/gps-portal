@@ -148,15 +148,28 @@ async function coachLogin(body, res) {
     if (Array.isArray(rows2) && rows2[0]) stored = rows2[0].value;
   }
 
+  // Identity defaults: the shared coach password = the owner (Alex).
+  let identity = { lvl: 'owner', nm: 'Alex Tremble', em: 'alex@gpsleadership.org', aid: null };
   let ok = verifyPassword(password, stored);
   if (!ok) {
-    const ar = await sbSecret('/rest/v1/admin_accounts?is_active=eq.true&select=password');
+    // Named admin accounts (e.g. the EA). Capture WHICH account matched so the
+    // session carries real role + identity for RBAC and message attribution.
+    const ar = await sbSecret('/rest/v1/admin_accounts?is_active=eq.true&select=id,name,email,role,password');
     const admins = ar.ok ? await ar.json() : [];
-    ok = Array.isArray(admins) && admins.some(a => verifyPassword(password, a.password));
+    const match = Array.isArray(admins) ? admins.find(a => verifyPassword(password, a.password)) : null;
+    if (match) {
+      ok = true;
+      identity = {
+        lvl: match.role === 'owner' ? 'owner' : 'assistant',
+        nm:  match.name  || 'GPS Leadership',
+        em:  match.email || 'team@gpsleadership.org',
+        aid: match.id,
+      };
+    }
   }
   if (!ok) return res.status(401).json({ error: 'Incorrect password' });
 
-  const session = signSession({ role: 'coach', exp: Date.now() + COACH_SESSION_TTL_MS });
+  const session = signSession({ role: 'coach', lvl: identity.lvl, nm: identity.nm, em: identity.em, aid: identity.aid, exp: Date.now() + COACH_SESSION_TTL_MS });
   return res.status(200).json({ ok: true, session, expires_in_ms: COACH_SESSION_TTL_MS });
 }
 async function coachSession(body, res) {

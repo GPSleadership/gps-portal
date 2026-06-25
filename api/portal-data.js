@@ -206,7 +206,7 @@ export default async function handler(req, res) {
         const convs = cr.ok ? await cr.json() : [];
         const conv = convs[0] || null;
         if (!conv) return res.status(200).json({ ok: true, eligible: true, conversation: null, messages: [] });
-        const mr = await sb(`/rest/v1/coach_messages?conversation_id=eq.${conv.id}&select=id,sender_role,message_type,message_text,created_at,read_by_client&order=created_at.asc`);
+        const mr = await sb(`/rest/v1/coach_messages?conversation_id=eq.${conv.id}&select=id,sender_role,sender_name,message_type,message_text,created_at,read_by_client&order=created_at.asc`);
         const messages = mr.ok ? await mr.json() : [];
         // Mark coach replies as read by the client now that they're being viewed.
         await sb(`/rest/v1/coach_messages?conversation_id=eq.${conv.id}&sender_role=eq.coach&read_by_client=eq.false`, 'PATCH', { read_by_client: true }, { Prefer: 'return=minimal' }).catch(() => {});
