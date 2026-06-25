@@ -6089,23 +6089,42 @@ function renderResultsTab(surveyResponses, checkins, client, surveyTokens, selfC
 
   // ── Consistency summary: showing up is the leading indicator ────────────
   let consistencyHTML = '';
-  if (checkins && checkins.length > 0) {
+  // Show follow-through whenever a plan is active — INCLUDING when there are zero
+  // check-ins. The leader who is behind is exactly who needs to see the number.
+  if (client.plan_submitted_at) {
     let expectedWeeks = 0;
     if (client.plan_start_date) {
       const days = Math.floor((Date.now() - new Date(client.plan_start_date).getTime()) / 86400000);
       expectedWeeks = Math.min(13, Math.max(1, Math.floor(days / 7) + 1));
     }
-    const maxWk = Math.max.apply(null, checkins.map(c => c.week_number || 0));
+    const ci = checkins || [];
+    const maxWk = ci.length ? Math.max.apply(null, ci.map(c => c.week_number || 0)) : 0;
     if (!expectedWeeks || !isFinite(expectedWeeks)) expectedWeeks = maxWk;
-    expectedWeeks = Math.max(expectedWeeks, maxWk);
-    const submitted = checkins.length;
-    const ciPct = expectedWeeks ? Math.round((submitted / expectedWeeks) * 100) : null;
-    const coachAns = checkins.filter(c => c.attended_coaching === true || c.attended_coaching === false);
-    const coachYes = checkins.filter(c => c.attended_coaching === true).length;
-    const coachPct = coachAns.length ? Math.round((coachYes / coachAns.length) * 100) : null;
-    const ftAns = checkins.filter(c => c.completion_status);
-    const ftYes = checkins.filter(c => c.completion_status === 'Yes').length;
+    expectedWeeks = Math.max(expectedWeeks, maxWk, 1);
+    const submitted = ci.length;
+    const ciPct = Math.round((submitted / expectedWeeks) * 100);
+    const coachYes = ci.filter(c => c.attended_coaching === true).length;
+    const coachPct = expectedWeeks ? Math.round((coachYes / expectedWeeks) * 100) : 0;
+    const ftAns = ci.filter(c => c.completion_status);
+    const ftYes = ci.filter(c => c.completion_status === 'Yes').length;
     const ftPct = ftAns.length ? Math.round((ftYes / ftAns.length) * 100) : null;
+
+    // Honest, non-shaming nudge that scales with how far behind they are.
+    let nudge, nudgeColor;
+    if (submitted === 0) {
+      nudge = 'You have not logged a weekly check-in yet. This is the one habit the whole plan runs on — start this week.';
+      nudgeColor = 'var(--red)';
+    } else if (ciPct < 50) {
+      nudge = 'You have logged ' + submitted + ' of ' + expectedWeeks + ' weeks. Getting back to a weekly rhythm is the highest-leverage move you can make right now.';
+      nudgeColor = '#C47A30';
+    } else if (ciPct < 80) {
+      nudge = 'Solid so far — a little more consistency and the gains start to compound.';
+      nudgeColor = '#C47A30';
+    } else {
+      nudge = 'Strong consistency. This is exactly how the progress sticks.';
+      nudgeColor = '#2e7d32';
+    }
+
     const stat = (label, val, sub) => `
       <div style="flex:1;min-width:140px;background:rgba(0,67,105,0.04);border-radius:8px;padding:14px 16px;text-align:center;">
         <div style="font-size:24px;font-weight:800;color:var(--navy);">${val}</div>
@@ -6114,13 +6133,14 @@ function renderResultsTab(surveyResponses, checkins, client, surveyTokens, selfC
       </div>`;
     consistencyHTML = `
       <div class="card" style="margin-bottom:20px;">
-        <div class="card-title">Consistency</div>
+        <div class="card-title">Your Follow-Through</div>
         <div class="card-subtitle">Showing up is the leading indicator. Your track record so far.</div>
         <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:14px;">
-          ${stat('Check-ins submitted', `${submitted} of ${expectedWeeks}`, ciPct != null ? ciPct + '% of weeks' : '')}
-          ${coachPct != null ? stat('Coaching attended', coachPct + '%', `${coachYes} of ${coachAns.length} sessions`) : ''}
+          ${stat('Check-ins submitted', `${submitted} of ${expectedWeeks}`, ciPct + '% of weeks')}
+          ${client.coaching_sessions_enabled ? stat('Coaching attended', `${coachYes} of ${expectedWeeks}`, coachPct + '% of sessions') : ''}
           ${ftPct != null ? stat('Follow-through', ftPct + '%', `${ftYes} of ${ftAns.length} weeks &ldquo;Yes&rdquo;`) : ''}
         </div>
+        <div style="margin-top:14px;padding:10px 14px;border-left:3px solid ${nudgeColor};background:rgba(0,0,0,0.02);font-size:13px;color:var(--gray-700);line-height:1.5;">${nudge}</div>
       </div>`;
   }
 
