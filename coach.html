@@ -744,12 +744,12 @@
   </div>
   <div class="profile-body">
     <div class="profile-sidenav">
-      <div class="profile-nav-item active" id="profNav-overview"     onclick="switchProfileNav('overview')">📊 Overview</div>
-      <div class="profile-nav-item"        id="profNav-plan"         onclick="switchProfileNav('plan')">🎯 Plan</div>
-      <div class="profile-nav-item"        id="profNav-checkins"     onclick="switchProfileNav('checkins')">✅ Check-ins</div>
-      <div class="profile-nav-item"        id="profNav-surveys"      onclick="switchProfileNav('surveys')">👥 Surveys &amp; Stakeholders</div>
-      <div class="profile-nav-item"        id="profNav-diagnostics"  onclick="switchProfileNav('diagnostics')">🔬 Diagnostics</div>
-      <div class="profile-nav-item"        id="profNav-settings"     onclick="switchProfileNav('settings')">⚙️ Settings</div>
+      <div class="profile-nav-item active" id="profNav-summary"     onclick="switchProfileNav('summary')">📊 Summary</div>
+      <div class="profile-nav-item"        id="profNav-diagnostics"  onclick="switchProfileNav('diagnostics')">🔬 Diagnostics &amp; Reports</div>
+      <div class="profile-nav-item"        id="profNav-plan"         onclick="switchProfileNav('plan')">🎯 Coaching Plan</div>
+      <div class="profile-nav-item"        id="profNav-progress"     onclick="switchProfileNav('progress')">✅ Progress &amp; Check-ins</div>
+      <div class="profile-nav-item"        id="profNav-surveys"      onclick="switchProfileNav('surveys')">👥 Stakeholders &amp; Surveys</div>
+      <div class="profile-nav-item"        id="profNav-admin"        onclick="switchProfileNav('admin')">⚙️ Admin &amp; Links</div>
     </div>
     <div class="profile-content" id="profileContent">
     </div>
@@ -2279,7 +2279,7 @@ function openClientProfile(clientId) {
   document.getElementById('clientProfileOverlay').style.display = 'flex';
   document.getElementById('clientProfileOverlay').style.flexDirection = 'column';
   document.body.style.overflow = 'hidden';
-  switchProfileNav('overview');
+  switchProfileNav('summary');
 }
 
 function closeClientProfile() {
@@ -2413,82 +2413,120 @@ function renderProfileSection(section, client, checkins) {
       </div>
     </div>`;
 
-  if (section === 'overview') {
-    const isPreProgram = !client.plan_submitted_at && checkins.length === 0;
-    if (isPreProgram) {
-      const enrolled = client.in_coaching_program || client.coaching_sessions_enabled;
-      el.innerHTML = `
-        <div class="profile-section-title">Overview</div>
-        <div style="background:white;border-radius:8px;padding:28px 24px;box-shadow:0 1px 4px rgba(0,0,0,0.06);text-align:center;margin-bottom:18px;">
-          <div style="width:52px;height:52px;border-radius:50%;background:var(--light-sand);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:24px;">👤</div>
-          <div style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:6px;">${esc(client.name || 'This client')} hasn't started their program yet.</div>
-          <div style="font-size:13px;color:var(--gray-600);margin-bottom:20px;max-width:440px;margin-left:auto;margin-right:auto;">
-            ${enrolled
-              ? 'They\'re enrolled as a coaching client. Send them their portal link to begin.'
-              : 'Currently a sponsor / workshop participant only. Enroll them or start a diagnostic to activate their profile.'}
-          </div>
-          <div style="display:flex;justify-content:center;gap:10px;flex-wrap:wrap;">
-            <button onclick="navigator.clipboard.writeText('${portalURL}').then(function(){toast('Portal link copied.')})"
-              style="padding:8px 20px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">
-              Copy Portal Link
-            </button>
-            <button onclick="sendWelcomeEmail('${client.id}')"
-              style="padding:8px 20px;background:var(--navy);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">
-              Send Welcome Email
-            </button>
-            <button onclick="switchProfileNav('diagnostics')"
-              style="padding:8px 20px;background:none;border:2px solid var(--navy);color:var(--navy);border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">
-              Start Diagnostic →
-            </button>
-          </div>
-          ${!enrolled ? `<div style="margin-top:14px;"><button onclick="setEnrolledStatus('${client.id}', true)" id="enrollQuickBtn-${client.id}"
-            style="padding:7px 18px;background:none;border:1px solid var(--teal);color:var(--teal);border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">
-            + Enroll as Coaching Client
-          </button></div>` : ''}
+  if (section === 'summary') {
+    // ── Shared summary derivations ──────────────────────────────────────────
+    const initials = (client.name||'?').split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase();
+    const pillarKey = (client.tp3_pillar || '').toLowerCase();
+    const linkedDiags = (typeof ALL_DIAGS !== 'undefined' ? ALL_DIAGS : []).filter(d => d.client_id === client.id);
+    const latestDiag = linkedDiags.length ? linkedDiags[linkedDiags.length - 1] : null;
+    const isCoaching = client.in_coaching_program || client.coaching_sessions_enabled;
+    const isWorkshop = client.is_workshop_participant;
+    const engLabel = isCoaching ? 'Coaching client'
+      : (linkedDiags.length && !isCoaching) ? 'Diagnostic only'
+      : isWorkshop ? 'Workshop only'
+      : 'Diagnostic only';
+    const engBg = isCoaching ? 'var(--teal)' : (engLabel === 'Workshop only' ? '#6b21a8' : '#1565c0');
+    const askAlex30 = client.ask_alex_total_questions || 0;
+
+    // Header card
+    const headerCard = `
+      <div style="background:white;border-radius:8px;padding:20px 22px;box-shadow:0 1px 4px rgba(0,0,0,0.06);margin-bottom:18px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+        <div style="width:54px;height:54px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Montserrat',sans-serif;font-size:20px;font-weight:800;flex-shrink:0;">${esc(initials)}</div>
+        <div style="flex:1;min-width:200px;">
+          <div style="font-family:'Montserrat',sans-serif;font-size:18px;font-weight:800;color:var(--navy);">${esc(client.name || 'Client')}</div>
+          <div style="font-size:13px;color:var(--gray-600);margin-top:2px;">${[client.organization, client.title].filter(Boolean).map(esc).join(' · ') || '—'}</div>
+          ${client.tp3_pillar ? `<div style="margin-top:6px;"><span class="pillar-badge pillar-${pillarKey}">${esc(client.tp3_pillar)}</span> <span style="font-size:11px;color:var(--gray-600);">focus pillar</span></div>` : ''}
         </div>
-      `;
-    } else {
-      el.innerHTML = `
-        <div class="profile-section-title">Overview</div>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;">
-          <div style="background:white;border-radius:8px;padding:16px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
-            <div style="font-family:'Montserrat',sans-serif;font-size:28px;font-weight:800;color:var(--navy);">${currentWeek ? 'Wk ' + currentWeek : '—'}</div>
-            <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);margin-top:4px;">Current Week</div>
-          </div>
-          <div style="background:white;border-radius:8px;padding:16px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
-            <div style="font-family:'Montserrat',sans-serif;font-size:28px;font-weight:800;color:var(--navy);">${completionRate}</div>
-            <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);margin-top:4px;">Follow-Through</div>
-          </div>
-          <div style="background:white;border-radius:8px;padding:16px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
-            <div style="font-family:'Montserrat',sans-serif;font-size:28px;font-weight:800;color:var(--navy);">${client.ask_alex_total_questions || 0}</div>
-            <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);margin-top:4px;">Ask Alex Q's</div>
-          </div>
-          <div style="background:white;border-radius:8px;padding:16px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
-            <div style="font-family:'Montserrat',sans-serif;font-size:14px;font-weight:700;color:var(--navy);">${lastDate}</div>
-            <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);margin-top:4px;">Last Check-In</div>
-          </div>
+        <span style="background:${engBg};color:#fff;font-size:11px;font-weight:700;padding:5px 12px;border-radius:14px;white-space:nowrap;">${engLabel}</span>
+      </div>`;
+
+    // Current sprint snapshot (4 stat tiles)
+    const snapshotCard = `
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px;">
+        <div style="background:white;border-radius:8px;padding:16px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+          <div style="font-family:'Montserrat',sans-serif;font-size:22px;font-weight:800;color:var(--navy);">${currentWeek ? 'Week ' + currentWeek : '—'}</div>
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);margin-top:4px;">${currentWeek ? 'of 12' : 'Not started'}</div>
         </div>
-        <div style="background:white;border-radius:8px;padding:18px 20px;margin-bottom:18px;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);margin-bottom:10px;">13-Week Submission Track</div>
-          <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
-            ${dotRow}
-            <span style="font-size:11px;color:var(--gray-600);margin-left:8px;">${checkins.length}/13 submitted</span>
-          </div>
+        <div style="background:white;border-radius:8px;padding:16px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+          <div style="font-family:'Montserrat',sans-serif;font-size:22px;font-weight:800;color:var(--navy);">${completionRate}</div>
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);margin-top:4px;">Follow-Through</div>
         </div>
-        ${client.plan_submitted_at ? `
-        <div style="background:white;border-radius:8px;padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);margin-bottom:10px;">Metric Progress</div>
-          <div class="metric-bar-wrap">
-            <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:4px;">${client.metric_name || 'Metric'}</div>
-            <div class="metric-bar-track"><div class="metric-bar-fill" style="width:${progress}%"></div></div>
-            <div class="metric-nums"><span>Baseline: ${baseline}</span><span style="font-weight:700;color:var(--navy);">Current: ${current} &nbsp;(${Math.round(progress)}%)</span><span>Target: ${target}</span></div>
-          </div>
-        </div>` : ''}
-      `;
-    }
+        <div style="background:white;border-radius:8px;padding:16px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+          <div style="font-family:'Montserrat',sans-serif;font-size:14px;font-weight:700;color:var(--navy);">${lastDate}</div>
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);margin-top:4px;">Last Check-In</div>
+        </div>
+        <div style="background:white;border-radius:8px;padding:16px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+          <div style="font-family:'Montserrat',sans-serif;font-size:22px;font-weight:800;color:var(--navy);">${askAlex30}</div>
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);margin-top:4px;">Ask Alex Q's (30d)</div>
+        </div>
+      </div>`;
+
+    // Plan headline
+    const planHeadline = client.plan_submitted_at ? `
+      <div style="background:white;border-radius:8px;padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.06);margin-bottom:18px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);">90-Day Plan</div>
+          <button onclick="switchProfileNav('plan')" style="font-size:12px;padding:5px 14px;border:1px solid var(--teal);color:var(--teal);background:none;border-radius:6px;cursor:pointer;font-weight:700;">Open full plan →</button>
+        </div>
+        <div style="font-size:14px;font-weight:700;color:var(--navy);line-height:1.4;">${esc(client.goal_statement || '—')}</div>
+        <div style="font-size:12px;color:var(--gray-600);margin-top:8px;line-height:1.5;">
+          <strong>Behavior 1:</strong> ${esc(client.behavior_1 || client.start_behavior || '—')}
+          ${client.behavior_2 ? `<br/><strong>Behavior 2:</strong> ${esc(client.behavior_2)}` : ''}
+        </div>
+      </div>` : `
+      <div style="background:white;border-radius:8px;padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.06);margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <div style="font-size:13px;color:var(--gray-600);">No 90-day plan yet · Start after diagnostic</div>
+        <button onclick="switchProfileNav('diagnostics')" style="font-size:12px;padding:6px 14px;border:1px solid var(--navy);color:var(--navy);background:none;border-radius:6px;cursor:pointer;font-weight:700;">Go to Diagnostics →</button>
+      </div>`;
+
+    // Metric progress mini-card
+    const metricCard = client.plan_submitted_at ? `
+      <div style="background:white;border-radius:8px;padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.06);margin-bottom:18px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);margin-bottom:10px;">Metric Progress</div>
+        <div class="metric-bar-wrap">
+          <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:4px;">${esc(client.metric_name || 'Metric')}</div>
+          <div class="metric-bar-track"><div class="metric-bar-fill" style="width:${progress}%"></div></div>
+          <div class="metric-nums"><span>Baseline: ${baseline}</span><span style="font-weight:700;color:var(--navy);">Current: ${current} &nbsp;(${Math.round(progress)}%)</span><span>Target: ${target}</span></div>
+        </div>
+      </div>` : '';
+
+    // Stakeholder pulse mini-card (lightweight container; populated by loader)
+    const stakeholderPulse = `
+      <div style="background:white;border-radius:8px;padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.06);margin-bottom:18px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);">Stakeholder Pulse</div>
+          <button onclick="switchProfileNav('surveys')" style="font-size:12px;padding:5px 14px;border:1px solid var(--teal);color:var(--teal);background:none;border-radius:6px;cursor:pointer;font-weight:700;">Open surveys →</button>
+        </div>
+        <div id="summary-stakeholder-pulse-${client.id}" style="font-size:13px;color:var(--gray-600);">Loading stakeholder status…</div>
+      </div>`;
+
+    // Diagnostics status mini-card
+    const diagCard = latestDiag ? `
+      <div style="background:white;border-radius:8px;padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.06);margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);margin-bottom:6px;">Diagnostic</div>
+          <div style="font-size:13px;color:var(--navy);">${diagStatusBadge(latestDiag.status)}${latestDiag.close_date ? ' <span style="color:var(--gray-600);">· Closes ' + diagFormatDate(latestDiag.close_date) + '</span>' : ''}</div>
+        </div>
+        <button onclick="switchProfileNav('diagnostics')" style="font-size:12px;padding:6px 14px;border:1px solid var(--teal);color:var(--teal);background:none;border-radius:6px;cursor:pointer;font-weight:700;">Open →</button>
+      </div>` : `
+      <div style="background:white;border-radius:8px;padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.06);margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <div style="font-size:13px;color:var(--gray-600);">No diagnostic linked</div>
+        <button onclick="switchProfileNav('diagnostics')" style="font-size:12px;padding:6px 14px;background:var(--teal);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700;">Start diagnostic →</button>
+      </div>`;
+
+    el.innerHTML = `
+      <div class="profile-section-title">Summary</div>
+      ${headerCard}
+      ${snapshotCard}
+      ${planHeadline}
+      ${metricCard}
+      ${stakeholderPulse}
+      ${diagCard}
+    `;
+    loadSummaryStakeholderPulse(client.id);
   } else if (section === 'plan') {
     el.innerHTML = `
-      <div class="profile-section-title">Plan</div>
+      <div class="profile-section-title">Coaching Plan</div>
       <div style="background:white;border-radius:8px;padding:20px 24px;box-shadow:0 1px 4px rgba(0,0,0,0.06);margin-bottom:18px;">
         ${planRows}
       </div>
@@ -2507,16 +2545,40 @@ function renderProfileSection(section, client, checkins) {
         </button>
       </div>
     `;
-  } else if (section === 'checkins') {
+  } else if (section === 'progress') {
+    const submittedCount = submittedCheckins.length;
+    const yesCount       = yesCheckins.length;
+    const followLine = submittedCount > 0
+      ? `${yesCount} of last ${submittedCount} week${submittedCount !== 1 ? 's' : ''} submitted with follow-through (${completionRate})`
+      : 'No check-ins submitted yet.';
     el.innerHTML = `
-      <div class="profile-section-title">Check-ins</div>
+      <div class="profile-section-title">Progress &amp; Check-ins</div>
+      <div style="background:white;border-radius:8px;padding:18px 20px;margin-bottom:18px;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);margin-bottom:10px;">Follow-Through Summary</div>
+        <div style="font-size:14px;font-weight:700;color:var(--navy);margin-bottom:6px;">${followLine}</div>
+        <div style="font-size:12px;color:var(--gray-600);">${currentWeek ? 'Current week: Week ' + currentWeek + ' of 12 · ' : ''}Last check-in: ${lastDate}</div>
+        <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:12px;">
+          ${dotRow}
+          <span style="font-size:11px;color:var(--gray-600);margin-left:8px;">${checkins.length}/13 submitted</span>
+        </div>
+      </div>
+      ${client.plan_submitted_at ? `
+      <div style="background:white;border-radius:8px;padding:18px 20px;margin-bottom:18px;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);margin-bottom:10px;">Metric Progress</div>
+        <div class="metric-bar-wrap">
+          <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:4px;">${esc(client.metric_name || 'Metric')}</div>
+          <div class="metric-bar-track"><div class="metric-bar-fill" style="width:${progress}%"></div></div>
+          <div class="metric-nums"><span>Baseline: ${baseline}</span><span style="font-weight:700;color:var(--navy);">Current: ${current} &nbsp;(${Math.round(progress)}%)</span><span>Target: ${target}</span></div>
+        </div>
+      </div>` : ''}
       <div style="background:white;border-radius:8px;padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.06);overflow-x:auto;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);margin-bottom:10px;">Check-In History</div>
         ${historyRows}
       </div>
     `;
   } else if (section === 'surveys') {
     el.innerHTML = `
-      <div class="profile-section-title">Surveys &amp; Stakeholders</div>
+      <div class="profile-section-title">Stakeholders &amp; Surveys</div>
       <div id="stakeholders-section-${client.id}">
         <div id="stakeholders-content-${client.id}">
           <div class="spinner" style="width:24px;height:24px;border-width:3px;margin:12px auto;"></div>
@@ -2571,7 +2633,7 @@ function renderProfileSection(section, client, checkins) {
       : `<p style="color:var(--gray-600);font-size:13px;font-style:italic;">No diagnostics linked to this client yet.</p>`;
 
     el.innerHTML = `
-      <div class="profile-section-title">Diagnostics</div>
+      <div class="profile-section-title">Diagnostics &amp; Reports</div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
         <div style="font-size:13px;color:var(--gray-600);">${linkedDiags.length} diagnostic${linkedDiags.length !== 1 ? 's' : ''} linked to this client.</div>
         <button onclick="openDiagFromClient('${client.id}')"
@@ -2581,11 +2643,11 @@ function renderProfileSection(section, client, checkins) {
       </div>
       ${diagRows}
     `;
-  } else if (section === 'settings') {
+  } else if (section === 'admin') {
     const enrolled = client.in_coaching_program || client.coaching_sessions_enabled;
-    // Render settings HTML first, then load async stats
+    // Render admin HTML first, then load async stats
     el.innerHTML = `
-      <div class="profile-section-title">Settings</div>
+      <div class="profile-section-title">Admin &amp; Links</div>
       ${editInfoSection}
       <div class="detail-section" style="margin-top:20px;">
         <h4>Client Enrollment</h4>
@@ -3291,7 +3353,7 @@ async function setEnrolledStatus(clientId, newState) {
     allClients = allClients.map(c => c.id === clientId ? { ...c, ...payload } : c);
     toast(newState ? 'Client enrolled in coaching program.' : 'Client removed from coaching program.');
     // Re-render the settings section so all buttons/text refresh.
-    switchProfileNav(document.querySelector('.profile-nav-item.active')?.id?.replace('profNav-','') || 'settings');
+    switchProfileNav(document.querySelector('.profile-nav-item.active')?.id?.replace('profNav-','') || 'admin');
   } catch (e) {
     toast('Error: ' + e.message);
     if (btn) { btn.textContent = newState ? 'Enroll as Coaching Client' : 'Remove from Coaching Program'; btn.disabled = false; }
@@ -3456,13 +3518,13 @@ async function toggleRetainer(clientId, current) {
     await cdUpdate('clients', { converted_to_retainer: !current }, { eq: { id: clientId } });
     allClients = allClients.map(c => c.id === clientId ? { ...c, converted_to_retainer: !current } : c);
     toast(!current ? 'Marked as continued to retainer.' : 'Retainer flag removed.');
-    switchProfileNav(document.querySelector('.profile-nav-item.active')?.id?.replace('profNav-','') || 'settings');
+    switchProfileNav(document.querySelector('.profile-nav-item.active')?.id?.replace('profNav-','') || 'admin');
   } catch (e) { toast('Error: ' + e.message); }
 }
 
 async function markEngagementEnded(clientId) {
   const c = allClients.find(x => x.id === clientId);
-  const navBack = () => switchProfileNav(document.querySelector('.profile-nav-item.active')?.id?.replace('profNav-','') || 'settings');
+  const navBack = () => switchProfileNav(document.querySelector('.profile-nav-item.active')?.id?.replace('profNav-','') || 'admin');
   if (c && c.coaching_program_end_date) {
     if (!confirm('This engagement already has an end date (' + c.coaching_program_end_date + '). Clear it and reactivate?')) return;
     try {
@@ -5180,6 +5242,43 @@ function escHtml(str) {
   return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// Lightweight stakeholder summary for the Summary tab pulse card.
+async function loadSummaryStakeholderPulse(clientId) {
+  const box = document.getElementById('summary-stakeholder-pulse-' + clientId);
+  if (!box) return;
+  try {
+    const [stakeholders, responses] = await Promise.all([
+      cdSelect('stakeholders', { eq: { client_id: clientId, is_active: true }, select: 'id' }),
+      cdSelect('survey_responses', { eq: { client_id: clientId }, select: 'checkpoint,score' }),
+    ]);
+    const total = (stakeholders || []).length;
+    if (total === 0) {
+      box.textContent = 'No stakeholder survey set up yet.';
+      return;
+    }
+    const baselineScores = (responses || []).filter(r => r.checkpoint === 'baseline' && r.score != null).map(r => parseFloat(r.score)).filter(v => !isNaN(v));
+    const latestCheckpoint = (responses || []).some(r => r.checkpoint === 'day90') ? 'day90'
+      : (responses || []).some(r => r.checkpoint === 'day30') ? 'day30' : null;
+    const latestScores = latestCheckpoint
+      ? (responses || []).filter(r => r.checkpoint === latestCheckpoint && r.score != null).map(r => parseFloat(r.score)).filter(v => !isNaN(v))
+      : [];
+    const responded = new Set();
+    (responses || []).forEach(r => { if (r.checkpoint === 'baseline') responded.add('x'); });
+    const baselineCount = (responses || []).filter(r => r.checkpoint === 'baseline').length;
+    const avg = arr => arr.length ? (arr.reduce((a,b)=>a+b,0)/arr.length) : null;
+    const baseAvg = avg(baselineScores);
+    const latestAvg = avg(latestScores);
+    let html = `Stakeholder survey: ${baselineCount}/${total} responses`;
+    if (baseAvg != null) {
+      html += ` · Baseline avg ${baseAvg.toFixed(1)}`;
+      if (latestAvg != null) html += ` → ${latestCheckpoint === 'day90' ? 'Day 90' : 'Day 30'} avg ${latestAvg.toFixed(1)}`;
+    }
+    box.innerHTML = html;
+  } catch (_) {
+    box.textContent = 'No stakeholder survey set up yet.';
+  }
+}
+
 async function loadStakeholderData(clientId) {
   const el = document.getElementById('stakeholders-content-' + clientId);
   if (!el) return;
@@ -5490,8 +5589,8 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
   const sendBtnLabel    = baselineSent ? '✓ Baseline Sent' : '▶ Send Baseline Survey';
 
   el.innerHTML = `
-    <div id="obs-measure-${clientId}" style="margin-bottom:14px;"></div>
-    <div style="margin-bottom:12px;">${badgeHtml}</div>
+    ${scoreboardHtml}
+    <div style="margin-bottom:12px;${scoreboardHtml ? 'margin-top:18px;' : ''}">${badgeHtml}</div>
     <div id="sh-list-${clientId}">${listHtml}</div>
     <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
       ${canAddMore ? `
@@ -5512,7 +5611,7 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
     </div>` : ''}
     <div id="sh-sched-${clientId}" style="margin-top:6px;font-size:12px;"></div>
     ${addFormHtml}
-    ${scoreboardHtml}
+    <div id="obs-measure-${clientId}" style="margin-top:18px;"></div>
   `;
   loadObservableMeasure(clientId);
   loadStakeholderSchedule(clientId);
