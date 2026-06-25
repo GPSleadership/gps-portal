@@ -4171,10 +4171,16 @@ async function setCoachConvStatus(convId, status){
   catch(e){ alert('Could not update status: ' + e.message); }
 }
 // Coach starts a NEW message to a client (reply-only left no way to reach out first).
+function nmIsCoachingClient(c){
+  return !!(c && (c.in_coaching_program || c.coaching_sessions_enabled || c.is_active_coaching || c.engagement_type === 'diagnostic_plus_coaching'));
+}
 function openNewClientMessage(preselectId){
   var old = document.getElementById('nm-overlay'); if (old) old.remove();
-  var clients = (allClients || []).filter(function(c){ return !c.is_archived; })
+  // Only coaching clients have an active "Contact Your Coach" tab, so they're the only
+  // ones who can actually receive + see a portal message. (Email anyone else directly.)
+  var clients = (allClients || []).filter(function(c){ return !c.is_archived && nmIsCoachingClient(c); })
     .sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); });
+  if (!clients.length) { alert('No active coaching clients to message. Portal messaging is only available to coaching clients — email others directly.'); return; }
   var opts = clients.map(function(c){
     return '<option value="'+c.id+'"'+(c.id===preselectId?' selected':'')+'>'+esc(c.name||'(no name)')+(c.organization?' — '+esc(c.organization):'')+'</option>';
   }).join('');
