@@ -10262,16 +10262,33 @@ function drSponsorsPanel(t, links, sponsors, members, nameById){
   window._drSpEdit={ links:links, members:members, nameById:nameById, teamId:t.id };  // for drEditSponsor
   var list=links.map(function(l){
     var s=byId[l.sponsor_id]||{}; var url='/decision-room?token='+(s.sponsor_token||'');
-    return '<div style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:13px;"><b>'+drEsc(s.name||'')+'</b> <span style="font-size:11px;color:#666;">· '+drEsc(l.confidentiality_mode)+(s.email?' · '+drEsc(s.email):'')+'</span>'
+    var isProg=l.confidentiality_mode==='progress';
+    var modeLabel=isProg?'Process only':(l.confidentiality_mode==='private'?'Full (private)':'Full (standard)');
+    return '<div style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:13px;"><b>'+drEsc(s.name||'')+'</b> <span style="font-size:11px;font-weight:700;color:'+(isProg?'#b45309':'#0f766e')+';">· '+modeLabel+'</span><span style="font-size:11px;color:#666;">'+(s.email?' · '+drEsc(s.email):'')+'</span>'
       +'<div style="margin-top:4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><code style="font-size:11px;background:#f5f5f5;padding:3px 7px;border-radius:4px;">'+drEsc(url)+'</code>'
       +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#01949A;" onclick="window.open(location.origin+\''+url+'\',\'_blank\')">Open ↗</button>'
       +'<button class="btn-add" style="padding:3px 9px;font-size:11px;" onclick="navigator.clipboard&&navigator.clipboard.writeText(location.origin+\''+url+'\');this.textContent=\'Copied\';">Copy link</button>'
       +(s.email?'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#004369;" onclick="drSendSponsor(\''+s.id+'\')">Email link</button>':'')
+      +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:'+(isProg?'#01949A':'#b45309')+';" onclick="drToggleSponsorReveal(\''+l.id+'\',\''+drEsc(l.confidentiality_mode||'')+'\',\''+t.id+'\')">'+(isProg?'Reveal full report ▸':'Switch to process-only ▸')+'</button>'
       +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#6b7280;" onclick="drEditSponsor(\''+l.id+'\')">Edit</button>'
       +'</div></div>';
   }).join('') || '<div style="color:#666;font-size:13px;">No sponsors linked yet.</div>';
   return drCard('Sponsors (Decision Room access)', list
     +'<div style="margin-top:12px;border-top:1px solid #eee;padding-top:12px;"><button class="btn-add" onclick="drOpenSponsor(\''+t.id+'\')">+ Add sponsor to this team</button></div>');
+}
+
+// One-click staged reveal: flip a sponsor link between process-only ('progress')
+// and full ('private'). Lets the coach send the link early (status only) and
+// reveal the full Decision Room once everything is approved.
+async function drToggleSponsorReveal(linkId, currentMode, teamId){
+  var goFull = currentMode==='progress';
+  var newMode = goFull ? 'private' : 'progress';
+  var msg = goFull
+    ? 'REVEAL the full report to this sponsor?\n\nThey will see the full Decision Room — scores, succession, and any recommendations you have set to Show. Make sure your report and recommendations are approved first.'
+    : 'Switch this sponsor to PROCESS-ONLY?\n\nThey will see only engagement status (where each leader is in the process) — no scores, recommendations, or report — until you reveal.';
+  if(!confirm(msg)) return;
+  try{ await cdUpdate('sponsor_teams',{ confidentiality_mode:newMode },{ eq:{ id:linkId } }); drManageTeam(teamId); }
+  catch(e){ alert('Could not update sponsor visibility: '+e.message); }
 }
 
 function drEditSponsor(linkId){
@@ -10286,7 +10303,7 @@ function drEditSponsor(linkId){
   ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:480px;width:100%;box-shadow:0 16px 48px rgba(0,0,0,.25);">'
     +'<div style="padding:18px 22px;border-bottom:1px solid #e8e8e8;display:flex;justify-content:space-between;align-items:center;"><div style="font-family:Montserrat,sans-serif;font-weight:800;color:#004369;font-size:17px;">Edit sponsor</div><div id="drspe_x" style="cursor:pointer;font-size:18px;color:#888;">✕</div></div>'
     +'<div style="padding:20px 22px;">'
-    +'<div style="margin-bottom:14px;"><label style="font-size:11px;font-weight:700;color:#5a6b76;text-transform:uppercase;display:block;margin-bottom:4px;">Confidentiality</label><select id="drspe_conf" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;"><option value="standard"'+(link.confidentiality_mode==='standard'?' selected':'')+'>Standard — sponsor can open individual reports</option><option value="private"'+(link.confidentiality_mode==='private'?' selected':'')+'>Private — individual scores hidden; team patterns only</option></select></div>'
+    +'<div style="margin-bottom:14px;"><label style="font-size:11px;font-weight:700;color:#5a6b76;text-transform:uppercase;display:block;margin-bottom:4px;">Confidentiality</label><select id="drspe_conf" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;"><option value="progress"'+(link.confidentiality_mode==='progress'?' selected':'')+'>Process only — engagement status, no results yet (reveal later)</option><option value="standard"'+(link.confidentiality_mode==='standard'?' selected':'')+'>Standard — sponsor can open individual reports</option><option value="private"'+(link.confidentiality_mode==='private'?' selected':'')+'>Private — individual scores hidden; team patterns only</option></select></div>'
     +'<div><label style="font-size:11px;font-weight:700;color:#5a6b76;text-transform:uppercase;display:block;margin-bottom:6px;">Who do they supervise on this team?</label>'+memRows+'</div>'
     +'<div id="drspe_err" style="color:#dc2626;font-size:12px;margin-top:8px;"></div>'
     +'</div>'

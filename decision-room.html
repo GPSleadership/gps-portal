@@ -336,7 +336,7 @@ function renderProgress(members){
       + (m.pipeline ? renderPipeline(m.pipeline) : '<div class="empty">No diagnostic set up yet.</div>')
       +'</div></div>';
   }).join('');
-  var html = '<div class="conf-banner"><b>Coordinator view.</b> You can see where each leader is in the process — their diagnostic and the team assessment — plus your own full report. Individual results for other leaders stay private to them.</div>';
+  var html = '<div class="conf-banner"><b>Engagement status.</b> Here\'s where things stand in the process right now. The full report and recommendations will appear here once your coach has reviewed and released them.</div>';
   html += '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Process Status</div><span class="section-note">Where each leader is — no individual results</span></div>'+(rows||'<div class="empty">No team members yet.</div>')+'</div>';
   if(own.length){
     html += '<div class="card-head" style="margin-top:20px;"><div class="card-title"><span class="dot"></span>Your report</div></div>';
