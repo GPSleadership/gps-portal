@@ -15,6 +15,17 @@ const SUPABASE_URL  = process.env.SUPABASE_URL  || 'https://pbnkefuqpoztcxfagiod
 const SUPABASE_KEY  = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_ANON;
 if (!SUPABASE_KEY) throw new Error('send-reminders.js: missing SUPABASE_SECRET_KEY — refusing to run cron with no service key');
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
+
+// Record a successful cron run so detect_breakages can flag this job if it goes silent.
+async function recordHeartbeat(name, status = 'ok', detail = null) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/cron_heartbeats?on_conflict=cron_name`, {
+      method:  'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ cron_name: name, last_run_at: new Date().toISOString(), last_status: status, last_detail: detail, updated_at: new Date().toISOString() }),
+    });
+  } catch (_) { /* best-effort */ }
+}
 const RESEND_FROM    = process.env.RESEND_FROM_EMAIL || 'noreply@portal.gpsleadership.org';
 const PORTAL_BASE    = 'https://portal.gpsleadership.org/client.html';
 const CRON_SECRET    = process.env.CRON_SECRET;
@@ -96,6 +107,7 @@ export default async function handler(req, res) {
   const clients = await clientsRes.json();
 
   if (!Array.isArray(clients) || clients.length === 0) {
+    await recordHeartbeat('send-reminders', 'ok', 'no active clients to remind');
     return res.status(200).json({ message: 'No active clients with email addresses found.', sent: 0, skipped: 0, errors: [] });
   }
 
@@ -268,6 +280,7 @@ export default async function handler(req, res) {
     }
   }
 
+  await recordHeartbeat('send-reminders', 'ok', `sent ${sent} of ${toRemind.length}`);
   return res.status(200).json({
     message: `Reminders sent: ${sent} of ${toRemind.length}`,
     sent,

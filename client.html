@@ -7339,12 +7339,9 @@ async function saveProfile() {
   btn.textContent = 'Saving…';
 
   try {
-    const { error } = await db
-      .from('clients')
-      .update({ preferred_name, title, org, phone, sms_opt_in, timezone })
-      .eq('id', client.id);
-
-    if (error) throw error;
+    // Phase 1: route through the token-scoped endpoint (service role); the anon key
+    // is dead for data so the old db.from update silently failed for every client.
+    await portalData('update-client', { updates: { preferred_name, title, org, phone, sms_opt_in, timezone } });
 
     // Update local client object so next open reflects saved values
     client.preferred_name = preferred_name;

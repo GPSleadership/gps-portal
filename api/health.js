@@ -26,5 +26,15 @@ export default async function handler(req, res) {
   out.checks.anthropic_key = process.env.ANTHROPIC_API_KEY ? 'present' : 'missing';
   if (!SUPABASE_SECRET) out.ok = false;
 
+  // Email config — today's outage was a sender-domain problem that health didn't see.
+  out.checks.resend_key = process.env.RESEND_API_KEY ? 'present' : 'missing';
+  if (!process.env.RESEND_API_KEY) out.ok = false;
+  // The verified Resend domain is the portal.gpsleadership.org subdomain; sending from the
+  // apex gpsleadership.org 403s. Flag (warn, don't fail) if the from-address isn't the subdomain.
+  const fromEmail = process.env.RESEND_FROM_EMAIL || '';
+  out.checks.resend_from = !fromEmail
+    ? 'default (noreply@portal.gpsleadership.org)'
+    : (/@portal\.gpsleadership\.org$/i.test(fromEmail) ? 'ok' : `warn_unverified_domain:${fromEmail.replace(/^[^@]+/, '***')}`);
+
   return res.status(out.ok ? 200 : 503).json(out);
 }

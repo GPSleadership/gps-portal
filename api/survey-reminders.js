@@ -39,6 +39,17 @@ function verifyCoachSession(tok) {
 
 const REMINDER_INTERVAL_DAYS = 2;
 
+// Record a successful cron run so detect_breakages can flag this job if it goes silent.
+async function recordHeartbeat(name, status = 'ok', detail = null) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/cron_heartbeats?on_conflict=cron_name`, {
+      method:  'POST',
+      headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}`, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ cron_name: name, last_run_at: new Date().toISOString(), last_status: status, last_detail: detail, updated_at: new Date().toISOString() }),
+    });
+  } catch (_) { /* best-effort */ }
+}
+
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -245,8 +256,12 @@ export default async function handler(req, res) {
     // Sequence: Day1AM (day before expiry) → Day1PM (expiry day) →
     //           Day2 (1 day after) → Day3 (2 days after) → Day5 (4 days after).
     // Tracked via continuation_step on the clients row (0 = not started, 5 = complete).
+    // Trial accounts are the ones whose 90-day portal access expires (coaching clients
+    // never expire). NOTE: there is no is_coaching_client column — that bad filter 400'd
+    // the whole query and silently killed this sequence. account_type='trial' is the
+    // canonical non-coaching, access-expiring population. (Fixed 2026-06-24.)
     const seqClientsRes = await sbFetch(
-      `/rest/v1/clients?is_coaching_client=eq.false&is_archived=eq.false` +
+      `/rest/v1/clients?account_type=eq.trial&is_archived=eq.false` +
       `&portal_first_active_at=not.is.null&continuation_step=lt.5` +
       // phone, sms_opt_in, timezone fetched here for the SMS_HOOK above
       `&select=id,email,name,portal_first_active_at,continuation_step,phone,sms_opt_in,timezone`
@@ -386,6 +401,7 @@ export default async function handler(req, res) {
     }
     // Non-blocking — don't fail the whole cron if this section errors
 
+    await recordHeartbeat('survey-reminders', 'ok', `sent ${results.sent.length}, errors ${results.errors.length}`);
     return res.status(200).json({
       message: `Done. Sent: ${results.sent.length} | Flagged: ${results.flagged.length} | Errors: ${results.errors.length}`,
       results

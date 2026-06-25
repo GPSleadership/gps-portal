@@ -11,6 +11,17 @@ const SUPABASE_URL    = process.env.SUPABASE_URL        || 'https://pbnkefuqpozt
 const SUPABASE_SECRET = process.env.SUPABASE_SECRET_KEY;
 const CRON_SECRET     = process.env.CRON_SECRET;
 
+// Record a successful cron run so detect_breakages can flag a job that goes silent.
+async function recordHeartbeat(name, status = 'ok', detail = null) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/cron_heartbeats?on_conflict=cron_name`, {
+      method:  'POST',
+      headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}`, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ cron_name: name, last_run_at: new Date().toISOString(), last_status: status, last_detail: detail, updated_at: new Date().toISOString() }),
+    });
+  } catch (_) { /* heartbeat is best-effort; never fail the run on it */ }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -34,6 +45,7 @@ export default async function handler(req, res) {
     });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) return res.status(502).json({ error: 'detect_breakages failed', detail: data });
+    await recordHeartbeat('ops-monitor');
     return res.status(200).json({ ok: true, result: data });
   } catch (e) {
     return res.status(500).json({ error: e.message });

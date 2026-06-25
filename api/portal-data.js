@@ -41,6 +41,8 @@ const CLIENT_WRITABLE = new Set([
   'goal_90_day', 'plan_submitted_at',
   'industry', 'revenue_band', 'num_locations', 'regions_owned', 'direct_reports_count',
   'preferred_name',
+  // Client-editable profile fields (own profile screen — no role/access escalation)
+  'title', 'org', 'phone', 'sms_opt_in',
 ]);
 function pickWritable(updates) {
   const out = {};

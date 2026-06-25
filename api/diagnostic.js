@@ -22,6 +22,17 @@ const SUPABASE_URL      = process.env.SUPABASE_URL      || 'https://pbnkefuqpozt
 // Phase 1: server-side functions use the SERVICE ROLE key (bypasses RLS) so they
 // keep working after the v26 anon-policy lockdown. Never expose this to the browser.
 const SUPABASE_KEY      = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_ANON;
+
+// Record a successful cron run so detect_breakages can flag a job that goes silent.
+async function recordHeartbeat(name, status = 'ok', detail = null) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/cron_heartbeats?on_conflict=cron_name`, {
+      method:  'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ cron_name: name, last_run_at: new Date().toISOString(), last_status: status, last_detail: detail, updated_at: new Date().toISOString() }),
+    });
+  } catch (_) { /* best-effort */ }
+}
 if (!SUPABASE_KEY) throw new Error('diagnostic.js: missing SUPABASE_SECRET_KEY — refusing to start with no service key');
 const RESEND_API_KEY    = process.env.RESEND_API_KEY;
 const RESEND_FROM       = process.env.RESEND_FROM_EMAIL   || 'noreply@portal.gpsleadership.org';
@@ -724,6 +735,7 @@ async function handleTrialSweep(req, res) {
       archived = buckets.archive.length;
     }
 
+    await recordHeartbeat('trial-sweep', 'ok', doArchive ? 'archive' : 'report');
     return res.status(200).json({
       ok: true,
       mode: doArchive ? 'archive' : 'report',
@@ -3116,6 +3128,7 @@ async function handleReminders(req, res) {
       log.errors.push({ type: 'ALL_COMPLETE_SECTION', error: err.message });
     }
 
+    await recordHeartbeat('diagnostic-reminders', 'ok', `r1 ${log.r1_sent.length}, r2 ${log.r2_sent.length}`);
     return res.status(200).json({
       ran_at:               now.toISOString(),
       r1_sent:              log.r1_sent.length,
