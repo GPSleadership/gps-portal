@@ -6582,11 +6582,29 @@ async function loadEmailFailureFlags() {
       eq:    { status: 'error' },
       gte:   { sent_at: since },
       order: { col: 'sent_at', asc: false },
-      limit: 20,
+      limit: 50,
       select: 'sent_at,recipient_email,recipient_name,email_type,subject,error_details',
     });
     if (!fails.length) { box.innerHTML = ''; return; }
-    const rows = fails.map(f => {
+    // Hide failures that were later re-sent successfully to the same recipient + type
+    // (e.g. after a fix + Run Reminders Now). Only genuinely-stuck failures should nag.
+    const sents = await cdSelect('email_log', {
+      eq: { status: 'sent' }, gte: { sent_at: since },
+      order: { col: 'sent_at', asc: false }, limit: 300,
+      select: 'sent_at,recipient_email,email_type',
+    });
+    const latestSent = {};
+    (sents || []).forEach(function (s) {
+      const k = (s.recipient_email || '') + '|' + (s.email_type || '');
+      const t = new Date(s.sent_at).getTime();
+      if (!latestSent[k] || t > latestSent[k]) latestSent[k] = t;
+    });
+    const unresolved = fails.filter(function (f) {
+      const ls = latestSent[(f.recipient_email || '') + '|' + (f.email_type || '')];
+      return !(ls && ls > new Date(f.sent_at).getTime());
+    });
+    if (!unresolved.length) { box.innerHTML = ''; return; }
+    const rows = unresolved.map(f => {
       const when = new Date(f.sent_at).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
       const who  = f.recipient_name ? `${f.recipient_name} (${f.recipient_email})` : f.recipient_email;
       return `<div style="padding:8px 0;border-bottom:1px solid #f0ebe3;">
@@ -6598,7 +6616,7 @@ async function loadEmailFailureFlags() {
     box.innerHTML = `<div class="card" style="margin-bottom:20px;border-left:4px solid var(--d-red2);">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
         <div class="card-title" style="color:var(--d-red2);">⚠️ Email Delivery Failures (last 7 days)</div>
-        <span style="font-size:12px;color:var(--d-mid);">${fails.length} failed</span>
+        <span style="font-size:12px;color:var(--d-mid);">${unresolved.length} unresolved</span>
       </div>
       <div style="font-size:12px;color:var(--d-mid);margin-bottom:6px;">These emails did NOT reach the recipient. Resend manually or fix the address.</div>
       ${rows}

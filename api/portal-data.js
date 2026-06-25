@@ -213,6 +213,20 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true, eligible: true, conversation: conv, messages });
       }
 
+      // ── Contact Your Coach: unread coach-message count (no mutation) ────────
+      // Used on portal load to badge the tab BEFORE the client opens the thread
+      // (opening it via coach-thread-get is what marks messages read).
+      case 'coach-unread': {
+        if (!isCoachingClient(client)) return res.status(200).json({ ok: true, unread: 0 });
+        const cr = await sb(`/rest/v1/coach_conversations?client_id=eq.${clientId}&select=id`);
+        const convs = cr.ok ? await cr.json() : [];
+        if (!convs.length) return res.status(200).json({ ok: true, unread: 0 });
+        const ids = convs.map(c => `"${c.id}"`).join(',');
+        const mr = await sb(`/rest/v1/coach_messages?conversation_id=in.(${ids})&sender_role=eq.coach&read_by_client=eq.false&select=id`);
+        const rows = mr.ok ? await mr.json() : [];
+        return res.status(200).json({ ok: true, unread: Array.isArray(rows) ? rows.length : 0 });
+      }
+
       // ── Contact Your Coach: client sends a message ──────────────────────────
       case 'coach-message-send': {
         if (!isCoachingClient(client)) return res.status(403).json({ error: 'Messaging is available to active coaching clients only.' });

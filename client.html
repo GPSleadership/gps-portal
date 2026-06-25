@@ -2664,6 +2664,29 @@ function coachFmtTime(iso) {
   try { return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
   catch (_) { return ''; }
 }
+// Unread coach-message indicator: a red count on the "Contact Your Coach" tab so a
+// message from the coach is visible the moment the leader opens the portal. Opening
+// the thread (loadCoachThread -> coach-thread-get) marks them read server-side.
+async function updateCoachUnreadBadge() {
+  try {
+    const r = await portalData('coach-unread');
+    const n = (r && r.unread) || 0;
+    const tab = document.getElementById('tabCoach');
+    if (!tab) return;
+    tab.querySelectorAll('.coach-unread-dot').forEach(function (e) { e.remove(); });
+    if (n > 0) {
+      const dot = document.createElement('span');
+      dot.className = 'coach-unread-dot';
+      dot.textContent = n;
+      dot.style.cssText = 'display:inline-block;margin-left:6px;background:#DB1F48;color:#fff;font-size:10px;font-weight:800;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;vertical-align:middle;';
+      tab.appendChild(dot);
+    }
+  } catch (_) { /* non-fatal */ }
+}
+function clearCoachUnread() {
+  const tab = document.getElementById('tabCoach');
+  if (tab) tab.querySelectorAll('.coach-unread-dot').forEach(function (e) { e.remove(); });
+}
 async function loadCoachThread() {
   const thread = document.getElementById('coachThread');
   if (!thread) return;
@@ -2962,8 +2985,18 @@ function renderDiagnosticTab() {
     </div>`;
     return;
   }
-  if (CLIENT_DIAG.report_finalized_at) {
+  // A diagnostic is COMPLETE when finalized, or when its status is terminal — legacy
+  // diagnostics (done before the portal) carry status='report_final' without the
+  // finalized timestamp, so keying only off the timestamp left them stuck on the
+  // in-progress pipeline. Treat terminal status as complete too.
+  const TERMINAL_DIAG = ['report_final', 'debrief_complete', 'plan_active'];
+  const diagComplete = !!CLIENT_DIAG.report_finalized_at || TERMINAL_DIAG.indexOf(CLIENT_DIAG.status) >= 0;
+  const hasInPortalReport = !!CLIENT_DIAG.report_finalized_at || !!CLIENT_DIAG_REPORT
+    || !!(CLIENT_DIAG.report_doc && CLIENT_DIAG.report_doc.sections && CLIENT_DIAG.report_doc.sections.length);
+  if (diagComplete && hasInPortalReport) {
     renderDiagReportMode(CLIENT_DIAG, CLIENT_DIAG_REPORT);
+  } else if (diagComplete) {
+    renderDiagCompleteMinimal(CLIENT_DIAG);   // complete, but the report was delivered outside the portal (legacy)
   } else {
     renderDiagActiveMode(CLIENT_DIAG, CLIENT_DIAG_RATERS);
   }
@@ -3103,6 +3136,32 @@ function renderDiagActiveMode(d, raters) {
       <p>Your coach is reviewing your report. You\'ll receive an email when it\'s finalized and ready to view.</p>
     </div>` : ''}
   `;
+}
+
+// Complete diagnostic whose report lives outside the portal (legacy: done before launch).
+// Shows a clear "complete" state instead of the stuck in-progress pipeline, and points
+// the leader to their results + report PDF if one is on file.
+function renderDiagCompleteMinimal(d) {
+  const el = document.getElementById('diag-content');
+  if (!el) return;
+  const leaderName = d.leader_name || (currentClient && currentClient.name) || '';
+  const finDate    = diagFormatDateClient(d.report_finalized_at) || '';
+  const pdfUrl     = d.report_pdf_url || (currentClient && currentClient.diagnostic_report_url) || '';
+  el.innerHTML = `
+    <div class="dc-report-header">
+      <h2>TP3™ Leadership Diagnostic</h2>
+      <div class="dc-rh-meta">${escD(leaderName)}${finDate ? ' · Completed ' + finDate : ''} · <span style="color:#2EA887;font-weight:700;">Complete</span></div>
+    </div>
+    <div class="dc-card" style="padding:28px 26px;max-width:640px;margin:0 auto;text-align:center;">
+      <div style="font-size:34px;margin-bottom:8px;">✅</div>
+      <div style="font-size:17px;font-weight:700;color:#1A3D6E;margin-bottom:8px;">Your diagnostic is complete.</div>
+      <p style="font-size:14px;color:#374151;line-height:1.6;margin:0 auto 18px;max-width:520px;">All steps are done. Your TP3 leadership scores and stakeholder feedback are on your results page.</p>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+        <button onclick="showPortalTab('results')" style="background:#1A3D6E;color:#fff;border:none;border-radius:8px;font-weight:700;padding:12px 24px;font-size:14px;cursor:pointer;">View My Results →</button>
+        ${pdfUrl ? `<a href="${pdfUrl}" target="_blank" rel="noopener" style="display:inline-block;background:none;border:2px solid #1A3D6E;color:#1A3D6E;border-radius:8px;font-weight:700;padding:10px 22px;font-size:14px;text-decoration:none;">⬇ Download Report (PDF)</a>` : ''}
+      </div>
+      <p style="font-size:13px;color:#6b7280;margin-top:18px;">Questions about your results? <a href="mailto:alex@gpsleadership.org" style="color:#1A3D6E;">Reach Alex directly →</a></p>
+    </div>`;
 }
 
 function renderDiagReportMode(d, reportDraft) {
@@ -3450,6 +3509,7 @@ async function loadClient() {
         if (client.is_coaching_client) tc.classList.remove('ptab-locked');
         else tc.classList.add('ptab-locked');
       }
+      if (client.is_coaching_client) updateCoachUnreadBadge();
 
       // Store survey data globally for Results tab
       clientSurveyData = surveyData || [];
@@ -7197,6 +7257,7 @@ function showPortalTab(tab) {
     if (coachPanel) coachPanel.classList.add('active');
     if (tabCoach)   tabCoach.classList.add('active');
     loadCoachThread();
+    clearCoachUnread();   // opening the thread marks messages read server-side
     window.scrollTo({ top: 0 });
   } else {
     // Check terms consent before showing Q&A
