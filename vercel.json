@@ -85,6 +85,10 @@
     {
       "path": "/api/ops-monitor",
       "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/synthetic-check",
+      "schedule": "15 8 * * *"
     }
   ],
   "headers": [
@@ -210,6 +214,9 @@
       "maxDuration": 10
     },
     "api/ops-monitor.js": {
+      "maxDuration": 30
+    },
+    "api/synthetic-check.js": {
       "maxDuration": 30
     },
     "api/import-clients.js": {

@@ -7290,7 +7290,7 @@ function openProfileModal() {
   document.getElementById('profileEmail').value         = client.email || '';
   document.getElementById('profilePreferredName').value = client.preferred_name || '';
   document.getElementById('profileTitle').value         = client.title || '';
-  document.getElementById('profileOrg').value           = client.org   || '';
+  document.getElementById('profileOrg').value           = client.organization || client.org || '';
   document.getElementById('profilePhone').value         = client.phone || '';
   document.getElementById('profileSmsOptIn').checked    = !!client.sms_opt_in;
 
@@ -7341,12 +7341,13 @@ async function saveProfile() {
   try {
     // Phase 1: route through the token-scoped endpoint (service role); the anon key
     // is dead for data so the old db.from update silently failed for every client.
-    await portalData('update-client', { updates: { preferred_name, title, org, phone, sms_opt_in, timezone } });
+    // Write to the canonical `organization` column (the dead `org` column was the drift).
+    await portalData('update-client', { updates: { preferred_name, title, organization: org, phone, sms_opt_in, timezone } });
 
     // Update local client object so next open reflects saved values
     client.preferred_name = preferred_name;
     client.title          = title;
-    client.org            = org;
+    client.organization   = org;
     client.phone          = phone;
     client.sms_opt_in     = sms_opt_in;
     client.timezone       = timezone;
