@@ -465,7 +465,16 @@ const PIPELINE_STEPS = [
   { n:6, label:'Survey window closed & data locked',
     detail: d => d.survey_closed_at ? `Closed ${formatDate(d.survey_closed_at)}` : 'Follows automatically when the survey window ends' },
   { n:7, label:'Diagnostic report finalized',
-    detail: d => d.report_finalized_at ? `Report available ${formatDate(d.report_finalized_at)}` : 'Alex reviews and finalizes your report' },
+    detail: d => {
+      const released = !d.report_release_at || (new Date() >= new Date(d.report_release_at));
+      if (released && (d.report_finalized_at || d.report_generated_at)) {
+        return `Report available ${formatDate(d.report_release_at || d.report_finalized_at)}`;
+      }
+      if (d.report_finalized_at || d.report_generated_at) {
+        return `Being finalized — available ${d.report_release_at ? formatDate(d.report_release_at) : 'the evening before your debrief'}`;
+      }
+      return 'Alex reviews and finalizes your report';
+    }},
   { n:8, label:'Debrief session',
     detail: d => d.debrief_completed_at
       ? `Completed ${formatDate(d.debrief_completed_at)}`
@@ -536,7 +545,16 @@ function renderPipeline() {
     'debrief_complete':         'Debrief complete. Your 90-day plan is next.',
     'plan_active':              'Your 90-day plan is active. Check in weekly with Alex.',
   };
-  document.getElementById('pipeline-sub').textContent = subMap[d.status] || '';
+  let subText = subMap[d.status] || '';
+  // Until the report is actually released to the leader (report_release_at, ~the
+  // evening before the debrief), don't tell them it's "ready" — it's being finalized.
+  if (d.status === 'report_final') {
+    const released = !d.report_release_at || (new Date() >= new Date(d.report_release_at));
+    subText = released
+      ? 'Your report is ready. Debrief session coming soon.'
+      : 'Your report is being finalized. It unlocks the evening before your debrief.';
+  }
+  document.getElementById('pipeline-sub').textContent = subText;
 
   // Steps
   let html = '';
