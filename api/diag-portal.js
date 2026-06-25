@@ -161,11 +161,22 @@ export default async function handler(req, res) {
         // self-vs-others). Gated to finalized states; never exposes the AI narrative here.
         if (['report_final','debrief_complete','plan_active'].includes(diag.status)) {
           try {
-            const sr = await sb(`/rest/v1/diagnostic_report_drafts?diagnostic_id=eq.${diag.id}&select=scores_json,generated_at&order=generated_at.desc&limit=1`);
+            const sr = await sb(`/rest/v1/diagnostic_report_drafts?diagnostic_id=eq.${diag.id}&select=scores_json,raw_markdown,generated_at&order=generated_at.desc&limit=1`);
             const srows = sr.ok ? await sr.json() : [];
             if (srows[0] && srows[0].scores_json) diag.scores = srows[0].scores_json;
+            if (srows[0] && srows[0].raw_markdown) diag.report_html = srows[0].raw_markdown;
           } catch (_) { /* scores are optional */ }
         }
+        // Editable rater heads-up: if an approved 'rater_headsup' template exists,
+        // deliver its filled text so the leader's Step-4 box shows the coach's wording.
+        // Best-effort — on any miss the page falls back to its built-in copy.
+        try {
+          const tr = await sb(`/rest/v1/email_templates?template_key=eq.rater_headsup&is_approved=eq.true&select=body_text&limit=1`);
+          const trows = tr.ok ? await tr.json() : [];
+          if (trows[0] && trows[0].body_text) {
+            diag.rater_headsup_text = String(trows[0].body_text).replace(/\{\{\s*leader_name\s*\}\}/gi, diag.client_name || '');
+          }
+        } catch (_) { /* template optional — page falls back */ }
         return res.status(200).json({ ok: true, diagnostic: diag, raters });
       }
       case 'leader-add-rater': {
