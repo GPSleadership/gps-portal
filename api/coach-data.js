@@ -245,6 +245,48 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, sent_to: acct.email });
     }
 
+    // ── Ask Alex Log: what clients are actually asking (read-only) ────────────
+    // Surfaces the ask_alex_log data we already capture: recent questions across
+    // all clients + simple aggregates. Coaching signal + content fuel.
+    if (action === 'ask-alex-log') {
+      const lr = await sb('/rest/v1/ask_alex_log?select=client_id,asked_at,question_text,response_text&order=asked_at.desc&limit=60');
+      const logs = lr.ok ? await lr.json() : [];
+      const cr = await sb('/rest/v1/ask_alex_log?select=client_id,asked_at&order=asked_at.desc&limit=2000');
+      const all = cr.ok ? await cr.json() : [];
+      const now = Date.now();
+      const last30 = all.filter(r => r.asked_at && (now - new Date(r.asked_at).getTime()) <= 30 * 864e5).length;
+      const byClient = {};
+      all.forEach(r => {
+        if (!r.client_id) return;
+        byClient[r.client_id] = byClient[r.client_id] || { count: 0, last: null };
+        byClient[r.client_id].count++;
+        if (!byClient[r.client_id].last || r.asked_at > byClient[r.client_id].last) byClient[r.client_id].last = r.asked_at;
+      });
+      const ids = [...new Set([...logs.map(l => l.client_id), ...Object.keys(byClient)])].filter(Boolean);
+      const cmap = {};
+      if (ids.length) {
+        const clr = await sb(`/rest/v1/clients?id=in.(${ids.map(encodeURIComponent).join(',')})&select=id,name,organization`);
+        const clients = clr.ok ? await clr.json() : [];
+        clients.forEach(c => { cmap[c.id] = c; });
+      }
+      const recent = logs.map(l => ({
+        asked_at:         l.asked_at,
+        client_id:        l.client_id,
+        client_name:      (cmap[l.client_id] && cmap[l.client_id].name) || '(unknown)',
+        organization:     (cmap[l.client_id] && cmap[l.client_id].organization) || '',
+        question:         String(l.question_text || '').slice(0, 600),
+        response_preview: String(l.response_text || '').replace(/PARAGRAPH_BREAK/g, ' ').slice(0, 280),
+      }));
+      const topClients = Object.entries(byClient)
+        .map(([cid, v]) => ({ client_id: cid, name: (cmap[cid] && cmap[cid].name) || '(unknown)', count: v.count, last_at: v.last }))
+        .sort((a, b) => b.count - a.count).slice(0, 8);
+      return res.status(200).json({
+        ok: true,
+        totals: { recent_total: all.length, last_30d: last30, distinct_clients: Object.keys(byClient).length },
+        recent, top_clients: topClients,
+      });
+    }
+
     // ── Contact Your Coach: inbox list (conversations + needs-reply/overdue) ──
     if (action === 'coach-msg-inbox') {
       const cr = await sb('/rest/v1/coach_conversations?select=id,client_id,status,last_message_at&order=last_message_at.desc.nullslast');

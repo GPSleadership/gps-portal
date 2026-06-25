@@ -849,12 +849,22 @@
     <div id="subnav-comms" class="section-subnav" style="display:none;">
       <div class="section-subtab active" id="sub-emails"    onclick="showSection('emails')">Email Log</div>
       <div class="section-subtab"        id="sub-messages"  onclick="showSection('messages')">Client Messages <span id="msgNavBadge" style="display:none;background:#C0392B;color:#fff;border-radius:9px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:4px;">0</span></div>
+      <div class="section-subtab"        id="sub-asklog"    onclick="showSection('asklog')">Ask Alex Log</div>
       <div class="section-subtab"        id="sub-templates" onclick="showSection('templates')">Templates &amp; Automation</div>
       <div class="section-subtab"        id="sub-accesshelp" onclick="showSection('accesshelp')">Access &amp; IT</div>
     </div>
     <div id="subnav-settings" class="section-subnav" style="display:none;">
       <div class="section-subtab active" id="sub-admins"   onclick="showSection('admins')">Admin Accounts</div>
       <div class="section-subtab"        id="sub-security" onclick="showSection('security')">Account &amp; Security</div>
+    </div>
+
+    <!-- ═══ ASK ALEX LOG SECTION ═══ -->
+    <div id="section-asklog" style="display:none;">
+      <div class="card">
+        <div class="card-title">Ask Alex Log</div>
+        <p style="font-size:13px;color:#566;margin:4px 0 16px;max-width:680px;">What your clients are actually asking the in-portal assistant. Use it to spot coaching themes and to turn real questions into content.</p>
+        <div id="askLogBody"><div style="color:#8a97a0;font-size:13px;padding:18px 0;">Loading…</div></div>
+      </div>
     </div>
 
     <!-- ═══ ACCESS & IT (allowlist sheet) SECTION ═══ -->
@@ -4059,7 +4069,7 @@ document.getElementById('addAdminModal').addEventListener('click', function(e) {
 let _currentSection = 'dashboard';
 
 // Refactored IA: 5 top-level groups, each mapping to one or more underlying sections.
-var GROUP_OF = { dashboard:'today', clients:'clients', insights:'insights', diagnostics:'diagteams', decisionroom:'diagteams', emails:'comms', messages:'comms', templates:'comms', accesshelp:'comms', admins:'settings', security:'settings', workshops:'workshops', organizations:'organizations' };
+var GROUP_OF = { dashboard:'today', clients:'clients', insights:'insights', diagnostics:'diagteams', decisionroom:'diagteams', emails:'comms', messages:'comms', asklog:'comms', templates:'comms', accesshelp:'comms', admins:'settings', security:'settings', workshops:'workshops', organizations:'organizations' };
 var GROUP_DEFAULT = { today:'dashboard', clients:'clients', insights:'insights', diagteams:'diagnostics', comms:'emails', settings:'admins', workshops:'workshops', organizations:'organizations' };
 function showGroup(group){ showSection(GROUP_DEFAULT[group] || 'dashboard'); }
 
@@ -4220,7 +4230,7 @@ function showSection(name, skipHooks) {
   _currentSection = name;
   try { localStorage.setItem('gps_coach_section', name); } catch (_) {}
   // Toggle the underlying content sections.
-  ['dashboard', 'clients', 'insights', 'emails', 'messages', 'templates', 'accesshelp', 'admins', 'security', 'diagnostics', 'decisionroom', 'workshops', 'organizations'].forEach(s => {
+  ['dashboard', 'clients', 'insights', 'emails', 'messages', 'asklog', 'templates', 'accesshelp', 'admins', 'security', 'diagnostics', 'decisionroom', 'workshops', 'organizations'].forEach(s => {
     var sec = document.getElementById('section-' + s);
     if (sec) sec.style.display = s === name ? 'block' : 'none';
   });
@@ -4246,6 +4256,7 @@ function showSection(name, skipHooks) {
   if (name === 'decisionroom') drRender();
   if (name === 'workshops')   wsRender();
   if (name === 'emails')      loadEmailLog();
+  if (name === 'asklog')      loadAskLog();
   if (name === 'messages')    loadCoachInbox();
   if (name === 'admins')      loadAdminAccounts();
   if (name === 'templates')   { loadEmailTemplates(); loadCcSettingsPanel(); }
@@ -4253,6 +4264,50 @@ function showSection(name, skipHooks) {
   if (name === 'diagnostics') { diagBoot(); renderDiagTable(); }
   if (name === 'organizations') renderOrganizations();
   if (name === 'insights')    renderCoachInsights();
+}
+
+// ── Ask Alex Log (what clients are asking the in-portal assistant) ──────────
+async function loadAskLog() {
+  var body = document.getElementById('askLogBody');
+  if (!body) return;
+  body.innerHTML = '<div style="color:#8a97a0;font-size:13px;padding:18px 0;">Loading…</div>';
+  var data;
+  try { data = await coachData({ action: 'ask-alex-log' }); }
+  catch (e) { body.innerHTML = '<div style="color:#dc2626;font-size:13px;padding:12px 0;">' + esc(e.message) + '</div>'; return; }
+  var t = data.totals || {}, recent = data.recent || [], top = data.top_clients || [];
+
+  var stat = function(big, label){ return '<div style="flex:1;min-width:120px;background:#f6f8fa;border-radius:10px;padding:14px 16px;"><div style="font-size:26px;font-weight:800;color:#004369;font-family:\'Montserrat\',sans-serif;line-height:1;">' + big + '</div><div style="font-size:11px;color:#566;text-transform:uppercase;letter-spacing:.04em;margin-top:6px;">' + label + '</div></div>'; };
+  var stats = '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px;">'
+    + stat(t.last_30d != null ? t.last_30d : '—', 'Questions, last 30 days')
+    + stat(t.distinct_clients != null ? t.distinct_clients : '—', 'Clients using Ask Alex')
+    + stat(t.recent_total != null ? t.recent_total : '—', 'Questions logged')
+    + '</div>';
+
+  var topHtml = top.length
+    ? '<div style="margin-bottom:18px;"><div style="font-size:12px;font-weight:700;color:#004369;margin-bottom:8px;">Most active clients</div><div style="display:flex;flex-wrap:wrap;gap:8px;">'
+      + top.map(function(c){ return '<span style="font-size:12px;background:#eef2f6;border-radius:20px;padding:5px 12px;color:#33414a;">' + esc(c.name) + ' · ' + c.count + '</span>'; }).join('')
+      + '</div></div>'
+    : '';
+
+  var listHtml;
+  if (!recent.length) {
+    listHtml = '<div style="color:#8a97a0;font-size:13px;padding:12px 0;">No questions logged yet.</div>';
+  } else {
+    listHtml = '<div style="font-size:12px;font-weight:700;color:#004369;margin-bottom:10px;">Recent questions</div>'
+      + recent.map(function(r){
+          var when = '';
+          try { when = new Date(r.asked_at).toLocaleDateString(undefined,{month:'short',day:'numeric'}) + ', ' + new Date(r.asked_at).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}); } catch(_) {}
+          return '<div style="border:1px solid #eef1f2;border-radius:10px;padding:12px 14px;margin-bottom:10px;">'
+            + '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px;">'
+            + '<span style="font-size:12.5px;font-weight:700;color:#004369;">' + esc(r.client_name) + (r.organization ? ' <span style="font-weight:400;color:#8a97a0;">· ' + esc(r.organization) + '</span>' : '') + '</span>'
+            + '<span style="font-size:11px;color:#8a97a0;white-space:nowrap;">' + when + '</span>'
+            + '</div>'
+            + '<div style="font-size:13.5px;color:#1a2730;line-height:1.5;">' + esc(r.question) + '</div>'
+            + (r.response_preview ? '<div style="font-size:12px;color:#6b7a83;line-height:1.45;margin-top:6px;border-top:1px dashed #eef1f2;padding-top:6px;"><span style="color:#01949A;font-weight:700;">Alex:</span> ' + esc(r.response_preview) + '…</div>' : '')
+            + '</div>';
+        }).join('');
+  }
+  body.innerHTML = stats + topHtml + listHtml;
 }
 
 // ── Coach Insights (read-only portfolio + client health) ───────────────────
