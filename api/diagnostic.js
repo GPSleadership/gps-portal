@@ -3518,15 +3518,23 @@ async function handleGenerateTeamReport(req, res) {
         });
       }
 
-      // Others responses (scores + open-ended text)
-      let othersResponses = [];
-      if (othersRaters?.length > 0) {
-        const otherIds = othersRaters.map(r => `"${r.id}"`).join(',');
-        const othersRespRes = await sb(
-          `/rest/v1/diagnostic_responses?rater_id=in.(${otherIds})&diagnostic_id=eq.${diag.id}&select=rater_id,question_code,score,text_response`
-        );
-        othersResponses = await othersRespRes.json() || [];
-      }
+      // Others responses (scores + open-ended text). Hard-cut anonymity stores
+      // others' responses with rater_id = NULL, so a rater_id=in.(...) filter
+      // returns nothing (this was the "others scores unavailable" bug). Fetch ALL
+      // responses for the diagnostic and keep the non-self rows: anonymous rows
+      // (rater_id NULL — never the self-assessment) plus any rows still linked to
+      // a completed non-self rater. The self rater is always excluded.
+      const selfRaterId       = (selfRaters && selfRaters[0]) ? selfRaters[0].id : null;
+      const completedOtherIds = new Set((othersRaters || []).map(r => r.id));
+      const allRespRes = await sb(
+        `/rest/v1/diagnostic_responses?diagnostic_id=eq.${diag.id}&select=rater_id,question_code,score,text_response,rater_relationship`
+      );
+      const allResps = await allRespRes.json() || [];
+      const othersResponses = (Array.isArray(allResps) ? allResps : []).filter(r =>
+        r.rater_id == null
+          ? true
+          : (r.rater_id !== selfRaterId && completedOtherIds.has(r.rater_id))
+      );
 
       // Compute others scores via existing helpers
       const scores = buildScoreSummary(othersResponses);
