@@ -10304,6 +10304,7 @@ function drEditSponsor(linkId){
     +'<div style="padding:18px 22px;border-bottom:1px solid #e8e8e8;display:flex;justify-content:space-between;align-items:center;"><div style="font-family:Montserrat,sans-serif;font-weight:800;color:#004369;font-size:17px;">Edit sponsor</div><div id="drspe_x" style="cursor:pointer;font-size:18px;color:#888;">✕</div></div>'
     +'<div style="padding:20px 22px;">'
     +'<div style="margin-bottom:14px;"><label style="font-size:11px;font-weight:700;color:#5a6b76;text-transform:uppercase;display:block;margin-bottom:4px;">Confidentiality</label><select id="drspe_conf" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;"><option value="progress"'+(link.confidentiality_mode==='progress'?' selected':'')+'>Process only — engagement status, no results yet (reveal later)</option><option value="standard"'+(link.confidentiality_mode==='standard'?' selected':'')+'>Standard — sponsor can open individual reports</option><option value="private"'+(link.confidentiality_mode==='private'?' selected':'')+'>Private — individual scores hidden; team patterns only</option></select></div>'
+    +'<div style="margin-bottom:14px;"><label style="font-size:11px;font-weight:700;color:#5a6b76;text-transform:uppercase;display:block;margin-bottom:4px;">Sponsor debrief date</label><input type="date" id="drspe_debrief" value="'+(link.sponsor_debrief_date||'')+'" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;"><div style="font-size:11px;color:#8a97a0;margin-top:4px;">The full report auto-reveals to this sponsor the day before this date. Leave blank to control the reveal manually.</div></div>'
     +'<div><label style="font-size:11px;font-weight:700;color:#5a6b76;text-transform:uppercase;display:block;margin-bottom:6px;">Who do they supervise on this team?</label>'+memRows+'</div>'
     +'<div id="drspe_err" style="color:#dc2626;font-size:12px;margin-top:8px;"></div>'
     +'</div>'
@@ -10316,9 +10317,10 @@ function drEditSponsor(linkId){
   ov.addEventListener('click', function(e){ if(e.target===ov) close(); });
   document.getElementById('drspe_save').onclick=async function(){
     var conf=document.getElementById('drspe_conf').value;
+    var sdd=document.getElementById('drspe_debrief').value||null;
     var supIds=[]; document.querySelectorAll('.dr_supedit').forEach(function(c){ if(c.checked) supIds.push(c.value); });
     this.disabled=true; this.textContent='Saving…';
-    try{ await cdUpdate('sponsor_teams',{ confidentiality_mode:conf, supervises_client_ids:supIds }, { eq:{ id:linkId } }); close(); drManageTeam(teamId); }
+    try{ await cdUpdate('sponsor_teams',{ confidentiality_mode:conf, sponsor_debrief_date:sdd, supervises_client_ids:supIds }, { eq:{ id:linkId } }); close(); drManageTeam(teamId); }
     catch(e){ document.getElementById('drspe_err').textContent=e.message; this.disabled=false; this.textContent='Save changes'; }
   };
 }

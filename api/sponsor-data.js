@@ -262,11 +262,17 @@ async function buildPipeline(clientId) {
   const planActive = !!d.plan_locked_at || ['active', 'in_progress', 'locked'].includes(ps);
   const planComplete = ['complete', 'completed', 'closed', 'done'].includes(ps);
 
+  // The report step stays "Drafting report" until it is actually released
+  // (report_release_at, ~the evening before the debrief) — a finalized-but-unreleased
+  // report is still being prepared from the sponsor's point of view.
+  const reportReleased = !d.report_release_at || (new Date() >= new Date(d.report_release_at));
+  const reportReady = reportReleased && !!(d.report_finalized_at || d.report_generated_at);
+
   const stages = [
     { key: 'kickoff',  label: 'Kickoff',             date: d.kickoff_date || null,                                                    done: !!d.kickoff_completed_at },
     { key: 'survey',   label: 'Survey sent',         date: d.invites_sent_at || d.invites_scheduled_at || null,                       done: !!d.invites_sent_at },
     { key: 'collect',  label: 'Collecting responses', date: d.all_raters_complete_at || d.survey_closed_at || d.close_date || null,    done: !!(d.all_raters_complete_at || d.survey_closed_at), note: ratersTotal ? (ratersTotal + ' rater' + (ratersTotal === 1 ? '' : 's') + ' loaded') : null },
-    { key: 'report',   label: 'Report ready',        date: d.report_finalized_at || d.report_release_at || d.report_generated_at || null, done: !!(d.report_finalized_at || d.report_release_at) },
+    { key: 'report',   label: reportReady ? 'Report ready' : 'Drafting report', date: reportReady ? (d.report_release_at || d.report_finalized_at) : (d.report_release_at || null), done: reportReady },
     { key: 'debrief',  label: 'Debrief',             date: d.debrief_date || null,                                                    done: !!d.debrief_completed_at },
     { key: 'plan',     label: '90-day plan active',  date: d.plan_locked_at || null,                                                  done: planActive || planComplete },
     { key: 'complete', label: '90-day complete',     date: null,                                                                      done: planComplete },
@@ -418,9 +424,19 @@ export default async function handler(req, res) {
       }
 
       const isPrivate = link.confidentiality_mode === 'private';
-      // 'progress' = a coordinating POC who may see ONLY where each leader is in
-      // the process (diagnostic + assessment), never another leader's results.
-      const isProgress = link.confidentiality_mode === 'progress';
+      // 'progress' = staged view: the sponsor sees ONLY where each leader is in the
+      // process, never results. Auto-reveal: a staged link opens to the full Decision
+      // Room the day before the sponsor's own debrief (sponsor_debrief_date). The
+      // manual reveal toggle (private/standard) still overrides at any time.
+      let autoReveal = false;
+      if (link.sponsor_debrief_date) {
+        const dbd = new Date(link.sponsor_debrief_date + 'T00:00:00');
+        if (!isNaN(dbd.getTime())) {
+          const revealAt = new Date(dbd.getTime() - 24 * 3600 * 1000); // the day before
+          autoReveal = new Date() >= revealAt;
+        }
+      }
+      const isProgress = (link.confidentiality_mode === 'progress') && !autoReveal;
       const ownClientId = sponsor.linked_client_id || null;
       const supervises = Array.isArray(link.supervises_client_ids) ? link.supervises_client_ids
                        : (link.supervises_client_ids ? JSON.parse(link.supervises_client_ids) : []);
