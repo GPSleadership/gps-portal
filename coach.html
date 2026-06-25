@@ -9881,11 +9881,18 @@ function drCard(title, inner){
 }
 
 function drNarrativePanel(t){
+  var themes=t.themes; if(typeof themes==='string'){ try{themes=JSON.parse(themes);}catch(_){themes=null;} } themes=themes||{};
+  var strLines=(Array.isArray(themes.strengths)?themes.strengths:[]).join('\n');
+  var riskLines=(Array.isArray(themes.riskPatterns)?themes.riskPatterns:[]).join('\n');
   var inner='<div style="display:grid;gap:10px;">'
     +'<div><label style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;">Quick read (the "Net:" line)</label>'
     +'<input id="dr_quick" value="'+drEsc(t.quick_read||'')+'" style="width:100%;padding:9px 12px;border:1.5px solid #d0d0d0;border-radius:6px;" /></div>'
     +'<div><label style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;">Summary</label>'
     +'<textarea id="dr_summary" style="width:100%;min-height:64px;padding:9px 12px;border:1.5px solid #d0d0d0;border-radius:6px;">'+drEsc(t.summary||'')+'</textarea></div>'
+    +'<div><label style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;">Team strengths <span style="font-weight:400;text-transform:none;color:#999;">(one per line)</span></label>'
+    +'<textarea id="dr_themes_str" style="width:100%;min-height:64px;padding:9px 12px;border:1.5px solid #d0d0d0;border-radius:6px;">'+drEsc(strLines)+'</textarea></div>'
+    +'<div><label style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;">Risk patterns <span style="font-weight:400;text-transform:none;color:#999;">(one per line)</span></label>'
+    +'<textarea id="dr_themes_risk" style="width:100%;min-height:64px;padding:9px 12px;border:1.5px solid #d0d0d0;border-radius:6px;">'+drEsc(riskLines)+'</textarea></div>'
     +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;"><button class="btn-add" id="dr_gencontent_btn" onclick="drGenContent(\''+t.id+'\')">⚙ Generate from diagnostics</button><button class="btn-save" onclick="drSaveNarr(\''+t.id+'\')">Save narrative</button></div></div>'
     +'<div style="font-size:11px;color:#888;margin-top:8px;font-style:italic;">"Generate from diagnostics" fills the quick-read, summary, team themes, Start/Stop/Continue, Intent-vs-Impact, the snapshot, and each leader\'s cards from this team\'s in-system diagnostics. You can edit the quick-read and summary above after generating. It only uses leaders with completed in-system diagnostics; legacy/PDF-only leaders are added separately.</div>';
   return drCard('Narrative (sponsor read-only)', inner);
@@ -9900,16 +9907,36 @@ async function drGenContent(teamId){
     drManageTeam(teamId);
   }catch(e){ alert('Could not generate content: '+e.message); if(btn){ btn.disabled=false; btn.textContent='⚙ Generate from diagnostics'; } }
 }
+async function drSaveMemberSummary(memberId, teamId){
+  var el=document.getElementById('dr_msum_'+memberId); if(!el) return;
+  var val=(el.value||'').trim();
+  el.style.borderColor='#dbe3e6';
+  try{
+    var rows=await cdSelect('team_members',{ eq:{id:memberId}, limit:1 });
+    var rj=(rows&&rows[0]&&rows[0].report_json)||{};
+    if(typeof rj==='string'){ try{rj=JSON.parse(rj);}catch(_){rj={};} }
+    rj.summaryLine=val;
+    await cdUpdate('team_members',{ report_json:rj },{ eq:{id:memberId} });
+    el.style.borderColor='#0F6E56'; setTimeout(function(){ el.style.borderColor='#d0d0d0'; },1200);
+  }catch(e){ el.style.borderColor='#dc2626'; alert('Save failed: '+e.message); }
+}
 async function drSaveNarr(teamId){
-  try{ await cdUpdate('teams',{ quick_read:drVal('dr_quick'), summary:drVal('dr_summary'), updated_at:new Date().toISOString() },{ eq:{id:teamId} }); alert('Saved.'); }
+  var toLines=function(id){ return (drVal(id)||'').split('\n').map(function(s){return s.trim();}).filter(Boolean); };
+  var themes={ strengths:toLines('dr_themes_str'), riskPatterns:toLines('dr_themes_risk') };
+  try{ await cdUpdate('teams',{ quick_read:drVal('dr_quick'), summary:drVal('dr_summary'), themes:themes, updated_at:new Date().toISOString() },{ eq:{id:teamId} }); alert('Saved.'); }
   catch(e){ alert('Save failed: '+e.message); }
 }
 
 function drMembersPanel(t, members, clients, nameById){
   var list=members.map(function(m){
-    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f0f0f0;">'
+    var rj=m.report_json; if(typeof rj==='string'){ try{rj=JSON.parse(rj);}catch(_){rj=null;} }
+    var sumLine=(rj&&rj.summaryLine)?rj.summaryLine:'';
+    return '<div style="padding:8px 0;border-bottom:1px solid #f0f0f0;">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;">'
       +'<div><b>'+drEsc(nameById[m.client_id]||'(client)')+'</b> — '+drEsc(m.role||'')+(m.is_coaching_client?' <span style="font-size:10px;background:#E8F7F7;color:#01949A;padding:1px 7px;border-radius:8px;">Coaching</span>':'')+'</div>'
-      +'<button class="btn-add" style="background:#fff;color:#DB1F48;border:1px solid #DB1F48;padding:4px 10px;font-size:11px;" onclick="drRemoveMember(\''+m.id+'\',\''+t.id+'\')">Remove</button></div>';
+      +'<button class="btn-add" style="background:#fff;color:#DB1F48;border:1px solid #DB1F48;padding:4px 10px;font-size:11px;" onclick="drRemoveMember(\''+m.id+'\',\''+t.id+'\')">Remove</button></div>'
+      +(rj?'<div style="margin-top:6px;"><label style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;">Sponsor-facing summary line</label><textarea id="dr_msum_'+m.id+'" style="width:100%;min-height:42px;padding:7px 10px;border:1.5px solid #d0d0d0;border-radius:6px;font-size:12.5px;font-family:inherit;">'+drEsc(sumLine)+'</textarea><div style="text-align:right;margin-top:4px;"><button class="btn-add" style="padding:3px 10px;font-size:11px;" onclick="drSaveMemberSummary(\''+m.id+'\',\''+t.id+'\')">Save summary</button></div></div>':'')
+      +'</div>';
   }).join('') || '<div style="color:#666;font-size:13px;">No members yet.</div>';
   var existing={}; members.forEach(function(m){ existing[m.client_id]=1; });
   var teamOrg=(t.client_org_name||'').trim();
