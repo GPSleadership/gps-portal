@@ -157,5 +157,9 @@ export default async function handler(req, res) {
     }
   }
 
+  // Confidentiality: business_outcome_goal is only for sponsor-driven engagements.
+  // Gate it server-side here (the client portal also hides it, but never rely on the UI).
+  if (!client.sponsor_outcome_focus) client.business_outcome_goal = null;
+
   return res.status(200).json(client);
 }
