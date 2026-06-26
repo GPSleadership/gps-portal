@@ -2705,20 +2705,6 @@ function renderProfileSection(section, client, checkins) {
         </div>
         <div id="regenMsg-${client.id}" style="margin-top:8px;"></div>
       </div>
-      <div class="detail-section">
-        <h4>Coaching Session Check-In Question</h4>
-        <p id="coachingSessionStatus-${client.id}" style="font-size:12px;color:var(--gray-600);margin-bottom:10px;">
-          ${client.coaching_sessions_enabled
-            ? 'On. Their weekly check-in includes a "did you attend your coaching session?" question.'
-            : 'Off. The coaching-session attendance question is hidden from their check-in.'
-          }
-        </p>
-        <button onclick="toggleCoachingSessions('${client.id}', ${!!client.coaching_sessions_enabled})" id="coachingSessionBtn-${client.id}"
-          style="padding:8px 18px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;border:none;
-            background:${client.coaching_sessions_enabled ? 'var(--red)' : 'var(--teal)'};color:#fff;">
-          ${client.coaching_sessions_enabled ? 'Turn off session question' : 'Turn on session question'}
-        </button>
-      </div>
       <div class="detail-section" id="bigwin-section-${client.id}">
         <h4>Client Win</h4>
         <p style="font-size:12px;color:var(--gray-600);margin-bottom:10px;">

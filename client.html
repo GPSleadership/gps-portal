@@ -5236,12 +5236,23 @@ function renderCheckinForm(client, checkins, currentWeek) {
         </div>
       </div>
 
-      ${client.coaching_sessions_enabled ? `
+      ${client.is_coaching_client ? `
       <div class="form-group">
-        <label>Did you attend your coaching session this week?</label>
-        <div class="radio-group" id="coachingGroup">
-          <label onclick="selectRadio('coachingGroup', this)"><input type="radio" name="coaching" value="true" /><span>Yes</span></label>
-          <label onclick="selectRadio('coachingGroup', this)"><input type="radio" name="coaching" value="false" /><span>No</span></label>
+        <label>Did you have a coaching call scheduled this week?</label>
+        <div class="radio-group" id="callScheduledGroup">
+          <label onclick="selectRadio('callScheduledGroup', this); coachingCallToggle()"><input type="radio" name="callsched" value="true" /><span>Yes</span></label>
+          <label onclick="selectRadio('callScheduledGroup', this); coachingCallToggle()"><input type="radio" name="callsched" value="false" /><span>No</span></label>
+        </div>
+        <div id="attendBlock" style="display:none;margin-top:14px;">
+          <label>Did you attend?</label>
+          <div class="radio-group" id="attendGroup">
+            <label onclick="selectRadio('attendGroup', this); coachingAttendToggle()"><input type="radio" name="attend" value="true" /><span>Yes</span></label>
+            <label onclick="selectRadio('attendGroup', this); coachingAttendToggle()"><input type="radio" name="attend" value="false" /><span>No</span></label>
+          </div>
+          <div id="missedReasonBlock" style="display:none;margin-top:12px;">
+            <label>What got in the way?</label>
+            <textarea id="coachingMissedReason" rows="2" placeholder="A quick note — rescheduled, schedule conflict, travel, etc."></textarea>
+          </div>
         </div>
       </div>` : ''}
 
@@ -5309,6 +5320,26 @@ function renderCheckinForm(client, checkins, currentWeek) {
       </div>
     </div>
   `;
+}
+
+// Coaching-call check-in branching: scheduled? → attended? → what got in the way?
+function coachingCallToggle() {
+  const sched = document.querySelector('#callScheduledGroup label.selected input');
+  const attendBlock = document.getElementById('attendBlock');
+  const scheduledYes = !!(sched && sched.value === 'true');
+  if (attendBlock) attendBlock.style.display = scheduledYes ? '' : 'none';
+  if (!scheduledYes) {
+    document.querySelectorAll('#attendGroup label.selected').forEach(l => l.classList.remove('selected'));
+    const mr = document.getElementById('missedReasonBlock');
+    if (mr) mr.style.display = 'none';
+  } else {
+    coachingAttendToggle();
+  }
+}
+function coachingAttendToggle() {
+  const att = document.querySelector('#attendGroup label.selected input');
+  const mr = document.getElementById('missedReasonBlock');
+  if (mr) mr.style.display = (att && att.value === 'false') ? '' : 'none';
 }
 
 function selectRadio(groupId, labelEl) {
@@ -5453,10 +5484,15 @@ async function submitFormA(clientId, clientName, weekNumber, noCompletion) {
   const barrierEl  = document.getElementById('completionBarrier');
   const barrier    = barrierEl ? barrierEl.value.trim() : '';
 
-  const coachingLabel   = document.querySelector('#coachingGroup label.selected');
+  const callSchedLabel  = document.querySelector('#callScheduledGroup label.selected');
+  const attendLabel     = document.querySelector('#attendGroup label.selected');
   const completionLabel = document.querySelector('#completionGroup label.selected');
 
-  const attendedCoaching  = coachingLabel   ? coachingLabel.querySelector('input').value === 'true' : null;
+  const coachingCallScheduled = callSchedLabel ? callSchedLabel.querySelector('input').value === 'true' : null;
+  // Attendance only means something if a call was scheduled; otherwise null (off week).
+  const attendedCoaching  = (coachingCallScheduled === true && attendLabel) ? (attendLabel.querySelector('input').value === 'true') : null;
+  const coachingMissedReason = (coachingCallScheduled === true && attendedCoaching === false)
+    ? ((document.getElementById('coachingMissedReason')?.value || '').trim() || null) : null;
   const completionStatus  = completionLabel ? completionLabel.querySelector('input').value : null;
 
   if (isNaN(metricVal)) {
@@ -5473,13 +5509,23 @@ async function submitFormA(clientId, clientName, weekNumber, noCompletion) {
     return;
   }
 
+  // Missed a scheduled coaching call → ask for a quick reason (valuable coaching signal).
+  if (coachingCallScheduled === true && attendedCoaching === false && !coachingMissedReason) {
+    errEl.textContent = 'Please add a quick note on what got in the way of your coaching call.';
+    errEl.style.display = 'block';
+    document.getElementById('coachingMissedReason')?.focus();
+    return;
+  }
+
   btn.disabled = true;
   btn.textContent = 'Submitting…';
 
   const checkinData = {
     client_id:          clientId,
     week_number:        weekNumber,
+    coaching_call_scheduled: coachingCallScheduled,
     attended_coaching:  attendedCoaching,
+    coaching_missed_reason:  coachingMissedReason,
     planned_action:     action || null,
     completion_status:  noCompletion ? null : completionStatus,
     completion_barrier: (!noCompletion && barrier) ? barrier : null,
@@ -5859,8 +5905,10 @@ function renderWeekTimeline(client, checkins, currentWeek) {
   const submitted    = checkins.length;
   const pct          = weeksElapsed > 0 ? Math.round((submitted / weeksElapsed) * 100) : null;
 
-  // Coaching sessions attended (only relevant if coaching_sessions_enabled)
+  // Coaching calls attended, measured only against weeks a call was scheduled.
+  // Legacy check-ins (no coaching_call_scheduled) count as scheduled if they answered.
   const coachingCount = checkins.filter(c => c.attended_coaching === true).length;
+  const coachingScheduled = checkins.filter(c => c.coaching_call_scheduled === true || (c.coaching_call_scheduled == null && c.attended_coaching != null)).length;
 
   // Color for submission rate
   const pctColor = pct === null ? '#9CA3AF'
@@ -5868,12 +5916,12 @@ function renderWeekTimeline(client, checkins, currentWeek) {
     : pct >= 40 ? '#C47A30'
     : '#C0222E';
 
-  const coachingStat = client.coaching_sessions_enabled ? `
+  const coachingStat = (client.is_coaching_client && coachingScheduled > 0) ? `
       <div style="width:1px;background:rgba(0,67,105,0.1);align-self:stretch;"></div>
       <div style="display:flex;flex-direction:column;gap:2px;">
-        <span style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray-600);">Coaching Sessions</span>
+        <span style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray-600);">Coaching Calls</span>
         <span style="font-size:18px;font-weight:800;font-family:'Montserrat',sans-serif;color:${coachingCount > 0 ? '#2e7d32' : 'var(--gray-600)'};">${coachingCount}<span style="font-size:13px;font-weight:500;color:var(--gray-600);"> attended</span></span>
-        <span style="font-size:10px;color:var(--gray-600);">of ${submitted} check-in weeks</span>
+        <span style="font-size:10px;color:var(--gray-600);">of ${coachingScheduled} scheduled</span>
       </div>` : '';
 
   const statBlock = weeksElapsed > 0 ? `
@@ -6362,7 +6410,8 @@ function renderResultsTab(surveyResponses, checkins, client, surveyTokens, selfC
     const submitted = ci.length;
     const ciPct = Math.round((submitted / expectedWeeks) * 100);
     const coachYes = ci.filter(c => c.attended_coaching === true).length;
-    const coachPct = expectedWeeks ? Math.round((coachYes / expectedWeeks) * 100) : 0;
+    const coachScheduled = ci.filter(c => c.coaching_call_scheduled === true || (c.coaching_call_scheduled == null && c.attended_coaching != null)).length;
+    const coachPct = coachScheduled ? Math.round((coachYes / coachScheduled) * 100) : 0;
     const ftAns = ci.filter(c => c.completion_status);
     const ftYes = ci.filter(c => c.completion_status === 'Yes').length;
     const ftPct = ftAns.length ? Math.round((ftYes / ftAns.length) * 100) : null;
@@ -6395,7 +6444,7 @@ function renderResultsTab(surveyResponses, checkins, client, surveyTokens, selfC
         <div class="card-subtitle">Showing up is the leading indicator. Your track record so far.</div>
         <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:14px;">
           ${stat('Check-ins submitted', `${submitted} of ${expectedWeeks}`, ciPct + '% of weeks')}
-          ${client.coaching_sessions_enabled ? stat('Coaching attended', `${coachYes} of ${expectedWeeks}`, coachPct + '% of sessions') : ''}
+          ${(client.is_coaching_client && coachScheduled > 0) ? stat('Coaching calls attended', `${coachYes} of ${coachScheduled}`, coachPct + '% of calls') : ''}
           ${ftPct != null ? stat('Follow-through', ftPct + '%', `${ftYes} of ${ftAns.length} weeks &ldquo;Yes&rdquo;`) : ''}
         </div>
         <div style="margin-top:14px;padding:10px 14px;border-left:3px solid ${nudgeColor};background:rgba(0,0,0,0.02);font-size:13px;color:var(--gray-700);line-height:1.5;">${nudge}</div>
