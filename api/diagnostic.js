@@ -265,6 +265,103 @@ function tplBodyToHtml(text) {
   return html;
 }
 
+// ── Kickoff recap email (draft → review/edit → send) ─────────────────────────
+// After a kickoff/intake call, the coach can draft a recap email to the leader from
+// the intake notes, review/edit it, then copy or send. The AI prompt itself is an
+// EDITABLE template (Communication > Templates, key "kickoff_email_prompt"), so Alex
+// can tune how these emails are written without a code change.
+const KICKOFF_EMAIL_PROMPT_DEFAULT = `You are drafting a short follow-up email FROM Alex Tremble (GPS Leadership Solutions) TO a leader who just completed their kickoff / intake call for a 14-Day Executive Leadership Diagnostic. Write in Alex's voice: direct, warm, candid, plain language, short sentences. No corporate buzzwords. No hype. Do not use em dashes; use a comma, period, or semicolon instead.
+
+Use ONLY the kickoff notes and leader context provided. Do not invent facts, commitments, dates, or names that are not in the notes. If something is unclear, keep it general rather than guessing.
+
+The email should:
+- Open warmly and thank them for the kickoff conversation.
+- Briefly reflect back what you heard: their situation, what they want to change, and the focus for the diagnostic (2 to 4 sentences, specific to the notes).
+- Confirm the next step in plain terms: they complete their self-assessment and add their rater list, then GPS runs the confidential 360.
+- Close with a short line of encouragement.
+
+Keep it tight: roughly 150 to 250 words. Do NOT include a sign-off or signature (it is added automatically). Do not put a subject line inside the body.
+
+Return ONLY valid JSON in this exact shape, nothing else:
+{"subject": "a short, specific subject line", "body_text": "the email body as plain paragraphs separated by blank lines; you may use \"- \" at the start of a line for a bullet"}`;
+
+function kickoffEmailShell(inner) {
+  return `
+  <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
+    <div style="background:#004369;padding:20px 28px;border-radius:8px 8px 0 0;">
+      <div style="color:#E5DDC8;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">GPS Leadership Solutions</div>
+      <div style="color:#ffffff;font-size:20px;font-weight:700;">A note after our kickoff</div>
+    </div>
+    <div style="background:#ffffff;padding:28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
+      ${inner}
+      <p style="margin-top:28px;">– Alex Tremble<br><span style="color:#666;font-size:13px;">GPS Leadership Solutions</span></p>
+    </div>
+  </div>`;
+}
+
+async function handleDraftKickoffEmail(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
+  const { diagnostic_id, session } = req.body || {};
+  if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
+  if (!diagnostic_id) return res.status(400).json({ error: 'diagnostic_id required' });
+  try {
+    const r = await sb(`/rest/v1/diagnostics?id=eq.${encodeURIComponent(diagnostic_id)}&select=client_name,client_title,client_org,intake_notes,intake_transcript_url,goal_description,goal_statement,tp3_pillar&limit=1`);
+    const rows = r.ok ? await r.json() : [];
+    const d = rows[0];
+    if (!d) return res.status(404).json({ error: 'Diagnostic not found' });
+    if (!d.intake_notes && !d.intake_transcript_url) {
+      return res.status(400).json({ error: 'Add kickoff / intake notes (or a transcript link) on this diagnostic first, then draft the email.' });
+    }
+    const firstName = String(d.client_name || '').trim().split(/\s+/)[0] || 'there';
+    const vars = { first_name: firstName, leader_name: d.client_name || '', leader_title: d.client_title || '', org: d.client_org || '' };
+
+    const promptTpl = await getApprovedTemplate('kickoff_email_prompt');
+    const systemPrompt = (promptTpl && promptTpl.body_text)
+      ? fillTemplate(promptTpl.body_text, vars)
+      : KICKOFF_EMAIL_PROMPT_DEFAULT;
+
+    const ctx = [
+      `Leader: ${d.client_name || ''}${d.client_title ? ', ' + d.client_title : ''}${d.client_org ? ' (' + d.client_org + ')' : ''}`,
+      d.tp3_pillar ? `Focus pillar: ${d.tp3_pillar}` : '',
+      d.goal_description ? `Stated goal: ${d.goal_description}` : '',
+      d.goal_statement ? `90-day goal: ${d.goal_statement}` : '',
+      '',
+      'KICK-OFF / INTAKE NOTES:',
+      d.intake_notes || '(no typed notes; see transcript)',
+      d.intake_transcript_url ? `\n(Transcript link for your reference only, not for the leader: ${d.intake_transcript_url})` : '',
+    ].filter(Boolean).join('\n');
+
+    const raw = await callClaude(systemPrompt, ctx, 1600, { model: CLAUDE_REPORT_MODEL, timeoutMs: 110000, temperature: 0.3, retries: 1 });
+    const parsed = parseJsonLoose(raw);
+    const subject = (parsed && parsed.subject) ? String(parsed.subject) : `Following up on our kickoff, ${firstName}`;
+    const body_text = (parsed && parsed.body_text) ? String(parsed.body_text) : String(raw || '').trim();
+    if (!body_text) return res.status(502).json({ error: 'Could not draft the email. Please try again.' });
+    return res.status(200).json({ ok: true, subject, body_text });
+  } catch (e) {
+    return res.status(502).json({ error: 'Could not draft the email. Please try again.' });
+  }
+}
+
+async function handleSendKickoffEmail(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const { diagnostic_id, session, subject, body_text } = req.body || {};
+  if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
+  if (!diagnostic_id || !subject || !body_text) return res.status(400).json({ error: 'diagnostic_id, subject and body_text are required' });
+  try {
+    const r = await sb(`/rest/v1/diagnostics?id=eq.${encodeURIComponent(diagnostic_id)}&select=client_id,client_name,client_email&limit=1`);
+    const rows = r.ok ? await r.json() : [];
+    const d = rows[0];
+    if (!d) return res.status(404).json({ error: 'Diagnostic not found' });
+    if (!d.client_email) return res.status(400).json({ error: 'No leader email is on file for this diagnostic.' });
+    const html = kickoffEmailShell(tplBodyToHtml(String(body_text)));
+    await sendEmail({ to: d.client_email, subject: String(subject), html, emailType: 'kickoff_recap', recipientName: d.client_name || '' });
+    return res.status(200).json({ ok: true, sent_to: d.client_email });
+  } catch (e) {
+    return res.status(502).json({ error: 'Could not send the email. ' + (e.message || '') });
+  }
+}
+
 // ── Main handler ─────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {
@@ -305,6 +402,8 @@ export default async function handler(req, res) {
     case 'feedback-context':     return handleFeedbackContext(req, res);
     case 'submit-external-feedback': return handleSubmitExternalFeedback(req, res);
     case 'reminders':            return handleReminders(req, res);
+    case 'draft-kickoff-email':  return handleDraftKickoffEmail(req, res);
+    case 'send-kickoff-email':   return handleSendKickoffEmail(req, res);
     default:
       return res.status(400).json({ error: `Unknown action: "${action}". Valid: send-invites, schedule-invites, send-scheduled, trial-sweep, send-leader-link, generate-question, generate-g2-question, generate-report, generate-team-report, finalize-report, sign-report-upload, generate-dr-content, request-external-feedback, feedback-context, submit-external-feedback, reminders` });
   }

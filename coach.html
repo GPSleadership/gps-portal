@@ -7138,6 +7138,11 @@ function renderOverviewTab() {
              </div></div>`}
       </div>
 
+      <div style="margin-bottom:14px;">
+        <button class="dbtn dbtn-outline dbtn-sm" onclick="draftKickoffEmail()">✉️ Draft kickoff email from notes</button>
+        <div class="dhint">Generates a recap email to the leader from your kick-off / intake notes. You review and edit it before anything sends.</div>
+      </div>
+
       <div style="margin-bottom:14px;padding-top:14px;border-top:1px solid var(--d-border);">
         <div style="font-size:11px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Coaching Notes</div>
         <textarea id="coaching-notes-field" style="min-height:100px;" placeholder="Ongoing observations, session themes, patterns..." onblur="saveCoachingNotes(this.value)">${d.coaching_notes || ''}</textarea>
@@ -8933,6 +8938,86 @@ async function saveKickoffTime(timeStr) {
 async function markKickoffHeld() {
   await updateDiag({ kickoff_completed_at: new Date().toISOString() });
   await refreshSelected();
+}
+
+// ── Kickoff recap email: draft from intake notes → review/edit → copy or send ──
+function _kfEnsureOverlay() {
+  let o = document.getElementById('kfOverlay');
+  if (!o) {
+    o = document.createElement('div');
+    o.id = 'kfOverlay';
+    o.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto;';
+    o.onclick = function (e) { if (e.target === o) closeKickoffModal(); };
+    document.body.appendChild(o);
+  }
+  return o;
+}
+function _kfModal(inner) {
+  const o = _kfEnsureOverlay();
+  o.innerHTML = '<div style="background:#fff;border-radius:12px;max-width:680px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.25);">' + inner + '</div>';
+}
+function closeKickoffModal() { const o = document.getElementById('kfOverlay'); if (o) o.remove(); }
+
+async function draftKickoffEmail() {
+  if (!DIAG_SEL || !DIAG_SEL.id) return;
+  _kfModal('<div style="padding:46px;text-align:center;color:var(--d-mid,#667);font-size:14px;">Drafting your kickoff email from the intake notes…</div>');
+  try {
+    const r = await fetch('/api/diagnostic', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'draft-kickoff-email', diagnostic_id: DIAG_SEL.id, session: getCoachSessionToken() })
+    });
+    const j = await r.json();
+    if (!r.ok || j.error) {
+      _kfModal('<div style="padding:24px;"><div style="color:#b00;font-size:14px;line-height:1.5;">' + escHtml(j.error || 'Could not draft the email.') + '</div><div style="margin-top:16px;text-align:right;"><button onclick="closeKickoffModal()" style="background:#eee;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;">Close</button></div></div>');
+      return;
+    }
+    _kfShowDraft(j.subject || '', j.body_text || '');
+  } catch (e) {
+    _kfModal('<div style="padding:24px;color:#b00;">Error: ' + escHtml(e.message) + '<div style="margin-top:16px;text-align:right;"><button onclick="closeKickoffModal()" style="background:#eee;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;">Close</button></div></div>');
+  }
+}
+function _kfShowDraft(subject, body) {
+  const inner =
+    '<div style="padding:18px 22px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;">'
+    + '<div style="font-family:\'Montserrat\',sans-serif;font-weight:700;color:var(--d-blue,#1A3D6E);">Kickoff email draft</div>'
+    + '<button onclick="closeKickoffModal()" style="background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#999;">&times;</button>'
+    + '</div>'
+    + '<div style="padding:18px 22px;">'
+    + '<label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#666;display:block;margin-bottom:5px;">Subject</label>'
+    + '<input id="kf-subject" type="text" value="' + escHtml(subject) + '" style="width:100%;padding:9px 12px;border:2px solid #d0d0d0;border-radius:6px;font-size:14px;margin-bottom:14px;box-sizing:border-box;">'
+    + '<label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#666;display:block;margin-bottom:5px;">Body</label>'
+    + '<textarea id="kf-body" style="width:100%;min-height:300px;padding:10px 12px;border:2px solid #d0d0d0;border-radius:6px;font-size:13px;line-height:1.6;resize:vertical;box-sizing:border-box;">' + escHtml(body) + '</textarea>'
+    + '<div style="font-size:11px;color:#888;margin-top:5px;">Review and edit freely. Nothing sends until you click Send to leader.</div>'
+    + '<div style="display:flex;align-items:center;gap:10px;margin-top:16px;flex-wrap:wrap;">'
+    + '<button onclick="sendKickoffEmail()" style="background:var(--d-blue,#1A3D6E);color:#fff;border:none;border-radius:6px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;">Send to leader</button>'
+    + '<button onclick="copyKickoffEmail()" style="background:#fff;color:var(--d-blue,#1A3D6E);border:1.5px solid var(--d-blue,#1A3D6E);border-radius:6px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;">Copy</button>'
+    + '<button onclick="draftKickoffEmail()" style="background:none;border:none;color:#666;font-size:13px;cursor:pointer;text-decoration:underline;">Regenerate</button>'
+    + '<span id="kf-status" style="font-size:13px;color:var(--d-green,#2EA887);"></span>'
+    + '</div></div>';
+  _kfModal(inner);
+}
+async function sendKickoffEmail() {
+  const subjEl = document.getElementById('kf-subject'), bodyEl = document.getElementById('kf-body'), statusEl = document.getElementById('kf-status');
+  const subject = subjEl ? subjEl.value.trim() : '', body = bodyEl ? bodyEl.value : '';
+  if (!subject || !body.trim()) { if (statusEl) { statusEl.style.color = '#b00'; statusEl.textContent = 'Subject and body are required.'; } return; }
+  if (!confirm('Send this kickoff email to the leader now?')) return;
+  if (statusEl) { statusEl.style.color = '#666'; statusEl.textContent = 'Sending…'; }
+  try {
+    const r = await fetch('/api/diagnostic', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'send-kickoff-email', diagnostic_id: DIAG_SEL.id, session: getCoachSessionToken(), subject, body_text: body })
+    });
+    const j = await r.json();
+    if (!r.ok || j.error) { if (statusEl) { statusEl.style.color = '#b00'; statusEl.textContent = j.error || 'Send failed.'; } return; }
+    if (statusEl) { statusEl.style.color = 'var(--d-green,#2EA887)'; statusEl.textContent = '✓ Sent to ' + (j.sent_to || 'the leader'); }
+  } catch (e) { if (statusEl) { statusEl.style.color = '#b00'; statusEl.textContent = 'Error: ' + e.message; } }
+}
+function copyKickoffEmail() {
+  const subj = (document.getElementById('kf-subject') || {}).value || '';
+  const body = (document.getElementById('kf-body') || {}).value || '';
+  const statusEl = document.getElementById('kf-status');
+  const text = 'Subject: ' + subj + '\n\n' + body;
+  navigator.clipboard.writeText(text).then(function () { if (statusEl) { statusEl.style.color = 'var(--d-green,#2EA887)'; statusEl.textContent = '✓ Copied to clipboard'; } });
 }
 
 async function saveIntakeNotes(val) {
