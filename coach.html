@@ -1110,6 +1110,10 @@ I'm taking part in a leadership assessment run by GPS Leadership Solutions. Thei
         <strong>Review before activating.</strong> These templates control the emails sent to stakeholders. Edit the subject and body as needed, then toggle <strong>Approved</strong> to activate each one. Unapproved templates fall back to the system default. Placeholders like <code>[ClientFirstName]</code> and <code>[SurveyLink]</code> are replaced automatically.
       </div>
 
+      <div id="renewalConfigPanel" style="background:var(--white);border-radius:8px;padding:16px 18px;margin-bottom:16px;border:1px solid var(--gray-200);">
+        <div class="spinner"></div>
+      </div>
+
       <div id="ccSettingsPanel" style="background:var(--white);border-radius:8px;padding:16px 18px;margin-bottom:16px;border:1px solid var(--gray-200);">
         <div class="spinner"></div>
       </div>
@@ -4259,7 +4263,7 @@ function showSection(name, skipHooks) {
   if (name === 'asklog')      loadAskLog();
   if (name === 'messages')    loadCoachInbox();
   if (name === 'admins')      loadAdminAccounts();
-  if (name === 'templates')   { loadEmailTemplates(); loadCcSettingsPanel(); }
+  if (name === 'templates')   { loadEmailTemplates(); loadCcSettingsPanel(); loadRenewalConfigPanel(); }
   if (name === 'dashboard')   { _actionItemsLoaded = false; renderDiagHome(); refreshMsgBadge(); }
   if (name === 'diagnostics') { diagBoot(); renderDiagTable(); }
   if (name === 'organizations') renderOrganizations();
@@ -4848,6 +4852,61 @@ function tplGroup(t){
 }
 // Global CC settings — who gets CC'd on survey + diagnostic emails. Editable here so
 // recipients can be added/removed any time (e.g., turn off alex@ later).
+// ── Renewal Links & Pricing (editable GHL checkout links — owner only) ────────
+async function loadRenewalConfigPanel(){
+  const el = document.getElementById('renewalConfigPanel');
+  if (!el) return;
+  let cfg = null;
+  try { const rows = await cdSelect('renewal_config', { eq:{ id:1 }, limit:1 }); cfg = rows && rows[0]; } catch (e) {}
+  if (!cfg) { el.innerHTML = '<div style="font-size:13px;color:var(--gray-600);">Renewal config unavailable.</div>'; return; }
+  const f = (label, id, val, ph) => `<div style="margin-bottom:10px;"><label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--gray-600);display:block;margin-bottom:4px;">${label}</label><input id="${id}" value="${escHtml(val==null?'':String(val))}" placeholder="${ph||''}" style="width:100%;padding:8px 11px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;box-sizing:border-box;"></div>`;
+  el.innerHTML =
+    '<div style="font-family:\'Montserrat\',sans-serif;font-weight:700;color:var(--navy);margin-bottom:4px;">Renewal Links &amp; Pricing</div>'
+    + '<div style="font-size:12px;color:var(--gray-600);margin-bottom:14px;line-height:1.5;">Paste your GoHighLevel checkout links here. They power the in-portal renewal / start-coaching buttons. Leave a link blank to hide that button until it is ready.</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 18px;">'
+    + '<div>'
+    + f('First Sprint — Credit ($10k) link', 'rc_credit_url', cfg.first_sprint_credit_url, 'https://...')
+    + f('First Sprint — Standard ($15k) link', 'rc_standard_url', cfg.first_sprint_standard_url, 'https://...')
+    + f('Continuation — Titan Quarterly link', 'rc_titan_url', cfg.continuation_titan_url, 'https://...')
+    + f('Continuation — Flex Monthly link', 'rc_flex_url', cfg.continuation_flex_url, 'https://...')
+    + '</div><div>'
+    + f('Price — First (credit)', 'rc_price_credit', cfg.price_first_credit)
+    + f('Price — First (standard)', 'rc_price_standard', cfg.price_first_standard)
+    + f('Price — Titan / quarter', 'rc_price_titan', cfg.price_titan_quarterly)
+    + f('Price — Flex / month', 'rc_price_flex', cfg.price_flex_monthly)
+    + '</div></div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 18px;">'
+    + f('Credit window (days)', 'rc_credit_days', cfg.credit_window_days)
+    + f('Grace window (days)', 'rc_grace_days', cfg.grace_window_days)
+    + f('Pre-charge notice (days)', 'rc_precharge_days', cfg.precharge_notice_days)
+    + '</div>'
+    + '<div style="display:flex;align-items:center;gap:12px;margin-top:8px;"><button onclick="saveRenewalConfig()" style="background:var(--navy);color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;">Save renewal config</button><span id="rc_status" style="font-size:13px;color:var(--teal);"></span></div>';
+}
+async function saveRenewalConfig(){
+  const v = id => { const e = document.getElementById(id); return e ? e.value.trim() : ''; };
+  const num = id => { const n = parseInt(v(id), 10); return isNaN(n) ? null : n; };
+  const status = document.getElementById('rc_status');
+  const vals = {
+    first_sprint_credit_url:   v('rc_credit_url')   || null,
+    first_sprint_standard_url: v('rc_standard_url') || null,
+    continuation_titan_url:    v('rc_titan_url')    || null,
+    continuation_flex_url:     v('rc_flex_url')     || null,
+    price_first_credit:    num('rc_price_credit'),
+    price_first_standard:  num('rc_price_standard'),
+    price_titan_quarterly: num('rc_price_titan'),
+    price_flex_monthly:    num('rc_price_flex'),
+    credit_window_days:    num('rc_credit_days'),
+    grace_window_days:     num('rc_grace_days'),
+    precharge_notice_days: num('rc_precharge_days'),
+    updated_at: new Date().toISOString(),
+  };
+  if (status) { status.style.color = 'var(--gray-600)'; status.textContent = 'Saving…'; }
+  try {
+    await cdUpdate('renewal_config', vals, { eq:{ id:1 } });
+    if (status) { status.style.color = 'var(--teal)'; status.textContent = '✓ Saved'; setTimeout(() => { if (status) status.textContent = ''; }, 3000); }
+  } catch (e) { if (status) { status.style.color = 'var(--red)'; status.textContent = 'Error: ' + (e.message || 'save failed'); } }
+}
+
 async function loadCcSettingsPanel(){
   const box = document.getElementById('ccSettingsPanel'); if (!box) return;
   let cfg = { cc_leader:true, cc_team:true, cc_alex:true, extra_cc:[] };
