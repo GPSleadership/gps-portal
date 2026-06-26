@@ -4947,9 +4947,20 @@ function renderTemplateCard(t) {
         </div>
         <div style="margin-bottom:12px;">
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);display:block;margin-bottom:6px;">Email Body</label>
-          <textarea id="tpl-body-${t.id}"
+          <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap;align-items:center;">
+            <button type="button" onclick="tplFormat('${t.id}','bold')" title="Bold" style="padding:4px 10px;border:1px solid var(--gray-300);background:#fff;border-radius:5px;cursor:pointer;font-size:13px;font-weight:800;color:var(--navy);">B</button>
+            <button type="button" onclick="tplFormat('${t.id}','italic')" title="Italic" style="padding:4px 10px;border:1px solid var(--gray-300);background:#fff;border-radius:5px;cursor:pointer;font-size:13px;font-style:italic;color:var(--navy);">I</button>
+            <button type="button" onclick="tplFormat('${t.id}','underline')" title="Underline" style="padding:4px 10px;border:1px solid var(--gray-300);background:#fff;border-radius:5px;cursor:pointer;font-size:13px;text-decoration:underline;color:var(--navy);">U</button>
+            <button type="button" onclick="tplFormat('${t.id}','bullet')" title="Bullet list" style="padding:4px 10px;border:1px solid var(--gray-300);background:#fff;border-radius:5px;cursor:pointer;font-size:12px;color:var(--navy);">&bull; List</button>
+            <button type="button" onclick="tplFormat('${t.id}','indent')" title="Indent line" style="padding:4px 10px;border:1px solid var(--gray-300);background:#fff;border-radius:5px;cursor:pointer;font-size:12px;color:var(--navy);">&#8677; Indent</button>
+            <span style="flex:1;"></span>
+            <button type="button" id="tpl-prevbtn-${t.id}" onclick="tplTogglePreview('${t.id}')" style="padding:4px 12px;border:1px solid var(--teal);background:#fff;border-radius:5px;cursor:pointer;font-size:12px;font-weight:700;color:var(--teal);">Preview</button>
+          </div>
+          <textarea id="tpl-body-${t.id}" oninput="tplMaybeRefreshPreview('${t.id}')"
             style="width:100%;padding:10px 12px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;resize:vertical;min-height:180px;line-height:1.6;"
             >${escHtml(t.body_text)}</textarea>
+          <div id="tpl-preview-${t.id}" style="display:none;margin-top:8px;border:2px solid var(--teal);border-radius:6px;padding:14px 16px;background:#fafffe;font-size:14px;line-height:1.6;color:#1B2A4A;"></div>
+          <div style="font-size:11px;color:var(--gray-600);margin-top:6px;line-height:1.5;">Formatting: <code>**bold**</code> · <code>*italic*</code> · <code>__underline__</code> · start a line with <code>-&nbsp;</code> for a bullet or <code>&gt;&nbsp;</code> to indent. Variables like <code>{{leader_name}}</code> are filled in automatically when sent.</div>
         </div>
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
           <button onclick="saveEmailTemplate('${t.id}', '${t.template_key}')"
@@ -4997,6 +5008,85 @@ async function saveEmailTemplate(templateId, templateKey) {
     statusEl.textContent = 'Error: ' + err.message;
     statusEl.style.color = 'var(--red)';
   }
+}
+
+// ── Template formatting toolbar ──────────────────────────────────────────────
+// Inserts lightweight markdown-style markers into the body textarea. Storage stays
+// plain text; the server (tplBodyToHtml / buildHtmlFromTemplate) renders the markers
+// to HTML when the email is sent. The Preview mirrors that server rendering.
+function tplFormat(id, kind) {
+  const ta = document.getElementById('tpl-body-' + id);
+  if (!ta) return;
+  const s = ta.selectionStart, e = ta.selectionEnd, val = ta.value, sel = val.slice(s, e);
+  function wrap(mark, placeholder) {
+    const inner = sel || placeholder;
+    ta.value = val.slice(0, s) + mark + inner + mark + val.slice(e);
+    const caret = s + mark.length;
+    ta.focus(); ta.setSelectionRange(caret, caret + inner.length);
+  }
+  function linePrefix(prefix) {
+    let ls = val.lastIndexOf('\n', s - 1) + 1;
+    let le = val.indexOf('\n', e); if (le === -1) le = val.length;
+    const block = val.slice(ls, le);
+    const out = block.split('\n').map(function (l) { return l.trim() ? prefix + l.replace(/^(\s*[-*]\s+|\s*>\s+)/, '') : l; }).join('\n');
+    ta.value = val.slice(0, ls) + out + val.slice(le);
+    ta.focus(); ta.setSelectionRange(ls, ls + out.length);
+  }
+  if (kind === 'bold') wrap('**', 'bold text');
+  else if (kind === 'italic') wrap('*', 'italic text');
+  else if (kind === 'underline') wrap('__', 'underlined text');
+  else if (kind === 'bullet') linePrefix('- ');
+  else if (kind === 'indent') linePrefix('> ');
+  tplMaybeRefreshPreview(id);
+}
+function tplMaybeRefreshPreview(id) {
+  const pv = document.getElementById('tpl-preview-' + id);
+  if (pv && pv.style.display !== 'none') tplRenderPreview(id);
+}
+function tplTogglePreview(id) {
+  const pv = document.getElementById('tpl-preview-' + id);
+  const btn = document.getElementById('tpl-prevbtn-' + id);
+  if (!pv) return;
+  if (pv.style.display === 'none' || !pv.style.display) {
+    tplRenderPreview(id); pv.style.display = 'block'; if (btn) btn.textContent = 'Hide Preview';
+  } else {
+    pv.style.display = 'none'; if (btn) btn.textContent = 'Preview';
+  }
+}
+function tplRenderPreview(id) {
+  const ta = document.getElementById('tpl-body-' + id);
+  const pv = document.getElementById('tpl-preview-' + id);
+  if (ta && pv) pv.innerHTML = tplPreviewHtml(ta.value);
+}
+// JS mirror of the server renderer; escapes HTML first for safe in-app preview.
+function tplPreviewHtml(text) {
+  function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function inline(s) {
+    return s
+      .replace(/\*\*(?!\s)([^*\n]+?)(?<!\s)\*\*/g, '<strong>$1</strong>')
+      .replace(/__(?!\s)([^_\n]+?)(?<!\s)__/g, '<span style="text-decoration:underline;">$1</span>')
+      .replace(/\*(?!\s)([^*\n]+?)(?<!\s)\*/g, '<em>$1</em>');
+  }
+  const lines = String(text || '').split(/\n/);
+  let html = '', buf = [];
+  function flush() {
+    if (buf.length) {
+      html += '<ul style="margin:0 0 12px;padding-left:22px;">' + buf.map(function (li) { return '<li style="margin:0 0 5px;">' + inline(li) + '</li>'; }).join('') + '</ul>';
+      buf = [];
+    }
+  }
+  for (const raw of lines) {
+    const line = esc(raw.trim());
+    if (!line) { flush(); continue; }
+    const b = line.match(/^[-*]\s+(.*)$/);
+    if (b) { buf.push(b[1]); continue; }
+    flush();
+    const ind = line.match(/^&gt;\s+(.*)$/);
+    if (ind) { html += '<p style="margin:0 0 12px;padding-left:22px;">' + inline(ind[1]) + '</p>'; continue; }
+    html += '<p style="margin:0 0 12px;">' + inline(line) + '</p>';
+  }
+  flush();
+  return html;
 }
 
 async function toggleTemplateApproval(templateId, templateKey, approved) {

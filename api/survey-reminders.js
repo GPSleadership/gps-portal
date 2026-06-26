@@ -530,12 +530,34 @@ function fillPlaceholders(text, clientFirstName, stakeholderName, surveyLink) {
  * Wrap plain-text template body in branded HTML email shell.
  */
 function buildHtmlFromTemplate(plainText) {
+  // Same lightweight, coach-authored markdown rendering as api/diagnostic.js
+  // tplBodyToHtml (kept in sync). Marker-free bodies render byte-identically to before.
+  function inline(s) {
+    return s
+      .replace(/\*\*(?!\s)([^*\n]+?)(?<!\s)\*\*/g, '<strong>$1</strong>')
+      .replace(/__(?!\s)([^_\n]+?)(?<!\s)__/g, '<span style="text-decoration:underline;">$1</span>')
+      .replace(/\*(?!\s)([^*\n]+?)(?<!\s)\*/g, '<em>$1</em>');
+  }
+  const P = 'color:#1B2A4A;font-size:15px;line-height:1.75;margin:0 0 14px;';
   const lines = (plainText || '').split('\n');
-  const body  = lines.map(line => {
-    const t = line.trim();
-    if (!t) return '';
-    return `<p style="color:#1B2A4A;font-size:15px;line-height:1.75;margin:0 0 14px;">${t}</p>`;
-  }).join('');
+  let body = '', buf = [];
+  function flush() {
+    if (buf.length) {
+      body += `<ul style="margin:0 0 14px;padding-left:22px;color:#1B2A4A;font-size:15px;line-height:1.75;">` + buf.map(li => `<li style="margin:0 0 6px;">${inline(li)}</li>`).join('') + `</ul>`;
+      buf = [];
+    }
+  }
+  for (const raw of lines) {
+    const t = raw.trim();
+    if (!t) { flush(); continue; }
+    const b = t.match(/^[-*]\s+(.*)$/);
+    if (b) { buf.push(b[1]); continue; }
+    flush();
+    const ind = t.match(/^>\s+(.*)$/);
+    if (ind) { body += `<p style="${P}padding-left:22px;">${inline(ind[1])}</p>`; continue; }
+    body += `<p style="${P}">${inline(t)}</p>`;
+  }
+  flush();
 
   return `<!DOCTYPE html>
 <html>

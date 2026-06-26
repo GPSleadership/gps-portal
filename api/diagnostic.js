@@ -230,10 +230,39 @@ async function getApprovedTemplate(templateKey) {
 function fillTemplate(text, vars) {
   return String(text == null ? '' : text).replace(/\{\{\s*([a-z0-9_]+)\s*\}\}/gi, (_, k) => (vars && vars[k] != null) ? String(vars[k]) : '');
 }
-// Plain-text template body (blank-line or single-newline separated) → HTML <p> paragraphs.
+// Template body → HTML. Lines become <p> paragraphs (blank lines separate, as before).
+// Lightweight, coach-authored markdown-style formatting is supported and is fully
+// backward compatible: bodies with no markers render byte-identically to the old
+// version. Markers (markers must hug their text — "**bold**" not "** bold **" — so
+// stray asterisks in math/copy are never mistaken for formatting):
+//   **bold**  *italic*  __underline__   |   "- " bullet lines   |   "> " indented line
 function tplBodyToHtml(text) {
-  return String(text || '').split(/\n{2,}|\n/).map(l => l.trim()).filter(Boolean)
-    .map(l => `<p style="margin:0 0 14px;">${l}</p>`).join('');
+  function inline(s) {
+    return s
+      .replace(/\*\*(?!\s)([^*\n]+?)(?<!\s)\*\*/g, '<strong>$1</strong>')
+      .replace(/__(?!\s)([^_\n]+?)(?<!\s)__/g, '<span style="text-decoration:underline;">$1</span>')
+      .replace(/\*(?!\s)([^*\n]+?)(?<!\s)\*/g, '<em>$1</em>');
+  }
+  const lines = String(text || '').split(/\n/);
+  let html = '', buf = [];
+  function flush() {
+    if (buf.length) {
+      html += '<ul style="margin:0 0 14px;padding-left:22px;">' + buf.map(function (li) { return '<li style="margin:0 0 6px;">' + inline(li) + '</li>'; }).join('') + '</ul>';
+      buf = [];
+    }
+  }
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) { flush(); continue; }
+    const b = line.match(/^[-*]\s+(.*)$/);
+    if (b) { buf.push(b[1]); continue; }
+    flush();
+    const ind = line.match(/^>\s+(.*)$/);
+    if (ind) { html += '<p style="margin:0 0 14px;padding-left:22px;">' + inline(ind[1]) + '</p>'; continue; }
+    html += '<p style="margin:0 0 14px;">' + inline(line) + '</p>';
+  }
+  flush();
+  return html;
 }
 
 // ── Main handler ─────────────────────────────────────────────────────────────
