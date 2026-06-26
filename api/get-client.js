@@ -31,17 +31,66 @@ function sbSecret(path, method = 'GET', body = null) {
   });
 }
 
-function buildResendLinkEmail(clientName, portalUrl) {
+// ── Editable copy (Communication > Templates) — approved template or fallback ──
+// Subject + body prose are editable in the coach Templates UI; if no approved row
+// exists, the call site falls back to the original hardcoded copy, so a missing
+// template never breaks a send. Markers match the Templates editor + send renderers.
+const _tplCache = {};
+async function getApprovedTemplate(key) {
+  if (_tplCache[key] !== undefined) return _tplCache[key];
+  let tpl = null;
+  try {
+    const r = await sbSecret(`/rest/v1/email_templates?template_key=eq.${encodeURIComponent(key)}&is_approved=eq.true&select=subject,body_text&limit=1`);
+    if (r.ok) { const d = await r.json(); tpl = (Array.isArray(d) && d[0]) ? d[0] : null; }
+  } catch (_) { tpl = null; }
+  _tplCache[key] = tpl;
+  return tpl;
+}
+function fillTemplate(text, vars) {
+  return String(text == null ? '' : text).replace(/\{\{\s*([a-z0-9_]+)\s*\}\}/gi, (_, k) => (vars && vars[k] != null) ? String(vars[k]) : '');
+}
+function tplProse(text) {
+  function inline(s) {
+    return s
+      .replace(/\*\*(?!\s)([^*\n]+?)(?<!\s)\*\*/g, '<strong>$1</strong>')
+      .replace(/__(?!\s)([^_\n]+?)(?<!\s)__/g, '<span style="text-decoration:underline;">$1</span>')
+      .replace(/\*(?!\s)([^*\n]+?)(?<!\s)\*/g, '<em>$1</em>');
+  }
+  const lines = String(text || '').split(/\n/);
+  let html = '', buf = [];
+  function flush() { if (buf.length) { html += '<ul style="margin:0 0 14px;padding-left:20px;">' + buf.map(li => `<li style="margin:0 0 6px;">${inline(li)}</li>`).join('') + '</ul>'; buf = []; } }
+  for (const raw of lines) {
+    const l = raw.trim();
+    if (!l) { flush(); continue; }
+    const b = l.match(/^[-*]\s+(.*)$/);
+    if (b) { buf.push(b[1]); continue; }
+    flush();
+    const ind = l.match(/^>\s+(.*)$/);
+    if (ind) { html += `<p style="margin:0 0 12px;padding-left:20px;">${inline(ind[1])}</p>`; continue; }
+    html += `<p style="margin:0 0 12px;">${inline(l)}</p>`;
+  }
+  flush();
+  return html;
+}
+
+// Editable copy: Communication > Templates, key "portal_link_email" (subject + the
+// greeting/intro prose). The button, copy-link, privacy note and signature are the
+// structural shell. Falls back to the original copy when no approved row exists.
+async function buildResendLinkEmail(clientName, portalUrl) {
   const firstName = (clientName || '').split(' ')[0] || 'there';
-  return `
+  const vars = { first_name: firstName };
+  const tpl = await getApprovedTemplate('portal_link_email');
+  const subject = (tpl && tpl.subject) ? fillTemplate(tpl.subject, vars) : 'Your GPS Leadership Portal Link';
+  const proseDefault = `Hi ${firstName},\n\nHere's your GPS Leadership Portal access link. Bookmark it so you always have it handy.`;
+  const prose = tplProse((tpl && tpl.body_text) ? fillTemplate(tpl.body_text, vars) : proseDefault);
+  const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
       <div style="background:#1A3D6E;padding:20px 28px;border-radius:8px 8px 0 0;">
         <div style="color:#C09A2A;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">GPS Leadership Solutions</div>
         <div style="color:#ffffff;font-size:20px;font-weight:700;">Your Portal Access Link</div>
       </div>
       <div style="background:#ffffff;padding:28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
-        <p>Hi ${firstName},</p>
-        <p>Here's your GPS Leadership Portal access link. Bookmark it so you always have it handy.</p>
+        ${prose}
         <div style="margin:28px 0;text-align:center;">
           <a href="${portalUrl}"
              style="background:#1A3D6E;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;display:inline-block;letter-spacing:0.3px;">
@@ -49,11 +98,12 @@ function buildResendLinkEmail(clientName, portalUrl) {
           </a>
         </div>
         <p style="font-size:13px;color:#666;">Or copy this link: <a href="${portalUrl}" style="color:#1A3D6E;">${portalUrl}</a></p>
-        <p style="margin-top:24px;font-size:13px;color:#888;">Keep this link private — it's your personal access. If you didn't request this, you can ignore this email.</p>
+        <p style="margin-top:24px;font-size:13px;color:#888;">Keep this link private; it's your personal access. If you didn't request this, you can ignore this email.</p>
         <p>– Alex Tremble<br /><span style="color:#666;font-size:13px;">GPS Leadership Solutions</span></p>
       </div>
     </div>
   `;
+  return { html, subject };
 }
 
 // ── Coach auth helpers (Phase 1 hardening) ──────────────────────────────────
@@ -95,16 +145,24 @@ function verifyPassword(password, stored) {
   return password === stored;
 }
 // ── Decision Room: email a sponsor their access link (coach-session gated) ──
-function buildSponsorInviteEmail(name, url) {
+// Editable copy: Communication > Templates, key "sponsor_invite_email" (subject +
+// the greeting/intro prose). Button, paste-link, and signature are structural.
+async function buildSponsorInviteEmail(name, url) {
   const first = name ? String(name).split(' ')[0] : 'there';
-  return '<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1a1a1a;">'
+  const vars = { first_name: first };
+  const tpl = await getApprovedTemplate('sponsor_invite_email');
+  const subject = (tpl && tpl.subject) ? fillTemplate(tpl.subject, vars) : 'Your GPS Leadership Decision Room';
+  const proseDefault = `Hi ${first},\n\nYour GPS Leadership Decision Room is ready. It gives you a fast, current read on your leadership team, where they stand, what is already in motion, and the highest-leverage next moves.`;
+  const prose = tplProse((tpl && tpl.body_text) ? fillTemplate(tpl.body_text, vars) : proseDefault);
+  const paste = (function(){ try { return require('./brand-link').pasteLink(url); } catch (_) { return ''; } })();
+  const html = '<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1a1a1a;">'
     + '<h2 style="color:#004369;">Your Leadership Decision Room</h2>'
-    + '<p>Hi ' + first + ',</p>'
-    + '<p>Your GPS Leadership Decision Room is ready. It gives you a fast, current read on your leadership team — where they stand, what is already in motion, and the highest-leverage next moves.</p>'
+    + prose
     + '<p style="margin:24px 0 0;"><a href="' + url + '" style="background:#01949A;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:700;">Open your Decision Room</a></p>'
-    + (function(){ try { return require('./brand-link').pasteLink(url); } catch (_) { return ''; } })()
+    + paste
     + '<p style="font-size:12px;color:#666;margin-top:16px;">This private link is just for you. Please do not forward it.</p>'
     + '<p style="font-size:12px;color:#666;">— Alex Tremble, GPS Leadership Solutions</p></div>';
+  return { html, subject };
 }
 async function sponsorInvite(body, res) {
   const payload = verifySession(body.session);
@@ -117,14 +175,15 @@ async function sponsorInvite(body, res) {
   if (!sp.email) return res.status(400).json({ error: 'Sponsor has no email on file' });
   const url = `${PORTAL_BASE}/decision-room?token=${encodeURIComponent(sp.sponsor_token)}`;
   if (RESEND_API_KEY) {
+    const built = await buildSponsorInviteEmail(sp.name, url);
     await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         from: `Alex Tremble – GPS Leadership <${RESEND_FROM}>`,
         to: [sp.email],
-        subject: 'Your GPS Leadership Decision Room',
-        html: buildSponsorInviteEmail(sp.name, url),
+        subject: built.subject,
+        html: built.html,
       }),
     });
   }
@@ -283,6 +342,7 @@ export default async function handler(req, res) {
       const portalUrl = `${PORTAL_BASE}/client?token=${encodeURIComponent(client.token)}`;
 
       if (RESEND_API_KEY) {
+        const built = await buildResendLinkEmail(client.name, portalUrl);
         await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
@@ -292,8 +352,8 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             from:    `Alex Tremble – GPS Leadership <${RESEND_FROM}>`,
             to:      [client.email],
-            subject: 'Your GPS Leadership Portal Link',
-            html:    buildResendLinkEmail(client.name, portalUrl),
+            subject: built.subject,
+            html:    built.html,
           }),
         });
       }
