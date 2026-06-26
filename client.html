@@ -3777,9 +3777,11 @@ async function wizDoPrefill(force) {
   const goal30El = document.getElementById('wizGoal30');
   const hint30El = document.getElementById('wizGoal30Hint');
   const btn      = document.getElementById('wizGenBtn');
-  if (!goalEl) return;
 
-  const goal = goalEl.value.trim();
+  // The 90-day goal field only exists on its own step now; once we've advanced past it
+  // we generate from the saved wizPlan.goal90 instead, so this works from any step.
+  const goal = goalEl ? goalEl.value.trim() : (wizPlan.goal90 || '').trim();
+  if (!goal) return;
   const words = goal.split(/\s+/).filter(Boolean).length;
   if (words < 8) {
     if (force && statusEl) { statusEl.style.color = 'var(--red)'; statusEl.textContent = 'Write a fuller 90-day goal first (a sentence or two), then generate.'; }
@@ -3807,10 +3809,10 @@ async function wizDoPrefill(force) {
     }
 
     // Fill the 30-day goal: always on force, otherwise only if still blank.
-    if (pf.goal30 && goal30El && (force || !goal30El.value.trim())) {
-      goal30El.value = pf.goal30;
+    if (pf.goal30 && (force || !wizPlan.goal30)) {
       wizPlan.goal30 = pf.goal30;
-      if (hint30El) hint30El.textContent = '✦ Suggested based on your goal — edit as needed';
+      if (goal30El) goal30El.value = pf.goal30;
+      if (hint30El) hint30El.textContent = '✦ Drafted from your 90-day goal — edit as needed';
     }
 
     // Store the rest in wizPlan for later steps (force overwrites, auto fills).
@@ -4013,36 +4015,27 @@ function wizSelectPillar(p) {
 
 // ── Step 2: Goals ──────────────────────────────────────────────────────────
 function wizS2() {
-  const hasPre = wizPlan.hasDiag && (wizPlan.goal90 || wizPlan.goal30);
+  const hasPre = wizPlan.hasDiag && wizPlan.goal90;
   return `
     <div class="card navy-top">
-      <div class="wiz-step-badge">Step 2 of 7 — Your Goals</div>
-      <div class="card-title">Your 90-Day and 30-Day Goals</div>
-      <div class="card-subtitle">Write the 90-day goal first — the outcome that will be true at day 90. Then the 30-day goal: a concrete checkpoint that proves you\'re on track. Both are required.</div>
+      <div class="wiz-step-badge">Step 2 of 7 — Your 90-Day Goal</div>
+      <div class="card-title">Your 90-Day Goal</div>
+      <div class="card-subtitle">Write the outcome that will be true at day 90. Take your time and write the whole thing. When you continue, we'll use it to draft your 30-day goal, behaviors, and metrics on the next steps.</div>
     </div>
     <div class="card">
       ${!wizPlan.hasDiag ? `
       <div id="wizPrefillNotice" style="display:flex;gap:11px;align-items:flex-start;background:#E8F7F7;border:1px solid #b2e0e1;border-radius:8px;padding:12px 14px;margin-bottom:18px;">
         <span style="font-size:16px;line-height:1;margin-top:1px;">✦</span>
         <div style="font-size:13px;color:#004369;line-height:1.6;">
-          <strong>We'll help you build this.</strong> Write your 90-day goal below, then click <strong>Generate suggestions</strong>. We'll draft a 30-day goal, two behaviors, and both metrics for you. Everything is editable, and you can regenerate any time you change your 90-day goal. It's a starting point, not a final answer.
+          <strong>Write your full 90-day goal first.</strong> When you click Continue, we'll draft a 30-day goal, two behaviors, and both metrics from it on the next steps. Everything is editable; it's a starting point, not a final answer.
         </div>
       </div>` : ''}
       <div class="form-group">
         <label>90-Day Goal <span style="color:var(--red)">*</span></label>
         <div class="hint">First person. Specific behavior change. Written as if day 90 has arrived.</div>
-        <textarea id="wizGoal90" rows="3" oninput="wizGoal90Typed()">${wizEsc(wizPlan.goal90)}</textarea>
+        <textarea id="wizGoal90" rows="4">${wizEsc(wizPlan.goal90)}</textarea>
         ${hasPre && wizPlan.goal90 ? '<div class="wiz-prefilled">✦ Pre-filled from your diagnostic</div>' : ''}
         <div id="wizGoal90Status" style="font-size:12px;color:var(--teal);font-weight:600;margin-top:6px;min-height:16px;line-height:1.5;"></div>
-        ${!wizPlan.hasDiag ? `<button type="button" id="wizGenBtn" onclick="wizGenerateSuggestions()" style="margin-top:8px;background:var(--light-teal);color:#004369;border:1.5px solid #b2e0e1;border-radius:7px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">✦ Generate suggestions</button>
-        <div class="hint" style="margin-top:6px;">Edit your 90-day goal above, then click to draft (or redraft) the 30-day goal, behaviors, and metrics.</div>` : ''}
-      </div>
-      <div style="height:1px;background:var(--gray-200);margin:16px 0;"></div>
-      <div class="form-group">
-        <label>30-Day Goal <span style="color:var(--red)">*</span></label>
-        <div class="hint">What specific, observable progress will you point to at day 30? Not a feeling — a fact.</div>
-        <textarea id="wizGoal30" rows="3">${wizEsc(wizPlan.goal30)}</textarea>
-        <div id="wizGoal30Hint" style="font-size:11px;color:var(--teal);font-weight:600;margin-top:5px;min-height:16px;">${wizPlan.aiPrefilled && wizPlan.goal30 ? '✦ Suggested based on your goal — edit as needed' : (hasPre && wizPlan.goal30 ? '✦ Pre-filled working backwards from your 90-day goal' : '')}</div>
       </div>
       <div class="form-group">
         <label>Plan Start Date <span style="color:var(--red)">*</span></label>
@@ -4057,9 +4050,19 @@ function wizS3() {
   const m2 = wizPlan.metric2;
   return `
     <div class="card navy-top">
-      <div class="wiz-step-badge">Step 3 of 7 — Your Metrics</div>
-      <div class="card-title">Two Metrics — Both Required</div>
-      <div class="card-subtitle">Every plan tracks exactly two things: how often you\'re doing the behavior (self-tracked), and how others experience the change (stakeholder perception). Edit the text, not the structure.</div>
+      <div class="wiz-step-badge">Step 3 of 7 — Your 30-Day Goal &amp; Metrics</div>
+      <div class="card-title">Your 30-Day Goal and Two Metrics</div>
+      <div class="card-subtitle">Drafted from the 90-day goal you just wrote. Edit anything. The 30-day goal is your day-30 checkpoint; the two metrics are how you'll track progress.</div>
+    </div>
+    <div class="card">
+      <div class="form-group">
+        <label>30-Day Goal <span style="color:var(--red)">*</span></label>
+        <div class="hint">What specific, observable progress will you point to at day 30? Not a feeling, a fact.</div>
+        <textarea id="wizGoal30" rows="3">${wizEsc(wizPlan.goal30)}</textarea>
+        <div id="wizGoal30Hint" style="font-size:11px;color:var(--teal);font-weight:600;margin-top:5px;min-height:16px;">${wizPlan.aiPrefilled && wizPlan.goal30 ? '✦ Drafted from your 90-day goal — edit as needed' : ''}</div>
+        <button type="button" id="wizGenBtn" onclick="wizRegenFromStep3()" style="margin-top:8px;background:var(--light-teal);color:#004369;border:1.5px solid #b2e0e1;border-radius:7px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">✦ Regenerate from my 90-day goal</button>
+        <div id="wizGoal90Status" style="font-size:12px;color:var(--teal);font-weight:600;margin-top:6px;min-height:16px;"></div>
+      </div>
     </div>
     <div class="wiz-metric-block">
       <div class="wiz-required-note">✦ Required — Metric 1 is always self-tracked and count-based.</div>
@@ -4346,15 +4349,15 @@ function wizValidate(step) {
   }
   if (step === 2) {
     const g90 = document.getElementById('wizGoal90').value.trim();
-    const g30 = document.getElementById('wizGoal30').value.trim();
     const sd  = document.getElementById('wizStartDate').value;
     if (!g90) { wizShowError('Please enter your 90-day goal.'); return false; }
-    if (!g30) { wizShowError('Please enter your 30-day goal.'); return false; }
     if (!sd)  { wizShowError('Please enter a plan start date.'); return false; }
-    wizPlan.goal90 = g90; wizPlan.goal30 = g30; wizPlan.startDate = sd;
+    wizPlan.goal90 = g90; wizPlan.startDate = sd;
     return true;
   }
   if (step === 3) {
+    const g30 = document.getElementById('wizGoal30').value.trim();
+    if (!g30) { wizShowError('Please enter your 30-day goal.'); return false; }
     const m1n = document.getElementById('wizM1Name').value.trim();
     const m1b = parseFloat(document.getElementById('wizM1Base').value);
     const m1t = parseFloat(document.getElementById('wizM1Target').value);
@@ -4365,6 +4368,7 @@ function wizValidate(step) {
     if (isNaN(m1t))     { wizShowError('Please enter a 90-day target for Metric 1.'); return false; }
     if (!m2q)           { wizShowError('Please enter the stakeholder survey question for Metric 2.'); return false; }
     if (isNaN(m2a)||m2a<1||m2a>5) { wizShowError('Metric 2 target must be between 1 and 5.'); return false; }
+    wizPlan.goal30 = g30;
     wizPlan.metric1 = { name:m1n, baseline:m1b, target:m1t };
     wizPlan.metric2 = { question:m2q, targetAvg:m2a };
     return true;
@@ -4404,8 +4408,32 @@ async function wizNext() {
   if (!wizValidate(wizStep)) return;
   if (wizStep === 7) { wizLockIn(); return; }
 
+  // After the 90-day goal page, draft the 30-day goal + behaviors + metrics from the
+  // COMPLETED 90-day goal — not while typing. Only for non-diagnostic, non-edit flows,
+  // and only when the goal actually changed since the last draft (so going back and
+  // forth doesn't overwrite the leader's own edits).
+  if (wizStep === 2 && !wizPlan.hasDiag && !wizIsEdit) {
+    const g90 = (wizPlan.goal90 || '').trim();
+    if (g90 && g90 !== _wizGoal90LastFired) {
+      const nextBtn = document.getElementById('wizBtnNext');
+      const prev = nextBtn ? nextBtn.textContent : '';
+      if (nextBtn) { nextBtn.disabled = true; nextBtn.textContent = '✦ Building your plan…'; }
+      try { await wizDoPrefill(true); } catch (_) {}
+      if (nextBtn) { nextBtn.disabled = false; nextBtn.textContent = prev; }
+    }
+  }
+
   wizStep++;
   wizRender();
+}
+
+// Step-3 "Regenerate from my 90-day goal": redraft from the saved 90-day goal, then
+// repaint the step so the metric fields reflect the new suggestions.
+async function wizRegenFromStep3() {
+  const btn = document.getElementById('wizGenBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '✦ Regenerating…'; }
+  try { await wizDoPrefill(true); } catch (_) {}
+  wizRenderStep(wizStep);
 }
 
 function wizBack() {
