@@ -31,6 +31,54 @@ const PORTAL_BASE    = 'https://portal.gpsleadership.org/client.html';
 const CRON_SECRET    = process.env.CRON_SECRET;
 const COACH_SESSION_SECRET = process.env.COACH_SESSION_SECRET || '';
 
+// ── Editable copy (Communication > Templates) ────────────────────────────────
+// Subject + body prose for outbound emails can be edited by the coach in the
+// Templates UI. We fetch the approved row; if none exists we fall back to the
+// hardcoded default at the call site, so a missing/un-approved row never breaks
+// a send. Body markers (**bold** *italic* __underline__ "- " bullets "> " indent)
+// match the Templates editor + the other send renderers.
+const _tplCache = {};
+async function getApprovedTemplate(key) {
+  if (_tplCache[key] !== undefined) return _tplCache[key];
+  let tpl = null;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/email_templates?template_key=eq.${encodeURIComponent(key)}&is_approved=eq.true&select=subject,body_text&limit=1`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+    });
+    if (r.ok) { const d = await r.json(); tpl = (Array.isArray(d) && d[0]) ? d[0] : null; }
+  } catch (_) { tpl = null; }
+  _tplCache[key] = tpl;
+  return tpl;
+}
+function fillTemplate(text, vars) {
+  return String(text == null ? '' : text).replace(/\{\{\s*([a-z0-9_]+)\s*\}\}/gi, (_, k) => (vars && vars[k] != null) ? String(vars[k]) : '');
+}
+function tplProse(text) {
+  function inline(s) {
+    return s
+      .replace(/\*\*(?!\s)([^*\n]+?)(?<!\s)\*\*/g, '<strong>$1</strong>')
+      .replace(/__(?!\s)([^_\n]+?)(?<!\s)__/g, '<span style="text-decoration:underline;">$1</span>')
+      .replace(/\*(?!\s)([^*\n]+?)(?<!\s)\*/g, '<em>$1</em>');
+  }
+  const lines = String(text || '').split(/\n/);
+  let html = '', buf = [];
+  function flush() {
+    if (buf.length) { html += '<ul style="margin:0 0 16px;padding-left:22px;">' + buf.map(li => `<li style="margin:0 0 6px;">${inline(li)}</li>`).join('') + '</ul>'; buf = []; }
+  }
+  for (const raw of lines) {
+    const l = raw.trim();
+    if (!l) { flush(); continue; }
+    const b = l.match(/^[-*]\s+(.*)$/);
+    if (b) { buf.push(b[1]); continue; }
+    flush();
+    const ind = l.match(/^>\s+(.*)$/);
+    if (ind) { html += `<p style="margin:0 0 16px;padding-left:22px;">${inline(ind[1])}</p>`; continue; }
+    html += `<p style="margin:0 0 16px;">${inline(l)}</p>`;
+  }
+  flush();
+  return html;
+}
+
 // Verify a coach session token (HMAC) for authenticated manual cron triggers.
 function verifyCoachSession(tok) {
   if (!tok || !COACH_SESSION_SECRET) return null;
@@ -166,7 +214,21 @@ export default async function handler(req, res) {
     const firstName   = (client.name || '').split(' ')[0] || 'there';
     const portalLink  = `${PORTAL_BASE}?token=${client.token}`;
 
-    const subject = `Week ${currentWeek} check-in — a quick reminder, ${firstName}`;
+    // Editable copy: Communication > Templates, key "reminder_weekly_checkin".
+    // Falls back to the original hardcoded copy if no approved row exists.
+    const _tpl = await getApprovedTemplate('reminder_weekly_checkin');
+    const _vars = { first_name: firstName, week: currentWeek };
+    const subject = (_tpl && _tpl.subject)
+      ? fillTemplate(_tpl.subject, _vars)
+      : `Week ${currentWeek} check-in — a quick reminder, ${firstName}`;
+    const bodyProse = (_tpl && _tpl.body_text)
+      ? tplProse(fillTemplate(_tpl.body_text, _vars))
+      : tplProse([
+          `Hi ${firstName},`,
+          `Just a quick heads-up — your Week ${currentWeek} check-in is ready for you.`,
+          `It takes less than two minutes. Log your metric, note what you did this week, and set your action for next week. That's it.`,
+          `The leaders who move fastest are the ones who stay honest with themselves weekly — not just on coaching calls.`,
+        ].join('\n\n'));
 
     // Google Calendar recurring Monday event link
     const gcalTitle   = encodeURIComponent('GPS Leadership — Weekly Check-In');
@@ -192,13 +254,7 @@ export default async function handler(req, res) {
         </div>
         <div style="background:#ffffff;padding:28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
 
-          <p>Hi ${firstName},</p>
-
-          <p>Just a quick heads-up — your Week ${currentWeek} check-in is ready for you.</p>
-
-          <p>It takes less than two minutes. Log your metric, note what you did this week, and set your action for next week. That's it.</p>
-
-          <p>The leaders who move fastest are the ones who stay honest with themselves weekly — not just on coaching calls.</p>
+          ${bodyProse}
 
           <div style="margin:28px 0 0;text-align:center;">
             <a href="${portalLink}"
