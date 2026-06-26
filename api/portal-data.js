@@ -370,7 +370,22 @@ export default async function handler(req, res) {
             }),
           });
         }
-        return res.status(200).json({ ok: true, diagnostic: diag, raters, report });
+        // Recommendations: surface the leader's team recommendations that the coach
+        // has BOTH approved and released to clients. Identical gate to the sponsor
+        // view (status=approved, visible_to_client=true) so nothing the coach hasn't
+        // cleared can reach the leader. Scoped to teams this client belongs to.
+        let recommendations = [];
+        try {
+          const tmRes = await sb(`/rest/v1/team_members?client_id=eq.${encodeURIComponent(clientId)}&select=team_id`);
+          const tms = tmRes.ok ? await tmRes.json() : [];
+          const teamIds = Array.from(new Set((Array.isArray(tms) ? tms : []).map(function (t) { return t.team_id; }).filter(Boolean)));
+          if (teamIds.length) {
+            const inList = teamIds.map(function (id) { return encodeURIComponent(id); }).join(',');
+            const rc = await sb(`/rest/v1/recommendations?team_id=in.(${inList})&status=eq.approved&visible_to_client=eq.true&select=short_title,description,owner,timeframe,category,target_band,quick_start_today,quick_start_week,updated_at&order=updated_at.desc`);
+            recommendations = rc.ok ? await rc.json() : [];
+          }
+        } catch (_) { recommendations = []; }
+        return res.status(200).json({ ok: true, diagnostic: diag, raters, report, recommendations });
       }
       case 'diag-get-raters': {
         if (!(await diagnosticOwnedBy(body.diagnostic_id, clientId))) return res.status(403).json({ error: 'Not your diagnostic' });

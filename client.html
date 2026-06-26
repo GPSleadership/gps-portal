@@ -2750,6 +2750,7 @@ let qaAttachedDoc    = null; // { name, text } — document attached to Ask Alex
 let CLIENT_DIAG        = null; // active diagnostic record
 let CLIENT_DIAG_RATERS = [];   // raters for active diagnostic
 let CLIENT_DIAG_REPORT = null; // finalized report draft
+let CLIENT_DIAG_RECS   = [];   // coach-approved, client-released recommendations
 
 window.addEventListener('DOMContentLoaded', () => {
   if (!token) {
@@ -2924,6 +2925,7 @@ async function loadClientDiagnostic() {
     }
     CLIENT_DIAG = resp.diagnostic;
     CLIENT_DIAG_RATERS = resp.raters || [];
+    CLIENT_DIAG_RECS = resp.recommendations || [];
     if (CLIENT_DIAG.report_finalized_at) {
       CLIENT_DIAG_REPORT = resp.report || null;
     }
@@ -3186,6 +3188,7 @@ function renderDiagReportMode(d, reportDraft) {
         <div class="dc-rh-meta">${escD(leaderName)}${finDate ? ' · Finalized ' + finDate : ''}</div>
       </div>
       <div class="dc-report-body">${docHtml}</div>
+      ${renderLeaderRecs(CLIENT_DIAG_RECS)}
       <div style="text-align:center;padding-bottom:32px;">
         <p style="font-size:13px;color:#6b7280;">Questions about your results? Reach out to Alex directly.</p>
         <a href="mailto:alex@gpsleadership.org" class="dc-btn dc-btn-outline" style="text-decoration:none;display:inline-block;">Contact Alex →</a>
@@ -3208,6 +3211,7 @@ function renderDiagReportMode(d, reportDraft) {
       <div style="width:100%;border-radius:8px;overflow:hidden;border:1px solid var(--gray-300);background:#f5f5f5;">
         <iframe src="${report.pdf_base64}" style="width:100%;min-height:800px;border:none;display:block;" title="GPS Diagnostic Report"></iframe>
       </div>
+      ${renderLeaderRecs(CLIENT_DIAG_RECS)}
       <div style="text-align:center;padding:24px 0 32px;">
         <p style="font-size:13px;color:#6b7280;">Questions about your results? Reach out to Alex directly.</p>
         <a href="mailto:alex@gpsleadership.org" class="dc-btn dc-btn-outline" style="text-decoration:none;display:inline-block;">Contact Alex →</a>
@@ -3228,11 +3232,45 @@ function renderDiagReportMode(d, reportDraft) {
           : `<p style="color:#6b7280;text-align:center;padding:32px 0;">Report content is being prepared. Check back shortly.</p>`
       }
     </div>
+    ${renderLeaderRecs(CLIENT_DIAG_RECS)}
     <div style="text-align:center;padding-bottom:32px;">
       <p style="font-size:13px;color:#6b7280;">Questions about your results? Reach out to Alex directly.</p>
       <a href="mailto:alex@gpsleadership.org" class="dc-btn dc-btn-outline" style="text-decoration:none;display:inline-block;">Contact Alex →</a>
     </div>
   `;
+}
+
+// Leader-facing recommendations block, shown beneath the diagnostic report. The server
+// (diag-get) only sends recommendations the coach has approved AND released to clients
+// (status=approved, visible_to_client=true) for this leader's team. Returns '' when
+// there are none, so the report renders unchanged for leaders without released recs.
+function renderLeaderRecs(recs) {
+  if (!Array.isArray(recs) || !recs.length) return '';
+  const bandLbl = { top:'Top performers', middle:'Mid-band', bottom:'At-risk', system:'Team system' };
+  const card = function (r) {
+    const bands = r.target_band ? String(r.target_band).split(',').map(function (b) {
+      b = b.trim(); const lbl = bandLbl[b];
+      return lbl ? '<span style="display:inline-block;font-size:10px;font-weight:700;color:#01949A;background:#e6f4f4;border-radius:8px;padding:2px 9px;margin:0 5px 6px 0;text-transform:uppercase;letter-spacing:.03em;">' + escD(lbl) + '</span>' : '';
+    }).join('') : '';
+    const meta = (r.owner || r.timeframe)
+      ? '<div style="font-size:12px;color:#6b7280;margin-top:2px;">' + (r.owner ? 'Owner: ' + escD(r.owner) : '') + (r.owner && r.timeframe ? ' · ' : '') + (r.timeframe ? 'Timeframe: ' + escD(r.timeframe) : '') + '</div>'
+      : '';
+    const qs = (r.quick_start_today || r.quick_start_week)
+      ? '<div style="margin-top:9px;font-size:13px;line-height:1.5;color:#004369;background:#f0f6f7;border-radius:8px;padding:9px 12px;">' + (r.quick_start_today ? '<div><strong>By end of today:</strong> ' + escD(r.quick_start_today) + '</div>' : '') + (r.quick_start_week ? '<div style="margin-top:3px;"><strong>By end of this week:</strong> ' + escD(r.quick_start_week) + '</div>' : '') + '</div>'
+      : '';
+    return '<div style="border:1px solid #e5e7eb;border-left:4px solid #01949A;border-radius:10px;padding:14px 16px;margin-bottom:12px;">'
+      + '<div style="font-size:16px;font-weight:700;font-family:\'Montserrat\',sans-serif;color:#004369;">' + escD(r.short_title || '') + '</div>'
+      + meta
+      + (bands ? '<div style="margin-top:6px;">' + bands + '</div>' : '')
+      + '<div style="font-size:14px;line-height:1.55;color:#374151;margin-top:6px;">' + escD(r.description || '') + '</div>'
+      + qs
+      + '</div>';
+  };
+  return '<div class="dc-report-body" style="margin-top:8px;">'
+    + '<h2>Your Recommendations</h2>'
+    + '<p style="font-size:13px;color:#6b7280;margin:-4px 0 14px;">The highest-leverage moves from your diagnostic. Start with one this week.</p>'
+    + recs.map(card).join('')
+    + '</div>';
 }
 
 function buildReportFromJson(r) {
