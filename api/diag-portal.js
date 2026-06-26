@@ -46,6 +46,50 @@ async function raterByToken(token) {
   return (Array.isArray(rows) && rows[0]) || null;
 }
 
+// ── Editable copy (Communication > Templates) ────────────────────────────────
+// Fetch an approved template; callers fall back to hardcoded copy if none, so a
+// missing/un-approved row never breaks a send. Markers (**bold** *italic*
+// __underline__ "- " bullets "> " indent) match the Templates editor + renderers.
+const _tplCache = {};
+async function getApprovedTemplate(key) {
+  if (_tplCache[key] !== undefined) return _tplCache[key];
+  let tpl = null;
+  try {
+    const r = await sb(`/rest/v1/email_templates?template_key=eq.${enc(key)}&is_approved=eq.true&select=subject,body_text&limit=1`);
+    if (r.ok) { const d = await r.json(); tpl = (Array.isArray(d) && d[0]) ? d[0] : null; }
+  } catch (_) { tpl = null; }
+  _tplCache[key] = tpl;
+  return tpl;
+}
+function fillTemplate(text, vars) {
+  return String(text == null ? '' : text).replace(/\{\{\s*([a-z0-9_]+)\s*\}\}/gi, (_, k) => (vars && vars[k] != null) ? String(vars[k]) : '');
+}
+function tplProse(text) {
+  function inline(s) {
+    return s
+      .replace(/\*\*(?!\s)([^*\n]+?)(?<!\s)\*\*/g, '<strong>$1</strong>')
+      .replace(/__(?!\s)([^_\n]+?)(?<!\s)__/g, '<span style="text-decoration:underline;">$1</span>')
+      .replace(/\*(?!\s)([^*\n]+?)(?<!\s)\*/g, '<em>$1</em>');
+  }
+  const lines = String(text || '').split(/\n/);
+  let html = '', buf = [];
+  function flush() {
+    if (buf.length) { html += '<ul style="margin:0 0 14px;padding-left:20px;">' + buf.map(li => `<li style="margin:0 0 6px;">${inline(li)}</li>`).join('') + '</ul>'; buf = []; }
+  }
+  for (const raw of lines) {
+    const l = raw.trim();
+    if (!l) { flush(); continue; }
+    const b = l.match(/^[-*]\s+(.*)$/);
+    if (b) { buf.push(b[1]); continue; }
+    flush();
+    const ind = l.match(/^>\s+(.*)$/);
+    if (ind) { html += `<p style="margin:0 0 12px;padding-left:20px;">${inline(ind[1])}</p>`; continue; }
+    html += `<p style="margin:0 0 12px;">${inline(l)}</p>`;
+  }
+  flush();
+  return html;
+}
+
 // ── Rater-invite "brief your raters" email to the leader ──────────────────────
 async function sendMail(to, subject, html) {
   if (!RESEND_API_KEY || !to) return { ok: false };
@@ -63,35 +107,57 @@ async function sendMail(to, subject, html) {
   } catch (_) { return { ok: false }; }
 }
 
-function buildRaterBriefEmail({ firstName, fullName, raterCount }) {
+// Editable copy (Communication > Templates):
+//   rater_brief_cover → email subject + the leader-facing cover note
+//   rater_brief_draft → the "draft language for your raters" block. {NAME} is a
+//     literal placeholder the leader replaces; {{leader_name}} is filled here.
+// Both fall back to the original hardcoded copy if no approved row exists.
+async function buildRaterBriefEmail({ firstName, fullName, raterCount }) {
   const countPhrase = raterCount > 0
     ? `The group of ${raterCount} people you added gives us a strong, well-rounded basis for honest feedback.`
     : `The group of people you added gives us a strong, well-rounded basis for honest feedback.`;
-  return `
+  const vars = { first_name: firstName, leader_name: (fullName || firstName), rater_count: raterCount, count_phrase: countPhrase };
+
+  const coverDefault = [
+    `Hello ${firstName},`,
+    `Thank you for completing your self-assessment and entering your rater list. ${countPhrase}`,
+    `We're now moving into the most important phase: gathering confidential input on your leadership from the people who see you lead day to day. What they share will shape a focused 90-day plan built around how you actually show up, not guesswork.`,
+    `The next step is yours, and it's simple. Before we release the surveys, send a short note to your raters so they know it's coming, what it's about, and that it's confidential. A quick heads-up from you meaningfully improves both response rate and candor.`,
+  ].join('\n\n');
+
+  const draftDefault = [
+    `Hi {NAME},`,
+    `I want to give you a heads-up about something important happening over the next few days. I've engaged Alex Tremble and GPS Leadership Solutions to run a 14-Day Executive Leadership Diagnostic focused on me (e.g., how I lead, communicate, and support) all of you. My goal is simple, get honest feedback so I can keep getting better for our team and the people we serve.`,
+    `In the next few days, you'll receive a short, confidential survey by email from Alex / GPS Leadership Solutions. A few things to know:`,
+    `- It's about my leadership; not an evaluation of you.`,
+    `- It's confidential. GPS compiles and summarizes the results; I see themes and examples, never who said what.`,
+    `- It's development-focused, not a performance review. The point is to help me improve so we all work better together.`,
+    `- It's short, about 8 to 10 minutes, and open for roughly a week.`,
+    `When your personal link arrives, please complete it honestly. Your candid input will directly shape where I focus over the next 90 days and how we make this a better place to work and serve. Thank you for your help, and for what you do every day.`,
+    `${fullName || firstName}`,
+  ].join('\n\n');
+
+  const coverTpl = await getApprovedTemplate('rater_brief_cover');
+  const draftTpl = await getApprovedTemplate('rater_brief_draft');
+  const coverHtml = tplProse((coverTpl && coverTpl.body_text) ? fillTemplate(coverTpl.body_text, vars) : coverDefault);
+  const draftHtml = tplProse((draftTpl && draftTpl.body_text) ? fillTemplate(draftTpl.body_text, vars) : draftDefault);
+  const subject = (coverTpl && coverTpl.subject)
+    ? fillTemplate(coverTpl.subject, vars)
+    : 'Next step: inviting your raters for the 14-Day Executive Leadership Diagnostic';
+
+  const html = `
   <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;line-height:1.6;font-size:15px;">
-    <p>Hello ${firstName},</p>
-    <p>Thank you for completing your self-assessment and entering your rater list. ${countPhrase}</p>
-    <p>We're now moving into the most important phase: gathering confidential input on your leadership from the people who see you lead day to day. What they share will shape a focused 90-day plan built around how you actually show up, not guesswork.</p>
-    <p>The next step is yours, and it's simple. Before we release the surveys, send a short note to your raters so they know it's coming, what it's about, and that it's confidential. A quick heads-up from you meaningfully improves both response rate and candor.</p>
+    ${coverHtml}
     <p style="font-weight:700;margin-bottom:6px;">Here's draft language you can send to your raters (feel free to edit to fit your voice):</p>
     <div style="border-left:3px solid #1A3D6E;background:#f5f7fa;padding:14px 18px;border-radius:0 6px 6px 0;color:#333;">
-      <p style="margin:0 0 12px;">Hi {NAME},</p>
-      <p style="margin:0 0 12px;">I want to give you a heads-up about something important happening over the next few days. I've engaged Alex Tremble and GPS Leadership Solutions to run a 14-Day Executive Leadership Diagnostic focused on me (e.g., how I lead, communicate, and support) all of you. My goal is simple, get honest feedback so I can keep getting better for our team and the people we serve.</p>
-      <p style="margin:0 0 8px;">In the next few days, you'll receive a short, confidential survey by email from Alex / GPS Leadership Solutions. A few things to know:</p>
-      <ul style="margin:0 0 12px;padding-left:20px;">
-        <li style="margin-bottom:4px;">It's about my leadership; not an evaluation of you.</li>
-        <li style="margin-bottom:4px;">It's confidential. GPS compiles and summarizes the results; I see themes and examples, never who said what.</li>
-        <li style="margin-bottom:4px;">It's development-focused, not a performance review. The point is to help me improve so we all work better together.</li>
-        <li style="margin-bottom:4px;">It's short, about 8 to 10 minutes, and open for roughly a week.</li>
-      </ul>
-      <p style="margin:0 0 12px;">When your personal link arrives, please complete it honestly. Your candid input will directly shape where I focus over the next 90 days and how we make this a better place to work and serve. Thank you for your help, and for what you do every day.</p>
-      <p style="margin:0;">${fullName || firstName}</p>
+      ${draftHtml}
     </div>
     <p style="margin-top:16px;"><strong>One important note:</strong> when you send your version of this to your raters, please CC alex@gpsleadership.org and Team@gpsleadership.org. That CC is how we know your raters have been informed and that it's time to release the survey.</p>
     <p>Once that email goes out and we're CC'd, you don't need to do anything else until your debrief. We'll handle the survey launch, reminders, and the analysis from there.</p>
     <p style="margin-top:18px;">All my best,<br>Alex D. Tremble<br><span style="color:#555;font-size:13px;">Founder &amp; CEO, GPS Leadership Solutions</span></p>
     <p style="font-size:12px;color:#777;">We install simple leadership operating systems so CEOs of multi-location, operations-heavy companies doing roughly eight figures stop being the bottleneck.<br><a href="https://www.GPSLeadership.org" style="color:#004369;">www.GPSLeadership.org</a></p>
   </div>`;
+  return { html, subject };
 }
 
 // Fires ONCE, only when BOTH the self-assessment is complete AND the rater list
@@ -109,8 +175,8 @@ async function maybeSendRaterBrief(diagId) {
     if (cr.ok) count = (await cr.json()).length;
     const fullName  = String(d.client_name || '').trim();
     const firstName = fullName.split(/\s+/)[0] || 'there';
-    const html = buildRaterBriefEmail({ firstName, fullName, raterCount: count });
-    const sent = await sendMail(d.client_email, 'Next step: inviting your raters for the 14-Day Executive Leadership Diagnostic', html);
+    const { html, subject } = await buildRaterBriefEmail({ firstName, fullName, raterCount: count });
+    const sent = await sendMail(d.client_email, subject, html);
     if (sent.ok) {
       await sb(`/rest/v1/diagnostics?id=eq.${enc(diagId)}`, 'PATCH', { rater_brief_sent_at: new Date().toISOString() }, { Prefer: 'return=minimal' });
     }
