@@ -4802,6 +4802,7 @@ function renderPortal(client, checkins) {
     <div class="portal-layout">
     <div class="portal-main">
     ${renderActionCenter(client, mobileStatus, currentWeek, checkins)}
+    ${renderDesktopActionCard(client, mobileStatus, currentWeek, alreadyCheckedInThisWeek, isEngagementComplete, _dayN, _closeStr)}
     ${renderDiagnosticConversion(client, mobileStatus)}
     ${!isEngagementComplete && !alreadyCheckedInThisWeek ? renderCheckinForm(client, checkins, currentWeek) : ''}
     ${mobileStatus === 'coaching_client' ? `
@@ -4959,7 +4960,9 @@ function renderCloseoutDone() {
     <div class="closeout-done">
       <div style="font-size:40px;margin-bottom:12px;">🏁</div>
       <h3>Sprint Complete</h3>
-      <p>Your closeout has been submitted. Alex will be in touch about what's next.<br>Check the <strong>My Results</strong> tab to review your full 90-day progress.</p>
+      <p>Your closeout has been submitted. Check the <strong>My Results</strong> tab to review your full 90-day progress.</p>
+      <p style="margin-top:14px;font-size:14px;color:#444;">The end of a sprint is the best time to decide what's next. Book time with Alex to look at your results together and set the next 90 days.</p>
+      <a href="${COACHING_CALL_LINK}" target="_blank" rel="noopener" style="display:inline-block;margin-top:6px;background:var(--teal,#01949A);color:#fff;text-decoration:none;border-radius:8px;padding:11px 24px;font-size:14px;font-weight:700;font-family:'Montserrat',sans-serif;">Book your next-step call →</a>
     </div>`;
 }
 
@@ -6396,7 +6399,36 @@ function renderResultsTab(surveyResponses, checkins, client, surveyTokens, selfC
     return;
   }
 
-  el.innerHTML = nonResponseNotice + tp3HTML + consistencyHTML + scorecardHTML + commentsHTML + metricHTML;
+  el.innerHTML = nonResponseNotice + tp3HTML + consistencyHTML + scorecardHTML + commentsHTML + metricHTML + renderResultsNextStep(client);
+}
+
+// The results page is the highest-emotion screen in the portal — the moment a leader
+// sees their numbers move (or not). Never leave it as a dead-end. Give them the one
+// next action that fits where they are in the journey.
+function renderResultsNextStep(client) {
+  const status = getClientStatus(client);
+  const card = (eyebrow, headline, sub, btnHtml) => `
+    <div class="card" style="margin-top:24px;border-left:4px solid var(--teal,#01949A);">
+      <div style="font-size:12px;font-weight:700;letter-spacing:.05em;color:var(--teal,#01949A);text-transform:uppercase;">${eyebrow}</div>
+      <div style="font-size:18px;font-weight:800;font-family:'Montserrat',sans-serif;color:var(--navy,#004369);margin:6px 0 4px;">${headline}</div>
+      <div style="font-size:14px;color:#444;line-height:1.5;margin-bottom:14px;">${sub}</div>
+      ${btnHtml}
+    </div>`;
+  if (status === 'coaching_client') {
+    return card(
+      'Your next move',
+      'Bring the number that matters to your coach',
+      "Pick the one result you most want to change and put it in front of Alex before your next session. That's where the work happens.",
+      `<button onclick="showPortalTab('coach')" style="background:var(--teal,#01949A);color:#fff;border:none;border-radius:8px;padding:11px 22px;font-size:14px;font-weight:700;font-family:'Montserrat',sans-serif;cursor:pointer;">Message your coach →</button>`
+    );
+  }
+  // diagnostic-only, alumni, workshop — they have the data but no ongoing support.
+  return card(
+    'Your next move',
+    'Turn these numbers into change',
+    'A diagnostic shows you where you stand. Coaching is what moves it. Book a short call with Alex to talk through what your results mean and what to do first.',
+    `<a href="${COACHING_CALL_LINK}" target="_blank" rel="noopener" style="display:inline-block;background:var(--teal,#01949A);color:#fff;text-decoration:none;border-radius:8px;padding:11px 22px;font-size:14px;font-weight:700;font-family:'Montserrat',sans-serif;">Book time with Alex →</a>`
+  );
 }
 
 // ─────────────────────────────────────────────
