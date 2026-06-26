@@ -79,6 +79,8 @@ const READ_TABLES = new Set([
   'workshops', 'workshop_participants', 'workshop_questions', 'workshop_responses',
   // Organizations (v40)
   'organizations',
+  // Renewal / payment (v74)
+  'renewal_config', 'renewals',
 ]);
 // Tables the dashboard may write through the generic proxy.
 const WRITE_TABLES = new Set([
@@ -92,6 +94,8 @@ const WRITE_TABLES = new Set([
   'workshops', 'workshop_participants', 'workshop_questions', 'workshop_responses',
   // Organizations (v40)
   'organizations',
+  // Renewal / payment (v74) — owner-only write (payment links live here)
+  'renewal_config',
 ]);
 // NOTE: admin_accounts and coach_settings are intentionally NOT in either set —
 // they are served only by the dedicated, hardened actions below.
@@ -147,7 +151,7 @@ export default async function handler(req, res) {
   const senderAid   = (session.aid != null) ? session.aid : null;
   const senderFirst = String(senderName).split(' ')[0] || 'GPS Leadership';
   // Global IP / templates / automation: assistants may READ but never WRITE.
-  const OWNER_ONLY_WRITE = new Set(['email_templates', 'coach_settings', 'diagnostic_question_overrides', 'workshop_questions']);
+  const OWNER_ONLY_WRITE = new Set(['email_templates', 'coach_settings', 'diagnostic_question_overrides', 'workshop_questions', 'renewal_config']);
   // Permanent deletion of core records: owner only (assistants run ops, not nukes).
   const OWNER_ONLY_DELETE = new Set(['clients', 'diagnostics', 'teams', 'workshops', 'diagnostic_team_reports', 'diagnostic_raters', 'diagnostic_responses']);
 

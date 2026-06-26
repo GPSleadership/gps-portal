@@ -387,6 +387,59 @@ export default async function handler(req, res) {
         } catch (_) { recommendations = []; }
         return res.status(200).json({ ok: true, diagnostic: diag, raters, report, recommendations });
       }
+
+      case 'renewal-options': {
+        // Which renewal/continuation offer (if any) to show this leader, plus the
+        // editable GHL link + price from renewal_config. Cards stay hidden when the
+        // relevant link is not configured yet, so nothing renders half-built.
+        const cfgRes = await sb(`/rest/v1/renewal_config?id=eq.1&select=*&limit=1`);
+        const cfg = (cfgRes.ok ? (await cfgRes.json())[0] : null) || {};
+        const cRes = await sb(`/rest/v1/clients?id=eq.${encodeURIComponent(clientId)}&select=is_coaching_client,plan_start_date,payer_type,subscription_status&limit=1`);
+        const client = cRes.ok ? (await cRes.json())[0] : null;
+        if (!client) return res.status(200).json({ ok: true, show: false });
+        const payer_type = client.payer_type || 'leader_pays';
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const addDays = function (d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+        const ymd = function (d) { return d.toISOString().slice(0, 10); };
+
+        // Touchpoint B — continuation, for active coaching clients in/near sprint end.
+        if (client.is_coaching_client) {
+          const spRes = await sb(`/rest/v1/sprints?client_id=eq.${encodeURIComponent(clientId)}&select=start_date,end_date,sprint_number,status&order=sprint_number.desc&limit=1`);
+          const sp = spRes.ok ? (await spRes.json())[0] : null;
+          const start = (sp && sp.start_date) ? new Date(sp.start_date) : (client.plan_start_date ? new Date(client.plan_start_date) : null);
+          if (start && !isNaN(start)) {
+            const end = (sp && sp.end_date) ? new Date(sp.end_date) : addDays(start, 90);
+            const day75 = addDays(end, -15);
+            const graceEnd = addDays(end, cfg.grace_window_days || 7);
+            if (today >= day75 && today <= graceEnd) {
+              return res.status(200).json({
+                ok: true, show: true, touchpoint: 'continuation', payer_type,
+                sprint_end: ymd(end),
+                titan: cfg.continuation_titan_url ? { url: cfg.continuation_titan_url, price: cfg.price_titan_quarterly } : null,
+                flex:  cfg.continuation_flex_url  ? { url: cfg.continuation_flex_url,  price: cfg.price_flex_monthly  } : null,
+              });
+            }
+          }
+          return res.status(200).json({ ok: true, show: false });
+        }
+
+        // Touchpoint A — diagnostic → first coaching sprint (credit window).
+        const dRes = await sb(`/rest/v1/diagnostics?client_id=eq.${encodeURIComponent(clientId)}&select=debrief_date,status&order=created_at.desc&limit=1`);
+        const diagRow = dRes.ok ? (await dRes.json())[0] : null;
+        if (diagRow && diagRow.debrief_date) {
+          const creditEnds = addDays(new Date(diagRow.debrief_date), cfg.credit_window_days || 30);
+          const inWindow = today <= creditEnds;
+          const url = inWindow ? cfg.first_sprint_credit_url : cfg.first_sprint_standard_url;
+          return res.status(200).json({
+            ok: true, show: !!url, touchpoint: 'first_sprint', payer_type,
+            in_credit_window: inWindow,
+            credit_window_ends: ymd(creditEnds),
+            price: inWindow ? cfg.price_first_credit : cfg.price_first_standard,
+            url: url || null,
+          });
+        }
+        return res.status(200).json({ ok: true, show: false });
+      }
       case 'diag-get-raters': {
         if (!(await diagnosticOwnedBy(body.diagnostic_id, clientId))) return res.status(403).json({ error: 'Not your diagnostic' });
         const r = await sb(`/rest/v1/diagnostic_raters?diagnostic_id=eq.${encodeURIComponent(body.diagnostic_id)}&select=*&order=created_at.asc`);
