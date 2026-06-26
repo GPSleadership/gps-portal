@@ -3445,9 +3445,15 @@ async function loadClient() {
       initWizard(client);
     } else {
       // Post-lockdown: all reads go through the token-gated endpoint.
-      const [rd] = await Promise.all([
-        portalData('results-data', {}).catch(function(){ return {}; }),
-      ]);
+      // Don't silently swallow a failure here — an empty rd makes the portal look
+      // broken (no results, no check-ins). Retry once for transient/cold-start
+      // failures, then surface a clear, non-blocking error with a Reload action.
+      let _resultsLoadFailed = false;
+      let rd = await portalData('results-data', {}).catch(function(){ return null; });
+      if (rd === null) {
+        rd = await portalData('results-data', {}).catch(function(){ return null; });
+      }
+      if (rd === null) { _resultsLoadFailed = true; rd = {}; }
       const checkins        = rd.checkins         || [];
       const surveyData      = rd.survey_responses || [];
       const surveyTokenData = rd.survey_tokens    || [];
@@ -3523,10 +3529,25 @@ async function loadClient() {
       renderClientStakeholderCard(client.id, stakeholderData || []);
       loadClientDiagnostic();
       loadMySponsor();
+      if (_resultsLoadFailed) showResultsLoadError();
     }
   } catch (e) {
     showError('Something went wrong.', 'Please refresh the page. If the problem continues, contact alex@gpsleadership.org.');
   }
+}
+
+// Non-blocking banner shown when results-data failed to load after a retry. The plan
+// still renders from the already-loaded client row; this tells the leader their recent
+// results/check-ins may be missing (rather than letting it look like they have none)
+// and gives them a one-click Reload.
+function showResultsLoadError() {
+  const host = document.getElementById('mainContent');
+  if (!host || document.getElementById('resultsLoadErr')) return;
+  host.insertAdjacentHTML('afterbegin',
+    '<div id="resultsLoadErr" style="background:#FFF4E5;border:1px solid #F0B968;border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">' +
+      '<div style="font-size:14px;color:#7A4F00;line-height:1.5;">We could not load your latest results and check-ins. Your plan is shown below, but recent progress may be missing.</div>' +
+      '<button onclick="location.reload()" style="background:#01949A;color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">Reload</button>' +
+    '</div>');
 }
 
 // ─────────────────────────────────────────────

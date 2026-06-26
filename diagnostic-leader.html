@@ -416,7 +416,7 @@ function renderTopAlert() {
   } else if (s === 'debrief_complete') {
     const portalBtn = DIAGNOSTIC.coaching_portal_url
       ? `<div style="margin-top:14px;"><a href="${DIAGNOSTIC.coaching_portal_url}" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:700;">Go to Your Coaching Portal &rarr;</a></div>`
-      : `<div style="margin-top:10px;font-size:13px;color:#666;">Your coaching portal link will arrive by email shortly. Check your inbox.</div>`;
+      : `<div style="margin-top:14px;"><a href="mailto:alex@gpsleadership.org?subject=My%20coaching%20portal%20link" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:700;">Email Alex for your portal link &rarr;</a><div style="margin-top:8px;font-size:13px;color:#666;">Your link is also on its way by email. Don't see it? Use the button above.</div></div>`;
     el.innerHTML = `<div class="alert alert-green">
       <span class="alert-icon">✓</span>
       <div><strong>Debrief complete.</strong> Your 90-day plan portal is ready. Use the link in your email or the button below to get started.${portalBtn}</div>
