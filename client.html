@@ -3744,6 +3744,28 @@ function wizRenderStep(step) {
   const body = document.getElementById('wizStepBody');
   const fn = [wizS0, wizS1, wizS2, wizS3, wizS4, wizS5, wizS6, wizS7][step];
   body.innerHTML = fn ? fn() : '';
+  // On arriving at the 30-day / metrics step, auto-draft from the completed 90-day
+  // goal if nothing is there yet — so it's filled before the leader interacts.
+  if (step === 3) wizMaybeAutoDraft30();
+}
+
+// Auto-draft the 30-day goal + behaviors + metrics from the 90-day goal the leader
+// just wrote. Runs once, only when the 30-day is still blank (so it never overwrites
+// the leader's own edits or a diagnostic pre-fill). The Regenerate button is the
+// manual path for redrafting after a 90-day change.
+let _wizAutoDraftTried = false;
+async function wizMaybeAutoDraft30() {
+  if (wizPlan.hasDiag) return;                       // diagnostic clients are already pre-filled
+  if ((wizPlan.goal30 || '').trim()) return;          // already has a 30-day — keep it
+  if (!(wizPlan.goal90 || '').trim()) return;         // no 90-day to draft from
+  if (_wizAutoDraftTried) return;                     // only auto-draft once per session
+  _wizAutoDraftTried = true;
+  const g30El = document.getElementById('wizGoal30');
+  const hintEl = document.getElementById('wizGoal30Hint');
+  if (g30El) g30El.setAttribute('placeholder', 'Drafting from your 90-day goal…');
+  if (hintEl) hintEl.textContent = '✦ Drafting from your 90-day goal…';
+  try { await wizDoPrefill(true); } catch (_) {}
+  if (wizStep === 3) wizRenderStep(3); // repaint so the 30-day + metric fields show the draft
 }
 
 // ── Escape helper ──────────────────────────────────────────────────────────
@@ -4407,22 +4429,6 @@ function wizValidate(step) {
 async function wizNext() {
   if (!wizValidate(wizStep)) return;
   if (wizStep === 7) { wizLockIn(); return; }
-
-  // After the 90-day goal page, draft the 30-day goal + behaviors + metrics from the
-  // COMPLETED 90-day goal — not while typing. Only for non-diagnostic, non-edit flows,
-  // and only when the goal actually changed since the last draft (so going back and
-  // forth doesn't overwrite the leader's own edits).
-  if (wizStep === 2 && !wizPlan.hasDiag && !wizIsEdit) {
-    const g90 = (wizPlan.goal90 || '').trim();
-    if (g90 && g90 !== _wizGoal90LastFired) {
-      const nextBtn = document.getElementById('wizBtnNext');
-      const prev = nextBtn ? nextBtn.textContent : '';
-      if (nextBtn) { nextBtn.disabled = true; nextBtn.textContent = '✦ Building your plan…'; }
-      try { await wizDoPrefill(true); } catch (_) {}
-      if (nextBtn) { nextBtn.disabled = false; nextBtn.textContent = prev; }
-    }
-  }
-
   wizStep++;
   wizRender();
 }

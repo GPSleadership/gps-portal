@@ -2683,7 +2683,7 @@ function renderProfileSection(section, client, checkins) {
           <button onclick="setEnrolledStatus('${client.id}', ${!enrolled})" id="enrollBtn-${client.id}"
             style="padding:8px 18px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;border:none;
               background:${enrolled ? 'var(--red)' : 'var(--teal)'};color:#fff;font-family:'Montserrat',sans-serif;">
-            ${enrolled ? 'Remove from Coaching Program' : 'Enroll as Coaching Client'}
+            ${enrolled ? 'Remove from Coaching Program' : 'Enroll in Coaching Program'}
           </button>
           <button onclick="switchProfileNav('diagnostics')"
             style="padding:8px 18px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid var(--navy);background:none;color:var(--navy);font-family:'Montserrat',sans-serif;">
@@ -2706,17 +2706,17 @@ function renderProfileSection(section, client, checkins) {
         <div id="regenMsg-${client.id}" style="margin-top:8px;"></div>
       </div>
       <div class="detail-section">
-        <h4>Coaching Client</h4>
+        <h4>Coaching Session Check-In Question</h4>
         <p id="coachingSessionStatus-${client.id}" style="font-size:12px;color:var(--gray-600);margin-bottom:10px;">
           ${client.coaching_sessions_enabled
-            ? 'Enabled. Their weekly check-in includes a coaching session attendance question.'
-            : 'Not enabled. The coaching session attendance question is hidden from their check-in.'
+            ? 'On. Their weekly check-in includes a "did you attend your coaching session?" question.'
+            : 'Off. The coaching-session attendance question is hidden from their check-in.'
           }
         </p>
         <button onclick="toggleCoachingSessions('${client.id}', ${!!client.coaching_sessions_enabled})" id="coachingSessionBtn-${client.id}"
           style="padding:8px 18px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;border:none;
             background:${client.coaching_sessions_enabled ? 'var(--red)' : 'var(--teal)'};color:#fff;">
-          ${client.coaching_sessions_enabled ? 'Disable Coaching Client' : 'Enable Coaching Client'}
+          ${client.coaching_sessions_enabled ? 'Turn off session question' : 'Turn on session question'}
         </button>
       </div>
       <div class="detail-section" id="bigwin-section-${client.id}">
@@ -2876,23 +2876,6 @@ function renderProfileSection(section, client, checkins) {
             <button onclick="markEngagementEnded('${client.id}')" style="padding:7px 14px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid ${client.coaching_program_end_date ? 'var(--red)' : 'var(--gray-300)'};background:#fff;color:${client.coaching_program_end_date ? 'var(--red)' : 'var(--navy)'};">${client.coaching_program_end_date ? 'Ended ' + client.coaching_program_end_date : 'Mark engagement ended'}</button>
           </div>
         </div>
-      </div>
-      <div class="detail-section">
-        <h4>Diagnostic Report Link</h4>
-        <p style="font-size:12px;color:var(--gray-600);margin-bottom:8px;">Paste the client's Google Drive report URL here. It will appear as a button on their portal.</p>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <input type="url" id="diagUrl-${client.id}"
-            value="${client.diagnostic_report_url || ''}"
-            placeholder="https://drive.google.com/..."
-            style="flex:1;padding:8px 12px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;"
-            onfocus="this.style.borderColor='var(--teal)'"
-            onblur="this.style.borderColor='var(--gray-300)'" />
-          <button class="copy-btn" style="background:var(--navy);white-space:nowrap;" onclick="saveDiagnosticUrl('${client.id}', this)">Save Link</button>
-        </div>
-        ${client.diagnostic_report_url
-          ? `<p style="font-size:11px;color:#2e7d32;margin-top:6px;">✓ Report link saved — visible to client on their portal.</p>`
-          : `<p style="font-size:11px;color:var(--gray-600);margin-top:6px;">No report link saved yet.</p>`
-        }
       </div>
       <div class="action-btns">
         <button class="btn-action-sm" style="color:var(--gray-600);border:1px solid var(--gray-300);" onclick="toggleActive('${client.id}', ${client.is_active})">
@@ -3350,15 +3333,15 @@ async function toggleCoachingSessions(clientId, currentState) {
   allClients = allClients.map(c => c.id === clientId ? { ...c, coaching_sessions_enabled: newState } : c);
 
   if (newState) {
-    btn.textContent = 'Disable Coaching Client';
+    btn.textContent = 'Turn off session question';
     btn.style.background = 'var(--red)';
     btn.setAttribute('onclick', `toggleCoachingSessions('${clientId}', true)`);
-    if (statusEl) statusEl.textContent = 'Enabled. Their weekly check-in includes a coaching session attendance question.';
+    if (statusEl) statusEl.textContent = 'On. Their weekly check-in includes a "did you attend your coaching session?" question.';
   } else {
-    btn.textContent = 'Enable Coaching Client';
+    btn.textContent = 'Turn on session question';
     btn.style.background = 'var(--teal)';
     btn.setAttribute('onclick', `toggleCoachingSessions('${clientId}', false)`);
-    if (statusEl) statusEl.textContent = 'Not enabled. The coaching session attendance question is hidden from their check-in.';
+    if (statusEl) statusEl.textContent = 'Off. The coaching-session attendance question is hidden from their check-in.';
   }
   btn.disabled = false;
 }
@@ -3379,7 +3362,7 @@ async function setEnrolledStatus(clientId, newState) {
     switchProfileNav(document.querySelector('.profile-nav-item.active')?.id?.replace('profNav-','') || 'admin');
   } catch (e) {
     toast('Error: ' + e.message);
-    if (btn) { btn.textContent = newState ? 'Enroll as Coaching Client' : 'Remove from Coaching Program'; btn.disabled = false; }
+    if (btn) { btn.textContent = newState ? 'Enroll in Coaching Program' : 'Remove from Coaching Program'; btn.disabled = false; }
   }
 }
 
