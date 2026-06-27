@@ -3676,9 +3676,11 @@ function initWizard(client) {
     behavior1: wizIsEdit ? (client.behavior_1 || client.start_behavior || '') : (p?.suggested?.behavior1 || ''),
     behavior2: wizIsEdit ? (client.behavior_2 || '') : (p?.suggested?.behavior2 || ''),
     metric1: {
-      name:     wizIsEdit ? (client.metric_1_name || client.metric_name || '') : (p?.suggested?.metric1?.name || ''),
-      baseline: wizIsEdit ? (client.metric_1_baseline ?? client.metric_baseline ?? '') : (p?.suggested?.metric1?.baseline ?? ''),
-      target:   wizIsEdit ? (client.metric_1_target  ?? client.metric_target  ?? '') : (p?.suggested?.metric1?.target  ?? ''),
+      name:       wizIsEdit ? (client.metric_1_name || client.metric_name || '') : (p?.suggested?.metric1?.name || ''),
+      baseline:   wizIsEdit ? (client.metric_1_baseline ?? client.metric_baseline ?? '') : (p?.suggested?.metric1?.baseline ?? ''),
+      target:     wizIsEdit ? (client.metric_1_target  ?? client.metric_target  ?? '') : (p?.suggested?.metric1?.target  ?? ''),
+      type:       wizIsEdit ? (client.metric_1_type || 'number') : 'number',
+      ratioDenom: wizIsEdit ? (client.metric_1_ratio_denom ?? '') : '',
     },
     metric2: {
       question:  wizIsEdit ? (client.metric_2_question  || '') : (p?.suggested?.metric2?.question  || ''),
@@ -4087,27 +4089,48 @@ function wizS3() {
       </div>
     </div>
     <div class="wiz-metric-block">
-      <div class="wiz-required-note">✦ Required — Metric 1 is always self-tracked and count-based.</div>
+      <div class="wiz-required-note">✦ Required — Metric 1 is always self-tracked.</div>
       <div class="wiz-metric-hdr">
-        <div><div class="wiz-metric-title">Metric 1 — Self Behavior Metric</div><div class="wiz-metric-desc">Counts how often you execute the behavior each week.</div></div>
+        <div><div class="wiz-metric-title">Metric 1 — Self Behavior Metric</div><div class="wiz-metric-desc">How often you execute the behavior each week.</div></div>
         <span class="wiz-metric-badge self">Self</span>
       </div>
+      <div class="form-group" style="margin-bottom:10px;">
+        <label>Measurement type <span style="color:var(--red)">*</span></label>
+        <div style="display:flex;gap:8px;margin-top:6px;">
+          <label id="wizM1TypeNum" onclick="wizM1TypeToggle('number')" style="display:flex;align-items:center;gap:7px;padding:9px 14px;border:1.5px solid ${m1.type==='ratio'?'var(--gray-300)':'var(--navy)'};border-radius:7px;cursor:pointer;background:${m1.type==='ratio'?'#fff':'#f0f4ff'};font-size:13px;font-weight:${m1.type==='ratio'?'400':'700'};color:${m1.type==='ratio'?'var(--gray-600)':'var(--navy)'};transition:all .15s;">
+            <span style="width:16px;height:16px;border-radius:50%;border:2px solid ${m1.type==='ratio'?'var(--gray-300)':'var(--navy)'};background:${m1.type==='ratio'?'#fff':'var(--navy)'};flex-shrink:0;display:flex;align-items:center;justify-content:center;">${m1.type!=='ratio'?'<span style="width:6px;height:6px;border-radius:50%;background:#fff;display:block;"></span>':''}</span>
+            Count / Number
+          </label>
+          <label id="wizM1TypeRatio" onclick="wizM1TypeToggle('ratio')" style="display:flex;align-items:center;gap:7px;padding:9px 14px;border:1.5px solid ${m1.type==='ratio'?'var(--navy)':'var(--gray-300)'};border-radius:7px;cursor:pointer;background:${m1.type==='ratio'?'#f0f4ff':'#fff'};font-size:13px;font-weight:${m1.type==='ratio'?'700':'400'};color:${m1.type==='ratio'?'var(--navy)':'var(--gray-600)'};transition:all .15s;">
+            <span style="width:16px;height:16px;border-radius:50%;border:2px solid ${m1.type==='ratio'?'var(--navy)':'var(--gray-300)'};background:${m1.type==='ratio'?'var(--navy)':'#fff'};flex-shrink:0;display:flex;align-items:center;justify-content:center;">${m1.type==='ratio'?'<span style="width:6px;height:6px;border-radius:50%;background:#fff;display:block;"></span>':''}</span>
+            Ratio (X out of Y)
+          </label>
+        </div>
+        <div id="wizM1RatioHint" style="display:${m1.type==='ratio'?'block':'none'};margin-top:8px;font-size:12px;background:#eff6ff;border-left:3px solid #2563eb;padding:8px 10px;border-radius:0 5px 5px 0;color:#1e3a5f;line-height:1.5;">
+          Use this when success is a percentage — e.g., "8 out of 10 commitments completed." You'll track numerator and denominator each week. The chart will show your completion rate over time.
+        </div>
+      </div>
       <div class="form-group">
-        <label>What you\'re counting <span style="color:var(--red)">*</span></label>
-        <div class="hint">Phrase it as "# of times I did [behavior] this week."</div>
-        <textarea id="wizM1Name" rows="2" placeholder="e.g. # of times I asked for options before giving my view" style="resize:vertical;">${wizEsc(m1.name)}</textarea>
+        <label>What you\'re tracking <span style="color:var(--red)">*</span></label>
+        <div class="hint" id="wizM1NameHint">${m1.type==='ratio'?'e.g. "Commitments I completed vs. total commitments made this week"':'Phrase it as "# of times I did [behavior] this week."'}</div>
+        <textarea id="wizM1Name" rows="2" placeholder="${m1.type==='ratio'?'e.g. Commitments I completed vs. total commitments':'e.g. # of times I asked for options before giving my view'}" style="resize:vertical;">${wizEsc(m1.name)}</textarea>
         ${m1.name && wizPlan.hasDiag ? '<div class="wiz-prefilled">✦ Pre-filled from your diagnostic</div>' : (m1.name && wizPlan.aiPrefilled ? '<div class="wiz-prefilled">✦ Suggested based on your goal — edit as needed</div>' : '')}
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>Baseline <span style="color:var(--red)">*</span></label>
-          <div class="hint">Last week\'s count.</div>
-          <input type="number" id="wizM1Base" value="${m1.baseline !== '' ? m1.baseline : ''}" min="0" placeholder="e.g. 2" />
+          <label id="wizM1BaseLabel">${m1.type==='ratio'?'Baseline (last week\'s numerator)':'Baseline'} <span style="color:var(--red)">*</span></label>
+          <div class="hint" id="wizM1BaseHint">${m1.type==='ratio'?'How many did you complete last week?':'Last week\'s count.'}</div>
+          <input type="number" id="wizM1Base" value="${m1.baseline !== '' ? m1.baseline : ''}" min="0" placeholder="${m1.type==='ratio'?'e.g. 6':'e.g. 2'}" />
+        </div>
+        <div class="form-group" id="wizM1DenomGroup" style="display:${m1.type==='ratio'?'block':'none'};">
+          <label>Out of how many? <span style="color:var(--red)">*</span></label>
+          <div class="hint">Your typical or goal denominator (e.g. 10 if you aim for "8 out of 10").</div>
+          <input type="number" id="wizM1Denom" value="${m1.ratioDenom !== '' ? m1.ratioDenom : ''}" min="1" placeholder="e.g. 10" />
         </div>
         <div class="form-group">
-          <label>90-Day Weekly Target <span style="color:var(--red)">*</span></label>
-          <div class="hint">Where you want to be by week 13.</div>
-          <input type="number" id="wizM1Target" value="${m1.target !== '' ? m1.target : ''}" min="1" placeholder="e.g. 8" />
+          <label id="wizM1TargetLabel">${m1.type==='ratio'?'Target (numerator per week)':'90-Day Weekly Target'} <span style="color:var(--red)">*</span></label>
+          <div class="hint" id="wizM1TargetHint">${m1.type==='ratio'?'Where you want to be by week 13.':'Where you want to be by week 13.'}</div>
+          <input type="number" id="wizM1Target" value="${m1.target !== '' ? m1.target : ''}" min="0" placeholder="${m1.type==='ratio'?'e.g. 8':'e.g. 8'}" />
         </div>
       </div>
     </div>
@@ -4338,7 +4361,7 @@ function wizS7() {
       </div>
       <div class="wiz-sum-section">
         <div class="wiz-sum-hdr">Metrics</div>
-        <div class="wiz-sum-row"><div class="wiz-sum-label">Self (Metric 1)</div><div class="wiz-sum-val">${wizEsc(p.metric1.name||'—')}<br/><span style="font-size:11px;color:var(--gray-500);">Baseline: ${p.metric1.baseline} → Target: ${p.metric1.target}/week</span></div></div>
+        <div class="wiz-sum-row"><div class="wiz-sum-label">Self (Metric 1)</div><div class="wiz-sum-val">${wizEsc(p.metric1.name||'—')}<br/><span style="font-size:11px;color:var(--gray-500);">${p.metric1.type==='ratio' ? `Baseline: ${p.metric1.baseline}/${p.metric1.ratioDenom} → Target: ${p.metric1.target}/${p.metric1.ratioDenom}/week` : `Baseline: ${p.metric1.baseline} → Target: ${p.metric1.target}/week`}</span></div></div>
         <div class="wiz-sum-row"><div class="wiz-sum-label">Stakeholder (M2)</div><div class="wiz-sum-val">"${wizEsc(p.metric2.question||'—')}"<br/><span style="font-size:11px;color:var(--gray-500);">Target avg: ${p.metric2.targetAvg} / 5.0</span></div></div>
       </div>
       ${shs.length ? `
@@ -4380,18 +4403,25 @@ function wizValidate(step) {
   if (step === 3) {
     const g30 = document.getElementById('wizGoal30').value.trim();
     if (!g30) { wizShowError('Please enter your 30-day goal.'); return false; }
-    const m1n = document.getElementById('wizM1Name').value.trim();
-    const m1b = parseFloat(document.getElementById('wizM1Base').value);
-    const m1t = parseFloat(document.getElementById('wizM1Target').value);
+    const m1n    = document.getElementById('wizM1Name').value.trim();
+    const m1b    = parseFloat(document.getElementById('wizM1Base').value);
+    const m1t    = parseFloat(document.getElementById('wizM1Target').value);
+    const m1type = wizPlan.metric1.type || 'number';
+    const m1denomEl = document.getElementById('wizM1Denom');
+    const m1denom   = m1denomEl ? parseFloat(m1denomEl.value) : NaN;
     const m2q = document.getElementById('wizM2Q').value.trim();
     const m2a = parseFloat(document.getElementById('wizM2Avg').value);
-    if (!m1n)           { wizShowError('Please enter the name for Metric 1.'); return false; }
-    if (isNaN(m1b))     { wizShowError('Please enter a baseline for Metric 1.'); return false; }
-    if (isNaN(m1t))     { wizShowError('Please enter a 90-day target for Metric 1.'); return false; }
-    if (!m2q)           { wizShowError('Please enter the stakeholder survey question for Metric 2.'); return false; }
+    if (!m1n)                { wizShowError('Please enter the name for Metric 1.'); return false; }
+    if (isNaN(m1b))          { wizShowError('Please enter a baseline for Metric 1.'); return false; }
+    if (m1type === 'ratio' && (isNaN(m1denom) || m1denom < 1))
+                             { wizShowError('Please enter a denominator (the "out of" number) for Metric 1.'); return false; }
+    if (isNaN(m1t))          { wizShowError('Please enter a 90-day target for Metric 1.'); return false; }
+    if (m1type === 'ratio' && m1t > m1denom)
+                             { wizShowError('Metric 1 target cannot be larger than the denominator.'); return false; }
+    if (!m2q)                { wizShowError('Please enter the stakeholder survey question for Metric 2.'); return false; }
     if (isNaN(m2a)||m2a<1||m2a>5) { wizShowError('Metric 2 target must be between 1 and 5.'); return false; }
-    wizPlan.goal30 = g30;
-    wizPlan.metric1 = { name:m1n, baseline:m1b, target:m1t };
+    wizPlan.goal30  = g30;
+    wizPlan.metric1 = { name:m1n, baseline:m1b, target:m1t, type:m1type, ratioDenom: m1type==='ratio' ? m1denom : null };
     wizPlan.metric2 = { question:m2q, targetAvg:m2a };
     return true;
   }
@@ -4423,6 +4453,60 @@ function wizValidate(step) {
     return true;
   }
   return true;
+}
+
+// ── Metric 1 type toggle ───────────────────────────────────────────────────
+function wizM1TypeToggle(type) {
+  wizPlan.metric1.type = type;
+  const isRatio = type === 'ratio';
+
+  // Toggle button styles
+  const numBtn   = document.getElementById('wizM1TypeNum');
+  const ratioBtn = document.getElementById('wizM1TypeRatio');
+  if (numBtn) {
+    numBtn.style.border      = isRatio ? '1.5px solid var(--gray-300)' : '1.5px solid var(--navy)';
+    numBtn.style.background  = isRatio ? '#fff' : '#f0f4ff';
+    numBtn.style.fontWeight  = isRatio ? '400' : '700';
+    numBtn.style.color       = isRatio ? 'var(--gray-600)' : 'var(--navy)';
+    const dot = numBtn.querySelector('span span');
+    const ring = numBtn.querySelector('span');
+    if (ring) { ring.style.border = isRatio ? '2px solid var(--gray-300)' : '2px solid var(--navy)'; ring.style.background = isRatio ? '#fff' : 'var(--navy)'; }
+    if (dot)  dot.style.display = isRatio ? 'none' : 'block';
+  }
+  if (ratioBtn) {
+    ratioBtn.style.border     = isRatio ? '1.5px solid var(--navy)' : '1.5px solid var(--gray-300)';
+    ratioBtn.style.background = isRatio ? '#f0f4ff' : '#fff';
+    ratioBtn.style.fontWeight = isRatio ? '700' : '400';
+    ratioBtn.style.color      = isRatio ? 'var(--navy)' : 'var(--gray-600)';
+    const dot = ratioBtn.querySelector('span span');
+    const ring = ratioBtn.querySelector('span');
+    if (ring) { ring.style.border = isRatio ? '2px solid var(--navy)' : '2px solid var(--gray-300)'; ring.style.background = isRatio ? 'var(--navy)' : '#fff'; }
+    if (dot)  dot.style.display = isRatio ? 'block' : 'none';
+  }
+
+  // Toggle hint
+  const hint = document.getElementById('wizM1RatioHint');
+  if (hint) hint.style.display = isRatio ? 'block' : 'none';
+
+  // Toggle denom group
+  const denomGroup = document.getElementById('wizM1DenomGroup');
+  if (denomGroup) denomGroup.style.display = isRatio ? 'block' : 'none';
+
+  // Update labels/hints
+  const nameHint   = document.getElementById('wizM1NameHint');
+  const baseLabel  = document.getElementById('wizM1BaseLabel');
+  const baseHint   = document.getElementById('wizM1BaseHint');
+  const targetLabel = document.getElementById('wizM1TargetLabel');
+  const m1Name     = document.getElementById('wizM1Name');
+  const m1Base     = document.getElementById('wizM1Base');
+  const m1Target   = document.getElementById('wizM1Target');
+
+  if (nameHint)    nameHint.textContent    = isRatio ? 'e.g. "Commitments I completed vs. total commitments made this week"' : 'Phrase it as "# of times I did [behavior] this week."';
+  if (m1Name)      m1Name.placeholder      = isRatio ? 'e.g. Commitments I completed vs. total commitments' : 'e.g. # of times I asked for options before giving my view';
+  if (baseLabel)   baseLabel.innerHTML     = (isRatio ? "Baseline (last week's numerator)" : "Baseline") + ' <span style="color:var(--red)">*</span>';
+  if (baseHint)    baseHint.textContent    = isRatio ? 'How many did you complete last week?' : "Last week's count.";
+  if (m1Base)      m1Base.placeholder      = isRatio ? 'e.g. 6' : 'e.g. 2';
+  if (targetLabel) targetLabel.innerHTML   = (isRatio ? "Target (numerator per week)" : "90-Day Weekly Target") + ' <span style="color:var(--red)">*</span>';
 }
 
 // ── Navigation ─────────────────────────────────────────────────────────────
@@ -4474,13 +4558,15 @@ async function wizLockIn() {
     start_behavior:    p.behavior1,  // legacy sync
     ...(p.observableMeasure ? { observable_measure: p.observableMeasure } : {}),  // what stakeholders rate (AI-prefilled; coach can edit). Omit when empty so re-editing never wipes a coach-set value.
 
-    metric_1_name:     p.metric1.name,
-    metric_1_baseline: p.metric1.baseline,
-    metric_1_target:   p.metric1.target,
-    metric_current:    p.metric1.baseline,
-    metric_name:       p.metric1.name,      // legacy sync
-    metric_baseline:   p.metric1.baseline,  // legacy sync
-    metric_target:     p.metric1.target,    // legacy sync
+    metric_1_name:        p.metric1.name,
+    metric_1_baseline:    p.metric1.baseline,
+    metric_1_target:      p.metric1.target,
+    metric_1_type:        p.metric1.type || 'number',
+    metric_1_ratio_denom: p.metric1.ratioDenom ?? null,
+    metric_current:       p.metric1.baseline,
+    metric_name:          p.metric1.name,      // legacy sync
+    metric_baseline:      p.metric1.baseline,  // legacy sync
+    metric_target:        p.metric1.target,    // legacy sync
 
     // NEW v20 Metric 2 model
     metric_2_question:  p.metric2.question,
@@ -4546,7 +4632,82 @@ async function wizLockIn() {
   } catch (_) { /* non-blocking */ }
 
   trackActivity(wizClientId);
-  window.location.reload();
+  await showPostWizardOffer();
+}
+
+// ── Post-wizard sprint offer screen ───────────────────────────────────────
+async function showPostWizardOffer() {
+  // Hide progress bar and nav — this is a terminal screen
+  const progressWrap = document.getElementById('wizProgressWrap');
+  const nav          = document.getElementById('wizNav');
+  const errEl        = document.getElementById('wizErr');
+  if (progressWrap) progressWrap.style.display = 'none';
+  if (nav)          nav.style.display          = 'none';
+  if (errEl)        errEl.style.display        = 'none';
+
+  const body = document.getElementById('wizStepBody');
+  if (!body) { window.location.reload(); return; }
+
+  // Render a loading state first
+  body.innerHTML = `
+    <div class="card" style="border-top:4px solid var(--teal);text-align:center;padding:40px 24px;">
+      <div style="font-size:32px;margin-bottom:16px;">✓</div>
+      <div class="card-title" style="font-size:22px;">Your plan is locked in.</div>
+      <div class="card-subtitle">Loading your next step…</div>
+    </div>`;
+
+  // Fetch sprint offer
+  let offer = null;
+  try {
+    const r = await portalData('renewal-options', {});
+    if (r.show && r.touchpoint === 'first_sprint') offer = r;
+  } catch (_) { /* non-blocking — fall through to plain success */ }
+
+  if (!offer || !offer.url) {
+    // No offer configured — show plain success and auto-proceed
+    body.innerHTML = `
+      <div class="card" style="border-top:4px solid var(--teal);text-align:center;padding:40px 24px;">
+        <div style="font-size:40px;margin-bottom:12px;">✓</div>
+        <div class="card-title" style="font-size:22px;margin-bottom:8px;">Your 90-day plan is set.</div>
+        <div class="card-subtitle" style="margin-bottom:24px;">Your coach has been notified. Your weekly check-ins start on your plan start date.</div>
+        <button class="btn-primary" onclick="window.location.reload()">Continue to my portal →</button>
+      </div>`;
+    return;
+  }
+
+  // Build offer card
+  const price    = offer.price ? `$${offer.price.toLocaleString()}` : null;
+  const inWindow = offer.in_credit_window;
+  const windowEnd = offer.credit_window_ends
+    ? new Date(offer.credit_window_ends).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+    : null;
+
+  body.innerHTML = `
+    <div class="card" style="border-top:4px solid var(--teal);text-align:center;padding:32px 24px 24px;">
+      <div style="font-size:40px;margin-bottom:12px;">✓</div>
+      <div class="card-title" style="font-size:22px;margin-bottom:6px;">Your 90-day plan is locked in.</div>
+      <div style="font-size:14px;color:var(--gray-600);line-height:1.6;margin-bottom:8px;">Your coach has been notified. Weekly check-ins start on your plan start date.</div>
+    </div>
+
+    <div class="card" style="border-top:4px solid var(--navy);">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:var(--teal);background:var(--light-teal);border-radius:4px;padding:3px 8px;display:inline-block;margin-bottom:12px;">What's Next</div>
+      <div class="card-title" style="margin-bottom:6px;">Execute the plan with a coaching sprint.</div>
+      <div style="font-size:14px;color:var(--gray-600);line-height:1.65;margin-bottom:16px;">
+        Having the plan is step one. The sprint is where the execution happens — weekly coaching calls, weekly check-ins, and a coach tracking your progress in real time. Most leaders who go through both say the sprint is where it clicked.
+      </div>
+      ${inWindow && windowEnd ? `
+      <div style="background:#fef9ec;border:1.5px solid #f59e0b;border-radius:8px;padding:12px 15px;margin-bottom:16px;font-size:13px;line-height:1.5;">
+        <span style="font-weight:700;color:#92400e;">Credit window open</span> — your diagnostic investment applies toward the sprint.
+        ${windowEnd ? `Offer expires <strong>${windowEnd}</strong>.` : ''}
+      </div>` : ''}
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
+        ${price ? `<div style="font-size:28px;font-weight:800;color:var(--navy);font-family:'Montserrat',sans-serif;">${price}</div>` : ''}
+        <a href="${offer.url}" target="_blank" style="display:inline-block;background:var(--navy);color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:700;font-family:'Montserrat',sans-serif;letter-spacing:0.3px;">Start the Sprint →</a>
+      </div>
+      <div style="text-align:center;">
+        <button onclick="window.location.reload()" style="background:none;border:none;color:var(--gray-500);font-size:13px;cursor:pointer;text-decoration:underline;font-family:inherit;">Continue to my portal without starting the sprint</button>
+      </div>
+    </div>`;
 }
 
 // ── Error helpers ──────────────────────────────────────────────────────────
@@ -5067,6 +5228,7 @@ function renderPortal(client, checkins) {
 
   // Load any saved draft into the check-in form (runs after innerHTML is set)
   if (!alreadyCheckedInThisWeek) {
+    initRatioPreview();
     loadDraftIntoForm(client.id, currentWeek);
   }
 }
@@ -5276,11 +5438,22 @@ function renderCheckinForm(client, checkins, currentWeek) {
       </div>` : ''}
 
       <!-- METRIC INPUTS (1 required, 2-3 if defined) -->
+      ${client.metric_1_type === 'ratio' ? `
+      <div class="form-group">
+        <label>${client.metric_1_name || client.metric_name || 'Metric 1'} <span style="color:var(--red)">*</span></label>
+        <div class="hint">Enter your numerator and denominator for this week. The completion rate (%) will be tracked automatically.</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+          <input type="number" id="currentMetricNum" placeholder="Completed" min="0" step="any" style="width:120px;" />
+          <span style="font-size:16px;font-weight:700;color:var(--gray-500);">out of</span>
+          <input type="number" id="currentMetricDenom" placeholder="Total" min="1" step="any" style="width:120px;" />
+        </div>
+        <div id="ratioPreview" style="font-size:12px;color:var(--teal);font-weight:700;margin-top:6px;min-height:16px;"></div>
+      </div>` : `
       <div class="form-group">
         <label>${client.metric_1_name || client.metric_name || 'Metric 1'} <span style="color:var(--red)">*</span></label>
         <div class="hint">Current value this week</div>
         <input type="number" id="currentMetric" placeholder="Enter current value" step="any" />
-      </div>
+      </div>`}
       ${(client.metric_2_name) ? `
       <div class="form-group">
         <label>${client.metric_2_name}</label>
@@ -5366,20 +5539,24 @@ function selectRadio(groupId, labelEl) {
 // ─────────────────────────────────────────────
 function collectFormData(noCompletion) {
   const metricEl   = document.getElementById('currentMetric');
+  const metricNumEl   = document.getElementById('currentMetricNum');
+  const metricDenomEl = document.getElementById('currentMetricDenom');
   const metric2El  = document.getElementById('currentMetric2');
   const metric3El  = document.getElementById('currentMetric3');
   const coachingLabel   = document.querySelector('#coachingGroup label.selected');
   const completionLabel = document.querySelector('#completionGroup label.selected');
 
   return {
-    metric:     metricEl  ? metricEl.value  : '',
-    metric2:    metric2El ? metric2El.value : '',
-    metric3:    metric3El ? metric3El.value : '',
-    coaching:   coachingLabel   ? coachingLabel.querySelector('input').value : '',
-    completion: (!noCompletion && completionLabel) ? completionLabel.querySelector('input').value : '',
-    action:     (document.getElementById('plannedAction')      || {}).value || '',
-    barrier:    (document.getElementById('completionBarrier') || {}).value || '',
-    notes:      (document.getElementById('reflectionNotes')   || {}).value || '',
+    metric:      metricEl      ? metricEl.value      : '',
+    metricNum:   metricNumEl   ? metricNumEl.value   : '',
+    metricDenom: metricDenomEl ? metricDenomEl.value : '',
+    metric2:     metric2El ? metric2El.value : '',
+    metric3:     metric3El ? metric3El.value : '',
+    coaching:    coachingLabel   ? coachingLabel.querySelector('input').value : '',
+    completion:  (!noCompletion && completionLabel) ? completionLabel.querySelector('input').value : '',
+    action:      (document.getElementById('plannedAction')      || {}).value || '',
+    barrier:     (document.getElementById('completionBarrier') || {}).value || '',
+    notes:       (document.getElementById('reflectionNotes')   || {}).value || '',
   };
 }
 
@@ -5408,6 +5585,23 @@ async function saveDraft(clientId, weekNumber, noCompletion) {
   }
 }
 
+function initRatioPreview() {
+  function updateRatioPreview() {
+    var n  = parseFloat((document.getElementById('currentMetricNum')   || {}).value);
+    var d  = parseFloat((document.getElementById('currentMetricDenom') || {}).value);
+    var el = document.getElementById('ratioPreview');
+    if (el && !isNaN(n) && !isNaN(d) && d > 0) {
+      el.textContent = Math.round(n / d * 100) + '% completion rate';
+    } else if (el) {
+      el.textContent = '';
+    }
+  }
+  var nEl = document.getElementById('currentMetricNum');
+  var dEl = document.getElementById('currentMetricDenom');
+  if (nEl) nEl.addEventListener('input', updateRatioPreview);
+  if (dEl) dEl.addEventListener('input', updateRatioPreview);
+}
+
 async function loadDraftIntoForm(clientId, weekNumber) {
   let data = null;
   try { const r = await portalData('get-draft', { week_number: weekNumber }); data = r.draft; }
@@ -5417,11 +5611,15 @@ async function loadDraftIntoForm(clientId, weekNumber) {
   const d = data.data || {};
   const savedAt = data.saved_at;
 
-  // Fill in metric values
-  const metricEl  = document.getElementById('currentMetric');
-  const metric2El = document.getElementById('currentMetric2');
-  const metric3El = document.getElementById('currentMetric3');
-  if (metricEl  && d.metric  !== '') metricEl.value  = d.metric;
+  // Fill in metric values (ratio or number)
+  const metricEl      = document.getElementById('currentMetric');
+  const metricNumEl   = document.getElementById('currentMetricNum');
+  const metricDenomEl = document.getElementById('currentMetricDenom');
+  const metric2El     = document.getElementById('currentMetric2');
+  const metric3El     = document.getElementById('currentMetric3');
+  if (metricEl      && d.metric      !== '') metricEl.value      = d.metric;
+  if (metricNumEl   && d.metricNum   !== '') metricNumEl.value   = d.metricNum;
+  if (metricDenomEl && d.metricDenom !== '') metricDenomEl.value = d.metricDenom;
   if (metric2El && d.metric2 !== '') metric2El.value = d.metric2;
   if (metric3El && d.metric3 !== '') metric3El.value = d.metric3;
 
@@ -5454,6 +5652,9 @@ async function loadDraftIntoForm(clientId, weekNumber) {
   if (barrierEl && d.barrier) barrierEl.value = d.barrier;
   if (notesEl   && d.notes)   notesEl.value   = d.notes;
 
+  // Wire up ratio preview listeners now that the form is in the DOM
+  initRatioPreview();
+
   // Show draft notice
   const statusEl = document.getElementById('draftStatus');
   if (statusEl && savedAt) {
@@ -5474,7 +5675,18 @@ async function submitFormA(clientId, clientName, weekNumber, noCompletion) {
   const errEl  = document.getElementById('formAError');
   errEl.style.display = 'none';
 
-  const metricVal  = parseFloat(document.getElementById('currentMetric').value);
+  // Ratio metric support: if metric_1_type === 'ratio', collect num/denom and compute %
+  const isRatioMetric = currentClient && currentClient.metric_1_type === 'ratio';
+  let metricVal, ratioNum = null, ratioDenom = null;
+  if (isRatioMetric) {
+    ratioNum   = parseFloat((document.getElementById('currentMetricNum')  || {}).value);
+    ratioDenom = parseFloat((document.getElementById('currentMetricDenom')|| {}).value);
+    metricVal  = (!isNaN(ratioNum) && !isNaN(ratioDenom) && ratioDenom > 0)
+      ? Math.round(ratioNum / ratioDenom * 10000) / 100  // store as percentage (2dp)
+      : NaN;
+  } else {
+    metricVal = parseFloat(document.getElementById('currentMetric').value);
+  }
   const metric2El  = document.getElementById('currentMetric2');
   const metric3El  = document.getElementById('currentMetric3');
   const metric2Val = metric2El ? parseFloat(metric2El.value) : null;
@@ -5496,7 +5708,9 @@ async function submitFormA(clientId, clientName, weekNumber, noCompletion) {
   const completionStatus  = completionLabel ? completionLabel.querySelector('input').value : null;
 
   if (isNaN(metricVal)) {
-    errEl.textContent = 'Please enter your current metric value.';
+    errEl.textContent = isRatioMetric
+      ? 'Please enter both the numerator (completed) and denominator (total) for Metric 1.'
+      : 'Please enter your current metric value.';
     errEl.style.display = 'block';
     return;
   }
@@ -5530,6 +5744,8 @@ async function submitFormA(clientId, clientName, weekNumber, noCompletion) {
     completion_status:  noCompletion ? null : completionStatus,
     completion_barrier: (!noCompletion && barrier) ? barrier : null,
     metric_value:       metricVal,
+    checkin_ratio_num:  isRatioMetric && !isNaN(ratioNum)   ? ratioNum   : null,
+    checkin_ratio_denom:isRatioMetric && !isNaN(ratioDenom) ? ratioDenom : null,
     metric_2_value:     !isNaN(metric2Val) ? metric2Val : null,
     metric_3_value:     !isNaN(metric3Val) ? metric3Val : null,
     notes:              notes || null,
@@ -5984,7 +6200,7 @@ function renderHistory(checkins, client) {
     return `<tr class="progress-row${idx >= 2 ? ' beyond-recent' : ''}">
       <td style="font-weight:700;color:var(--navy);">Wk ${c.week_number}</td>
       <td>${date}</td>
-      <td style="font-weight:700;">${c.metric_value ?? '—'}</td>
+      <td style="font-weight:700;">${(client.metric_1_type === 'ratio' && c.checkin_ratio_num != null && c.checkin_ratio_denom != null) ? `${c.checkin_ratio_num}/${c.checkin_ratio_denom} (${Math.round(c.checkin_ratio_num/c.checkin_ratio_denom*100)}%)` : (c.metric_value ?? '—')}</td>
       <td class="${completionClass}">${c.completion_status || '—'}</td>
       <td style="color:var(--gray-600);font-size:12px;">${c.planned_action ? c.planned_action.substring(0, 60) + (c.planned_action.length > 60 ? '…' : '') : '—'}</td>
     </tr>`;
@@ -6473,7 +6689,7 @@ function renderResultsTab(surveyResponses, checkins, client, surveyTokens, selfC
       return `<tr>
         <td style="font-weight:700;color:var(--navy);">Wk ${c.week_number}</td>
         <td>${date}</td>
-        ${hasM1 ? `<td>${c.metric_1_value ?? c.metric_value ?? '—'}</td>` : ''}
+        ${hasM1 ? `<td>${(client.metric_1_type === 'ratio' && c.checkin_ratio_num != null && c.checkin_ratio_denom != null) ? `${c.checkin_ratio_num}/${c.checkin_ratio_denom} (${Math.round(c.checkin_ratio_num/c.checkin_ratio_denom*100)}%)` : (c.metric_1_value ?? c.metric_value ?? '—')}</td>` : ''}
         ${hasM2 ? `<td>${c.metric_2_value ?? '—'}</td>` : ''}
         ${hasM3 ? `<td>${c.metric_3_value ?? '—'}</td>` : ''}
         <td style="${ftClass}">${c.completion_status || '—'}</td>

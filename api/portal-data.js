@@ -33,7 +33,7 @@ function sb(path, method = 'GET', body = null, extra = {}) {
 const CLIENT_WRITABLE = new Set([
   'tp3_pillar', 'goal_description', 'goal_30_day', 'goal_statement',
   'behavior_1', 'behavior_2', 'start_behavior',
-  'metric_1_name', 'metric_1_baseline', 'metric_1_target',
+  'metric_1_name', 'metric_1_baseline', 'metric_1_target', 'metric_1_type', 'metric_1_ratio_denom',
   'metric_2_name', 'metric_2_baseline', 'metric_2_target', 'metric_2_question', 'metric_2_target_avg',
   'metric_3_name', 'metric_3_baseline', 'metric_3_target',
   'metric_name', 'metric_baseline', 'metric_target', 'metric_current',
