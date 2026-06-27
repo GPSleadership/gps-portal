@@ -173,15 +173,22 @@ input:focus,select:focus{outline:none;border-color:var(--blue);}
   <!-- ── STATUS-SPECIFIC CARDS (rendered dynamically) ── -->
   <div id="status-cards"></div>
 
-  <!-- ── RATER LIST (shown when survey_open or later) ── -->
+  <!-- ── RATER LIST (shown when survey_open or later; collapsed after report is ready) ── -->
   <div class="card" id="rater-list-card" style="display:none;">
-    <div class="card-title" style="margin-bottom:4px;">Your Rater List</div>
-    <div class="card-sub" style="margin-bottom:14px;">The people invited to provide feedback on your leadership.</div>
-    <div class="alert alert-blue" style="margin-bottom:14px;">
-      <span class="alert-icon">ℹ</span>
-      <div>Individual completion status is not shown here to protect the anonymity of your raters. You can see the overall response count above.</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleRaterList()">
+      <div>
+        <div class="card-title" style="margin-bottom:2px;">Your Rater List</div>
+        <div class="card-sub" id="rater-list-sub">The people invited to provide feedback on your leadership.</div>
+      </div>
+      <span id="rater-list-toggle" style="font-size:18px;color:var(--mid);user-select:none;">▼</span>
     </div>
-    <div id="rater-list-rows"></div>
+    <div id="rater-list-body">
+      <div class="alert alert-blue" style="margin-top:14px;margin-bottom:14px;">
+        <span class="alert-icon">ℹ</span>
+        <div>Individual completion status is not shown here to protect the anonymity of your raters. You can see the overall response count above.</div>
+      </div>
+      <div id="rater-list-rows"></div>
+    </div>
   </div>
 
   <!-- ── ADD RATER FORM (shown before invites sent) ── -->
@@ -264,6 +271,9 @@ input:focus,select:focus{outline:none;border-color:var(--blue);}
 
   <!-- ── SPRINT CONVERSION OFFER (shown from debrief_date forward) ── -->
   <div class="card" id="sprint-offer-card" style="display:none;overflow:hidden;"></div>
+
+  <!-- ── NOW PORTAL (shown when coaching_portal_url is set) ── -->
+  <div class="card" id="now-portal-card" style="display:none;"></div>
 
 </div>
 
@@ -354,6 +364,7 @@ function renderPortal() {
   renderRaterSection();
   renderPlanCard();
   renderSprintOffer();
+  renderNowPortalCard();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -720,6 +731,7 @@ function renderRaterSection() {
         <div style="font-size:11px;color:var(--mid);">Invited ${formatDate(r.invited_at)}</div>
       </div>`).join('');
     document.getElementById('rater-list-rows').innerHTML = rows;
+    collapseRaterListIfReportReady();
   }
 }
 
@@ -1187,6 +1199,72 @@ function renderSprintOffer() {
       <div style="font-size:11px;color:#a0aab8;text-align:center;line-height:1.9;border-top:1px solid #f0ece4;padding-top:14px;">No card stored here. Payment is handled on our secure checkout page.</div>
       <a href="mailto:alex@gpsleadership.org?subject=90-Day%20Sprint%20Question" style="display:block;text-align:center;margin-top:14px;font-size:12.5px;color:#8a9bb0;text-decoration:none;">Prefer to talk it through first? Email Alex</a>`;
   }
+  el.style.display = 'block';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  RATER LIST COLLAPSE TOGGLE
+// ─────────────────────────────────────────────────────────────────────────────
+function toggleRaterList() {
+  const body   = document.getElementById('rater-list-body');
+  const toggle = document.getElementById('rater-list-toggle');
+  const hidden = body.style.display === 'none';
+  body.style.display   = hidden ? 'block' : 'none';
+  toggle.textContent   = hidden ? '▲' : '▼';
+}
+
+// Called from renderRaterSection after it shows the card. When the report is
+// ready, collapse the list by default so it doesn't crowd the results.
+function collapseRaterListIfReportReady() {
+  const s = DIAGNOSTIC && DIAGNOSTIC.status;
+  if (!['report_final','debrief_complete','plan_active'].includes(s)) return;
+  const body   = document.getElementById('rater-list-body');
+  const toggle = document.getElementById('rater-list-toggle');
+  const sub    = document.getElementById('rater-list-sub');
+  if (!body) return;
+  body.style.display = 'none';
+  if (toggle) toggle.textContent = '▼';
+  // Replace sub-title with a compact summary so the header still conveys info
+  const total = RATERS.length;
+  const done  = RATERS.filter(r => r.completed_at).length;
+  if (sub) sub.textContent = `${total} raters invited — ${done} responded. Tap to expand.`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  NOW PORTAL CARD
+//  Shown when coaching_portal_url is set on the diagnostic — links the leader
+//  to their 90-day plan workspace (resources, 30/60/90 plan, check-ins, etc.)
+// ─────────────────────────────────────────────────────────────────────────────
+function renderNowPortalCard() {
+  const el  = document.getElementById('now-portal-card');
+  if (!el) return;
+  const s   = DIAGNOSTIC && DIAGNOSTIC.status;
+  const url = DIAGNOSTIC && DIAGNOSTIC.coaching_portal_url;
+  // Only show once the debrief is done and the portal link is available
+  if (!['debrief_complete','plan_active'].includes(s) || !url) {
+    el.style.display = 'none';
+    return;
+  }
+  el.innerHTML = `
+    <div style="border-top:3px solid var(--blue);">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <div>
+          <div class="card-title">Your 90-Day Plan Portal</div>
+          <div class="card-sub">Your implementation workspace — resources, milestones, and weekly check-ins.</div>
+        </div>
+        <span class="badge badge-blue">Active</span>
+      </div>
+      <div style="margin-top:14px;">
+        <a href="${url}" target="_blank"
+           style="display:inline-flex;align-items:center;gap:8px;padding:11px 22px;background:var(--blue);color:#fff;border-radius:6px;font-size:13px;font-weight:700;text-decoration:none;">
+          Open Your Plan Portal
+        </a>
+      </div>
+      <div style="margin-top:12px;font-size:13px;color:var(--mid);line-height:1.6;">
+        This is where you'll track your 30/60/90-day milestones, access session resources, and log your weekly check-ins.
+        Questions? <a href="mailto:alex@gpsleadership.org" style="color:var(--blue);">alex@gpsleadership.org</a>.
+      </div>
+    </div>`;
   el.style.display = 'block';
 }
 
