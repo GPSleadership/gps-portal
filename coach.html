@@ -7759,7 +7759,7 @@ function renderReportTab() {
     </div>` : ''}
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
       ${done>=1 ? `<button class="dbtn dbtn-outline" onclick="viewCurrentScores()">📊 View current scores (numbers only)</button>` : ''}
-      ${d.report_generated_at ? `<button class="dbtn dbtn-outline" onclick="previewResultsPage()">👁 Preview client results page (private)</button>` : ''}
+      ${d.leader_token ? `<a href="${DIAG_BASE_URL}/diagnostic-leader.html?token=${d.leader_token}" target="_blank" class="dbtn dbtn-outline">🔗 Open ${(d.client_name||'leader').split(' ')[0]}'s diagnostic page</a>` : ''}
       ${d.report_generated_at ? `<button class="dbtn dbtn-outline" onclick="openResultsNarrativeEditor()">✍️ Edit results-page words</button>` : ''}
       <button class="dbtn dbtn-outline" onclick="openReportDocEditor()">🧱 Edit structured report (sections)</button>
       ${d.client_id ? `<button class="dbtn dbtn-outline" onclick="openPlanPrefillEditor()">🎯 Draft 90-day plan (prefill client)</button>` : ''}
