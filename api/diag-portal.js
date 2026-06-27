@@ -222,6 +222,19 @@ export default async function handler(req, res) {
             if (orows[0] && orows[0].logo_url) diag.org_logo_url = orows[0].logo_url;
           } catch (_) { /* logo is optional */ }
         }
+        // Client portal link — look up clients.token via diagnostics.client_id so the
+        // leader page can show a "Open your 90-day plan" button pointing to client.html.
+        // Only exposed once the debrief is done; before that the plan portal isn't relevant.
+        if (diag.client_id && ['debrief_complete','plan_active'].includes(diag.status)) {
+          try {
+            const cr = await sb(`/rest/v1/clients?id=eq.${encodeURIComponent(diag.client_id)}&select=token,is_active&limit=1`);
+            const crows = cr.ok ? await cr.json() : [];
+            if (crows[0] && crows[0].token && crows[0].is_active) {
+              const base = process.env.PORTAL_BASE_URL || 'https://portal.gpsleadership.org';
+              diag.client_portal_url = `${base}/client?token=${encodeURIComponent(crows[0].token)}`;
+            }
+          } catch (_) { /* client portal link is optional */ }
+        }
         // When the report is finalized, attach the latest draft's numeric scores so the
         // leader sees their color-coded visual results page (TP3, pillars, impact, bench,
         // self-vs-others). Gated to finalized states; never exposes the AI narrative here.

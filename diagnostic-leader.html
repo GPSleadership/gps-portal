@@ -269,11 +269,11 @@ input:focus,select:focus{outline:none;border-color:var(--blue);}
     <div class="plan-box" id="plan-content"></div>
   </div>
 
-  <!-- ── SPRINT CONVERSION OFFER (shown from debrief_date forward) ── -->
-  <div class="card" id="sprint-offer-card" style="display:none;overflow:hidden;"></div>
-
-  <!-- ── NOW PORTAL (shown when coaching_portal_url is set) ── -->
+  <!-- ── CLIENT PORTAL LINK (shown when debrief_complete/plan_active and client token exists) ── -->
   <div class="card" id="now-portal-card" style="display:none;"></div>
+
+  <!-- ── SPRINT CONVERSION OFFER (shown at debrief_complete/plan_active) ── -->
+  <div class="card" id="sprint-offer-card" style="display:none;overflow:hidden;"></div>
 
 </div>
 
@@ -1130,10 +1130,15 @@ function showError() {
 //  DIAGNOSTIC.sprint_offer (set in diag-portal.js leader-get).
 // ─────────────────────────────────────────────────────────────────────────────
 function renderSprintOffer() {
-  const el    = document.getElementById('sprint-offer-card');
-  const offer = DIAGNOSTIC && DIAGNOSTIC.sprint_offer;
+  const el     = document.getElementById('sprint-offer-card');
+  const offer  = DIAGNOSTIC && DIAGNOSTIC.sprint_offer;
+  const status = DIAGNOSTIC && DIAGNOSTIC.status;
   if (!el) return;
-  if (!offer || !offer.url) { el.style.display = 'none'; return; }
+  // Sprint offer is a secondary CTA — primary is the 90-day plan portal card above.
+  // Only show after the debrief is marked complete so Alex controls the timing.
+  if (!['debrief_complete','plan_active'].includes(status) || !offer || !offer.url) {
+    el.style.display = 'none'; return;
+  }
 
   const price     = Number(offer.price).toLocaleString('en-US');
   const expDate   = formatDate(offer.credit_window_ends);
@@ -1239,29 +1244,30 @@ function renderNowPortalCard() {
   const el  = document.getElementById('now-portal-card');
   if (!el) return;
   const s   = DIAGNOSTIC && DIAGNOSTIC.status;
-  const url = DIAGNOSTIC && DIAGNOSTIC.coaching_portal_url;
-  // Only show once the debrief is done and the portal link is available
+  const url = DIAGNOSTIC && DIAGNOSTIC.client_portal_url;
+  // Show once the debrief is done and a client portal token is available.
+  // The URL is built server-side from diagnostics.client_id → clients.token.
   if (!['debrief_complete','plan_active'].includes(s) || !url) {
     el.style.display = 'none';
     return;
   }
   el.innerHTML = `
-    <div style="border-top:3px solid var(--blue);">
+    <div style="border-top:3px solid var(--blue);padding-top:0;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
         <div>
-          <div class="card-title">Your 90-Day Plan Portal</div>
-          <div class="card-sub">Your implementation workspace — resources, milestones, and weekly check-ins.</div>
+          <div class="card-title">Your 90-Day Plan</div>
+          <div class="card-sub">Review your targets, milestones, and stakeholders — then we'll finalize together.</div>
         </div>
-        <span class="badge badge-blue">Active</span>
+        <span class="badge badge-blue">Next step</span>
       </div>
       <div style="margin-top:14px;">
-        <a href="${url}" target="_blank"
+        <a href="${url}"
            style="display:inline-flex;align-items:center;gap:8px;padding:11px 22px;background:var(--blue);color:#fff;border-radius:6px;font-size:13px;font-weight:700;text-decoration:none;">
-          Open Your Plan Portal
+          Open Your 90-Day Plan
         </a>
       </div>
       <div style="margin-top:12px;font-size:13px;color:var(--mid);line-height:1.6;">
-        This is where you'll track your 30/60/90-day milestones, access session resources, and log your weekly check-ins.
+        Your diagnostic results have been used to pre-populate your plan. Work through each section, then we'll review and lock it together.
         Questions? <a href="mailto:alex@gpsleadership.org" style="color:var(--blue);">alex@gpsleadership.org</a>.
       </div>
     </div>`;
