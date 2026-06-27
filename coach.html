@@ -4838,6 +4838,7 @@ async function loadRenewalConfigPanel(){
     + f('First Sprint — Standard ($15k) link', 'rc_standard_url', cfg.first_sprint_standard_url, 'https://...')
     + f('Continuation — Titan Quarterly link', 'rc_titan_url', cfg.continuation_titan_url, 'https://...')
     + f('Continuation — Flex Monthly link', 'rc_flex_url', cfg.continuation_flex_url, 'https://...')
+    + f('Starter Continuation link (coach-granted only)', 'rc_starter_url', cfg.starter_continuation_url, 'https://...')
     + '</div><div>'
     + f('Price — First (credit)', 'rc_price_credit', cfg.price_first_credit)
     + f('Price — First (standard)', 'rc_price_standard', cfg.price_first_standard)
@@ -4860,6 +4861,7 @@ async function saveRenewalConfig(){
     first_sprint_standard_url: v('rc_standard_url') || null,
     continuation_titan_url:    v('rc_titan_url')    || null,
     continuation_flex_url:     v('rc_flex_url')     || null,
+    starter_continuation_url:  v('rc_starter_url')  || null,
     price_first_credit:    num('rc_price_credit'),
     price_first_standard:  num('rc_price_standard'),
     price_titan_quarterly: num('rc_price_titan'),

@@ -261,6 +261,9 @@ input:focus,select:focus{outline:none;border-color:var(--blue);}
     <div class="plan-box" id="plan-content"></div>
   </div>
 
+  <!-- ── SPRINT CONVERSION OFFER (shown from debrief_date forward) ── -->
+  <div class="card" id="sprint-offer-card" style="display:none;overflow:hidden;"></div>
+
 </div>
 
 <script>
@@ -349,6 +352,7 @@ function renderPortal() {
   renderStatusCards();
   renderRaterSection();
   renderPlanCard();
+  renderSprintOffer();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1143,6 +1147,85 @@ function isReportReleased() {
 function showError() {
   document.getElementById('screen-loading').style.display = 'none';
   document.getElementById('screen-error').style.display   = 'block';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  SPRINT CONVERSION OFFER
+//  Renders after the debrief_date. Shows the $10k credit card (if within 30-day
+//  window) or the $15k standard card (after). Data comes from server-computed
+//  DIAGNOSTIC.sprint_offer (set in diag-portal.js leader-get).
+// ─────────────────────────────────────────────────────────────────────────────
+function renderSprintOffer() {
+  const el    = document.getElementById('sprint-offer-card');
+  const offer = DIAGNOSTIC && DIAGNOSTIC.sprint_offer;
+  if (!el) return;
+  if (!offer || !offer.url) { el.style.display = 'none'; return; }
+
+  const price     = Number(offer.price).toLocaleString('en-US');
+  const expDate   = formatDate(offer.credit_window_ends);
+  const daysLeft  = offer.days_left;
+  const safeUrl   = esc(offer.url);
+
+  if (offer.in_credit_window) {
+    el.innerHTML = `
+      <div style="height:3px;background:#C09A2A;margin:-22px -24px 22px;"></div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#8a9bb0;margin-bottom:10px;">Next step</div>
+      <div style="font-size:20px;font-weight:700;color:#004369;line-height:1.25;margin-bottom:12px;">Turn this diagnostic into a 90-day execution sprint.</div>
+      <div style="font-size:13.5px;line-height:1.7;color:#3a4a5a;margin-bottom:18px;">Your diagnostic showed exactly where the leverage is. The 90-day sprint is where it becomes behavior on Trust, Proactivity, and Productivity, with a plan we build and run together.</div>
+      <div style="height:1px;background:#e8e4dc;margin:0 0 18px;"></div>
+      <ul style="list-style:none;margin:0 0 22px;padding:0;">
+        <li style="display:flex;align-items:flex-start;gap:12px;font-size:13px;color:#3a4a5a;line-height:1.6;padding:7px 0;border-bottom:1px solid #f0ece4;"><span style="width:16px;height:1px;background:#C09A2A;margin-top:11px;flex-shrink:0;display:block;"></span>We build your leadership operating plan from the findings, then run it week to week.</li>
+        <li style="display:flex;align-items:flex-start;gap:12px;font-size:13px;color:#3a4a5a;line-height:1.6;padding:7px 0;border-bottom:1px solid #f0ece4;"><span style="width:16px;height:1px;background:#C09A2A;margin-top:11px;flex-shrink:0;display:block;"></span>Up to two 60-minute 1:1 advisory sessions per month, plus support between sessions.</li>
+        <li style="display:flex;align-items:flex-start;gap:12px;font-size:13px;color:#3a4a5a;line-height:1.6;padding:7px 0;"><span style="width:16px;height:1px;background:#C09A2A;margin-top:11px;flex-shrink:0;display:block;"></span>Decisions stay moving. Leaders take ownership. You stop being the answer to every question.</li>
+      </ul>
+      <div style="margin-bottom:22px;">
+        <div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:6px;">
+          <span style="font-size:38px;font-weight:300;color:#004369;line-height:1;font-variant-numeric:tabular-nums;">$${price}</span>
+          <span style="font-size:12px;color:#8a9bb0;margin-bottom:7px;">for 90 days</span>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:#C09A2A;font-weight:600;line-height:1.5;margin-bottom:5px;">
+          <span style="width:6px;height:6px;border-radius:50%;background:#C09A2A;flex-shrink:0;margin-top:4px;display:inline-block;"></span>
+          Your $5,000 diagnostic fee is credited through ${expDate}.
+        </div>
+        <div style="font-size:11.5px;color:#6b7a8d;padding-left:14px;">This credit expires in <strong style="color:#1a2a3a;">${daysLeft} day${daysLeft !== 1 ? 's' : ''}.</strong></div>
+      </div>
+      <a href="${safeUrl}" target="_blank" rel="noopener" style="display:block;background:#004369;color:#fff;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;padding:15px 24px;border-radius:3px;text-decoration:none;text-align:center;margin-bottom:12px;">Start my 90-day sprint</a>
+      <div style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:#6b7a8d;line-height:1.5;margin-bottom:14px;">
+        <span style="color:#01949A;font-weight:700;flex-shrink:0;">&#10003;</span>
+        30-Day Momentum Guarantee: if you don't feel meaningful momentum by Day 30, your second payment is canceled or credited.
+      </div>
+      <div style="font-size:11px;color:#a0aab8;text-align:center;line-height:1.9;border-top:1px solid #f0ece4;padding-top:14px;">
+        No card stored here. Payment is handled on our secure checkout page.<br>You will receive confirmation and next steps within one business day.
+      </div>
+      <a href="mailto:alex@gpsleadership.org?subject=90-Day%20Sprint%20Question" style="display:block;text-align:center;margin-top:14px;font-size:12.5px;color:#8a9bb0;text-decoration:none;">Prefer to talk it through first? Email Alex</a>`;
+  } else {
+    el.innerHTML = `
+      <div style="height:3px;background:#ddd8ce;margin:-22px -24px 22px;"></div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#8a9bb0;margin-bottom:10px;">Next step</div>
+      <div style="font-size:20px;font-weight:700;color:#1a2a3a;line-height:1.25;margin-bottom:12px;">Start your 90-day execution sprint.</div>
+      <div style="font-size:13.5px;line-height:1.7;color:#3a4a5a;margin-bottom:18px;">Your diagnostic is complete. The 90-day sprint is where the findings become behavior, with a leadership operating plan we build and run together.</div>
+      <div style="height:1px;background:#e8e4dc;margin:0 0 18px;"></div>
+      <ul style="list-style:none;margin:0 0 22px;padding:0;">
+        <li style="display:flex;align-items:flex-start;gap:12px;font-size:13px;color:#3a4a5a;line-height:1.6;padding:7px 0;border-bottom:1px solid #f0ece4;"><span style="width:16px;height:1px;background:#8a9bb0;margin-top:11px;flex-shrink:0;display:block;"></span>Leadership operating plan built from your diagnostic findings.</li>
+        <li style="display:flex;align-items:flex-start;gap:12px;font-size:13px;color:#3a4a5a;line-height:1.6;padding:7px 0;border-bottom:1px solid #f0ece4;"><span style="width:16px;height:1px;background:#8a9bb0;margin-top:11px;flex-shrink:0;display:block;"></span>Up to two 60-minute 1:1 advisory sessions per month, plus between-session support.</li>
+        <li style="display:flex;align-items:flex-start;gap:12px;font-size:13px;color:#3a4a5a;line-height:1.6;padding:7px 0;"><span style="width:16px;height:1px;background:#8a9bb0;margin-top:11px;flex-shrink:0;display:block;"></span>Same coach, same operating system, from diagnostic through execution.</li>
+      </ul>
+      <div style="margin-bottom:22px;">
+        <div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:6px;">
+          <span style="font-size:38px;font-weight:300;color:#1a2a3a;line-height:1;font-variant-numeric:tabular-nums;">$${price}</span>
+          <span style="font-size:12px;color:#8a9bb0;margin-bottom:7px;">for 90 days</span>
+        </div>
+        <div style="font-size:12px;color:#6b7a8d;margin-top:4px;">A focused first sprint to install your leadership operating system.</div>
+      </div>
+      <a href="${safeUrl}" target="_blank" rel="noopener" style="display:block;background:#1a2a3a;color:#fff;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;padding:15px 24px;border-radius:3px;text-decoration:none;text-align:center;margin-bottom:12px;">Start my 90-day sprint</a>
+      <div style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:#6b7a8d;line-height:1.5;margin-bottom:14px;">
+        <span style="color:#01949A;font-weight:700;flex-shrink:0;">&#10003;</span>
+        30-Day Momentum Guarantee included. If you don't feel meaningful momentum by Day 30, your second payment is canceled or credited.
+      </div>
+      <div style="font-size:11px;color:#a0aab8;text-align:center;line-height:1.9;border-top:1px solid #f0ece4;padding-top:14px;">No card stored here. Payment is handled on our secure checkout page.</div>
+      <a href="mailto:alex@gpsleadership.org?subject=90-Day%20Sprint%20Question" style="display:block;text-align:center;margin-top:14px;font-size:12.5px;color:#8a9bb0;text-decoration:none;">Prefer to talk it through first? Email Alex</a>`;
+  }
+  el.style.display = 'block';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

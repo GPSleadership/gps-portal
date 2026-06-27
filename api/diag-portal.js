@@ -243,6 +243,40 @@ export default async function handler(req, res) {
             diag.rater_headsup_text = String(trows[0].body_text).replace(/\{\{\s*leader_name\s*\}\}/gi, diag.client_name || '');
           }
         } catch (_) { /* template optional — page falls back */ }
+        // Sprint conversion offer — shown from debrief_date forward.
+        // Computes credit window and selects the right link/price from renewal_config.
+        // Never blocks the page: any failure here is swallowed.
+        if (diag.debrief_date) {
+          const today      = new Date();
+          const debriefDay = new Date(diag.debrief_date + 'T12:00:00');
+          if (today >= debriefDay) {
+            try {
+              const cr = await sb('/rest/v1/renewal_config?id=eq.1&select=first_sprint_credit_url,first_sprint_standard_url,price_first_credit,price_first_standard,credit_window_days&limit=1');
+              if (cr.ok) {
+                const crows = await cr.json();
+                const cfg   = Array.isArray(crows) && crows[0];
+                if (cfg) {
+                  const windowDays      = typeof cfg.credit_window_days === 'number' ? cfg.credit_window_days : 30;
+                  const creditWindowEnd = new Date(debriefDay);
+                  creditWindowEnd.setDate(creditWindowEnd.getDate() + windowDays);
+                  const inWindow  = today <= creditWindowEnd;
+                  const daysLeft  = Math.max(0, Math.ceil((creditWindowEnd - today) / 86400000));
+                  const url       = inWindow ? cfg.first_sprint_credit_url : cfg.first_sprint_standard_url;
+                  if (url) {
+                    diag.sprint_offer = {
+                      in_credit_window:    inWindow,
+                      credit_window_ends:  creditWindowEnd.toISOString().split('T')[0],
+                      days_left:           daysLeft,
+                      price:               inWindow ? (cfg.price_first_credit || 10000) : (cfg.price_first_standard || 15000),
+                      url,
+                    };
+                  }
+                }
+              }
+            } catch (_) { /* sprint offer is optional — never blocks page load */ }
+          }
+        }
+
         return res.status(200).json({ ok: true, diagnostic: diag, raters });
       }
       case 'leader-add-rater': {
