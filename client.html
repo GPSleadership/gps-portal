@@ -4513,6 +4513,18 @@ function wizM1TypeToggle(type) {
 async function wizNext() {
   if (!wizValidate(wizStep)) return;
   if (wizStep === 7) { wizLockIn(); return; }
+
+  // When moving from step 2 (90-day goal) to step 3 (30-day + metrics),
+  // run the AI draft BEFORE rendering step 3 so the fields are already
+  // populated when the page appears — no visible loading delay.
+  if (wizStep === 2 && !wizPlan.hasDiag && !(wizPlan.goal30 || '').trim() && (wizPlan.goal90 || '').trim() && !_wizAutoDraftTried) {
+    const btn = document.getElementById('wizBtnNext');
+    if (btn) { btn.disabled = true; btn.textContent = 'Drafting your plan…'; }
+    _wizAutoDraftTried = true;
+    try { await wizDoPrefill(true); } catch (_) {}
+    if (btn) { btn.disabled = false; btn.textContent = 'Continue →'; }
+  }
+
   wizStep++;
   wizRender();
 }
