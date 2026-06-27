@@ -8,6 +8,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="https://drive.google.com/thumbnail?id=1ysVzaHFlxivjp1WwuWw04H7bV4Tc6vAm&amp;sz=w192">
 <link rel="apple-touch-icon" href="/icons/gps-apple-touch.png?v=2">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/results-visual.js"></script>
 <style>
 :root {
   --blue:#1A3D6E; --gold:#C09A2A; --dark:#1C1C1C; --mid:#555;
@@ -404,19 +405,10 @@ function renderTopAlert() {
       </div>`;
     }
   } else if (s === 'report_final') {
-    const released = isReportReleased();
-    if (released) {
-      el.innerHTML = `<div class="alert alert-green">
-        <span class="alert-icon">✓</span>
-        <div><strong>Your diagnostic report is ready.</strong>${DIAGNOSTIC.debrief_date ? ' Your debrief session is scheduled for ' + formatDate(DIAGNOSTIC.debrief_date) + '.' : ''}</div>
-      </div>`;
-    } else {
-      const releaseStr = DIAGNOSTIC.report_release_at ? formatDate(DIAGNOSTIC.report_release_at) : 'the evening before your session';
-      el.innerHTML = `<div class="alert alert-blue">
-        <span class="alert-icon">📋</span>
-        <div>Your report is being finalized. It will be available by end of day on ${releaseStr} — the evening before your debrief.</div>
-      </div>`;
-    }
+    el.innerHTML = `<div class="alert alert-green">
+      <span class="alert-icon">✓</span>
+      <div><strong>Your diagnostic report is ready.</strong>${DIAGNOSTIC.debrief_date ? ' Your debrief session is scheduled for ' + formatDate(DIAGNOSTIC.debrief_date) + '.' : ''}</div>
+    </div>`;
   } else if (s === 'debrief_complete') {
     const portalBtn = DIAGNOSTIC.coaching_portal_url
       ? `<div style="margin-top:14px;"><a href="${DIAGNOSTIC.coaching_portal_url}" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:700;">Go to Your Coaching Portal &rarr;</a></div>`
@@ -470,13 +462,8 @@ const PIPELINE_STEPS = [
     detail: d => d.survey_closed_at ? `Closed ${formatDate(d.survey_closed_at)}` : 'Follows automatically when the survey window ends' },
   { n:7, label:'Diagnostic report finalized',
     detail: d => {
-      const released = !d.report_release_at || (new Date() >= new Date(d.report_release_at));
-      if (released && (d.report_finalized_at || d.report_generated_at)) {
-        return `Report available ${formatDate(d.report_release_at || d.report_finalized_at)}`;
-      }
-      if (d.report_finalized_at || d.report_generated_at) {
-        return `Being finalized — available ${d.report_release_at ? formatDate(d.report_release_at) : 'the evening before your debrief'}`;
-      }
+      if (d.report_finalized_at) return `Report finalized ${formatDate(d.report_finalized_at)}`;
+      if (d.report_generated_at) return 'Report in progress — Alex finalizes before your debrief';
       return 'Alex reviews and finalizes your report';
     }},
   { n:8, label:'Debrief session',
@@ -549,15 +536,7 @@ function renderPipeline() {
     'debrief_complete':         'Debrief complete. Your 90-day plan is next.',
     'plan_active':              'Your 90-day plan is active. Check in weekly with Alex.',
   };
-  let subText = subMap[d.status] || '';
-  // Until the report is actually released to the leader (report_release_at, ~the
-  // evening before the debrief), don't tell them it's "ready" — it's being finalized.
-  if (d.status === 'report_final') {
-    const released = !d.report_release_at || (new Date() >= new Date(d.report_release_at));
-    subText = released
-      ? 'Your report is ready. Debrief session coming soon.'
-      : 'Your report is being finalized. It unlocks the evening before your debrief.';
-  }
+  const subText = subMap[d.status] || '';
   document.getElementById('pipeline-sub').textContent = subText;
 
   // Steps
@@ -676,11 +655,10 @@ function renderStatusCards() {
   }
 
   if (s === 'report_final' || s === 'debrief_complete' || s === 'plan_active') {
-    const released = isReportReleased();
-    // Color-coded visual results (TP3, pillars, impact, bench, self-vs-others) — shown
-    // once the report is released. The written narrative stays in the PDF/debrief.
-    if (released && DIAGNOSTIC.scores) html += renderResultsVisual(DIAGNOSTIC.scores);
-    if (released && DIAGNOSTIC.report_pdf_url) {
+    // Color-coded visual results (TP3, pillars, impact, bench, self-vs-others).
+    // The written narrative stays in the PDF/debrief.
+    if (DIAGNOSTIC.scores) html += renderResultsVisual(DIAGNOSTIC.scores);
+    if (DIAGNOSTIC.report_pdf_url) {
       html += `
       <div class="card" style="border-top:3px solid var(--gold);">
         <div style="display:flex;align-items:center;justify-content:space-between;">
@@ -699,31 +677,17 @@ function renderStatusCards() {
           Questions? Reach out at <a href="mailto:alex@gpsleadership.org" style="color:var(--blue);">alex@gpsleadership.org</a>.
         </div>
       </div>`;
-    } else if (released && !DIAGNOSTIC.report_pdf_url) {
+    } else {
       html += `
       <div class="card" style="border-top:3px solid var(--gold);">
         <div style="display:flex;align-items:center;justify-content:space-between;">
           <div><div class="card-title">Your Diagnostic Report</div>
-          <div class="card-sub">Finalized — Alex will share this at your debrief</div></div>
+          <div class="card-sub">Finalized — Alex will walk you through this at your debrief</div></div>
           <div style="display:flex;align-items:center;">${orgChip}<span class="badge badge-open">Ready</span></div>
         </div>
         <div style="margin-top:14px;font-size:13px;color:var(--mid);line-height:1.6;">
           Alex will walk you through your full report at your debrief session${DIAGNOSTIC.debrief_date ? ' on ' + formatDate(DIAGNOSTIC.debrief_date) : ''}.
           Questions beforehand? <a href="mailto:alex@gpsleadership.org" style="color:var(--blue);">alex@gpsleadership.org</a>.
-        </div>
-      </div>`;
-    } else if (!released && DIAGNOSTIC.report_release_at) {
-      const releaseDate = formatDate(DIAGNOSTIC.report_release_at);
-      html += `
-      <div class="card" style="border-top:3px solid var(--border);">
-        <div style="display:flex;align-items:center;justify-content:space-between;">
-          <div><div class="card-title">Your Diagnostic Report</div>
-          <div class="card-sub">Available by end of day on ${releaseDate}</div></div>
-          <div style="display:flex;align-items:center;">${orgChip}<span class="badge" style="background:#f1f5f9;color:#64748b;">Upcoming</span></div>
-        </div>
-        <div style="margin-top:14px;font-size:13px;color:var(--mid);line-height:1.6;">
-          Your report will be available by end of business day Eastern on ${releaseDate} — the evening before your session${DIAGNOSTIC.debrief_date ? ' on ' + formatDate(DIAGNOSTIC.debrief_date) : ''}.
-          Feel free to review it when it arrives, or we'll walk through it together.
         </div>
       </div>`;
     }
@@ -1137,12 +1101,10 @@ function esc(s) {
   });
 }
 
-function isReportReleased() {
-  if (!DIAGNOSTIC) return false;
-  // If no release time set, default to released (backwards compat for finalized reports without debrief_date)
-  if (!DIAGNOSTIC.report_release_at) return true;
-  return new Date() >= new Date(DIAGNOSTIC.report_release_at);
-}
+// report_release_at is no longer used for display gating.
+// The leader_token IS the access gate — if Alex hasn't shared the link,
+// the page is unreachable. No separate release date needed.
+function isReportReleased() { return !!DIAGNOSTIC; }
 
 function showError() {
   document.getElementById('screen-loading').style.display = 'none';
