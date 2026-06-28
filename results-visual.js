@@ -139,7 +139,7 @@
     const self=bg.self;
     if(self&&self.n) body+=`<tr><td data-label="Group">Self</td>${cell(self.trust,'Trust')}${cell(self.proactivity,'Proactivity')}${cell(self.productivity,'Productivity')}${cell(self.tp3,'TP3')}</tr>`;
     const supShown=rows.some(r=>r.k==='supervisor');
-    let note=(supShown?'Your supervisor’s ratings are shown directly — your manager stands behind their assessment. ':'')
+    let note=(supShown?'Your supervisor's ratings are shown directly — your manager stands behind their assessment. ':'')
       +'Groups with fewer than 3 raters are combined so individual responses stay confidential.';
     if(suppressed) note+=` ${suppressed} response${suppressed===1?'':'s'} from smaller groups are included in your overall scores but not broken out.`;
     return { hasRows: rows.length>0 || (self&&self.n), body, note };
@@ -173,22 +173,26 @@
     // ── 1. Three summary cards ──────────────────────────────────────────────
     const headline = N.headline ? `<div class="txt" style="font-weight:800;margin-bottom:4px;">${_rvEsc(N.headline)}</div>` : '';
     const allDev = (sc.trust<4 && sc.proactivity<4 && sc.productivity<4);
-    const foundation = tier==='strong'
-      ? 'You’re at or above the 4.0 standard. The focus now is sustaining it and taking on more scope.'
+    const _foundAuto = tier==='strong'
+      ? "You're at or above the 4.0 standard. The focus now is sustaining it and taking on more scope."
       : tier==='serious'
       ? 'Several areas are below the develop range — this calls for a focused 90-day plan, starting now.'
       : (allDev ? 'Workable foundation, but not yet at the 4.0 standard on any pillar.'
                 : 'A solid base, with at least one pillar already at the 4.0 standard.');
+    const foundation = N.foundation ? _rvEsc(N.foundation) : _foundAuto;
     let focus1, focus2;
-    if(tier==='strong' && !hasGap){
-      focus1 = '<li>Take on more scope — you’re at the standard across the board.</li>';
-      focus2 = topPill ? `<li>Push <b>${topPill[0]}</b> from strong to exceptional.</li>` : '';
+    if(N.focus1 || N.focus2){
+      focus1 = N.focus1 ? '<li>'+_rvEsc(N.focus1)+'</li>' : '';
+      focus2 = N.focus2 ? '<li>'+_rvEsc(N.focus2)+'</li>' : '';
+    } else if(tier==='strong' && !hasGap){
+      focus1 = "<li>Take on more scope — you're at the standard across the board.</li>";
+      focus2 = topPill ? '<li>Push <b>'+topPill[0]+'</b> from strong to exceptional.</li>' : '';
     } else {
       const lv = lowG ? (lowG.trust!=null?lowG.trust:lowG.tp3) : null;
       const verb = (lv!=null && lv<3) ? 'Rebuild' : 'Strengthen';
-      focus1 = lowG ? `<li>${verb} trust with your <b>${lowG.label}</b> <b class="${_rvCls(lv)}">(${_rvFmt(lv)} — ${_rvBand(lv)})</b>.</li>` : '';
+      focus1 = lowG ? '<li>'+verb+' trust with your <b>'+lowG.label+'</b> <b class="'+_rvCls(lv)+'">('+_rvFmt(lv)+' — '+_rvBand(lv)+')</b>.</li>' : '';
       const fp = (gapPills.length?gapPills:lowP).slice(0,2);
-      focus2 = fp.length ? `<li>Raise <b>${fp.join('</b> and <b>')}</b> toward the <b>4.0 standard</b>.</li>` : '';
+      focus2 = fp.length ? '<li>Raise <b>'+fp.join('</b> and <b>')+'</b> toward the <b>4.0 standard</b>.</li>' : '';
     }
     const debriefWhen = _rvDate(D.debrief_date, D.debrief_time);
     const summary = `
@@ -203,12 +207,12 @@
         <div class="scard focus">
           <div class="t">Your 90-day focus</div>
           <ul>${focus1}${focus2}</ul>
-          <div class="note">We’ll build a 90-day plan around these in your debrief.</div>
+          <div class="note">We'll build a 90-day plan around these in your debrief.</div>
         </div>
         <div class="scard debrief">
           <div class="t">${debriefWhen?'Your debrief is scheduled':'Your debrief'}</div>
-          ${debriefWhen?`<div class="txt" style="margin-top:8px;"><b>${debriefWhen}</b> with Alex.</div>`:`<div class="txt" style="margin-top:8px;">We’ll schedule your debrief shortly.</div>`}
-          <div class="txt" style="margin-top:6px;">We’ll use this page to pick 1–2 concrete behavior goals for the next 90 days.</div>
+          ${debriefWhen?`<div class="txt" style="margin-top:8px;"><b>${debriefWhen}</b> with Alex.</div>`:`<div class="txt" style="margin-top:8px;">We'll schedule your debrief shortly.</div>`}
+          <div class="txt" style="margin-top:6px;">We'll use this page to pick 1–2 concrete behavior goals for the next 90 days.</div>
           <a class="prepbtn" href="#rv-debrief-prep">How to prepare →</a>
         </div>
       </div>`;
@@ -258,19 +262,24 @@
 
     // ── 4. How others experience you (group table + strengths/work) ─────────
     const gt = _rvGroupTable(bg);
-    const sowhat = N.sowhat
-      ? `<div class="sowhat"><b>So what this means:</b> ${_rvEsc(N.sowhat)}</div>`
-      : (lowG && lowG.tp3!=null && lowG.tp3<4)
-        ? `<div class="sowhat"><b>So what this means:</b> ${isSup
-            ? `Only your direct reports are at or above the 4.0 standard. Your colleagues, supervisor, and self-assessment all fall below it — the people above and around you don’t yet have the same confidence your team does. That gap is the work.`
-            : `Your ${topG?topG.label:’ strongest group’} rates you highest, but your ${lowG.label} experiences you differently. The work is closing that distance.`
-          }</div>`
-        : (tier===’strong’ ? `<div class="sowhat"><b>So what this means:</b> your groups see you consistently at the standard — the conversation is about more scope, not repair.</div>` : ‘’);
+    let sowhat;
+    if(N.sowhat){
+      sowhat = '<div class="sowhat"><b>So what this means:</b> '+_rvEsc(N.sowhat)+'</div>';
+    } else if(lowG && lowG.tp3!=null && lowG.tp3<4){
+      const _sowhatText = isSup
+        ? "Only your direct reports are at or above the 4.0 standard. Your colleagues, supervisor, and self-assessment all fall below it — the people above and around you don't yet have the same confidence your team does. That gap is the work."
+        : 'Your '+(topG?topG.label:'strongest group')+' rates you highest, but your '+lowG.label+' experiences you differently. The work is closing that distance.';
+      sowhat = '<div class="sowhat"><b>So what this means:</b> '+_sowhatText+'</div>';
+    } else if(tier==='strong'){
+      sowhat = '<div class="sowhat"><b>So what this means:</b> your groups see you consistently at the standard — the conversation is about more scope, not repair.</div>';
+    } else {
+      sowhat = '';
+    }
     const teamQuote = N.team_quote ? `
       <div class="qlabel">In their words — your team</div>
       <div class="quote" style="margin-top:6px;"><p>“${_rvEsc(N.team_quote)}”</p><div class="by">— A direct report</div></div>` : '';
     const strengths = `
-      <div class="mini s"><h3>Where you’re closest to the standard</h3>
+      <div class="mini s"><h3>Where you're closest to the standard</h3>
         ${topPill?`<div class="item"><span class="dot" style="background:${_rvCol(topPill[1])}"></span><span><b>${topPill[0]}</b> — your strongest pillar (${_rvFmt(topPill[1])}).</span></div>`:''}
         ${topG?`<div class="item"><span class="dot" style="background:${_rvCol(topG.tp3)}"></span><span>Your <b>${topG.label}</b> rate you ${_rvFmt(topG.tp3)} overall — your highest group.</span></div>`:''}
       </div>${teamQuote}`;
@@ -331,12 +340,12 @@
     const prep = `
       <div class="prep" id="rv-debrief-prep">
         <h2>How to prepare for your debrief</h2>
-        <div class="ps">Ten minutes of prep makes the session twice as useful. We’ll leave the debrief with 1–2 concrete behavior commitments you can start this week.</div>
+        <div class="ps">Ten minutes of prep makes the session twice as useful. We'll leave the debrief with 1–2 concrete behavior commitments you can start this week.</div>
         <ul>
           <li>Note 1–2 recent situations where trust with your ${lowG?lowG.label:'supervisor'} felt strained (a missed update, a last-minute surprise, an unclear decision).</li>
           <li>Bring one example where delegating a decision went well (clear guardrails, you stayed out of the way) and one where it bottlenecked (people waited on you).</li>
           <li>Skim this page and star anything that surprises you or feels off.</li>
-          <li>Come ready to commit to 1–2 specific behavior experiments you’ll run for the next 90 days.</li>
+          <li>Come ready to commit to 1–2 specific behavior experiments you'll run for the next 90 days.</li>
         </ul>
         <div class="bring">Bring this summary, with your notes and examples, to the debrief.</div>
       </div>`;

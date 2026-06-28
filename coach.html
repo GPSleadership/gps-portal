@@ -5964,7 +5964,7 @@ async function removeStakeholder(stakeholderId, clientId, name, btn) {
 }
 
 async function resendStakeholderSurvey(stakeholderId, clientId, checkpoint, btn) {
-  if (!confirm('Resend the survey email to this stakeholder?\n\nThey’ll get a fresh link (their old link stops working). Useful if the first email went to junk.')) return;
+  if (!confirm('Resend the survey email to this stakeholder?\n\nThey'll get a fresh link (their old link stops working). Useful if the first email went to junk.')) return;
   const orig = btn.textContent; btn.disabled = true; btn.textContent = 'Sending…';
   try {
     const session = getCoachSessionToken();
@@ -8344,9 +8344,10 @@ async function previewResultsPage(){
   document.body.appendChild(ov);
 }
 
-// ── Coach editor for the WORDS on the leader results page (headline, honest read,
-//    supervisor quote, team quote). Numbers are always from the portal; this only
-//    edits narrative. Saved to diagnostics.results_narrative via the coach endpoint. ──
+// ── Coach editor for the WORDS on the leader results page. Numbers come from the
+//    portal automatically; this edits all narrative text. Fields are pre-filled with
+//    the auto-generated wording so nothing ever looks empty. Saved to
+//    diagnostics.results_narrative via the coach endpoint. ──
 function openResultsNarrativeEditor(){
   const d=DIAG_SEL; if(!d) return;
   const n=(d.results_narrative)||{};
@@ -8354,25 +8355,100 @@ function openResultsNarrativeEditor(){
   const ov=document.createElement('div'); ov.id='rn-overlay';
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:40px 16px;';
   ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
-  const fld=(id,label,val,ph,rows)=>`<label style="display:block;font-size:12px;font-weight:700;color:#04243a;margin:14px 0 4px;">${label}</label>`+
-    (rows?`<textarea id="${id}" rows="${rows}" placeholder="${ph}" style="width:100%;border:1px solid #d3dde3;border-radius:8px;padding:9px 11px;font-size:13px;font-family:inherit;resize:vertical;">${esc(val||'')}</textarea>`
-         :`<input id="${id}" value="${esc(val||'')}" placeholder="${ph}" style="width:100%;border:1px solid #d3dde3;border-radius:8px;padding:9px 11px;font-size:13px;font-family:inherit;" />`);
-  ov.innerHTML=`<div style="background:#fff;border-radius:12px;max-width:600px;width:100%;padding:22px 24px;box-shadow:0 10px 40px rgba(0,0,0,.2);">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:4px;">
-      <div style="font-family:Montserrat,sans-serif;font-size:17px;font-weight:800;color:#004369;">Results-page words — ${esc(d.client_name||'')}</div>
-      <button onclick="document.getElementById('rn-overlay').remove()" style="background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#888;">&times;</button>
-    </div>
-    <div style="font-size:12px;color:#5a6b76;margin-bottom:6px;">All optional. The numbers, bars, and group table come from the portal automatically — these just set the prose and the two real quotes. Leave blank to use the auto-generated wording.</div>
-    ${fld('rn-headline','Headline (one line)',n.headline,'e.g. Solid with your team; a trust problem with your boss.')}
-    ${fld('rn-honest','The honest read',n.honest_read,'2–4 sentences of straight-talk framing.',4)}
-    ${fld('rn-sowhat','"So what this means" text',n.sowhat||'','Override the auto-generated line shown under the group table. 1–3 sentences.',3)}
-    ${fld('rn-sup','Supervisor quote',n.supervisor_quote,'A short, real quote from the supervisor open-ended responses.',3)}
-    ${fld('rn-team','Team quote',n.team_quote,'A short, real quote from a direct report.',3)}
-    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;">
-      <button class="dbtn dbtn-outline" onclick="document.getElementById('rn-overlay').remove()">Cancel</button>
-      <button class="dbtn dbtn-primary" id="rn-save" onclick="saveResultsNarrative(event)">Save words</button>
-    </div>
-  </div>`;
+
+  // ── Compute auto-generated values from scores (mirrors results-visual.js logic) ──
+  const sc=(d.results)||{};
+  const _tp3=(sc.tp3_index!=null)?sc.tp3_index:sc.tp3;
+  const bg=sc.by_group||{};
+  const _GL={direct_report:'direct reports',peer:'peers',internal_partner:'internal partners',supervisor:'supervisor'};
+  let _lowG=null;
+  ['supervisor','peer','internal_partner','direct_report'].forEach(function(k){
+    const g=bg[k]; if(g&&g.n&&g.tp3!=null){ if(!_lowG||g.tp3<_lowG.tp3) _lowG={k:k,tp3:g.tp3,trust:g.trust,label:_GL[k]}; }
+  });
+  let _topG=null;
+  ['direct_report','peer','internal_partner','supervisor'].forEach(function(k){
+    const g=bg[k]; if(g&&g.n&&g.tp3!=null){ if(!_topG||g.tp3>_topG.tp3) _topG={k:k,tp3:g.tp3,label:_GL[k]}; }
+  });
+  const _nfmt=function(x){ return (x!=null)?parseFloat(x).toFixed(2):'--'; };
+  const _nband=function(x){ return (x>=4)?'Strong':((x>=3)?'Develop':'Serious'); };
+  const _pills=[['Trust',sc.trust],['Proactivity',sc.proactivity],['Productivity',sc.productivity]].filter(function(p){return p[1]!=null;}).sort(function(a,b){return a[1]-b[1];});
+  const _topPill=_pills.length?_pills[_pills.length-1]:null;
+  const _gapPills=_pills.filter(function(p){return p[1]<4;}).map(function(p){return p[0];});
+  const _allDev=(sc.trust<4&&sc.proactivity<4&&sc.productivity<4);
+  const _isSup=_lowG&&_lowG.k==='supervisor';
+  const _tier=(_tp3>=4)?'strong':((_tp3>=3)?'develop':'serious');
+
+  // Auto foundation text (plain text shown in the TP3 card)
+  const _foundAuto=_tier==='strong'
+    ? "You're at or above the 4.0 standard. The focus now is sustaining it and taking on more scope."
+    : _tier==='serious'
+    ? 'Several areas are below the develop range — this calls for a focused 90-day plan, starting now.'
+    : (_allDev?'Workable foundation, but not yet at the 4.0 standard on any pillar.'
+              :'A solid base, with at least one pillar already at the 4.0 standard.');
+
+  // Auto 90-day focus bullets (plain text)
+  let _f1Auto='', _f2Auto='';
+  if(_tier==='strong'&&!_gapPills.length){
+    _f1Auto="Take on more scope — you're at the standard across the board.";
+    _f2Auto=_topPill?('Push '+_topPill[0]+' from strong to exceptional.'):'';
+  } else {
+    const _lv=_lowG?(_lowG.trust!=null?_lowG.trust:_lowG.tp3):null;
+    const _verb=(_lv!=null&&_lv<3)?'Rebuild':'Strengthen';
+    _f1Auto=_lowG?(_verb+' trust with your '+_lowG.label+' ('+_nfmt(_lv)+' -- '+_nband(_lv)+')'):'';
+    const _fp=(_gapPills.length?_gapPills:_pills.slice(0,2).map(function(p){return p[0];})).slice(0,2);
+    _f2Auto=_fp.length?('Raise '+_fp.join(' and ')+' toward the 4.0 standard.'):'';
+  }
+
+  // Auto honest read (plain text)
+  let _honestAuto;
+  if(_tier==='strong'){
+    _honestAuto='Your raters put you at or above the 4.0 standard across the board.'+(_topG?' Your '+_topG.label+' rate you highest ('+_nfmt(_topG.tp3)+').':'')+' The opportunity now is scope and consistency, not repair.';
+  } else if(_tier==='serious'){
+    _honestAuto='Multiple groups rate you below the develop range.'+(_lowG?' The most urgent gap is your '+_lowG.label+' ('+_nfmt(_lowG.tp3)+').':'')+' On the GPS scale this calls for a direct, focused 90-day plan.';
+  } else {
+    _honestAuto='You sit in the 3-range on '+(_allDev?'every pillar':'most pillars')+' -- a workable foundation, but '+(_allDev?'none are':'not all are')+' at the 4.0 standard yet. On the GPS scale that means a real plan, not a victory lap.'+(_lowG?' Your most urgent gap is your '+_lowG.label+'.':'');
+  }
+
+  // Auto sowhat (plain text)
+  let _sowhatAuto='';
+  if(_lowG&&_lowG.tp3!=null&&_lowG.tp3<4){
+    _sowhatAuto=_isSup
+      ?"Only your direct reports are at or above the 4.0 standard. Your colleagues, supervisor, and self-assessment all fall below it -- that gap is the work."
+      :'Your '+(_topG?_topG.label:'strongest group')+' rates you highest, but your '+_lowG.label+' experiences you differently. The work is closing that distance.';
+  } else if(_tier==='strong'){
+    _sowhatAuto='Your groups see you consistently at the standard -- the conversation is about more scope, not repair.';
+  }
+
+  // Use saved value if non-empty, otherwise fall back to auto
+  const _v=function(saved,auto){ return (saved&&saved.trim())?saved:(auto||''); };
+
+  const fld=function(id,label,val,ph,rows){
+    const _fs='width:100%;border:1px solid #d3dde3;border-radius:8px;padding:9px 11px;font-size:13px;font-family:inherit;';
+    return '<label style="display:block;font-size:12px;font-weight:700;color:#04243a;margin:14px 0 4px;">'+label+'</label>'
+      +(rows?'<textarea id="'+id+'" rows="'+rows+'" placeholder="'+ph+'" style="'+_fs+'resize:vertical;">'+esc(val)+'</textarea>'
+            :'<input id="'+id+'" value="'+esc(val)+'" placeholder="'+ph+'" style="'+_fs+'" />');
+  };
+
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:600px;width:100%;padding:22px 24px;box-shadow:0 10px 40px rgba(0,0,0,.2);">'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:4px;">'
+    +'<div style="font-family:Montserrat,sans-serif;font-size:17px;font-weight:800;color:#004369;">Results-page words &mdash; '+esc(d.client_name||'')+'</div>'
+    +'<button onclick="document.getElementById(\'rn-overlay\').remove()" style="background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#888;">&times;</button>'
+    +'</div>'
+    +'<div style="font-size:12px;color:#5a6b76;margin-bottom:6px;">All fields are pre-filled with the auto-generated wording. Edit anything that needs a personal touch &mdash; or leave as-is. Saves immediately to the leader page.</div>'
+    +fld('rn-headline','Headline (one line)',_v(n.headline,''),'e.g. Solid with your team; a trust problem with your boss.')
+    +'<div style="font-size:11px;color:#999;margin-top:3px;">If blank, no headline appears on the page. Write one when you want to name the story up front.</div>'
+    +fld('rn-foundation','TP3 card -- supporting text',_v(n.foundation,_foundAuto),'Auto-generated from score tier.',3)
+    +fld('rn-honest','The honest read',_v(n.honest_read,_honestAuto),'2-4 sentences of straight-talk framing.',4)
+    +fld('rn-sowhat','"So what this means"',_v(n.sowhat,_sowhatAuto),'1-3 sentences shown under the group table.',3)
+    +fld('rn-focus1','90-day focus -- first bullet',_v(n.focus1,_f1Auto),'e.g. Rebuild trust with your supervisor (2.8 -- Develop).')
+    +fld('rn-focus2','90-day focus -- second bullet',_v(n.focus2,_f2Auto),'e.g. Raise Proactivity toward the 4.0 standard.')
+    +fld('rn-sup','Supervisor quote',_v(n.supervisor_quote,''),'A short real quote from the supervisor open-ended responses.',3)
+    +fld('rn-team','Team quote',_v(n.team_quote,''),'A short real quote from a direct report.',3)
+    +'<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;">'
+    +'<button class="dbtn dbtn-outline" onclick="document.getElementById(\'rn-overlay\').remove()">Cancel</button>'
+    +'<button class="dbtn dbtn-primary" id="rn-save" onclick="saveResultsNarrative(event)">Save words</button>'
+    +'</div>'
+    +'</div>';
   document.body.appendChild(ov);
 }
 async function saveResultsNarrative(e){
@@ -8380,8 +8456,11 @@ async function saveResultsNarrative(e){
   const btn=e?e.currentTarget:null; if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
   const narrative={
     headline:        (document.getElementById('rn-headline').value||'').trim(),
+    foundation:      (document.getElementById('rn-foundation').value||'').trim(),
     honest_read:     (document.getElementById('rn-honest').value||'').trim(),
     sowhat:          (document.getElementById('rn-sowhat').value||'').trim(),
+    focus1:          (document.getElementById('rn-focus1').value||'').trim(),
+    focus2:          (document.getElementById('rn-focus2').value||'').trim(),
     supervisor_quote:(document.getElementById('rn-sup').value||'').trim(),
     team_quote:      (document.getElementById('rn-team').value||'').trim(),
   };
@@ -11239,7 +11318,7 @@ async function drSendSponsor(sponsorId){
     var email=(document.getElementById('wsAddEmail').value||'').trim();
     var role=(document.getElementById('wsAddRole').value||'').trim();
     if(!name||!email){ out.style.color='#dc2626'; out.textContent='Name and email are both required.'; return; }
-    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ out.style.color='#dc2626'; out.textContent='That email doesn’t look valid.'; return; }
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ out.style.color='#dc2626'; out.textContent='That email doesn't look valid.'; return; }
     var b=document.getElementById('wsAddOne'); if(b){ b.disabled=true; b.textContent='Adding…'; }
     out.style.color='#5a6b76'; out.textContent='Adding '+name+'…';
     try{
