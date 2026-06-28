@@ -126,7 +126,7 @@
   .empty { font-size:13px; color:var(--gray-600); font-style:italic; padding:8px 0; }
   .loading { text-align:center; padding:60px 20px; color:var(--gray-600); }
   .spinner { width:36px; height:36px; border:4px solid var(--gray-300); border-top-color:var(--teal); border-radius:50%; animation:spin .8s linear infinite; margin:0 auto 16px; } @keyframes spin { to { transform:rotate(360deg); } }
-  /* Skeleton shimmer — replaces the blank-white spinner on first load */
+  /* Skeleton shimmer -- replaces the blank-white spinner on first load */
   .skeleton-wrap { max-width:1080px; margin:0 auto; padding:22px 24px; }
   .skeleton-card { background:#fff; border-radius:8px; box-shadow:0 2px 12px rgba(0,0,0,.07); padding:22px; margin-bottom:16px; }
   .skeleton-line { border-radius:6px; background:linear-gradient(90deg,#eee 25%,#f7f7f7 50%,#eee 75%); background-size:200% 100%; animation:shimmer 1.4s infinite; }
@@ -161,7 +161,7 @@
 </div>
 <div class="bottom-bar"></div>
 
-<!-- Sticky sprint bar — appears after 400px scroll when a sprint URL is available -->
+<!-- Sticky sprint bar -- appears after 400px scroll when a sprint URL is available -->
 <div id="stickyCta" style="display:none;position:fixed;bottom:4px;left:0;right:0;z-index:200;padding:0 16px 0;">
   <div style="max-width:680px;margin:0 auto;background:var(--navy);border:2px solid #01949A;border-radius:10px;padding:10px 18px;display:flex;align-items:center;justify-content:space-between;gap:14px;box-shadow:0 4px 24px rgba(0,0,0,.25);">
     <div><div style="font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:#9FC0D6;font-weight:700;" id="stickyLabel">The 90-Day Sprint</div><div style="font-size:13px;color:#cfe0ea;margin-top:1px;">Three months · bi-weekly coaching · 45-day re-score · $10,000</div></div>
@@ -170,7 +170,7 @@
 </div>
 
 <script>
-/* GPS Decision Room — read-only sponsor page.
+/* GPS Decision Room -- read-only sponsor page.
    All access control + confidentiality is enforced server-side by
    /api/sponsor-data. This page renders ONLY what the endpoint returns:
    if a field (e.g. selfVsRaters) is absent, it simply isn't shown. There is
@@ -201,7 +201,7 @@ function init(){
     var teams = res.teams||[];
     if(!teams.length){ document.getElementById('view').innerHTML='<div class="card"><div class="empty">No teams are shared with you yet.</div></div>'; return; }
     var sel=document.getElementById('teamSelect');
-    sel.innerHTML = teams.map(function(t){ return '<option value="'+t.id+'">'+esc(t.client_org_name||t.name)+' — '+esc(t.name)+'</option>'; }).join('');
+    sel.innerHTML = teams.map(function(t){ return '<option value="'+t.id+'">'+esc(t.client_org_name||t.name)+' -- '+esc(t.name)+'</option>'; }).join('');
     document.getElementById('teamBar').style.display = teams.length>1 ? 'flex' : 'none';
     loadTeam(teams[0].id);
   }).catch(showError);
@@ -294,12 +294,12 @@ function renderSprintCta(url, firstName, compact){
   return '<div id="sprint-cta" style="background:var(--navy);border-radius:10px;padding:26px 28px;margin-top:16px;">'
     +'<div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#9FC0D6;font-weight:700;margin-bottom:6px;">Ready to build on this?</div>'
     +'<div style="font-family:Georgia,serif;font-size:20px;font-weight:800;color:#fff;margin-bottom:8px;">'+titleLine+'</div>'
-    +'<div style="font-size:14px;color:#cfe0ea;line-height:1.6;margin-bottom:12px;">The diagnostic tells you where the gaps are. The Sprint closes them — with structured coaching, weekly accountability, and a 90-day plan built around what this leader needs to deliver. Three months · bi-weekly coaching sessions · 45-day and 90-day re-score · $10,000</div>'
+    +'<div style="font-size:14px;color:#cfe0ea;line-height:1.6;margin-bottom:12px;">The diagnostic tells you where the gaps are. The Sprint closes them -- with structured coaching, weekly accountability, and a 90-day plan built around what this leader needs to deliver. Three months · bi-weekly coaching sessions · 45-day and 90-day re-score · $10,000</div>'
     +'<details style="margin-bottom:16px;"><summary style="cursor:pointer;font-size:13px;color:#9FC0D6;font-weight:700;letter-spacing:.02em;outline:none;user-select:none;list-style:none;">What 90 days buys you ▸</summary>'
     +'<div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">'
-    +'<div style="font-size:13px;color:#eaf2f7;line-height:1.5;display:flex;gap:10px;"><span style="color:#01949A;font-weight:900;min-width:16px;">1</span><span>A 90-day plan built specifically around the trust gap — not a generic program.</span></div>'
-    +'<div style="font-size:13px;color:#eaf2f7;line-height:1.5;display:flex;gap:10px;"><span style="color:#01949A;font-weight:900;min-width:16px;">2</span><span>A 45-day re-score — you see movement in the data before you decide how far to invest.</span></div>'
-    +'<div style="font-size:13px;color:#eaf2f7;line-height:1.5;display:flex;gap:10px;"><span style="color:#01949A;font-weight:900;min-width:16px;">3</span><span>A final 90-day report — showing where the leader started, what moved, and what the next decision is.</span></div>'
+    +'<div style="font-size:13px;color:#eaf2f7;line-height:1.5;display:flex;gap:10px;"><span style="color:#01949A;font-weight:900;min-width:16px;">1</span><span>A 90-day plan built specifically around the trust gap -- not a generic program.</span></div>'
+    +'<div style="font-size:13px;color:#eaf2f7;line-height:1.5;display:flex;gap:10px;"><span style="color:#01949A;font-weight:900;min-width:16px;">2</span><span>A 45-day re-score -- you see movement in the data before you decide how far to invest.</span></div>'
+    +'<div style="font-size:13px;color:#eaf2f7;line-height:1.5;display:flex;gap:10px;"><span style="color:#01949A;font-weight:900;min-width:16px;">3</span><span>A final 90-day report -- showing where the leader started, what moved, and what the next decision is.</span></div>'
     +'</div></details>'
     +'<a href="'+esc(url)+'" target="_blank" rel="noopener" style="display:inline-block;background:#01949A;color:#fff;font-weight:800;font-size:14px;padding:11px 24px;border-radius:7px;text-decoration:none;">'+btnLabel+'</a>'
     +'<div style="font-size:12px;color:#7FA8BE;margin-top:10px;">You\'ll be sent to our secure checkout. Your coach will reach out within 24 hours to schedule session 1.</div>'
@@ -308,7 +308,7 @@ function renderSprintCta(url, firstName, compact){
 
 function renderCoachPreviewBanner(){
   if(!DATA.coach_preview) return '';
-  return '<div style="background:#1b2a3a;color:#7FE3D6;font-size:12px;font-weight:700;text-align:center;padding:8px 16px;border-radius:8px;margin-bottom:14px;letter-spacing:.04em;">COACH PREVIEW — You are seeing this as the sponsor will see it. Their actual link is unaffected.</div>';
+  return '<div style="background:#1b2a3a;color:#7FE3D6;font-size:12px;font-weight:700;text-align:center;padding:8px 16px;border-radius:8px;margin-bottom:14px;letter-spacing:.04em;">COACH PREVIEW -- You are seeing this as the sponsor will see it. Their actual link is unaffected.</div>';
 }
 
 function renderTeam(){
@@ -317,7 +317,7 @@ function renderTeam(){
   var html='';
   html += renderCoachPreviewBanner();
   if(DATA.confidentiality==='private'){
-    html += '<div class="conf-banner"><b>Confidential engagement.</b> Each leader\'s individual diagnostic scores (self vs raters) stay private to them and are not shown here. Everything else — the 90-day plan, stakeholder progress, and engagement — is shared.</div>';
+    html += '<div class="conf-banner"><b>Confidential engagement.</b> Each leader\'s individual diagnostic scores (self vs raters) stay private to them and are not shown here. Everything else -- the 90-day plan, stakeholder progress, and engagement -- is shared.</div>';
   }
   // One-person team: land directly on that leader's report (with recommendations
   // and succession), not a blank team dashboard.
@@ -350,7 +350,7 @@ function renderTeam(){
    A coordinating POC sees ONLY where each leader is in the process (diagnostic +
    assessment) and their own full report. No other leader's results are sent by
    the server in this mode, so there is nothing here that could leak them. */
-function fmtStage(s){ if(!s) return '—'; return String(s).replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();}); }
+function fmtStage(s){ if(!s) return '--'; return String(s).replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();}); }
 // Prominent kickoff + debrief dates line for the sponsor/POC. Pulled from the pipeline
 // stages; shows TBD for a date not set yet. Omitted entirely if neither is set.
 function meetingDates(pl){
@@ -360,7 +360,7 @@ function meetingDates(pl){
   if(!k && !d) return '';
   return '<div style="font-size:12px;color:#475569;margin-top:3px">📅 Kickoff: <strong>'+(k?esc(fmtDate(k)):'TBD')+'</strong> &nbsp;·&nbsp; Debrief: <strong>'+(d?esc(fmtDate(d)):'TBD')+'</strong></div>';
 }
-/* Shared process-pipeline render — used in the POC view, the sponsor roster, and
+/* Shared process-pipeline render -- used in the POC view, the sponsor roster, and
    each member report. Stage + date only (no nudge flag). */
 function renderPipeline(pl){
   if(!pl||!pl.stages||!pl.stages.length) return '';
@@ -397,7 +397,7 @@ function renderProgress(members){
       +'</div></div>';
   }).join('');
   var html = '<div class="conf-banner"><b>Engagement status.</b> Here\'s where things stand in the process right now. The full report and recommendations will appear here once your coach has reviewed and released them.</div>';
-  html += '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Process Status</div><span class="section-note">Where each leader is — no individual results</span></div>'+(rows||'<div class="empty">No team members yet.</div>')+'</div>';
+  html += '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Process Status</div><span class="section-note">Where each leader is -- no individual results</span></div>'+(rows||'<div class="empty">No team members yet.</div>')+'</div>';
   if(own.length){
     html += '<div class="card-head" style="margin-top:20px;"><div class="card-title"><span class="dot"></span>Your report</div></div>';
     html += memberReportHtml(own[0]);
@@ -420,16 +420,16 @@ function renderSnapshot(t){
       var tagTxt = (d.prior!=null) ? '' : '<span class="trend flat">point in time</span>';
       var priorLine = (d.prior!=null) ? '<div class="tp3-prior">vs. prior cycle: '+Number(d.prior).toFixed(1)+'</div>' : '';
       return '<div class="tp3-cell tp3-'+p[1]+'"><div class="tp3-name">'+p[0]+tagTxt+'</div>'
-        +'<div class="tp3-score">'+(v!=null?Number(v).toFixed(1):'—')+'<span> / 5.0</span></div>'
+        +'<div class="tp3-score">'+(v!=null?Number(v).toFixed(1):'--')+'<span> / 5.0</span></div>'
         +'<div class="bar-track"><div class="bar-fill" style="width:'+pct+'%"></div></div>'+priorLine+'</div>';
     }).join('');
     body = '<div class="tp3-grid">'+cells+'</div>'
       + (s.asOf?'<div class="section-note" style="display:block;margin-top:9px;">TP3 is from the diagnostic on '+fmtDate(s.asOf)+', a point-in-time read. It changes only with a new diagnostic. Week-to-week progress shows in Team Stakeholder Momentum below.</div>':'');
   }
   var comp = s.completion ? '<div class="completion-strip">'
-      +'<div class="comp-item"><b>'+esc(s.completion.raters||'—')+'</b>Rater completion</div>'
-      +'<div class="comp-item"><b>'+esc(s.completion.selfDone||'—')+'</b>Leader self-assessment</div>'
-      +'<div class="comp-item"><b>'+esc(s.completion.surveyWindow||'—')+'</b>Survey window</div></div>' : '';
+      +'<div class="comp-item"><b>'+esc(s.completion.raters||'--')+'</b>Rater completion</div>'
+      +'<div class="comp-item"><b>'+esc(s.completion.selfDone||'--')+'</b>Leader self-assessment</div>'
+      +'<div class="comp-item"><b>'+esc(s.completion.surveyWindow||'--')+'</b>Survey window</div></div>' : '';
   return '<div class="card"><div class="card-head"><div><div class="card-title"><span class="dot"></span>Snapshot</div>'
     + '<div class="card-sub">TP3™ · Trust, Proactivity, Productivity → Profitability</div></div>'
     + (stamp?'<span class="asof-stamp">'+esc(stamp)+'</span>':'')+'</div>'
@@ -490,7 +490,7 @@ function renderRoster(members){
     var pills='';
     pills += m.is_coaching_client ? '<span class="badge b-sub">Coaching + Diagnostic</span>' : '<span class="badge b-sub">Diagnostic</span>';
     if(m.is_coaching_client && m.engagement && m.engagement.checkinRate!=null && m.engagement.checkinRate<0.6) pills+='<span class="badge b-sub b-sub-warn">Low engagement</span>';
-    // Only show a score band once a real score exists — no "No score yet" noise when we are already showing the stage.
+    // Only show a score band once a real score exists -- no "No score yet" noise when we are already showing the stage.
     var scoreChip = (st.key!=='pending') ? '<span class="badge status-chip '+st.cls+'">'+st.label+'</span>' : '';
     var stageChip = (m.pipeline&&m.pipeline.current_label) ? '<span class="badge b-draft" title="Where this leader is in the process">Stage: '+esc(m.pipeline.current_label)+'</span>' : '';
     return '<div class="doc-row"><div class="doc-icon">'+esc(initials(name))+'</div>'
@@ -512,7 +512,7 @@ function renderTeamSuccession(members){
     var risk=(!s.successorIdentified && st.key==='risk')?' <span class="badge b-flag-red">Key-person risk</span>':'';
     return '<tr><td>'+esc(name)+'<div class="succ-sub">'+esc(m.role||'')+'</div></td><td>'+succ+risk+'</td><td>'+esc(s.readiness||'')+'</td></tr>';
   }).join('');
-  return '<div class="card">'+head+'<div style="font-size:12px;color:var(--gray-600);line-height:1.55;background:var(--light-sand);border-radius:7px;padding:9px 12px;margin-bottom:10px;">These placements come from structured perception data in the 14-Day Executive Leadership Diagnostic — how close stakeholders currently experience each leader\'s behavior. Treat it as decision input, not a promotion list: combine it with recent performance and results, role requirements, and HR/risk considerations before any succession call.</div>'+'<div class="succ-summary"><b>'+noSucc.length+' of '+withS.length+'</b> leaders have no identified successor'+(noSucc.length?'. Each is a key-person risk: if they leave, the seat has no ready backup.':'.')+'</div>'
+  return '<div class="card">'+head+'<div style="font-size:12px;color:var(--gray-600);line-height:1.55;background:var(--light-sand);border-radius:7px;padding:9px 12px;margin-bottom:10px;">These placements come from structured perception data in the 14-Day Executive Leadership Diagnostic -- how close stakeholders currently experience each leader\'s behavior. Treat it as decision input, not a promotion list: combine it with recent performance and results, role requirements, and HR/risk considerations before any succession call.</div>'+'<div class="succ-summary"><b>'+noSucc.length+' of '+withS.length+'</b> leaders have no identified successor'+(noSucc.length?'. Each is a key-person risk: if they leave, the seat has no ready backup.':'.')+'</div>'
     +'<table class="sh-table"><thead><tr><th>Leader</th><th>Successor in place</th><th>Readiness for more</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 
@@ -553,11 +553,11 @@ function renderRecs(recs){
     + '</details>'
     + '</div>';
   }
-  // Until there's actual content, keep this neutral — no scope/accelerator framing
+  // Until there's actual content, keep this neutral -- no scope/accelerator framing
   // and no CTA when empty (reads like a sales pitch on an empty page).
   var all = scope.concat(accel);
   var body = all.length ? all.map(card).join('') : '<div class="empty">Nothing in motion yet.</div>';
-  // "Discuss these options" — only show if there are recs AND we have a sprint URL to point to
+  // "Discuss these options" -- only show if there are recs AND we have a sprint URL to point to
   var cta = '';
   if(all.length && DATA && DATA.sprint_cta_url){
     cta = '<div style="text-align:center;margin-top:20px;"><a class="cta-btn" href="'+esc(DATA.sprint_cta_url)+'">Discuss these options</a></div>';
@@ -588,7 +588,7 @@ function memberReportHtml(m){
   var t=DATA.team, name=m.name||m.role||'Leader', first=String(name).split(' ')[0];
   var engBadge = m.is_coaching_client ? '<span class="tag primary">Coaching client</span>' : '<span class="tag">Diagnostic only</span>';
   var sLine = m.coach_summary || (m.report_json&&m.report_json.summaryLine) || '';
-  // Sponsor view (Option C): hero leads — no separate profile card ahead of the data
+  // Sponsor view (Option C): hero leads -- no separate profile card ahead of the data
   if(m.sponsorReadout){ return sponsorReadoutCards(m); }
   var out = '<div class="card"><div class="ind-header"><div class="ind-avatar">'+esc(initials(name))+'</div><div><div class="ind-name">'+esc(name)+'</div>'
     + '<div class="ind-role">'+esc(m.role||'')+' &middot; '+esc(t.client_org_name||t.name)+' '+engBadge+'</div></div></div>'+(sLine?'<div class="ind-summary">'+esc(sLine)+'</div>':'')+'</div>';
@@ -631,7 +631,7 @@ function attentionBanner(m, first){
   var closing;
   if(anyRed){ var st=memberStanding(m); closing='<div class="attn-decision">Stakeholders currently rate this leader at '+(st!=null?st.toFixed(1)+'/5 on average':'below the bar')+'. On the GPS scale, 4 and up is where you want everyone; a 3 (including a 3.9) means not there yet, build a plan to get them to a 4; below 3 is a role-fit problem. Decide whether to (a) invest in a clear 90-day turnaround with support, or (b) start planning a different seat.</div>'; }
   else { closing='<div class="attn-policy">The GPS scale: 4 and up is where you want everyone (green). A 3, and that includes a 3.9, means not there yet, build a plan to get them to a 4 (orange). Below a 3 is a role-fit problem (red).</div>'; }
-  return '<div class="attention-banner '+(anyRed?'attn-red':'attn-amber')+'"><div class="attn-title">'+(anyRed?'Below the bar — needs a decision':'Development focus')+'</div><ul class="attn-list">'+items+'</ul>'+closing+'</div>';
+  return '<div class="attention-banner '+(anyRed?'attn-red':'attn-amber')+'"><div class="attn-title">'+(anyRed?'Below the bar -- needs a decision':'Development focus')+'</div><ul class="attn-list">'+items+'</ul>'+closing+'</div>';
 }
 function progressCard(m){
   if(!m.scoreboard || !m.scoreboard.length) return '';
@@ -653,8 +653,8 @@ function selfVsRatersCard(sv){
   var cells=[['Trust','trust'],['Proactivity','proactivity'],['Productivity','productivity']].map(function(p){
     var d=tp[p[1]]||{}; var r=d.raters, self=d.self; var pct=r!=null?Math.round(r/5*100):0;
     var gap=(self!=null&&r!=null)?(self-r):null; var gp,gc;
-    if(gap==null){ gp='—'; gc='gap-aligned'; } else if(gap>=0.6){ gp='Blind spot +'+gap.toFixed(1); gc='gap-blind'; } else if(gap<=-0.4){ gp='Hidden strength '+gap.toFixed(1); gc='gap-hidden'; } else { gp='Aligned'; gc='gap-aligned'; }
-    return '<div class="tp3-cell tp3-'+p[1]+'"><div class="tp3-name">'+p[0]+'<span class="gap-pill '+gc+'">'+gp+'</span></div><div class="tp3-score">'+(r!=null?Number(r).toFixed(1):'—')+'<span> / 5.0 raters</span></div><div class="bar-track"><div class="bar-fill" style="width:'+pct+'%"></div></div><div class="tp3-prior">Self-rating: '+(self!=null?Number(self).toFixed(1):'—')+'</div></div>';
+    if(gap==null){ gp='--'; gc='gap-aligned'; } else if(gap>=0.6){ gp='Blind spot +'+gap.toFixed(1); gc='gap-blind'; } else if(gap<=-0.4){ gp='Hidden strength '+gap.toFixed(1); gc='gap-hidden'; } else { gp='Aligned'; gc='gap-aligned'; }
+    return '<div class="tp3-cell tp3-'+p[1]+'"><div class="tp3-name">'+p[0]+'<span class="gap-pill '+gc+'">'+gp+'</span></div><div class="tp3-score">'+(r!=null?Number(r).toFixed(1):'--')+'<span> / 5.0 raters</span></div><div class="bar-track"><div class="bar-fill" style="width:'+pct+'%"></div></div><div class="tp3-prior">Self-rating: '+(self!=null?Number(self).toFixed(1):'--')+'</div></div>';
   }).join('');
   return '<div class="card"><div class="card-head"><div><div class="card-title"><span class="dot"></span>Leadership Scores &mdash; Self vs. Raters</div><div class="card-sub">From the diagnostic &middot; confidential rater pool</div></div>'+(sv.asOf?'<span class="asof-stamp">As of survey close &middot; '+fmtDate(sv.asOf)+'</span>':'')+'</div><div class="tp3-grid">'+cells+'</div></div>';
 }
@@ -682,7 +682,7 @@ function scoreboardCard(m, first){
   var ab=avgOf(m.scoreboard.map(function(s){return s.baseline;})), a30=avgOf(m.scoreboard.map(function(s){return s.d30;})), a90=avgOf(m.scoreboard.map(function(s){return s.d90;}));
   rows+='<tr class="sh-avg"><td>Average</td>'+cell(ab)+cell(a30)+cell(a90)+'</tr>';
   return '<div class="card"><div class="card-head"><div><div class="card-title"><span class="dot"></span>90-Day Stakeholder Scoreboard</div><div class="card-sub">Up to 5 stakeholders the leader selected · by role</div></div></div>'
-    +'<div class="sb-summary">Stakeholder ratings are '+dir+' since baseline (Avg: '+(b!=null?b.toFixed(1):'—')+' &rarr; '+(c!=null?c.toFixed(1):'—')+').</div>'
+    +'<div class="sb-summary">Stakeholder ratings are '+dir+' since baseline (Avg: '+(b!=null?b.toFixed(1):'--')+' &rarr; '+(c!=null?c.toFixed(1):'--')+').</div>'
     +'<table class="sh-table"><thead><tr><th>Stakeholder (by role)</th><th>Baseline</th><th>30 days</th><th>90 days</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 function engagementCard(m){
@@ -702,20 +702,20 @@ function successionCard(m){
   var benchRows=(s.bench||[]).map(function(b){ return '<tr><td>'+esc(b.role)+'</td><td>'+esc(b.readiness)+'</td><td>'+esc(b.timeline)+'</td><td>'+esc(b.gap)+'</td></tr>'; }).join('');
   var benchTable=benchRows?'<table class="sh-table" style="margin-top:10px;"><thead><tr><th>On their bench</th><th>Readiness</th><th>Timeline</th><th>Primary gap</th></tr></thead><tbody>'+benchRows+'</tbody></table>':'';
   return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Succession &amp; Bench</div>'+badge+'</div>'
-    +'<div style="font-size:11px;color:var(--gray-600);margin-bottom:8px;">Note: based on perception data — combine with performance and HR input before promotion decisions.</div>'
+    +'<div style="font-size:11px;color:var(--gray-600);margin-bottom:8px;">Note: based on perception data -- combine with performance and HR input before promotion decisions.</div>'
     +(s.readiness?'<div class="succ-line"><b>Readiness for more:</b> '+esc(s.readiness)+'</div>':'')+(s.benchNote?'<div class="succ-line">'+esc(s.benchNote)+'</div>':'')+benchTable+'</div>';
 }
 
 // ── Sponsor manager-view sections: verdict, group table + the sponsor's OWN
 //    comments, options, and the 90-day plan approval decision. Rendered only when
 //    the endpoint included sponsorReadout (non-private supervisor view). Aggregate
-//    numbers + the sponsor's own words only — never peer/direct-report verbatims. ──
+//    numbers + the sponsor's own words only -- never peer/direct-report verbatims. ──
 function sponsorReadoutCards(m){
   var r = m.sponsorReadout; if(!r || !r.scores) return '';
   var sc = r.scores, bg = sc.by_group || {};
   var name = m.name || m.role || 'This leader', first = String(name).split(' ')[0];
   var C={navy:'#004369',teal:'#01949A',sand:'#FDF6EC',green:'#0F6E56',amber:'#8A560F',amberbar:'#C8962F',red:'#A32D2D',redbg:'#FCEBEB',line:'#E6EBF0',mid:'#5F6B7A',ink:'#1B2A3A'};
-  function fnum(v){ return (v==null||isNaN(v))?'—':Number(v).toFixed(2); }
+  function fnum(v){ return (v==null||isNaN(v))?'--':Number(v).toFixed(2); }
   function scol(v){ return v==null?'#7a8a95':(v>=4?C.green:(v>=3?C.amber:C.red)); }
   function sband(v){ return v==null?'':(v>=4?'Strong':(v>=3?'Develop':'Serious')); }
   function gget(k){ return (bg[k] && bg[k].n) ? bg[k] : null; }
@@ -732,7 +732,7 @@ function sponsorReadoutCards(m){
   var glance = 'Develop and monitor (90 days).';
   if(sup && sup.tp3!=null){ if(sup.tp3<=2.5) glance='Reset the role conversation.'; else if(sup.tp3<=2.9 && dr && dr.tp3>=4) glance='Develop and invest (90 days).'; }
   var headline = (dr && sup) ? 'Strong with the team. A serious gap with you.' : 'The read across groups.';
-  var split = (dr && sup) ? (' — the team rates them '+fnum(dr.tp3)+', you rate them '+fnum(sup.tp3)+'. That split is the story; the decision is yours.') : '.';
+  var split = (dr && sup) ? (' -- the team rates them '+fnum(dr.tp3)+', you rate them '+fnum(sup.tp3)+'. That split is the story; the decision is yours.') : '.';
   var pa = r.plan_approval || {};
   var planStatus = pa.requires ? (pa.status==='approved'?'Approved':(pa.status==='changes_requested'?'Changes requested':'Awaiting review')) : 'In coaching plan';
   var succ = r.succession || {};
@@ -745,10 +745,10 @@ function sponsorReadoutCards(m){
 
   // ── OPTION C: NAVY HERO FIRST ──
   out += '<div style="background:'+C.navy+';color:#fff;border-radius:14px;padding:22px 24px;">'
-    + ‘<div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#9FC0D6;font-weight:700;">’+(sponsorFirst ? esc(sponsorFirst)+" — here’s what the data shows" : ‘What the data shows’)+’</div>’
-    + ‘<div style="font-size:21px;font-weight:800;font-family:Georgia,serif;margin:6px 0 8px;">’+esc(headline)+’</div>’
-    + ‘<div style="font-size:14px;color:#eaf2f7;line-height:1.55;">’+esc(first)+’ scores <b style="color:#fff;">’+fnum(tp3)+’ / 5 (‘+sband(tp3)+’)</b> overall’+esc(split)+’</div>’
-    + ‘<a href="#sprint-cta" onclick="var el=document.getElementById(\’sprint-cta\’);if(el){event.preventDefault();el.scrollIntoView({behavior:\’smooth\’,block:\’start\’})}" style="margin-top:14px;display:inline-block;background:’+C.teal+’;color:#fff;font-size:13px;font-weight:800;padding:6px 13px;border-radius:7px;text-decoration:none;cursor:pointer;">Decision at a glance: ‘+esc(glance)+’ &darr;</a>’
+    + '<div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#9FC0D6;font-weight:700;">'+(sponsorFirst ? esc(sponsorFirst)+" &mdash; here's what the data shows" : 'What the data shows')+'</div>'
+    + '<div style="font-size:21px;font-weight:800;font-family:Georgia,serif;margin:6px 0 8px;">'+esc(headline)+'</div>'
+    + '<div style="font-size:14px;color:#eaf2f7;line-height:1.55;">'+esc(first)+' scores <b style="color:#fff;">'+fnum(tp3)+' / 5 ('+sband(tp3)+')</b> overall'+esc(split)+'</div>'
+    + '<a href="#sprint-cta" onclick="var el=document.getElementById(\'sprint-cta\');if(el){event.preventDefault();el.scrollIntoView({behavior:\'smooth\',block:\'start\'})}" style="margin-top:14px;display:inline-block;background:'+C.teal+';color:#fff;font-size:13px;font-weight:800;padding:6px 13px;border-radius:7px;text-decoration:none;cursor:pointer;">Decision at a glance: '+esc(glance)+' &darr;</a>'
     + '</div>';
 
   // ── SLIM CONTEXT STRIP (replaces profile card + countdown box + gray note) ──
@@ -771,9 +771,9 @@ function sponsorReadoutCards(m){
     out += '<div style="background:#EEF4F8;border-left:4px solid '+C.navy+';border-radius:10px;padding:14px 18px;margin-top:12px;">'
       +'<div style="font-size:11px;font-weight:700;letter-spacing:.05em;color:'+C.mid+';text-transform:uppercase;margin-bottom:6px;">The split, in plain terms</div>'
       +'<div style="font-size:15px;font-weight:800;color:'+C.ink+';">'+(sponsorFirst?esc(sponsorFirst)+' rated':('You rated'))+' '+esc(first)+' <span style="color:'+C.red+';">'+fnum(sup.tp3)+'</span>. The team rated '+esc(first)+' <span style="color:'+C.green+';">'+fnum(dr.tp3)+'</span>. That '+esc(_gap)+'-point gap is what the plan is built to close.</div>'
-      +'<div style="font-size:13px;color:'+C.mid+';margin-top:6px;">The team sees something you don\'t — or there\'s a pattern specific to the working relationship between you and '+esc(first)+'. Either way, the 90-day plan targets this gap directly. Your re-score at day 45 tells you if it\'s working.</div>'
+      +'<div style="font-size:13px;color:'+C.mid+';margin-top:6px;">The team sees something you don\'t -- or there\'s a pattern specific to the working relationship between you and '+esc(first)+'. Either way, the 90-day plan targets this gap directly. Your re-score at day 45 tells you if it\'s working.</div>'
       +'</div>';
-    // Sprint CTA inline — catch the sponsor at peak engagement, right after the gap is named
+    // Sprint CTA inline -- catch the sponsor at peak engagement, right after the gap is named
     if(DATA.sprint_cta_url){
       out += renderSprintCta(DATA.sprint_cta_url, first, true);
     }
@@ -803,8 +803,8 @@ function sponsorReadoutCards(m){
     if(lowest && lowest.v<3){
       out += '<div style="background:'+C.redbg+';border:1px solid #f0b9b9;border-left:5px solid '+C.red+';border-radius:12px;padding:20px 24px;margin-top:14px;">'
         + '<div style="color:'+C.red+';font-size:17px;font-weight:800;font-family:Georgia,serif;margin-bottom:8px;">'+lowest.n+' with you, '+esc(first)+"'s supervisor: "+fnum(lowest.v)+' / 5 (Serious)</div>'
-        + '<div style="font-size:14px;margin:6px 0;">This is the gap that decides whether more investment pays off.'+(dr?(' Direct reports rate '+esc(first)+' <b>'+fnum(dr.tp3)+'</b> overall — the split is specifically the working relationship with you, not the ability to lead a team.'):'')+'</div>'
-        + '<div style="font-size:14px;font-weight:700;color:#8c2020;border-top:1px solid #f0b9b9;padding-top:10px;margin-top:8px;">This is the number the 90-day plan is built to move. We\'ll show you the change at day 45 and 90 — how far to invest from there is your call.</div>'
+        + '<div style="font-size:14px;margin:6px 0;">This is the gap that decides whether more investment pays off.'+(dr?(' Direct reports rate '+esc(first)+' <b>'+fnum(dr.tp3)+'</b> overall -- the split is specifically the working relationship with you, not the ability to lead a team.'):'')+'</div>'
+        + '<div style="font-size:14px;font-weight:700;color:#8c2020;border-top:1px solid #f0b9b9;padding-top:10px;margin-top:8px;">This is the number the 90-day plan is built to move. We\'ll show you the change at day 45 and 90 -- how far to invest from there is your call.</div>'
         + '</div>';
       if(DATA.sprint_cta_url){ out += renderSprintCta(DATA.sprint_cta_url, first, true); }
     }
@@ -813,13 +813,13 @@ function sponsorReadoutCards(m){
   // ── GROUP TABLE + the sponsor's OWN words ──
   function trow(label,gp,flag){ if(!gp) return ''; var f=flag && gp.tp3!=null && gp.tp3<=2.9; return '<tr'+(f?' style="background:#EEF4F8;"':'')+'><td style="text-align:left;padding:8px 6px;border-bottom:1px solid '+C.line+';font-weight:600;">'+esc(label)+' ('+gp.n+')</td>'+['trust','proactivity','productivity','tp3'].map(function(k){ return '<td style="text-align:right;padding:8px 6px;border-bottom:1px solid '+C.line+';color:'+scol(gp[k])+';font-weight:700;">'+fnum(gp[k])+'</td>'; }).join('')+'</tr>'; }
   var th='text-align:right;color:'+C.mid+';font-weight:600;border-bottom:2px solid '+C.line+';padding:7px 6px;';
-  var quotes=(r.sponsor_verbatims||[]).map(function(q){ return '<p style="margin:6px 0;font-style:italic;font-family:Georgia,serif;color:#3a2e16;font-size:14px;">“'+esc(q)+'”</p>'; }).join('');
+  var quotes=(r.sponsor_verbatims||[]).map(function(q){ return '<p style="margin:6px 0;font-style:italic;font-family:Georgia,serif;color:#3a2e16;font-size:14px;">"'+esc(q)+'"</p>'; }).join('');
   out += '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>How you rated '+esc(first)+' vs. how the team did</div></div>'
     + '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;"><thead><tr><th style="text-align:left;color:'+C.mid+';font-weight:600;border-bottom:2px solid '+C.line+';padding:7px 6px;">Rater</th><th style="'+th+'">Trust</th><th style="'+th+'">Proact.</th><th style="'+th+'">Prod.</th><th style="'+th+'">TP3</th></tr></thead><tbody>'
     + trow('Direct reports',dr,false) + trow('Other colleagues',other,false) + trow('You (supervisor)',sup,true)
     + '</tbody></table>'
-    + '<div style="font-size:12px;color:'+C.mid+';margin-top:8px;">Peers are folded into “Other colleagues” — groups under 3 raters aren\'t broken out, to protect confidentiality. Individual comments stay in '+esc(first)+"'s confidential debrief.</div>"
-    + (quotes?'<div style="background:'+C.sand+';border-radius:10px;padding:14px 18px;margin-top:14px;"><div style="font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:'+C.mid+';font-weight:700;margin-bottom:6px;">In your words — what you wrote about '+esc(first)+'</div>'+quotes+'</div>':'')
+    + '<div style="font-size:12px;color:'+C.mid+';margin-top:8px;">Peers are folded into "Other colleagues" -- groups under 3 raters aren\'t broken out, to protect confidentiality. Individual comments stay in '+esc(first)+"'s confidential debrief.</div>"
+    + (quotes?'<div style="background:'+C.sand+';border-radius:10px;padding:14px 18px;margin-top:14px;"><div style="font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:'+C.mid+';font-weight:700;margin-bottom:6px;">In your words -- what you wrote about '+esc(first)+'</div>'+quotes+'</div>':'')
     + '</div>';
 
   // ── NINE-BOX (talent placement) ──
@@ -833,7 +833,7 @@ function sponsorReadoutCards(m){
     var hotRowTop=2-rb, hotCol=cb, cells='';
     for(var rTop=0;rTop<3;rTop++){ for(var c=0;c<3;c++){ var hot=(rTop===hotRowTop&&c===hotCol); cells+='<div style="border:1px solid #eef1f4;font-size:10px;padding:5px;display:flex;align-items:flex-start;'+(hot?'background:#EAF5F0;color:'+C.green+';font-weight:700;':'color:#90a0ad;')+'">'+labels[rTop][c]+(hot?'<br>'+esc(first)+' is here':'')+'</div>'; } }
     out += '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Talent placement (nine-box)</div></div>'
-      + '<div style="font-size:13px;color:'+C.mid+';margin-bottom:10px;">Leadership effectiveness (TP3) across · bench / readiness up. Built from the data we have — combine with performance and HR input before any move.</div>'
+      + '<div style="font-size:13px;color:'+C.mid+';margin-bottom:10px;">Leadership effectiveness (TP3) across · bench / readiness up. Built from the data we have -- combine with performance and HR input before any move.</div>'
       + '<div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start;">'
       + '<div><div style="position:relative;width:300px;max-width:100%;height:300px;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);border:1px solid '+C.line+';border-radius:8px;overflow:hidden;">'+cells
       + '<div style="position:absolute;width:20px;height:20px;border-radius:50%;background:'+C.amberbar+';border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3);transform:translate(-50%,50%);z-index:5;left:'+xPct.toFixed(0)+'%;bottom:'+yPct.toFixed(0)+'%;" title="'+esc(first)+'"></div>'
@@ -848,12 +848,12 @@ function sponsorReadoutCards(m){
     + '<div style="background:'+C.sand+';border-radius:10px;padding:12px 14px;"><div style="font-size:12.5px;color:'+C.mid+';">Bench strength (raters)</div><div style="font-size:20px;font-weight:800;margin-top:4px;color:'+scol(sc.bench)+';">'+fnum(sc.bench)+' / 5</div></div>'
     + '<div style="background:'+C.sand+';border-radius:10px;padding:12px 14px;"><div style="font-size:12.5px;color:'+C.mid+';">Successor identified</div><div style="font-size:20px;font-weight:800;margin-top:4px;color:'+(successorIdentified?C.green:C.red)+';">'+successorLabel+'</div></div>'
     + '</div>'
-    + '<div style="font-size:13px;color:'+C.mid+';margin-top:12px;">Note: based on perception data — combine with performance and HR input before promotion decisions.</div>'
+    + '<div style="font-size:13px;color:'+C.mid+';margin-top:12px;">Note: based on perception data -- combine with performance and HR input before promotion decisions.</div>'
     + '</div>';
 
   // ── OPTIONS ──
   function optRow(t,d,when){ return '<div style="border:1px solid '+C.line+';border-radius:10px;padding:12px 14px;margin:8px 0;"><div style="font-weight:800;color:'+C.navy+';font-size:14px;">'+esc(t)+'</div><div style="font-size:13px;color:'+C.ink+';margin-top:3px;">'+esc(d)+'</div><div style="font-size:13px;color:'+C.navy+';font-weight:600;margin-top:5px;">Choose this if: '+esc(when)+'</div></div>'; }
-  out += '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Options to weigh — your call</div></div>'
+  out += '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Options to weigh -- your call</div></div>'
     + '<div style="font-size:13px;color:'+C.mid+';margin-bottom:4px;">We present the data and the realistic options. Choosing among them is yours; we\'ll support whichever you pick.</div>'
     + optRow('1 · Invest behind the plan','Back the 90-day plan and re-measure the gap at day 45 and 90.','you see a long-term role for '+first+' and read the gap as behavior, not values.')
     + optRow('2 · Hold and re-measure','Set expectations now without a formal coaching investment, and re-run the read in 90 days.','you want proof of movement before committing budget.')
@@ -875,7 +875,7 @@ function sponsorReadoutCards(m){
         : '';
       pbtns='<div style="background:#EAF5F0;border:1px solid #b7ddc9;border-radius:8px;padding:12px 14px;"><span style="color:'+C.green+';font-weight:700;">You approved this plan'+(pa.decided_at?' on '+fmtDate(pa.decided_at):'')+'. The plan is locked.</span><div style="font-size:13px;color:#1f4d36;margin-top:4px;">'+esc(first)+"'s plan is locked. The 90-day sprint is what puts it into motion."+'</div>'+_sprintNext+'</div>';
     }
-    else if(pa.status==='changes_requested'){ pbtns='<div style="background:'+C.redbg+';border:1px solid #f0b9b9;border-radius:8px;padding:12px 14px;color:#8c2020;"><b>Changes requested.</b>'+(pa.note?' “'+esc(pa.note)+'”':'')+' We\'ll adjust with you before anything starts.</div>'; }
+    else if(pa.status==='changes_requested'){ pbtns='<div style="background:'+C.redbg+';border:1px solid #f0b9b9;border-radius:8px;padding:12px 14px;color:#8c2020;"><b>Changes requested.</b>'+(pa.note?' "'+esc(pa.note)+'"':'')+' We\'ll adjust with you before anything starts.</div>'; }
     else { pbtns='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;">'
       + '<button onclick="sponsorDecide(\''+esc(m.client_id)+'\',\'approve\')" style="background:'+C.green+';color:#fff;border:none;border-radius:8px;padding:10px 18px;font-weight:700;font-size:13px;cursor:pointer;">Approve this plan</button>'
       + '<button onclick="sponsorDecide(\''+esc(m.client_id)+'\',\'changes\')" style="background:#fff;border:1px solid '+C.amberbar+';color:'+C.amber+';border-radius:8px;padding:10px 18px;font-weight:700;font-size:13px;cursor:pointer;">Request changes</button>'
@@ -883,7 +883,7 @@ function sponsorReadoutCards(m){
   } else {
     pbtns='<div style="font-size:13px;color:'+C.mid+';">This plan runs as part of '+esc(first)+"'s coaching. Your sign-off isn\'t required to start.</div>";
   }
-  out += '<div class="card" style="border-top:4px solid '+C.teal+';"><div class="card-head"><div class="card-title"><span class="dot"></span>'+esc(first)+"'s proposed 90-day plan — your review</div></div>"
+  out += '<div class="card" style="border-top:4px solid '+C.teal+';"><div class="card-head"><div class="card-title"><span class="dot"></span>'+esc(first)+"'s proposed 90-day plan -- your review</div></div>"
     + '<div style="font-size:13.5px;color:'+C.ink+';background:#F7F9FA;border-radius:8px;padding:12px 14px;margin:6px 0 4px;line-height:1.55;">'+esc(first)+' has proposed the plan below. Before we lock it, you weigh in: does this target what you need and where the business is going? Approve it as-is, or request changes.</div>'
     + (m.business_outcome_goal?'<div style="border:1px solid '+C.line+';border-radius:10px;padding:14px 16px;margin:10px 0;"><div style="font-weight:800;color:'+C.navy+';font-size:14px;">Business outcome this ladders up to</div><div style="font-size:13px;color:'+C.ink+';margin-top:4px;">'+esc(m.business_outcome_goal)+'</div></div>':'')
     + planBody + pbtns
@@ -900,7 +900,7 @@ function sponsorDecide(clientId, kind){
 
 init();
 
-// ── Sticky sprint bar — shows after 400px scroll when sprint URL is set ──
+// ── Sticky sprint bar -- shows after 400px scroll when sprint URL is set ──
 (function(){
   var shown = false, bar = document.getElementById('stickyCta');
   function updateSticky(){
@@ -976,18 +976,18 @@ init();
     if(!card||!act) return; act.innerHTML='';
     if (iOS()) {
       msg.textContent='Add it to your home screen for one-tap access:';
-      act.innerHTML='<div style="font-size:13px;color:#333;line-height:1.6;">Tap the <b>Share</b> button (bottom of Safari, top right of Chrome), then choose <b>“Add to Home Screen.”</b></div>';
+      act.innerHTML='<div style="font-size:13px;color:#333;line-height:1.6;">Tap the <b>Share</b> button (bottom of Safari, top right of Chrome), then choose <b>"Add to Home Screen."</b></div>';
     } else if (deferredPrompt) {
       msg.textContent='Install it as an app for one-tap access.';
     } else if (android()) {
       msg.textContent='Add it to your home screen:';
-      act.innerHTML='<div style="font-size:13px;color:#333;line-height:1.6;">Tap the <b>⋮</b> menu in Chrome, then <b>“Add to Home screen.”</b></div>';
+      act.innerHTML='<div style="font-size:13px;color:#333;line-height:1.6;">Tap the <b>⋮</b> menu in Chrome, then <b>"Add to Home screen."</b></div>';
     } else {
       msg.textContent='Keep it one click away:';
       act.innerHTML='<div style="font-size:13px;color:#333;line-height:1.6;margin-bottom:4px;">Bookmark this page (Ctrl/Cmd+D), or use the install icon in your browser\'s address bar.</div>';
       qr(act);
     }
-    // Always offer a clear yes + a "Not now" that snoozes — consistent with the client portal.
+    // Always offer a clear yes + a "Not now" that snoozes -- consistent with the client portal.
     var row=document.createElement('div'); row.style.cssText='display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;';
     var yes=document.createElement('button');
     yes.style.cssText='background:#004369;color:#fff;border:none;border-radius:8px;padding:11px 20px;font-size:14px;font-weight:700;cursor:pointer;flex:1;min-width:130px;';
@@ -1001,7 +1001,7 @@ init();
   }
   function maybeShow(){
     var n=bumpOpens();
-    if (!(n===1 || n%7===0)) return;   // 1st open, then every 7th — never every visit
+    if (!(n===1 || n%7===0)) return;   // 1st open, then every 7th -- never every visit
     var hasToken = /[?&]token=/.test(location.search) || (function(){ try{ return !!localStorage.getItem('gps_sponsor_token'); }catch(_){ return false; } })();
     if (hasToken) setTimeout(render, 2500);
   }
