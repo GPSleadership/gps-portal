@@ -258,9 +258,14 @@
 
     // ── 4. How others experience you (group table + strengths/work) ─────────
     const gt = _rvGroupTable(bg);
-    const sowhat = (lowG && lowG.tp3!=null && lowG.tp3<4)
-      ? `<div class="sowhat"><b>So what this means:</b> you’re seen as capable, but your ${lowG.label} ${isSup?'questions whether they can fully rely on you when stakes are high':'experiences you differently than your strongest group'}.</div>`
-      : (tier==='strong' ? `<div class="sowhat"><b>So what this means:</b> your groups see you consistently at the standard — the conversation is about more scope, not repair.</div>` : '');
+    const sowhat = N.sowhat
+      ? `<div class="sowhat"><b>So what this means:</b> ${_rvEsc(N.sowhat)}</div>`
+      : (lowG && lowG.tp3!=null && lowG.tp3<4)
+        ? `<div class="sowhat"><b>So what this means:</b> ${isSup
+            ? `Only your direct reports are at or above the 4.0 standard. Your colleagues, supervisor, and self-assessment all fall below it — the people above and around you don’t yet have the same confidence your team does. That gap is the work.`
+            : `Your ${topG?topG.label:’ strongest group’} rates you highest, but your ${lowG.label} experiences you differently. The work is closing that distance.`
+          }</div>`
+        : (tier===’strong’ ? `<div class="sowhat"><b>So what this means:</b> your groups see you consistently at the standard — the conversation is about more scope, not repair.</div>` : ‘’);
     const teamQuote = N.team_quote ? `
       <div class="qlabel">In their words — your team</div>
       <div class="quote" style="margin-top:6px;"><p>“${_rvEsc(N.team_quote)}”</p><div class="by">— A direct report</div></div>` : '';

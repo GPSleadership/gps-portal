@@ -8365,6 +8365,7 @@ function openResultsNarrativeEditor(){
     <div style="font-size:12px;color:#5a6b76;margin-bottom:6px;">All optional. The numbers, bars, and group table come from the portal automatically — these just set the prose and the two real quotes. Leave blank to use the auto-generated wording.</div>
     ${fld('rn-headline','Headline (one line)',n.headline,'e.g. Solid with your team; a trust problem with your boss.')}
     ${fld('rn-honest','The honest read',n.honest_read,'2–4 sentences of straight-talk framing.',4)}
+    ${fld('rn-sowhat','"So what this means" text',n.sowhat||'','Override the auto-generated line shown under the group table. 1–3 sentences.',3)}
     ${fld('rn-sup','Supervisor quote',n.supervisor_quote,'A short, real quote from the supervisor open-ended responses.',3)}
     ${fld('rn-team','Team quote',n.team_quote,'A short, real quote from a direct report.',3)}
     <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;">
@@ -8380,6 +8381,7 @@ async function saveResultsNarrative(e){
   const narrative={
     headline:        (document.getElementById('rn-headline').value||'').trim(),
     honest_read:     (document.getElementById('rn-honest').value||'').trim(),
+    sowhat:          (document.getElementById('rn-sowhat').value||'').trim(),
     supervisor_quote:(document.getElementById('rn-sup').value||'').trim(),
     team_quote:      (document.getElementById('rn-team').value||'').trim(),
   };

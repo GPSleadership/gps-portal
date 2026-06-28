@@ -2372,6 +2372,7 @@ async function handleSaveResultsNarrative(req, res) {
   const payload = {
     headline:         clean(n.headline, 200),
     honest_read:      clean(n.honest_read, 1200),
+    sowhat:           clean(n.sowhat, 600),
     supervisor_quote: clean(n.supervisor_quote, 600),
     team_quote:       clean(n.team_quote, 600),
     updated_at:       new Date().toISOString(),
