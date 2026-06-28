@@ -10344,31 +10344,78 @@ function drGpsFitNote(type){
 // so single and bulk actions can re-render IT alone (no full team-page reload/jump).
 function drRecsListHtml(teamId, recs){
   window.__drRecs = {};
-  var list=recs.map(function(r){
-    window.__drRecs[r.id]=r;
+  recs.forEach(function(r){ window.__drRecs[r.id]=r; });
+
+  function rowBg(r){
+    if(r.status==='approved'&&r.visible_to_client) return 'border-left:4px solid #2e7d32;background:#f1f8f1;';
+    if(r.status==='approved') return 'border-left:4px solid #c77700;background:#fffbe8;';
+    return 'border-left:4px solid #e0e0e0;background:#fff;';
+  }
+  function moveBtns(r){
+    if(!(r.status==='approved'&&r.visible_to_client)) return '';
+    return '<button class="btn-add" style="padding:2px 7px;font-size:12px;background:#fff;color:#004369;border:1px solid #ccd3da;" title="Move up" onclick="drRecMove(\''+r.id+'\',\'up\',\''+teamId+'\')">&#8593;</button>'
+      +'<button class="btn-add" style="padding:2px 7px;font-size:12px;background:#fff;color:#004369;border:1px solid #ccd3da;" title="Move down" onclick="drRecMove(\''+r.id+'\',\'down\',\''+teamId+'\')">&#8595;</button>';
+  }
+  function renderRec(r){
     var cat=r.category==='included_in_current_scope'?'In Scope':'Accelerator';
     var approved=(r.status==='approved');
     var statusChip = approved
-      ? (r.visible_to_client?'<span style="color:#2e7d32;font-weight:700;">Approved · Visible to sponsor</span>':'<span style="color:#c77700;font-weight:700;">Approved · Hidden</span>')
+      ? (r.visible_to_client?'<span style="color:#2e7d32;font-weight:700;">&#10003; Visible to sponsor</span>':'<span style="color:#c77700;font-weight:700;">Approved &middot; Hidden</span>')
       : '<span style="color:#DB1F48;font-weight:700;">Draft</span>';
     var editBtn='<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#fff;color:#004369;border:1px solid #004369;" onclick="drRecEdit(\''+r.id+'\',\''+teamId+'\')">Edit</button>';
     var btns = approved
-      ? editBtn
+      ? moveBtns(r)+editBtn
         +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#fff;color:#01949A;border:1px solid #01949A;" onclick="drRecVis(\''+r.id+'\','+(!r.visible_to_client)+',\''+teamId+'\')">'+(r.visible_to_client?'Hide':'Show')+'</button>'
         +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#fff;color:#888;border:1px solid #aaa;" onclick="drRecUnapprove(\''+r.id+'\',\''+teamId+'\')">Unapprove</button>'
       : editBtn
         +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#fff;color:#DB1F48;border:1px solid #DB1F48;" onclick="drRecReject(\''+r.id+'\',\''+teamId+'\')">Reject</button>'
         +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#fff;color:#2e7d32;border:1px solid #2e7d32;" onclick="drRecApprove(\''+r.id+'\',\''+teamId+'\')">Approve</button>';
-    return '<div id="dr_recrow_'+r.id+'" style="padding:10px 0;border-bottom:1px solid #f0f0f0;display:flex;gap:10px;align-items:flex-start;">'
+    return '<div id="dr_recrow_'+r.id+'" style="padding:10px 0 10px 10px;border-bottom:1px solid #f0f0f0;display:flex;gap:10px;align-items:flex-start;'+rowBg(r)+'">'
       +'<input type="checkbox" class="dr-rec-cb" value="'+r.id+'" onclick="drRecCount()" style="margin-top:3px;transform:scale(1.2);flex:0 0 auto;cursor:pointer;" />'
-      +'<div style="flex:1;min-width:0;"><b>'+drEsc(r.short_title)+'</b> <span style="font-size:11px;color:#666;">· '+cat+' · '+statusChip+'</span>'
+      +'<div style="flex:1;min-width:0;"><b>'+drEsc(r.short_title)+'</b> <span style="font-size:11px;color:#666;">&middot; '+cat+' &middot; '+statusChip+'</span>'
       +(r.description?'<div style="margin-top:5px;font-size:12.5px;color:#333;line-height:1.5;">'+drEsc(r.description)+'</div>':'')
-      +((r.owner||r.timeframe)?'<div style="margin-top:4px;font-size:11px;color:#888;">'+(r.owner?'Owner: '+drEsc(r.owner):'')+(r.owner&&r.timeframe?' · ':'')+(r.timeframe?'Timeframe: '+drEsc(r.timeframe):'')+'</div>':'')
+      +((r.owner||r.timeframe)?'<div style="margin-top:4px;font-size:11px;color:#888;">'+(r.owner?'Owner: '+drEsc(r.owner):'')+(r.owner&&r.timeframe?' &middot; ':'')+(r.timeframe?'Timeframe: '+drEsc(r.timeframe):'')+'</div>':'')
       +(r.target_band?'<div style="margin-top:5px;">'+String(r.target_band).split(',').map(function(b){ b=b.trim(); var c={top:'#1b6e3c',middle:'#0b5cad',bottom:'#b00020',system:'#6b21a8'}[b]||'#555'; return '<span style="display:inline-block;font-size:10px;font-weight:700;color:'+c+';background:#f1f1f4;border-radius:8px;padding:1px 8px;margin-right:4px;text-transform:uppercase;letter-spacing:.03em;">'+drEsc(b)+'</span>'; }).join('')+'</div>':'')
       +((r.quick_start_today||r.quick_start_week)?'<div style="margin-top:6px;font-size:11.5px;color:#333;background:#f8f9fb;border:1px solid #eee;border-radius:6px;padding:7px 10px;">'+(r.quick_start_today?'<div><b>By end of today:</b> '+drEsc(r.quick_start_today)+'</div>':'')+(r.quick_start_week?'<div style="margin-top:3px;"><b>By end of this week:</b> '+drEsc(r.quick_start_week)+'</div>':'')+'</div>':'')
-      +(r.gps_support_type?'<div style="margin-top:6px;font-size:11px;color:#01949A;font-style:italic;">GPS fit: '+drGpsFitNote(r.gps_support_type)+' <span style="color:#aaa;font-style:normal;">(internal — not shown to the sponsor)</span></div>':'')
+      +(r.gps_support_type?'<div style="margin-top:6px;font-size:11px;color:#01949A;font-style:italic;">GPS fit: '+drGpsFitNote(r.gps_support_type)+' <span style="color:#aaa;font-style:normal;">(internal &mdash; not shown to the sponsor)</span></div>':'')
       +'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">'+btns+'</div></div></div>';
-  }).join('') || '<div style="color:#666;font-size:13px;">No recommendations yet.</div>';
+  }
+
+  // Group by horizon; within each group: visible approved (by sort_order) → hidden approved → draft
+  var SHORT=[],MID=[],LONG=[],NONE=[];
+  recs.forEach(function(r){
+    if(r.horizon==='short') SHORT.push(r);
+    else if(r.horizon==='mid') MID.push(r);
+    else if(r.horizon==='long') LONG.push(r);
+    else NONE.push(r);
+  });
+  function sortGroup(g){
+    return g.slice().sort(function(a,b){
+      var ra=(a.status==='approved'&&a.visible_to_client)?0:(a.status==='approved')?1:2;
+      var rb=(b.status==='approved'&&b.visible_to_client)?0:(b.status==='approved')?1:2;
+      if(ra!==rb) return ra-rb;
+      return ((a.sort_order||0)-(b.sort_order||0));
+    });
+  }
+  function sectionHtml(label,color,group){
+    if(!group.length) return '';
+    return '<div style="margin-bottom:6px;">'
+      +'<div style="font-size:10.5px;font-weight:700;color:'+color+';text-transform:uppercase;letter-spacing:.05em;padding:5px 0;border-bottom:2px solid '+color+';margin-bottom:2px;">'+label+' ('+group.length+')</div>'
+      +sortGroup(group).map(renderRec).join('')
+      +'</div>';
+  }
+  var hasHorizons=SHORT.length||MID.length||LONG.length;
+  var list;
+  if(hasHorizons){
+    list=sectionHtml('Short-term — 0–30 days','#1b6e3c',SHORT)
+      +sectionHtml('Mid-term — 30–60 days','#0b5cad',MID)
+      +sectionHtml('Long-term — 60–90 days','#6b21a8',LONG)
+      +(NONE.length?sectionHtml('No horizon set','#888',NONE):'');
+    if(!list) list='<div style="color:#666;font-size:13px;">No recommendations yet.</div>';
+  } else {
+    list=recs.length?sortGroup(recs).map(renderRec).join(''):'<div style="color:#666;font-size:13px;">No recommendations yet.</div>';
+  }
+
   var bulk = recs.length ? '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#f4f7fa;border:1px solid #e0e6ec;border-radius:8px;padding:8px 12px;margin-bottom:12px;">'
     +'<label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:#004369;cursor:pointer;"><input type="checkbox" id="dr_rec_all" onclick="drRecSelectAll(this.checked)" style="transform:scale(1.2);cursor:pointer;" /> Select all</label>'
     +'<span id="dr_rec_selcount" style="font-size:12px;color:#666;">0 selected</span>'
@@ -10389,6 +10436,7 @@ function drRecsPanel(t, recs){
     +'<select id="dr_rcat" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;"><option value="included_in_current_scope">In current scope</option><option value="optional_accelerator">Optional accelerator</option></select>'
     +'<input id="dr_rowner" placeholder="Owner (e.g., CEO + Exec Team)" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;" />'
     +'<input id="dr_rtime" placeholder="Timeframe" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;width:120px;" />'
+    +'<select id="dr_rhorizon" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;"><option value="">No horizon</option><option value="short">Short-term (0–30d)</option><option value="mid">Mid-term (30–60d)</option><option value="long">Long-term (60–90d)</option></select>'
     +'<button class="btn-add" onclick="drAddRec(\''+t.id+'\')">Add (Draft)</button></div></div>';
   var genRec='<div style="border-bottom:1px solid #eee;padding-bottom:12px;margin-bottom:12px;"><button class="btn-add" id="dr_genrecs_btn" onclick="drGenRecs(\''+t.id+'\')">⚙ Draft recommendations from the report (AI)</button><div style="font-size:11px;color:#888;margin-top:5px;">Drafts 3–5 from this team\'s generated Decision Room content. They land as editable drafts; you adjust and approve.</div></div>';
   return drCard('Recommendations', genRec+'<div id="drRecsBody">'+drRecsListHtml(t.id, recs)+'</div>'+add);
@@ -10397,7 +10445,7 @@ function drRecsPanel(t, recs){
 async function drRefreshRecs(teamId){
   var body=document.getElementById('drRecsBody'); if(!body){ drManageTeam(teamId); return; }
   try{
-    var recs=await cdSelect('recommendations',{ eq:{team_id:teamId}, order:{col:'updated_at',asc:false} });
+    var recs=await cdSelect('recommendations',{ eq:{team_id:teamId}, order:{col:'sort_order',asc:true} });
     body.innerHTML=drRecsListHtml(teamId, recs);
   }catch(e){ alert('Could not refresh recommendations: '+e.message); }
 }
@@ -10442,7 +10490,9 @@ async function drGenRecs(teamId){
 }
 async function drAddRec(teamId){
   if(!drVal('dr_rtitle')){ alert('Title required.'); return; }
-  try{ await cdInsert('recommendations',{ team_id:teamId, short_title:drVal('dr_rtitle'), description:drVal('dr_rdesc'), category:drVal('dr_rcat'), owner:drVal('dr_rowner')||null, timeframe:drVal('dr_rtime')||null, status:'draft', visible_to_client:false });
+  try{
+    var existing=await cdSelect('recommendations',{ eq:{team_id:teamId}, select:'id' });
+    await cdInsert('recommendations',{ team_id:teamId, short_title:drVal('dr_rtitle'), description:drVal('dr_rdesc'), category:drVal('dr_rcat'), owner:drVal('dr_rowner')||null, timeframe:drVal('dr_rtime')||null, horizon:drVal('dr_rhorizon')||null, status:'draft', visible_to_client:false, sort_order:existing.length });
     ['dr_rtitle','dr_rdesc','dr_rowner','dr_rtime'].forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; });
     drRefreshRecs(teamId); }
   catch(e){ alert('Could not add: '+e.message); }
@@ -10456,7 +10506,8 @@ function drRecEdit(id, teamId){
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'
     +'<select id="dr_re_cat_'+id+'" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;"><option value="included_in_current_scope"'+(r.category!=='optional_accelerator'?' selected':'')+'>In current scope</option><option value="optional_accelerator"'+(r.category==='optional_accelerator'?' selected':'')+'>Optional accelerator</option></select>'
     +'<input id="dr_re_owner_'+id+'" value="'+drRecAttr(r.owner||'')+'" placeholder="Owner" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;" />'
-    +'<input id="dr_re_time_'+id+'" value="'+drRecAttr(r.timeframe||'')+'" placeholder="Timeframe" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;width:120px;" /></div>'
+    +'<input id="dr_re_time_'+id+'" value="'+drRecAttr(r.timeframe||'')+'" placeholder="Timeframe" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;width:120px;" />'
+    +'<select id="dr_re_hor_'+id+'" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;"><option value="">No horizon</option><option value="short"'+(r.horizon==='short'?' selected':'')+'>Short-term (0-30d)</option><option value="mid"'+(r.horizon==='mid'?' selected':'')+'>Mid-term (30-60d)</option><option value="long"'+(r.horizon==='long'?' selected':'')+'>Long-term (60-90d)</option></select></div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'
     +'<input id="dr_re_band_'+id+'" value="'+drRecAttr(r.target_band||'')+'" placeholder="Target band (top, middle, bottom, system)" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;min-width:230px;" />'
     +'<select id="dr_re_fit_'+id+'" style="padding:8px;border:1.5px solid #d0d0d0;border-radius:6px;">'+['','core_service','co_led','client_owned','outside_scope'].map(function(v){ var lbl={'':'GPS fit…','core_service':'core_service (GPS delivers)','co_led':'co_led (GPS facilitates)','client_owned':'client_owned','outside_scope':'outside_scope'}[v]; return '<option value="'+v+'"'+(r.gps_support_type===v?' selected':'')+'>'+lbl+'</option>'; }).join('')+'</select></div>'
@@ -10466,13 +10517,32 @@ function drRecEdit(id, teamId){
 }
 async function drRecSaveEdit(id, teamId){
   var title=drVal('dr_re_title_'+id); if(!title){ alert('Title required.'); return; }
-  try{ await cdUpdate('recommendations',{ short_title:title, description:drVal('dr_re_desc_'+id), category:drVal('dr_re_cat_'+id), owner:drVal('dr_re_owner_'+id)||null, timeframe:drVal('dr_re_time_'+id)||null, target_band:drVal('dr_re_band_'+id)||null, gps_support_type:drVal('dr_re_fit_'+id)||null, quick_start_today:drVal('dr_re_today_'+id)||null, quick_start_week:drVal('dr_re_week_'+id)||null, updated_at:new Date().toISOString() },{ eq:{id:id} }); drRefreshRecs(teamId); }
+  try{ await cdUpdate('recommendations',{ short_title:title, description:drVal('dr_re_desc_'+id), category:drVal('dr_re_cat_'+id), owner:drVal('dr_re_owner_'+id)||null, timeframe:drVal('dr_re_time_'+id)||null, horizon:drVal('dr_re_hor_'+id)||null, target_band:drVal('dr_re_band_'+id)||null, gps_support_type:drVal('dr_re_fit_'+id)||null, quick_start_today:drVal('dr_re_today_'+id)||null, quick_start_week:drVal('dr_re_week_'+id)||null, updated_at:new Date().toISOString() },{ eq:{id:id} }); drRefreshRecs(teamId); }
   catch(e){ alert('Could not save: '+e.message); }
 }
 async function drRecReject(id, teamId){ if(!confirm('Reject this recommendation? This deletes it.')) return; try{ await cdDelete('recommendations',{ eq:{id:id} }); drRefreshRecs(teamId); }catch(e){ alert('Could not reject: '+e.message); } }
 async function drRecApprove(id, teamId){ try{ await cdUpdate('recommendations',{ status:'approved', updated_at:new Date().toISOString() },{ eq:{id:id} }); drRefreshRecs(teamId); }catch(e){ alert(e.message); } }
 async function drRecUnapprove(id, teamId){ try{ await cdUpdate('recommendations',{ status:'draft', visible_to_client:false, updated_at:new Date().toISOString() },{ eq:{id:id} }); drRefreshRecs(teamId); }catch(e){ alert(e.message); } }
 async function drRecVis(id, vis, teamId){ try{ await cdUpdate('recommendations',{ visible_to_client:vis, updated_at:new Date().toISOString() },{ eq:{id:id} }); drRefreshRecs(teamId); }catch(e){ alert(e.message); } }
+async function drRecMove(id, dir, teamId){
+  try{
+    var allRecs=await cdSelect('recommendations',{ eq:{team_id:teamId}, order:{col:'sort_order',asc:true} });
+    var vis=allRecs.filter(function(r){ return r.status==='approved'&&r.visible_to_client; });
+    var idx=-1; for(var i=0;i<vis.length;i++){ if(vis[i].id===id){ idx=i; break; } }
+    if(idx<0) return;
+    var swapIdx=dir==='up'?idx-1:idx+1;
+    if(swapIdx<0||swapIdx>=vis.length) return;
+    var a=vis[idx], b=vis[swapIdx];
+    var aOrd=a.sort_order!=null?a.sort_order:idx, bOrd=b.sort_order!=null?b.sort_order:swapIdx;
+    if(aOrd===bOrd){ aOrd=idx; bOrd=swapIdx; }
+    var now=new Date().toISOString();
+    await Promise.all([
+      cdUpdate('recommendations',{ sort_order:bOrd, updated_at:now },{ eq:{id:a.id} }),
+      cdUpdate('recommendations',{ sort_order:aOrd, updated_at:now },{ eq:{id:b.id} })
+    ]);
+    drRefreshRecs(teamId);
+  }catch(e){ alert('Could not reorder: '+e.message); }
+}
 
 function drSignalsPanel(t, signals, invites){
   var list=signals.map(function(s){
