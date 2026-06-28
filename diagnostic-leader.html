@@ -541,6 +541,12 @@ function renderPipeline() {
   const badgeEl = document.getElementById('pipeline-badge');
   if (d.status === 'plan_active') {
     badgeEl.className = 'badge badge-open'; badgeEl.textContent = 'Complete';
+  } else if (d.status === 'debrief_complete') {
+    badgeEl.className = 'badge badge-open'; badgeEl.textContent = 'Debrief Complete';
+  } else if (d.status === 'report_final') {
+    badgeEl.className = 'badge badge-open'; badgeEl.textContent = 'Report Ready';
+  } else if (['report_draft','survey_closed'].includes(d.status)) {
+    badgeEl.className = 'badge badge-blue'; badgeEl.textContent = 'Report In Progress';
   } else if (['survey_open','self_assessment_pending','self_assessment_complete','intake_complete'].includes(d.status)) {
     badgeEl.className = 'badge badge-blue'; badgeEl.textContent = 'In Progress';
   }
@@ -1264,6 +1270,9 @@ function collapseRaterListIfReportReady() {
   if (!body) return;
   body.style.display = 'none';
   if (toggle) toggle.textContent = '▼';
+  // Rename card title to insight-oriented label now that the report is ready
+  const titleEl = document.querySelector('#rater-list-card .card-title');
+  if (titleEl) titleEl.textContent = 'Who Provided Feedback';
   // Replace sub-title with a compact summary so the header still conveys info
   const total = RATERS.length;
   const done  = RATERS.filter(r => r.completed_at).length;

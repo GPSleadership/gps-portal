@@ -155,6 +155,7 @@
    no mock data, no role switch, no preview-bypass, and no client-side gate. */
 
 var TOKEN = new URLSearchParams(location.search).get('token') || '';
+var COACH_SESSION = new URLSearchParams(location.search).get('coach_session') || '';
 var CURRENT_TEAM = null;
 var DATA = null;   // last 'team' payload
 
@@ -166,6 +167,7 @@ function band(v){ if(v==null) return null; return v>=4.0?'green':(v>=3.0?'amber'
 
 function api(action, extra){
   var body = Object.assign({ action:action, token:TOKEN }, extra||{});
+  if(COACH_SESSION) body.coach_session = COACH_SESSION;
   return fetch('/api/sponsor-data', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
     .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||('HTTP '+r.status)); return j; }); });
 }
@@ -255,10 +257,26 @@ function computeStatus(m){
 }
 
 /* ───────── TEAM VIEW ───────── */
+function renderSprintCta(url){
+  if(!url) return '';
+  return '<div style="background:var(--navy);border-radius:10px;padding:26px 28px;margin-top:16px;">'
+    +'<div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#9FC0D6;font-weight:700;margin-bottom:6px;">Ready to build on this?</div>'
+    +'<div style="font-family:Georgia,serif;font-size:20px;font-weight:800;color:#fff;margin-bottom:8px;">Start the 90-Day Leadership Sprint</div>'
+    +'<div style="font-size:14px;color:#cfe0ea;line-height:1.6;margin-bottom:18px;">The diagnostic tells you where the gaps are. The Sprint closes them — with structured coaching, weekly accountability, and a 90-day plan built around what this leader needs to deliver. Most clients see a measurable shift in ownership and execution within the first 30 days.</div>'
+    +'<a href="'+esc(url)+'" target="_blank" rel="noopener" style="display:inline-block;background:#01949A;color:#fff;font-weight:800;font-size:14px;padding:11px 24px;border-radius:7px;text-decoration:none;">Get started &rarr;</a>'
+    +'</div>';
+}
+
+function renderCoachPreviewBanner(){
+  if(!DATA.coach_preview) return '';
+  return '<div style="background:#1b2a3a;color:#7FE3D6;font-size:12px;font-weight:700;text-align:center;padding:8px 16px;border-radius:8px;margin-bottom:14px;letter-spacing:.04em;">COACH PREVIEW — You are seeing this as the sponsor will see it. Their actual link is unaffected.</div>';
+}
+
 function renderTeam(){
   var t=DATA.team, members=DATA.members||[];
   if(DATA.confidentiality==='progress'){ return renderProgress(members); }
   var html='';
+  html += renderCoachPreviewBanner();
   if(DATA.confidentiality==='private'){
     html += '<div class="conf-banner"><b>Confidential engagement.</b> Each leader\'s individual diagnostic scores (self vs raters) stay private to them and are not shown here. Everything else — the 90-day plan, stakeholder progress, and engagement — is shared.</div>';
   }
@@ -269,6 +287,7 @@ function renderTeam(){
     html += renderRecs(DATA.recommendations||[]);
     html += renderSignals(DATA.signals||[]);
     html += renderTeamReport(DATA.team_report);
+    html += renderSprintCta(DATA.sprint_cta_url);
     document.getElementById('view').innerHTML = html;
     return;
   }
@@ -283,6 +302,7 @@ function renderTeam(){
   html += renderRecs(DATA.recommendations||[]);
   html += renderSignals(DATA.signals||[]);
   html += renderTeamReport(DATA.team_report);
+  html += renderSprintCta(DATA.sprint_cta_url);
   document.getElementById('view').innerHTML = html;
 }
 

@@ -10522,6 +10522,7 @@ function drSponsorsPanel(t, links, sponsors, members, nameById){
       +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#01949A;" onclick="window.open(location.origin+\''+url+'\',\'_blank\')">Open ↗</button>'
       +'<button class="btn-add" style="padding:3px 9px;font-size:11px;" onclick="navigator.clipboard&&navigator.clipboard.writeText(location.origin+\''+url+'\');this.textContent=\'Copied\';">Copy link</button>'
       +(s.email?'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#004369;" onclick="drSendSponsor(\''+s.id+'\')">Email link</button>':'')
+      +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#7c3aed;" onclick="(function(){var previewUrl=location.origin+\''+url+'\'+(\''+url+'\'indexOf(\'?\')>=0?\'&\':\'?\')+\'coach_session=\'+encodeURIComponent(getCoachSessionToken()||\'\')+\'&preview=1\';window.open(previewUrl,\'_blank\');})()">Preview as sponsor ▸</button>'
       +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:'+(isProg?'#01949A':'#b45309')+';" onclick="drToggleSponsorReveal(\''+l.id+'\',\''+drEsc(l.confidentiality_mode||'')+'\',\''+t.id+'\')">'+(isProg?'Reveal full report ▸':'Switch to process-only ▸')+'</button>'
       +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#6b7280;" onclick="drEditSponsor(\''+l.id+'\')">Edit</button>'
       +'</div></div>';

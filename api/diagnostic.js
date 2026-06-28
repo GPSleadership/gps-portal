@@ -2822,6 +2822,7 @@ WHAT GPS DELIVERS: executive coaching, team coaching, leadership workshops and r
 GROUND TRUTH: If a GPS team report is provided (an attached PDF and/or report text below), treat IT as the AUTHORITATIVE interpretation — it reflects how GPS reads the data and operates — and ground your recommendations primarily in it; the Decision Room fields (summary, themes, Start/Stop/Continue, intent-vs-impact, per-leader reads) are supporting context. If no report is provided, synthesize from the Decision Room fields. Either way: never introduce a brand-new direction, never contradict the report or the data, never invent names that are not in the material.
 
 REQUIRED COVERAGE — produce 4-6 recommendations that MUST include at least one of EACH band:
+  - sprint_plan: a recommendation that is DIRECTLY tied to the leader's 90-day sprint plan (goal, focus, and metric provided below in the context). Reference the actual goal by name. Explain HOW the coaching sprint addresses the leadership gap the data reveals. This is always the first recommendation. If no 90-day plan exists yet, note that defining a sprint plan is the immediate next step.
   - bottom: a risk / role-fit move for sub-3.0 leaders. Frame as a MUTUAL role-fit decision (clarity for the org AND the leader), not "more coaching."
   - top: an ACCELERATOR that leverages the top 10-20% (TP3 + bench) as multipliers — e.g., have them co-lead the operating-rhythm meetings, each mentor 1-2 mid-tier leaders, and codify 3-5 of their habits into the leadership standard/onboarding. ALWAYS include at least one of these; include two if there are several strong performers.
   - middle: a DEVELOPMENT move for the 3.0-3.99 band (where coaching ROI is highest). Name the specific mid-band leaders and pair them with the named top performers as mentors.
@@ -2838,7 +2839,7 @@ For EACH recommendation output these fields:
   - short_title: short, action-oriented imperative.
   - description: 2-4 plain sentences — what to do, the change it drives, and the concrete deliverable; behavior-focused and tied to the data.
   - category: "included_in_current_scope" or "optional_accelerator".
-  - target_band: one or more of top|middle|bottom|system, comma-separated if more than one (e.g. "top,middle").
+  - target_band: one or more of sprint_plan|top|middle|bottom|system, comma-separated if more than one (e.g. "top,middle"). The sprint_plan recommendation must use "sprint_plan" as the band.
   - gps_support_type: one of core_service (GPS directly delivers) | co_led (GPS designs/facilitates, client executes ongoing) | client_owned (client runs it; GPS provides framing/templates only) | outside_scope (important but outside GPS's services).
   - quick_start_today: ONE tiny action the leader can take by end of today (schedule a meeting, send an email, choose owners, jot names).
   - quick_start_week: ONE small, concrete step by end of this week (draft a 1-pager, run a 30-minute huddle, build a candidate list).
@@ -2857,11 +2858,28 @@ async function handleGenerateRecommendations(req, res) {
     const teamRows = await (await sb(`/rest/v1/teams?id=eq.${team_id}&select=*`)).json();
     const team = Array.isArray(teamRows) && teamRows[0];
     if (!team) return res.status(404).json({ error: 'Team not found' });
-    const members = await (await sb(`/rest/v1/team_members?team_id=eq.${team_id}&select=report_json`)).json();
+    const members = await (await sb(`/rest/v1/team_members?team_id=eq.${team_id}&select=report_json,client_id`)).json();
     const memberLines = (Array.isArray(members) ? members : []).map(m => {
       const rj = m.report_json || {};
       return rj.summaryLine ? `- ${rj.name || 'Leader'}: ${rj.summaryLine}` : '';
     }).filter(Boolean);
+
+    // Fetch 90-day sprint plan data for each member so the recommendation AI can
+    // reference the actual plan the leader is working toward.
+    const clientIds = (Array.isArray(members) ? members : []).map(m => m.client_id).filter(Boolean);
+    let planLines = [];
+    if (clientIds.length) {
+      try {
+        const clientRows = await (await sb(`/rest/v1/clients?id=in.(${clientIds.join(',')})&select=id,name,plan_goal_90,plan_goal_30,metric_1_name,metric_1_target,metric_1_type,metric_1_ratio_denom`)).json();
+        planLines = (Array.isArray(clientRows) ? clientRows : []).map(c => {
+          if (!c.plan_goal_90 && !c.plan_goal_30) return null;
+          const metricStr = c.metric_1_name
+            ? ` | Success metric: ${c.metric_1_name}${c.metric_1_target != null ? ` → target ${c.metric_1_type === 'ratio' ? `${c.metric_1_target}/${c.metric_1_ratio_denom}` : c.metric_1_target}` : ''}`
+            : '';
+          return `- ${c.name || 'Leader'}: 90-day goal: ${c.plan_goal_90 || '(not set)'}${c.plan_goal_30 ? ` | 30-day focus: ${c.plan_goal_30}` : ''}${metricStr}`;
+        }).filter(Boolean);
+      } catch (_) { /* non-fatal — plan data is enrichment, not required */ }
+    }
 
     // The coach-uploaded branded report PDF is the authoritative interpretation;
     // its generated draft text is the fallback. Recommendations ground in the report.
@@ -2892,6 +2910,7 @@ async function handleGenerateRecommendations(req, res) {
       `Start/Stop/Continue: ${JSON.stringify(team.start_stop_continue || {})}`,
       `Intent vs Impact: ${JSON.stringify(team.intent_impact || [])}`,
       'Leaders:', ...memberLines,
+      ...(planLines.length ? ['\n90-DAY SPRINT PLANS (reference these for the sprint_plan recommendation):', ...planLines] : ['\n90-DAY SPRINT PLANS: No plans set yet — recommend defining one as the immediate next step.']),
     ].join('\n');
     const reportTextBlock = (!pdfBase64 && rep && rep.content_text)
       ? `\n\n=== GPS TEAM REPORT (authoritative interpretation) ===\n${rep.content_text}`

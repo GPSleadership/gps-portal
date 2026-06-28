@@ -11,12 +11,25 @@
 //
 // POST /api/sponsor-data  { action, token, team_id? }
 //   action = 'list-teams' | 'team'
-// ENV: SUPABASE_URL, SUPABASE_SECRET_KEY
+// ENV: SUPABASE_URL, SUPABASE_SECRET_KEY, COACH_SESSION_SECRET
 
 const SUPABASE_URL    = process.env.SUPABASE_URL || 'https://pbnkefuqpoztcxfagiod.supabase.co';
 const SUPABASE_SECRET = process.env.SUPABASE_SECRET_KEY;
+const COACH_SESSION_SECRET = process.env.COACH_SESSION_SECRET || '';
 
 const enc = encodeURIComponent;
+
+const crypto = require('crypto');
+// Mirrors the same HMAC-based session verification used in api/diagnostic.js.
+function verifyCoachSession(tok) {
+  if (!tok || !COACH_SESSION_SECRET) return false;
+  const parts = String(tok).split('.');
+  if (parts.length !== 2) return false;
+  const expected = Buffer.from(crypto.createHmac('sha256', COACH_SESSION_SECRET).update(parts[0]).digest());
+  const actual   = Buffer.from(parts[1], 'hex');
+  if (expected.length !== actual.length) return false;
+  return crypto.timingSafeEqual(expected, actual);
+}
 
 function sb(path, method = 'GET', body = null, extra = {}) {
   return fetch(SUPABASE_URL + path, {
@@ -417,13 +430,18 @@ export default async function handler(req, res) {
       const team = teamRows.find(t => t.id === teamId);
       if (!link || !team) return res.status(403).json({ error: 'Not authorized for this team' });
 
+      // Coach preview mode: a valid coach session in the request forces standard view
+      // regardless of the sponsor's actual confidentiality_mode. The sponsor's link
+      // is completely unaffected — only the coach sees this override.
+      const isCoachPreview = !!(body.coach_session && verifyCoachSession(body.coach_session));
+
       // Org logo (matched by organization name) — shown in the Decision Room header.
       let orgLogo = null;
       if (team.client_org_name) {
         try { const olr = await sbGet(`/rest/v1/organizations?name=eq.${enc(team.client_org_name)}&select=logo_url&limit=1`); if (olr && olr[0] && olr[0].logo_url) orgLogo = olr[0].logo_url; } catch (_) { /* optional */ }
       }
 
-      const isPrivate = link.confidentiality_mode === 'private';
+      const isPrivate = !isCoachPreview && link.confidentiality_mode === 'private';
       // 'progress' = staged view: the sponsor sees ONLY where each leader is in the
       // process, never results. Auto-reveal: a staged link opens to the full Decision
       // Room the day before the sponsor's own debrief (sponsor_debrief_date). The
@@ -441,7 +459,7 @@ export default async function handler(req, res) {
           autoReveal = todayET >= revealDate;
         }
       }
-      const isProgress = (link.confidentiality_mode === 'progress') && !autoReveal;
+      const isProgress = !isCoachPreview && (link.confidentiality_mode === 'progress') && !autoReveal;
       const ownClientId = sponsor.linked_client_id || null;
       const supervises = Array.isArray(link.supervises_client_ids) ? link.supervises_client_ids
                        : (link.supervises_client_ids ? JSON.parse(link.supervises_client_ids) : []);
@@ -485,10 +503,22 @@ export default async function handler(req, res) {
       const trRaw = isProgress ? null : await sbGet(`/rest/v1/diagnostic_team_reports?team_id=eq.${enc(teamId)}&sponsor_visible=eq.true&report_pdf_url=not.is.null&select=report_pdf_url,generated_at&order=generated_at.desc&limit=1`);
       const teamReport = (trRaw && trRaw[0]) ? { report_pdf_url: trRaw[0].report_pdf_url, generated_at: trRaw[0].generated_at } : null;
 
+      // Sprint CTA — only in standard (fully revealed) mode.
+      let sprintCtaUrl = null;
+      if (!isProgress && !isPrivate) {
+        try {
+          const rc = await sbGet(`/rest/v1/renewal_config?id=eq.1&select=first_sprint_credit_url&limit=1`);
+          sprintCtaUrl = (rc && rc[0] && rc[0].first_sprint_credit_url) || null;
+          // Per-engagement override (custom_cta_url on the sponsor_teams row).
+          if (link.custom_cta_url) sprintCtaUrl = link.custom_cta_url;
+        } catch (_) { /* non-fatal */ }
+      }
+
       return res.status(200).json({
         ok: true,
         sponsor: { name: sponsor.name },
-        confidentiality: link.confidentiality_mode,
+        coach_preview: isCoachPreview || undefined,
+        confidentiality: isCoachPreview ? 'standard' : link.confidentiality_mode,
         show_succession: link.show_succession_to_sponsor !== false,
         team: Object.assign({
           id: team.id, name: team.name, client_org_name: team.client_org_name, team_type: team.team_type,
@@ -503,6 +533,7 @@ export default async function handler(req, res) {
         recommendations: recsRaw,
         signals: signalsRaw,
         team_report: teamReport,
+        sprint_cta_url: sprintCtaUrl,
       });
     }
 
