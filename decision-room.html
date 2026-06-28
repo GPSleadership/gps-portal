@@ -126,6 +126,16 @@
   .empty { font-size:13px; color:var(--gray-600); font-style:italic; padding:8px 0; }
   .loading { text-align:center; padding:60px 20px; color:var(--gray-600); }
   .spinner { width:36px; height:36px; border:4px solid var(--gray-300); border-top-color:var(--teal); border-radius:50%; animation:spin .8s linear infinite; margin:0 auto 16px; } @keyframes spin { to { transform:rotate(360deg); } }
+  /* Skeleton shimmer — replaces the blank-white spinner on first load */
+  .skeleton-wrap { max-width:1080px; margin:0 auto; padding:22px 24px; }
+  .skeleton-card { background:#fff; border-radius:8px; box-shadow:0 2px 12px rgba(0,0,0,.07); padding:22px; margin-bottom:16px; }
+  .skeleton-line { border-radius:6px; background:linear-gradient(90deg,#eee 25%,#f7f7f7 50%,#eee 75%); background-size:200% 100%; animation:shimmer 1.4s infinite; }
+  @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+  .sk-h { height:14px; margin-bottom:10px; }
+  .sk-title { width:40%; height:16px; margin-bottom:14px; }
+  .sk-p { height:12px; margin-bottom:8px; }
+  .sk-short { width:60%; }
+  .sk-shorter { width:35%; }
 </style>
 </head>
 <body>
@@ -143,9 +153,21 @@
     <select class="team-select" id="teamSelect" onchange="loadTeam(this.value)"></select>
     <span class="team-meta" id="teamMeta"></span>
   </div>
-  <div id="view"><div class="loading"><div class="spinner"></div>Loading your Decision Room…</div></div>
+  <div id="view"><div class="skeleton-wrap">
+    <div class="skeleton-card"><div class="skeleton-line sk-title"></div><div class="skeleton-line sk-p sk-short"></div><div class="skeleton-line sk-p" style="margin-top:16px;"></div><div class="skeleton-line sk-p sk-shorter"></div><div class="skeleton-line sk-p sk-short"></div></div>
+    <div class="skeleton-card"><div class="skeleton-line sk-title" style="width:30%"></div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:8px;"><div class="skeleton-line" style="height:70px;border-radius:8px;"></div><div class="skeleton-line" style="height:70px;border-radius:8px;"></div><div class="skeleton-line" style="height:70px;border-radius:8px;"></div></div></div>
+    <div class="skeleton-card"><div class="skeleton-line sk-title" style="width:45%"></div><div class="skeleton-line sk-p"></div><div class="skeleton-line sk-p sk-short"></div></div>
+  </div></div>
 </div>
 <div class="bottom-bar"></div>
+
+<!-- Sticky sprint bar — appears after 400px scroll when a sprint URL is available -->
+<div id="stickyCta" style="display:none;position:fixed;bottom:4px;left:0;right:0;z-index:200;padding:0 16px 0;">
+  <div style="max-width:680px;margin:0 auto;background:var(--navy);border:2px solid #01949A;border-radius:10px;padding:10px 18px;display:flex;align-items:center;justify-content:space-between;gap:14px;box-shadow:0 4px 24px rgba(0,0,0,.25);">
+    <div><div style="font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:#9FC0D6;font-weight:700;" id="stickyLabel">The 90-Day Sprint</div><div style="font-size:13px;color:#cfe0ea;margin-top:1px;">Three months · bi-weekly coaching · 45-day re-score · $10,000</div></div>
+    <a id="stickyBtn" href="#" target="_blank" rel="noopener" style="flex-shrink:0;background:#01949A;color:#fff;font-weight:800;font-size:13px;padding:9px 18px;border-radius:7px;text-decoration:none;white-space:nowrap;">Start now →</a>
+  </div>
+</div>
 
 <script>
 /* GPS Decision Room — read-only sponsor page.
@@ -193,7 +215,7 @@ function setHeaderOrgLogo(t){
 }
 function loadTeam(teamId){
   CURRENT_TEAM = teamId;
-  document.getElementById('view').innerHTML='<div class="loading"><div class="spinner"></div>Loading…</div>';
+  document.getElementById('view').innerHTML='<div class="skeleton-wrap"><div class="skeleton-card"><div class="skeleton-line sk-title"></div><div class="skeleton-line sk-p sk-short"></div><div class="skeleton-line sk-p"></div></div><div class="skeleton-card"><div class="skeleton-line sk-title" style="width:30%"></div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:8px;"><div class="skeleton-line" style="height:70px;border-radius:8px;"></div><div class="skeleton-line" style="height:70px;border-radius:8px;"></div><div class="skeleton-line" style="height:70px;border-radius:8px;"></div></div></div></div>';
   api('team', { team_id:teamId }).then(function(res){
     setHeaderOrgLogo(res.team);
     if(res.gated){ renderGate(res); return; }
@@ -280,6 +302,7 @@ function renderSprintCta(url, firstName, compact){
     +'<div style="font-size:13px;color:#eaf2f7;line-height:1.5;display:flex;gap:10px;"><span style="color:#01949A;font-weight:900;min-width:16px;">3</span><span>A final 90-day report — showing where the leader started, what moved, and what the next decision is.</span></div>'
     +'</div></details>'
     +'<a href="'+esc(url)+'" target="_blank" rel="noopener" style="display:inline-block;background:#01949A;color:#fff;font-weight:800;font-size:14px;padding:11px 24px;border-radius:7px;text-decoration:none;">'+btnLabel+'</a>'
+    +'<div style="font-size:12px;color:#7FA8BE;margin-top:10px;">You\'ll be sent to our secure checkout. Your coach will reach out within 24 hours to schedule session 1.</div>'
     +'</div>';
 }
 
@@ -519,15 +542,26 @@ function renderRecs(recs){
     var qs = (r.quick_start_today||r.quick_start_week)
       ? '<div style="margin-top:8px;font-size:12.5px;line-height:1.5;color:var(--navy-dark);background:var(--light-sand);border-radius:7px;padding:8px 11px;">'+(r.quick_start_today?'<div><b>By end of today:</b> '+esc(r.quick_start_today)+'</div>':'')+(r.quick_start_week?'<div style="margin-top:3px;"><b>By end of this week:</b> '+esc(r.quick_start_week)+'</div>':'')+'</div>'
       : '';
-    return '<div class="rec '+recCat(r)+'"><div class="rec-title">'+esc(r.short_title)+'</div>'
-    + ((r.owner||r.timeframe)?'<div class="rec-meta">'+(r.owner?'Owner: '+esc(r.owner):'')+(r.owner&&r.timeframe?' &middot; ':'')+(r.timeframe?'Timeframe: '+esc(r.timeframe):'')+'</div>':'')
+    var meta = ((r.owner||r.timeframe)?'<div class="rec-meta">'+(r.owner?'Owner: '+esc(r.owner):'')+(r.owner&&r.timeframe?' &middot; ':'')+(r.timeframe?'Timeframe: '+esc(r.timeframe):'')+'</div>':'');
+    var body = '<div class="rec-desc">'+esc(r.description)+'</div>'+ qs +(r.updated_at?'<div class="rec-foot">Updated '+fmtDate(r.updated_at)+'</div>':'');
+    return '<div class="rec '+recCat(r)+'">'
+    + '<div class="rec-title">'+esc(r.short_title)+'</div>'
+    + meta
     + (bands?'<div style="margin-top:4px;">'+bands+'</div>':'')
-    + '<div class="rec-desc">'+esc(r.description)+'</div>'+ qs +(r.updated_at?'<div class="rec-foot">Updated '+fmtDate(r.updated_at)+'</div>':'')+'</div>'; }
+    + '<details style="margin-top:6px;"><summary style="cursor:pointer;font-size:12px;color:var(--navy);font-weight:700;letter-spacing:.01em;list-style:none;outline:none;user-select:none;">Details ▸</summary>'
+    + '<div style="margin-top:6px;">' + body + '</div>'
+    + '</details>'
+    + '</div>';
+  }
   // Until there's actual content, keep this neutral — no scope/accelerator framing
-  // and no "discuss these options" CTA (that reads like a sales pitch on an empty page).
+  // and no CTA when empty (reads like a sales pitch on an empty page).
   var all = scope.concat(accel);
   var body = all.length ? all.map(card).join('') : '<div class="empty">Nothing in motion yet.</div>';
-  var cta  = all.length ? '<div style="text-align:center;margin-top:20px;"><a class="cta-btn" href="https://gpsleadership.org/discuss">Discuss these options</a></div>' : '';
+  // "Discuss these options" — only show if there are recs AND we have a sprint URL to point to
+  var cta = '';
+  if(all.length && DATA && DATA.sprint_cta_url){
+    cta = '<div style="text-align:center;margin-top:20px;"><a class="cta-btn" href="'+esc(DATA.sprint_cta_url)+'">Discuss these options</a></div>';
+  }
   return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Recommendations</div></div>'+body+cta+'</div>';
 }
 
@@ -723,7 +757,7 @@ function sponsorReadoutCards(m){
     + ‘<div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#9FC0D6;font-weight:700;">’+(sponsorFirst ? esc(sponsorFirst)+’ — here\’s what the data shows’ : ‘What the data shows’)+’</div>’
     + ‘<div style="font-size:21px;font-weight:800;font-family:Georgia,serif;margin:6px 0 8px;">’+esc(headline)+’</div>’
     + ‘<div style="font-size:14px;color:#eaf2f7;line-height:1.55;">’+esc(first)+’ scores <b style="color:#fff;">’+fnum(tp3)+’ / 5 (‘+sband(tp3)+’)</b> overall’+esc(split)+’</div>’
-    + ‘<div style="margin-top:14px;display:inline-block;background:’+C.teal+’;color:#fff;font-size:13px;font-weight:800;padding:6px 13px;border-radius:7px;">Decision at a glance: ‘+esc(glance)+’</div>’
+    + ‘<a href="#sprint-cta" onclick="var el=document.getElementById(\’sprint-cta\’);if(el){event.preventDefault();el.scrollIntoView({behavior:\’smooth\’,block:\’start\’})}" style="margin-top:14px;display:inline-block;background:’+C.teal+’;color:#fff;font-size:13px;font-weight:800;padding:6px 13px;border-radius:7px;text-decoration:none;cursor:pointer;">Decision at a glance: ‘+esc(glance)+’ &darr;</a>’
     + ‘</div>’;
 
   // ── SPONSOR-LEADER MIRROR: show the gap explicitly when supervisor rated leader lower than team ──
@@ -734,6 +768,10 @@ function sponsorReadoutCards(m){
       +’<div style="font-size:15px;font-weight:800;color:’+C.ink+’;">’+(sponsorFirst?esc(sponsorFirst)+’ rated’:(‘You rated’))+’ ‘+esc(first)+’ <span style="color:’+C.red+’;">’+fnum(sup.tp3)+’</span>. The team rated ‘+esc(first)+’ <span style="color:’+C.green+’;">’+fnum(dr.tp3)+’</span>. That ‘+esc(_gap)+’-point gap is what the plan is built to close.</div>’
       +’<div style="font-size:13px;color:’+C.mid+’;margin-top:6px;">The team sees something you don\’t — or there\’s a pattern specific to the working relationship between you and ‘+esc(first)+’. Either way, the 90-day plan targets this gap directly. Your re-score at day 45 tells you if it\’s working.</div>’
       +’</div>’;
+    // Sprint CTA inline — catch the sponsor at peak engagement, right after the gap is named
+    if(DATA.sprint_cta_url){
+      out += renderSprintCta(DATA.sprint_cta_url, first, true);
+    }
   }
 
   // ── KPIs ──
@@ -826,7 +864,12 @@ function sponsorReadoutCards(m){
   }
   var pbtns='';
   if(pa.requires){
-    if(pa.status==='approved'){ pbtns='<div style="background:#EAF5F0;border:1px solid #b7ddc9;border-radius:8px;padding:12px 14px;color:'+C.green+';font-weight:700;">You approved this plan'+(pa.decided_at?' on '+fmtDate(pa.decided_at):'')+'. '+esc(first)+'’s coaching is running against it.</div>'; }
+    if(pa.status===’approved’){
+      var _sprintNext = DATA && DATA.sprint_cta_url
+        ? ‘ <a href="’+esc(DATA.sprint_cta_url)+’" target="_blank" rel="noopener" style="display:inline-block;margin-top:10px;background:#01949A;color:#fff;font-size:13px;font-weight:800;padding:8px 16px;border-radius:7px;text-decoration:none;">’+esc(first)+"’s Sprint — start here →"+’</a>’
+        : ‘’;
+      pbtns=’<div style="background:#EAF5F0;border:1px solid #b7ddc9;border-radius:8px;padding:12px 14px;"><span style="color:’+C.green+’;font-weight:700;">You approved this plan’+(pa.decided_at?’ on ‘+fmtDate(pa.decided_at):’’)+’. The plan is locked.</span><div style="font-size:13px;color:#1f4d36;margin-top:4px;">’+esc(first)+"’s plan is locked. The 90-day sprint is what puts it into motion."+’</div>’+_sprintNext+’</div>’;
+    }
     else if(pa.status==='changes_requested'){ pbtns='<div style="background:'+C.redbg+';border:1px solid #f0b9b9;border-radius:8px;padding:12px 14px;color:#8c2020;"><b>Changes requested.</b>'+(pa.note?' “'+esc(pa.note)+'”':'')+' We’ll adjust with you before anything starts.</div>'; }
     else { pbtns='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;">'
       + '<button onclick="sponsorDecide(\''+esc(m.client_id)+'\',\'approve\')" style="background:'+C.green+';color:#fff;border:none;border-radius:8px;padding:10px 18px;font-weight:700;font-size:13px;cursor:pointer;">Approve this plan</button>'
@@ -851,6 +894,33 @@ function sponsorDecide(clientId, kind){
 }
 
 init();
+
+// ── Sticky sprint bar — shows after 400px scroll when sprint URL is set ──
+(function(){
+  var shown = false, bar = document.getElementById('stickyCta');
+  function updateSticky(){
+    if(!DATA || !DATA.sprint_cta_url){ if(bar) bar.style.display='none'; return; }
+    // Set link + label once
+    if(!shown){
+      var btn=document.getElementById('stickyBtn');
+      var lbl=document.getElementById('stickyLabel');
+      if(btn) btn.href = DATA.sprint_cta_url;
+      // Personalise with the leader first name if one-person team
+      var members = DATA.members||[];
+      if(members.length===1){
+        var leaderFirst = String(members[0].name||'').split(' ')[0];
+        if(leaderFirst && lbl) lbl.textContent = 'Start '+leaderFirst+"'s Sprint";
+        if(leaderFirst && btn) btn.textContent = 'Start '+leaderFirst+"'s Sprint →";
+      }
+      shown = true;
+    }
+    if(window.scrollY > 400){ bar.style.display='block'; } else { bar.style.display='none'; }
+  }
+  window.addEventListener('scroll', updateSticky, {passive:true});
+  // Also hook into loadTeam so bar updates when data changes
+  var _origLoadTeam = loadTeam;
+  loadTeam = function(id){ shown=false; _origLoadTeam(id); };
+})();
 </script>
 <!-- ── Save-to-device prompt (PWA install) ── -->
 <div id="gpsInstall" style="display:none;position:fixed;left:0;right:0;bottom:0;z-index:9000;background:#fff;border-top:3px solid #004369;box-shadow:0 -6px 24px rgba(0,0,0,.16);padding:16px 18px;font-family:'Open Sans',Arial,sans-serif;">
