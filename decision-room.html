@@ -259,8 +259,8 @@ function computeStatus(m){
 /* ───────── TEAM VIEW ───────── */
 function renderSprintCta(url, firstName, compact){
   if(!url) return '';
-  var btnLabel = firstName ? 'Start '+firstName+'’s Sprint →' : 'Get started →';
-  var titleLine = firstName ? 'Start '+firstName+'’s 90-Day Sprint' : 'Start the 90-Day Leadership Sprint';
+  var btnLabel = firstName ? ‘Start ‘+firstName+"’s Sprint →" : ‘Get started →’;
+  var titleLine = firstName ? ‘Start ‘+firstName+"’s 90-Day Sprint" : ‘Start the 90-Day Leadership Sprint’;
   if(compact){
     return '<div id="sprint-cta-inline" style="background:var(--navy);border:2px solid #01949A;border-radius:10px;padding:18px 20px;margin-top:14px;">'
       +'<div style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#01949A;font-weight:700;margin-bottom:4px;">The next step</div>'
