@@ -281,8 +281,8 @@ function computeStatus(m){
 /* ───────── TEAM VIEW ───────── */
 function renderSprintCta(url, firstName, compact){
   if(!url) return '';
-  var btnLabel = firstName ? ‘Start ‘+firstName+"’s Sprint →" : ‘Get started →’;
-  var titleLine = firstName ? ‘Start ‘+firstName+"’s 90-Day Sprint" : ‘Start the 90-Day Leadership Sprint’;
+  var btnLabel = firstName ? 'Start '+firstName+"'s Sprint \u2192" : 'Get started \u2192';
+  var titleLine = firstName ? 'Start '+firstName+"'s 90-Day Sprint" : 'Start the 90-Day Leadership Sprint';
   if(compact){
     return '<div id="sprint-cta-inline" style="background:var(--navy);border:2px solid #01949A;border-radius:10px;padding:18px 20px;margin-top:14px;">'
       +'<div style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#01949A;font-weight:700;margin-bottom:4px;">The next step</div>'
@@ -498,7 +498,7 @@ function renderRoster(members){
       +'<div class="roster-chips">'+stageChip+pills+scoreChip
       +'<button class="btn-sm" onclick="viewMember('+members.indexOf(m)+')">View report</button></div></div>';
   }).join('');
-  return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Leadership Team</div><span class="section-note">Each leader’s current stage is shown · open a leader for their report</span></div>'+(rows||'<div class="empty">No team members.</div>')+'</div>';
+  return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Leadership Team</div><span class="section-note">Each leader\'s current stage is shown · open a leader for their report</span></div>'+(rows||'<div class="empty">No team members.</div>')+'</div>';
 }
 
 function renderTeamSuccession(members){
@@ -741,33 +741,33 @@ function sponsorReadoutCards(m){
 
   // ── DEBRIEF COUNTDOWN ──
   if(debriefDaysOut!=null && debriefDaysOut>0){
-    out += ‘<div style="background:#FDF6EC;border:1px solid ‘+C.amberbar+’;border-radius:10px;padding:12px 18px;margin-top:8px;display:flex;align-items:center;gap:14px;">’
-      +’<div style="font-size:26px;font-weight:900;color:’+C.amber+’;min-width:32px;text-align:center;line-height:1;">’+debriefDaysOut+’</div>’
-      +’<div><div style="font-size:13px;font-weight:800;color:’+C.amber+’;">day’+(debriefDaysOut===1?’’:’s’)+’ until debrief</div>’
-      +’<div style="font-size:12px;color:’+C.mid+’;margin-top:2px;">Session with ‘+esc(first)+’ scheduled for ‘+fmtDate(debriefDate)+’.</div>’
-      +’</div></div>’;
+    out += '<div style="background:#FDF6EC;border:1px solid '+C.amberbar+';border-radius:10px;padding:12px 18px;margin-top:8px;display:flex;align-items:center;gap:14px;">'
+      +'<div style="font-size:26px;font-weight:900;color:'+C.amber+';min-width:32px;text-align:center;line-height:1;">'+debriefDaysOut+'</div>'
+      +'<div><div style="font-size:13px;font-weight:800;color:'+C.amber+';">day'+(debriefDaysOut===1?'':'s')+' until debrief</div>'
+      +'<div style="font-size:12px;color:'+C.mid+';margin-top:2px;">Session with '+esc(first)+' scheduled for '+fmtDate(debriefDate)+'.</div>'
+      +'</div></div>';
   }
 
   // ── context note ──
-  out += ‘<div style="font-size:11.5px;letter-spacing:.05em;color:’+C.mid+’;font-weight:700;margin:’+(debriefDaysOut!=null&&debriefDaysOut>0?’10px’:’2px’)+’ 0 1px;">MANAGER VIEW · CONFIDENTIAL · ‘+totalRaters+’ raters</div>’
-    + ‘<div style="font-size:12px;color:’+C.mid+’;margin-bottom:6px;">Aggregate scores and your own input only. Individual peer and direct-report comments stay in ‘+esc(first)+’’s confidential coaching debrief.</div>’;
+  out += '<div style="font-size:11.5px;letter-spacing:.05em;color:'+C.mid+';font-weight:700;margin:'+(debriefDaysOut!=null&&debriefDaysOut>0?'10px':'2px')+' 0 1px;">MANAGER VIEW · CONFIDENTIAL · '+totalRaters+' raters</div>'
+    + '<div style="font-size:12px;color:'+C.mid+';margin-bottom:6px;">Aggregate scores and your own input only. Individual peer and direct-report comments stay in '+esc(first)+"'s confidential coaching debrief.</div>";
 
   // ── WHAT THE DATA SHOWS (navy hero) ──
-  out += ‘<div style="background:’+C.navy+’;color:#fff;border-radius:14px;padding:22px 24px;margin-top:6px;">’
-    + ‘<div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#9FC0D6;font-weight:700;">’+(sponsorFirst ? esc(sponsorFirst)+’ — here\’s what the data shows’ : ‘What the data shows’)+’</div>’
-    + ‘<div style="font-size:21px;font-weight:800;font-family:Georgia,serif;margin:6px 0 8px;">’+esc(headline)+’</div>’
-    + ‘<div style="font-size:14px;color:#eaf2f7;line-height:1.55;">’+esc(first)+’ scores <b style="color:#fff;">’+fnum(tp3)+’ / 5 (‘+sband(tp3)+’)</b> overall’+esc(split)+’</div>’
-    + ‘<a href="#sprint-cta" onclick="var el=document.getElementById(\’sprint-cta\’);if(el){event.preventDefault();el.scrollIntoView({behavior:\’smooth\’,block:\’start\’})}" style="margin-top:14px;display:inline-block;background:’+C.teal+’;color:#fff;font-size:13px;font-weight:800;padding:6px 13px;border-radius:7px;text-decoration:none;cursor:pointer;">Decision at a glance: ‘+esc(glance)+’ &darr;</a>’
-    + ‘</div>’;
+  out += '<div style="background:'+C.navy+';color:#fff;border-radius:14px;padding:22px 24px;margin-top:6px;">'
+    + '<div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#9FC0D6;font-weight:700;">'+(sponsorFirst ? esc(sponsorFirst)+' — here\'s what the data shows' : 'What the data shows')+'</div>'
+    + '<div style="font-size:21px;font-weight:800;font-family:Georgia,serif;margin:6px 0 8px;">'+esc(headline)+'</div>'
+    + '<div style="font-size:14px;color:#eaf2f7;line-height:1.55;">'+esc(first)+' scores <b style="color:#fff;">'+fnum(tp3)+' / 5 ('+sband(tp3)+')</b> overall'+esc(split)+'</div>'
+    + '<a href="#sprint-cta" onclick="var el=document.getElementById(\'sprint-cta\');if(el){event.preventDefault();el.scrollIntoView({behavior:\'smooth\',block:\'start\'})}" style="margin-top:14px;display:inline-block;background:'+C.teal+';color:#fff;font-size:13px;font-weight:800;padding:6px 13px;border-radius:7px;text-decoration:none;cursor:pointer;">Decision at a glance: '+esc(glance)+' &darr;</a>'
+    + '</div>';
 
   // ── SPONSOR-LEADER MIRROR: show the gap explicitly when supervisor rated leader lower than team ──
   if(sup && dr && sup.tp3!=null && dr.tp3!=null && (dr.tp3-sup.tp3)>=0.5){
     var _gap=(dr.tp3-sup.tp3).toFixed(2);
-    out += ‘<div style="background:#EEF4F8;border-left:4px solid ‘+C.navy+’;border-radius:10px;padding:14px 18px;margin-top:12px;">’
-      +’<div style="font-size:11px;font-weight:700;letter-spacing:.05em;color:’+C.mid+’;text-transform:uppercase;margin-bottom:6px;">The split, in plain terms</div>’
-      +’<div style="font-size:15px;font-weight:800;color:’+C.ink+’;">’+(sponsorFirst?esc(sponsorFirst)+’ rated’:(‘You rated’))+’ ‘+esc(first)+’ <span style="color:’+C.red+’;">’+fnum(sup.tp3)+’</span>. The team rated ‘+esc(first)+’ <span style="color:’+C.green+’;">’+fnum(dr.tp3)+’</span>. That ‘+esc(_gap)+’-point gap is what the plan is built to close.</div>’
-      +’<div style="font-size:13px;color:’+C.mid+’;margin-top:6px;">The team sees something you don\’t — or there\’s a pattern specific to the working relationship between you and ‘+esc(first)+’. Either way, the 90-day plan targets this gap directly. Your re-score at day 45 tells you if it\’s working.</div>’
-      +’</div>’;
+    out += '<div style="background:#EEF4F8;border-left:4px solid '+C.navy+';border-radius:10px;padding:14px 18px;margin-top:12px;">'
+      +'<div style="font-size:11px;font-weight:700;letter-spacing:.05em;color:'+C.mid+';text-transform:uppercase;margin-bottom:6px;">The split, in plain terms</div>'
+      +'<div style="font-size:15px;font-weight:800;color:'+C.ink+';">'+(sponsorFirst?esc(sponsorFirst)+' rated':('You rated'))+' '+esc(first)+' <span style="color:'+C.red+';">'+fnum(sup.tp3)+'</span>. The team rated '+esc(first)+' <span style="color:'+C.green+';">'+fnum(dr.tp3)+'</span>. That '+esc(_gap)+'-point gap is what the plan is built to close.</div>'
+      +'<div style="font-size:13px;color:'+C.mid+';margin-top:6px;">The team sees something you don\'t — or there\'s a pattern specific to the working relationship between you and '+esc(first)+'. Either way, the 90-day plan targets this gap directly. Your re-score at day 45 tells you if it\'s working.</div>'
+      +'</div>';
     // Sprint CTA inline — catch the sponsor at peak engagement, right after the gap is named
     if(DATA.sprint_cta_url){
       out += renderSprintCta(DATA.sprint_cta_url, first, true);
@@ -785,7 +785,7 @@ function sponsorReadoutCards(m){
 
   // ── TOP-LEVEL SCORE BARS (3.0 grey · 4.0 green reference lines) ──
   function bar(lbl,v){ return '<div style="margin:12px 0;"><div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:5px;"><span>'+lbl+'</span><b style="color:'+scol(v)+';">'+fnum(v)+'</b></div><div style="position:relative;background:#EEF1F4;border-radius:30px;height:14px;overflow:hidden;"><div style="height:100%;border-radius:30px;width:'+wpct(v)+'%;background:'+scol(v)+';"></div><div style="position:absolute;top:-3px;bottom:-3px;left:50%;width:2px;background:#6b7682;"></div><div style="position:absolute;top:-3px;bottom:-3px;left:75%;width:2px;background:'+C.green+';"></div></div></div>'; }
-  out += '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>How '+esc(first)+'’s '+totalRaters+' raters scored '+esc(first)+'</div></div>'
+  out += '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>How '+esc(first)+"'s "+totalRaters+' raters scored '+esc(first)+'</div></div>'
     + '<div style="font-size:13px;color:'+C.mid+';margin-bottom:2px;">'+fnum(tp3)+' / 5 overall · TP3 index</div>'
     + bar('Trust',sc.trust)+bar('Proactivity',sc.proactivity)+bar('Productivity',sc.productivity)+bar('Overall impact',sc.impact)+bar('Bench strength',sc.bench)
     + '<div style="font-size:12px;color:'+C.mid+';text-align:right;margin-top:6px;">grey line = 3.0 · green line = 4.0 standard</div>'
@@ -797,10 +797,10 @@ function sponsorReadoutCards(m){
     var lowest=null; dims.forEach(function(d){ var v=sup[d[1]]; if(v!=null && (lowest==null || v<lowest.v)) lowest={n:d[0],v:v}; });
     if(lowest && lowest.v<3){
       out += '<div style="background:'+C.redbg+';border:1px solid #f0b9b9;border-left:5px solid '+C.red+';border-radius:12px;padding:20px 24px;margin-top:14px;">'
-        + ‘<div style="color:’+C.red+’;font-size:17px;font-weight:800;font-family:Georgia,serif;margin-bottom:8px;">’+lowest.n+’ with you, ‘+esc(first)+"’s supervisor: "+fnum(lowest.v)+’ / 5 (Serious)</div>’
-        + ‘<div style="font-size:14px;margin:6px 0;">This is the gap that decides whether more investment pays off.’+(dr?(‘ Direct reports rate ‘+esc(first)+’ <b>’+fnum(dr.tp3)+’</b> overall — the split is specifically the working relationship with you, not the ability to lead a team.’):’’)+’</div>’
-        + ‘<div style="font-size:14px;font-weight:700;color:#8c2020;border-top:1px solid #f0b9b9;padding-top:10px;margin-top:8px;">This is the number the 90-day plan is built to move. We\’ll show you the change at day 45 and 90 — how far to invest from there is your call.</div>’
-        + ‘</div>’;
+        + '<div style="color:'+C.red+';font-size:17px;font-weight:800;font-family:Georgia,serif;margin-bottom:8px;">'+lowest.n+' with you, '+esc(first)+"'s supervisor: "+fnum(lowest.v)+' / 5 (Serious)</div>'
+        + '<div style="font-size:14px;margin:6px 0;">This is the gap that decides whether more investment pays off.'+(dr?(' Direct reports rate '+esc(first)+' <b>'+fnum(dr.tp3)+'</b> overall — the split is specifically the working relationship with you, not the ability to lead a team.'):'')+'</div>'
+        + '<div style="font-size:14px;font-weight:700;color:#8c2020;border-top:1px solid #f0b9b9;padding-top:10px;margin-top:8px;">This is the number the 90-day plan is built to move. We\'ll show you the change at day 45 and 90 — how far to invest from there is your call.</div>'
+        + '</div>';
       if(DATA.sprint_cta_url){ out += renderSprintCta(DATA.sprint_cta_url, first, true); }
     }
   }
@@ -813,7 +813,7 @@ function sponsorReadoutCards(m){
     + '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;"><thead><tr><th style="text-align:left;color:'+C.mid+';font-weight:600;border-bottom:2px solid '+C.line+';padding:7px 6px;">Rater</th><th style="'+th+'">Trust</th><th style="'+th+'">Proact.</th><th style="'+th+'">Prod.</th><th style="'+th+'">TP3</th></tr></thead><tbody>'
     + trow('Direct reports',dr,false) + trow('Other colleagues',other,false) + trow('You (supervisor)',sup,true)
     + '</tbody></table>'
-    + '<div style="font-size:12px;color:'+C.mid+';margin-top:8px;">Peers are folded into “Other colleagues” — groups under 3 raters aren’t broken out, to protect confidentiality. Individual comments stay in '+esc(first)+'’s confidential debrief.</div>'
+    + '<div style="font-size:12px;color:'+C.mid+';margin-top:8px;">Peers are folded into “Other colleagues” — groups under 3 raters aren\'t broken out, to protect confidentiality. Individual comments stay in '+esc(first)+"'s confidential debrief.</div>"
     + (quotes?'<div style="background:'+C.sand+';border-radius:10px;padding:14px 18px;margin-top:14px;"><div style="font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:'+C.mid+';font-weight:700;margin-bottom:6px;">In your words — what you wrote about '+esc(first)+'</div>'+quotes+'</div>':'')
     + '</div>';
 
@@ -849,7 +849,7 @@ function sponsorReadoutCards(m){
   // ── OPTIONS ──
   function optRow(t,d,when){ return '<div style="border:1px solid '+C.line+';border-radius:10px;padding:12px 14px;margin:8px 0;"><div style="font-weight:800;color:'+C.navy+';font-size:14px;">'+esc(t)+'</div><div style="font-size:13px;color:'+C.ink+';margin-top:3px;">'+esc(d)+'</div><div style="font-size:13px;color:'+C.navy+';font-weight:600;margin-top:5px;">Choose this if: '+esc(when)+'</div></div>'; }
   out += '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Options to weigh — your call</div></div>'
-    + '<div style="font-size:13px;color:'+C.mid+';margin-bottom:4px;">We present the data and the realistic options. Choosing among them is yours; we’ll support whichever you pick.</div>'
+    + '<div style="font-size:13px;color:'+C.mid+';margin-bottom:4px;">We present the data and the realistic options. Choosing among them is yours; we\'ll support whichever you pick.</div>'
     + optRow('1 · Invest behind the plan','Back the 90-day plan and re-measure the gap at day 45 and 90.','you see a long-term role for '+first+' and read the gap as behavior, not values.')
     + optRow('2 · Hold and re-measure','Set expectations now without a formal coaching investment, and re-run the read in 90 days.','you want proof of movement before committing budget.')
     + optRow('3 · Reset the role conversation','If the gap points to a deeper fit question, have a direct expectations conversation first.','the gap reads as fit or values, not a fixable behavior.')
@@ -864,21 +864,21 @@ function sponsorReadoutCards(m){
   }
   var pbtns='';
   if(pa.requires){
-    if(pa.status===’approved’){
+    if(pa.status==='approved'){
       var _sprintNext = DATA && DATA.sprint_cta_url
-        ? ‘ <a href="’+esc(DATA.sprint_cta_url)+’" target="_blank" rel="noopener" style="display:inline-block;margin-top:10px;background:#01949A;color:#fff;font-size:13px;font-weight:800;padding:8px 16px;border-radius:7px;text-decoration:none;">’+esc(first)+"’s Sprint — start here →"+’</a>’
-        : ‘’;
-      pbtns=’<div style="background:#EAF5F0;border:1px solid #b7ddc9;border-radius:8px;padding:12px 14px;"><span style="color:’+C.green+’;font-weight:700;">You approved this plan’+(pa.decided_at?’ on ‘+fmtDate(pa.decided_at):’’)+’. The plan is locked.</span><div style="font-size:13px;color:#1f4d36;margin-top:4px;">’+esc(first)+"’s plan is locked. The 90-day sprint is what puts it into motion."+’</div>’+_sprintNext+’</div>’;
+        ? ' <a href="'+esc(DATA.sprint_cta_url)+'" target="_blank" rel="noopener" style="display:inline-block;margin-top:10px;background:#01949A;color:#fff;font-size:13px;font-weight:800;padding:8px 16px;border-radius:7px;text-decoration:none;">'+esc(first)+"'s Sprint \u2014 start here \u2192"+'</a>'
+        : '';
+      pbtns='<div style="background:#EAF5F0;border:1px solid #b7ddc9;border-radius:8px;padding:12px 14px;"><span style="color:'+C.green+';font-weight:700;">You approved this plan'+(pa.decided_at?' on '+fmtDate(pa.decided_at):'')+'. The plan is locked.</span><div style="font-size:13px;color:#1f4d36;margin-top:4px;">'+esc(first)+"'s plan is locked. The 90-day sprint is what puts it into motion."+'</div>'+_sprintNext+'</div>';
     }
-    else if(pa.status==='changes_requested'){ pbtns='<div style="background:'+C.redbg+';border:1px solid #f0b9b9;border-radius:8px;padding:12px 14px;color:#8c2020;"><b>Changes requested.</b>'+(pa.note?' “'+esc(pa.note)+'”':'')+' We’ll adjust with you before anything starts.</div>'; }
+    else if(pa.status==='changes_requested'){ pbtns='<div style="background:'+C.redbg+';border:1px solid #f0b9b9;border-radius:8px;padding:12px 14px;color:#8c2020;"><b>Changes requested.</b>'+(pa.note?' “'+esc(pa.note)+'”':'')+' We\'ll adjust with you before anything starts.</div>'; }
     else { pbtns='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;">'
       + '<button onclick="sponsorDecide(\''+esc(m.client_id)+'\',\'approve\')" style="background:'+C.green+';color:#fff;border:none;border-radius:8px;padding:10px 18px;font-weight:700;font-size:13px;cursor:pointer;">Approve this plan</button>'
       + '<button onclick="sponsorDecide(\''+esc(m.client_id)+'\',\'changes\')" style="background:#fff;border:1px solid '+C.amberbar+';color:'+C.amber+';border-radius:8px;padding:10px 18px;font-weight:700;font-size:13px;cursor:pointer;">Request changes</button>'
-      + '</div><div style="font-size:12px;color:'+C.mid+';margin-top:8px;"><b style="color:'+C.ink+';">Approve and we lock the plan.</b> Request changes and we’ll adjust with you before anything starts.</div>'; }
+      + '</div><div style="font-size:12px;color:'+C.mid+';margin-top:8px;"><b style="color:'+C.ink+';">Approve and we lock the plan.</b> Request changes and we\'ll adjust with you before anything starts.</div>'; }
   } else {
-    pbtns='<div style="font-size:13px;color:'+C.mid+';">This plan runs as part of '+esc(first)+'’s coaching. Your sign-off isn’t required to start.</div>';
+    pbtns='<div style="font-size:13px;color:'+C.mid+';">This plan runs as part of '+esc(first)+"'s coaching. Your sign-off isn\'t required to start.</div>";
   }
-  out += '<div class="card" style="border-top:4px solid '+C.teal+';"><div class="card-head"><div class="card-title"><span class="dot"></span>'+esc(first)+'’s proposed 90-day plan — your review</div></div>'
+  out += '<div class="card" style="border-top:4px solid '+C.teal+';"><div class="card-head"><div class="card-title"><span class="dot"></span>'+esc(first)+"'s proposed 90-day plan — your review</div></div>"
     + '<div style="font-size:13.5px;color:'+C.ink+';background:#F7F9FA;border-radius:8px;padding:12px 14px;margin:6px 0 4px;line-height:1.55;">'+esc(first)+' has proposed the plan below. Before we lock it, you weigh in: does this target what you need and where the business is going? Approve it as-is, or request changes.</div>'
     + (m.business_outcome_goal?'<div style="border:1px solid '+C.line+';border-radius:10px;padding:14px 16px;margin:10px 0;"><div style="font-weight:800;color:'+C.navy+';font-size:14px;">Business outcome this ladders up to</div><div style="font-size:13px;color:'+C.ink+';margin-top:4px;">'+esc(m.business_outcome_goal)+'</div></div>':'')
     + planBody + pbtns
@@ -910,7 +910,7 @@ init();
       if(members.length===1){
         var leaderFirst = String(members[0].name||'').split(' ')[0];
         if(leaderFirst && lbl) lbl.textContent = 'Start '+leaderFirst+"'s Sprint";
-        if(leaderFirst && btn) btn.textContent = 'Start '+leaderFirst+"'s Sprint →";
+        if(leaderFirst && btn) btn.textContent = 'Start '+leaderFirst+"'s Sprint \u2192";
       }
       shown = true;
     }
@@ -979,7 +979,7 @@ init();
       act.innerHTML='<div style="font-size:13px;color:#333;line-height:1.6;">Tap the <b>⋮</b> menu in Chrome, then <b>“Add to Home screen.”</b></div>';
     } else {
       msg.textContent='Keep it one click away:';
-      act.innerHTML='<div style="font-size:13px;color:#333;line-height:1.6;margin-bottom:4px;">Bookmark this page (Ctrl/Cmd+D), or use the install icon in your browser’s address bar.</div>';
+      act.innerHTML='<div style="font-size:13px;color:#333;line-height:1.6;margin-bottom:4px;">Bookmark this page (Ctrl/Cmd+D), or use the install icon in your browser\'s address bar.</div>';
       qr(act);
     }
     // Always offer a clear yes + a "Not now" that snoozes — consistent with the client portal.
