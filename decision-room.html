@@ -257,13 +257,23 @@ function computeStatus(m){
 }
 
 /* ───────── TEAM VIEW ───────── */
-function renderSprintCta(url){
+function renderSprintCta(url, firstName, compact){
   if(!url) return '';
-  return '<div style="background:var(--navy);border-radius:10px;padding:26px 28px;margin-top:16px;">'
+  var btnLabel = firstName ? 'Start '+firstName+'’s Sprint →' : 'Get started →';
+  var titleLine = firstName ? 'Start '+firstName+'’s 90-Day Sprint' : 'Start the 90-Day Leadership Sprint';
+  if(compact){
+    return '<div id="sprint-cta-inline" style="background:var(--navy);border:2px solid #01949A;border-radius:10px;padding:18px 20px;margin-top:14px;">'
+      +'<div style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#01949A;font-weight:700;margin-bottom:4px;">The next step</div>'
+      +'<div style="font-family:Georgia,serif;font-size:17px;font-weight:800;color:#fff;margin-bottom:6px;">'+titleLine+'</div>'
+      +'<div style="font-size:13px;color:#cfe0ea;line-height:1.5;margin-bottom:12px;">Three months · Bi-weekly coaching · 45-day re-score · $10,000</div>'
+      +'<a href="'+esc(url)+'" target="_blank" rel="noopener" style="display:inline-block;background:#01949A;color:#fff;font-weight:800;font-size:13px;padding:9px 18px;border-radius:7px;text-decoration:none;">'+btnLabel+'</a>'
+      +'</div>';
+  }
+  return '<div id="sprint-cta" style="background:var(--navy);border-radius:10px;padding:26px 28px;margin-top:16px;">'
     +'<div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#9FC0D6;font-weight:700;margin-bottom:6px;">Ready to build on this?</div>'
-    +'<div style="font-family:Georgia,serif;font-size:20px;font-weight:800;color:#fff;margin-bottom:8px;">Start the 90-Day Leadership Sprint</div>'
-    +'<div style="font-size:14px;color:#cfe0ea;line-height:1.6;margin-bottom:18px;">The diagnostic tells you where the gaps are. The Sprint closes them — with structured coaching, weekly accountability, and a 90-day plan built around what this leader needs to deliver. Most clients see a measurable shift in ownership and execution within the first 30 days.</div>'
-    +'<a href="'+esc(url)+'" target="_blank" rel="noopener" style="display:inline-block;background:#01949A;color:#fff;font-weight:800;font-size:14px;padding:11px 24px;border-radius:7px;text-decoration:none;">Get started &rarr;</a>'
+    +'<div style="font-family:Georgia,serif;font-size:20px;font-weight:800;color:#fff;margin-bottom:8px;">'+titleLine+'</div>'
+    +'<div style="font-size:14px;color:#cfe0ea;line-height:1.6;margin-bottom:18px;">The diagnostic tells you where the gaps are. The Sprint closes them — with structured coaching, weekly accountability, and a 90-day plan built around what this leader needs to deliver. Three months · bi-weekly coaching sessions · 45-day and 90-day re-score · $10,000</div>'
+    +'<a href="'+esc(url)+'" target="_blank" rel="noopener" style="display:inline-block;background:#01949A;color:#fff;font-weight:800;font-size:14px;padding:11px 24px;border-radius:7px;text-decoration:none;">'+btnLabel+'</a>'
     +'</div>';
 }
 
@@ -283,11 +293,12 @@ function renderTeam(){
   // One-person team: land directly on that leader's report (with recommendations
   // and succession), not a blank team dashboard.
   if(members.length===1){
+    var firstName1 = String(members[0].name||'').split(' ')[0];
     html += memberReportHtml(members[0]);
     html += renderRecs(DATA.recommendations||[]);
     html += renderSignals(DATA.signals||[]);
     html += renderTeamReport(DATA.team_report);
-    html += renderSprintCta(DATA.sprint_cta_url);
+    html += renderSprintCta(DATA.sprint_cta_url, firstName1);
     document.getElementById('view').innerHTML = html;
     return;
   }
@@ -516,8 +527,9 @@ function renderRecs(recs){
 
 var SIG={green:'On track',yellow:'Watch',red:'Off track'};
 function renderSignals(signals){
+  if(!signals || !signals.length) return '';
   var rows=signals.map(function(s){ var lv=s.level||'yellow'; return '<div class="signal sig-'+lv+'"><div class="signal-head">'+fmtDate(s.date_observed)+' · '+esc(s.by_role||'')+' <span class="sig-chip sig-'+lv+'">'+(SIG[lv]||'Watch')+'</span></div><div class="signal-text">'+esc(s.summary)+'</div></div>'; }).join('');
-  return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>What We Are Seeing</div></div>'+(rows||'<div class="empty">No observations to show yet.</div>')+'</div>';
+  return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>What We Are Seeing</div></div>'+rows+'</div>';
 }
 
 function renderTeamReport(tr){
@@ -720,8 +732,9 @@ function sponsorReadoutCards(m){
       out += '<div style="background:'+C.redbg+';border:1px solid #f0b9b9;border-left:5px solid '+C.red+';border-radius:12px;padding:20px 24px;margin-top:14px;">'
         + '<div style="color:'+C.red+';font-size:17px;font-weight:800;font-family:Georgia,serif;margin-bottom:8px;">'+lowest.n+' with you, '+esc(first)+'’s supervisor: '+fnum(lowest.v)+' / 5 (Serious)</div>'
         + '<div style="font-size:14px;margin:6px 0;">This is the gap that decides whether more investment pays off.'+(dr?(' Direct reports rate '+esc(first)+' <b>'+fnum(dr.tp3)+'</b> overall — the split is specifically the working relationship with you, not the ability to lead a team.'):'')+'</div>'
-        + '<div style="font-size:14px;font-weight:700;color:#8c2020;border-top:1px solid #f0b9b9;padding-top:10px;margin-top:8px;">This is the number the 90-day plan is built to move. We’ll show you the change at day 45 and 90 — how far to invest from there is your call.</div>'
-        + '</div>';
+        + ‘<div style="font-size:14px;font-weight:700;color:#8c2020;border-top:1px solid #f0b9b9;padding-top:10px;margin-top:8px;">This is the number the 90-day plan is built to move. We’ll show you the change at day 45 and 90 — how far to invest from there is your call.</div>’
+        + ‘</div>’;
+      if(DATA.sprint_cta_url){ out += renderSprintCta(DATA.sprint_cta_url, first, true); }
     }
   }
 
