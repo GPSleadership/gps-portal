@@ -330,6 +330,26 @@ async function init() {
   if (!portal || !portal.diagnostic) { showError(); return; }
   DIAGNOSTIC = portal.diagnostic;
 
+  // ── COACH PREVIEW MODE ──
+  // ?preview=debrief_complete (or plan_active) lets the coach see what the leader
+  // will see at a future stage without touching real data.
+  var _previewStage = new URLSearchParams(window.location.search).get('preview');
+  var _validPreview = ['report_final','debrief_complete','plan_active'];
+  if (_previewStage && _validPreview.includes(_previewStage)) {
+    var _actualStatus = DIAGNOSTIC.status;
+    DIAGNOSTIC.status = _previewStage;
+    var _stageLabel = {report_final:'Report finalized',debrief_complete:'Debrief complete',plan_active:'Plan active'}[_previewStage]||_previewStage;
+    var _actualLabel = _actualStatus.replace(/_/g,' ');
+    var _bar = document.createElement('div');
+    _bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#004369;color:#fff;font-size:12.5px;font-weight:700;text-align:center;padding:8px 16px;display:flex;align-items:center;justify-content:center;gap:12px;';
+    _bar.innerHTML = '<span style="background:#E5DDC8;color:#004369;border-radius:4px;padding:2px 8px;font-size:11px;">COACH PREVIEW</span>'
+      +' Showing: <span style="color:#7FD8E8;">'+_stageLabel+'</span>'
+      +' &nbsp;&middot;&nbsp; Leader currently sees: <span style="color:#fcd88a;">'+_actualLabel+'</span>'
+      +' &nbsp;&middot;&nbsp; <a href="'+window.location.pathname+'?token='+encodeURIComponent(LEADER_TOKEN)+'" style="color:#E5DDC8;text-decoration:underline;">Exit preview</a>';
+    document.body.prepend(_bar);
+    document.body.style.paddingTop = '44px';
+  }
+
   const raterData = portal.raters || [];
   RATERS = raterData.filter(r => !r.is_self);
   const selfRow = raterData.find(r => r.is_self);
