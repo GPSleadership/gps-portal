@@ -139,7 +139,7 @@
     const self=bg.self;
     if(self&&self.n) body+=`<tr><td data-label="Group">Self</td>${cell(self.trust,'Trust')}${cell(self.proactivity,'Proactivity')}${cell(self.productivity,'Productivity')}${cell(self.tp3,'TP3')}</tr>`;
     const supShown=rows.some(r=>r.k==='supervisor');
-    let note=(supShown?'Your supervisor's ratings are shown directly — your manager stands behind their assessment. ':'')
+    let note=(supShown?"Your supervisor's ratings are shown directly — your manager stands behind their assessment. ":'')
       +'Groups with fewer than 3 raters are combined so individual responses stay confidential.';
     if(suppressed) note+=` ${suppressed} response${suppressed===1?'':'s'} from smaller groups are included in your overall scores but not broken out.`;
     return { hasRows: rows.length>0 || (self&&self.n), body, note };
