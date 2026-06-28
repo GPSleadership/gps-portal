@@ -272,7 +272,13 @@ function renderSprintCta(url, firstName, compact){
   return '<div id="sprint-cta" style="background:var(--navy);border-radius:10px;padding:26px 28px;margin-top:16px;">'
     +'<div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#9FC0D6;font-weight:700;margin-bottom:6px;">Ready to build on this?</div>'
     +'<div style="font-family:Georgia,serif;font-size:20px;font-weight:800;color:#fff;margin-bottom:8px;">'+titleLine+'</div>'
-    +'<div style="font-size:14px;color:#cfe0ea;line-height:1.6;margin-bottom:18px;">The diagnostic tells you where the gaps are. The Sprint closes them — with structured coaching, weekly accountability, and a 90-day plan built around what this leader needs to deliver. Three months · bi-weekly coaching sessions · 45-day and 90-day re-score · $10,000</div>'
+    +'<div style="font-size:14px;color:#cfe0ea;line-height:1.6;margin-bottom:12px;">The diagnostic tells you where the gaps are. The Sprint closes them — with structured coaching, weekly accountability, and a 90-day plan built around what this leader needs to deliver. Three months · bi-weekly coaching sessions · 45-day and 90-day re-score · $10,000</div>'
+    +'<details style="margin-bottom:16px;"><summary style="cursor:pointer;font-size:13px;color:#9FC0D6;font-weight:700;letter-spacing:.02em;outline:none;user-select:none;list-style:none;">What 90 days buys you ▸</summary>'
+    +'<div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">'
+    +'<div style="font-size:13px;color:#eaf2f7;line-height:1.5;display:flex;gap:10px;"><span style="color:#01949A;font-weight:900;min-width:16px;">1</span><span>A 90-day plan built specifically around the trust gap — not a generic program.</span></div>'
+    +'<div style="font-size:13px;color:#eaf2f7;line-height:1.5;display:flex;gap:10px;"><span style="color:#01949A;font-weight:900;min-width:16px;">2</span><span>A 45-day re-score — you see movement in the data before you decide how far to invest.</span></div>'
+    +'<div style="font-size:13px;color:#eaf2f7;line-height:1.5;display:flex;gap:10px;"><span style="color:#01949A;font-weight:900;min-width:16px;">3</span><span>A final 90-day report — showing where the leader started, what moved, and what the next decision is.</span></div>'
+    +'</div></details>'
     +'<a href="'+esc(url)+'" target="_blank" rel="noopener" style="display:inline-block;background:#01949A;color:#fff;font-weight:800;font-size:14px;padding:11px 24px;border-radius:7px;text-decoration:none;">'+btnLabel+'</a>'
     +'</div>';
 }
@@ -683,6 +689,10 @@ function sponsorReadoutCards(m){
   var dr = gget('direct_report'), sup = gget('supervisor');
   var other = wmerge([gget('peer'), gget('internal_partner'), gget('other_colleagues')]);
   var tp3 = sc.tp3_index;
+  var debriefDate = r.debrief && r.debrief.date;
+  var debriefDaysOut = null;
+  if(debriefDate){ var _ms=new Date(debriefDate)-Date.now(); debriefDaysOut=Math.ceil(_ms/86400000); }
+  var sponsorFirst = (DATA && DATA.team && DATA.team.primary_sponsor) ? String(DATA.team.primary_sponsor).split(' ')[0] : '';
   var totalRaters=(dr?dr.n:0)+(other?other.n:0)+(sup?sup.n:0);
   var glance = 'Develop and monitor (90 days).';
   if(sup && sup.tp3!=null){ if(sup.tp3<=2.5) glance='Reset the role conversation.'; else if(sup.tp3<=2.9 && dr && dr.tp3>=4) glance='Develop and invest (90 days).'; }
@@ -695,17 +705,36 @@ function sponsorReadoutCards(m){
   var successorLabel = successorIdentified ? 'Yes' : 'Not yet';
   var out = '';
 
+  // ── DEBRIEF COUNTDOWN ──
+  if(debriefDaysOut!=null && debriefDaysOut>0){
+    out += ‘<div style="background:#FDF6EC;border:1px solid ‘+C.amberbar+’;border-radius:10px;padding:12px 18px;margin-top:8px;display:flex;align-items:center;gap:14px;">’
+      +’<div style="font-size:26px;font-weight:900;color:’+C.amber+’;min-width:32px;text-align:center;line-height:1;">’+debriefDaysOut+’</div>’
+      +’<div><div style="font-size:13px;font-weight:800;color:’+C.amber+’;">day’+(debriefDaysOut===1?’’:’s’)+’ until debrief</div>’
+      +’<div style="font-size:12px;color:’+C.mid+’;margin-top:2px;">Session with ‘+esc(first)+’ scheduled for ‘+fmtDate(debriefDate)+’.</div>’
+      +’</div></div>’;
+  }
+
   // ── context note ──
-  out += '<div style="font-size:11.5px;letter-spacing:.05em;color:'+C.mid+';font-weight:700;margin:2px 0 1px;">MANAGER VIEW · CONFIDENTIAL · '+totalRaters+' raters</div>'
-    + '<div style="font-size:12px;color:'+C.mid+';margin-bottom:6px;">Aggregate scores and your own input only. Individual peer and direct-report comments stay in '+esc(first)+'’s confidential coaching debrief.</div>';
+  out += ‘<div style="font-size:11.5px;letter-spacing:.05em;color:’+C.mid+’;font-weight:700;margin:’+(debriefDaysOut!=null&&debriefDaysOut>0?’10px’:’2px’)+’ 0 1px;">MANAGER VIEW · CONFIDENTIAL · ‘+totalRaters+’ raters</div>’
+    + ‘<div style="font-size:12px;color:’+C.mid+’;margin-bottom:6px;">Aggregate scores and your own input only. Individual peer and direct-report comments stay in ‘+esc(first)+’’s confidential coaching debrief.</div>’;
 
   // ── WHAT THE DATA SHOWS (navy hero) ──
-  out += '<div style="background:'+C.navy+';color:#fff;border-radius:14px;padding:22px 24px;margin-top:6px;">'
-    + '<div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#9FC0D6;font-weight:700;">What the data shows</div>'
-    + '<div style="font-size:21px;font-weight:800;font-family:Georgia,serif;margin:6px 0 8px;">'+esc(headline)+'</div>'
-    + '<div style="font-size:14px;color:#eaf2f7;line-height:1.55;">'+esc(first)+' scores <b style="color:#fff;">'+fnum(tp3)+' / 5 ('+sband(tp3)+')</b> overall'+esc(split)+'</div>'
-    + '<div style="margin-top:14px;display:inline-block;background:'+C.teal+';color:#fff;font-size:13px;font-weight:800;padding:6px 13px;border-radius:7px;">Decision at a glance: '+esc(glance)+'</div>'
-    + '</div>';
+  out += ‘<div style="background:’+C.navy+’;color:#fff;border-radius:14px;padding:22px 24px;margin-top:6px;">’
+    + ‘<div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#9FC0D6;font-weight:700;">’+(sponsorFirst ? esc(sponsorFirst)+’ — here\’s what the data shows’ : ‘What the data shows’)+’</div>’
+    + ‘<div style="font-size:21px;font-weight:800;font-family:Georgia,serif;margin:6px 0 8px;">’+esc(headline)+’</div>’
+    + ‘<div style="font-size:14px;color:#eaf2f7;line-height:1.55;">’+esc(first)+’ scores <b style="color:#fff;">’+fnum(tp3)+’ / 5 (‘+sband(tp3)+’)</b> overall’+esc(split)+’</div>’
+    + ‘<div style="margin-top:14px;display:inline-block;background:’+C.teal+’;color:#fff;font-size:13px;font-weight:800;padding:6px 13px;border-radius:7px;">Decision at a glance: ‘+esc(glance)+’</div>’
+    + ‘</div>’;
+
+  // ── SPONSOR-LEADER MIRROR: show the gap explicitly when supervisor rated leader lower than team ──
+  if(sup && dr && sup.tp3!=null && dr.tp3!=null && (dr.tp3-sup.tp3)>=0.5){
+    var _gap=(dr.tp3-sup.tp3).toFixed(2);
+    out += ‘<div style="background:#EEF4F8;border-left:4px solid ‘+C.navy+’;border-radius:10px;padding:14px 18px;margin-top:12px;">’
+      +’<div style="font-size:11px;font-weight:700;letter-spacing:.05em;color:’+C.mid+’;text-transform:uppercase;margin-bottom:6px;">The split, in plain terms</div>’
+      +’<div style="font-size:15px;font-weight:800;color:’+C.ink+’;">’+(sponsorFirst?esc(sponsorFirst)+’ rated’:(‘You rated’))+’ ‘+esc(first)+’ <span style="color:’+C.red+’;">’+fnum(sup.tp3)+’</span>. The team rated ‘+esc(first)+’ <span style="color:’+C.green+’;">’+fnum(dr.tp3)+’</span>. That ‘+esc(_gap)+’-point gap is what the plan is built to close.</div>’
+      +’<div style="font-size:13px;color:’+C.mid+’;margin-top:6px;">The team sees something you don\’t — or there\’s a pattern specific to the working relationship between you and ‘+esc(first)+’. Either way, the 90-day plan targets this gap directly. Your re-score at day 45 tells you if it\’s working.</div>’
+      +’</div>’;
+  }
 
   // ── KPIs ──
   function kpi(l,vHtml,s){ return '<div style="background:#fff;border:1px solid '+C.line+';border-radius:12px;padding:14px 16px;"><div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:'+C.mid+';font-weight:700;">'+l+'</div><div style="font-size:23px;font-weight:800;margin-top:4px;font-family:Georgia,serif;">'+vHtml+'</div><div style="font-size:11.5px;color:'+C.mid+';margin-top:2px;">'+s+'</div></div>'; }
@@ -730,9 +759,9 @@ function sponsorReadoutCards(m){
     var lowest=null; dims.forEach(function(d){ var v=sup[d[1]]; if(v!=null && (lowest==null || v<lowest.v)) lowest={n:d[0],v:v}; });
     if(lowest && lowest.v<3){
       out += '<div style="background:'+C.redbg+';border:1px solid #f0b9b9;border-left:5px solid '+C.red+';border-radius:12px;padding:20px 24px;margin-top:14px;">'
-        + '<div style="color:'+C.red+';font-size:17px;font-weight:800;font-family:Georgia,serif;margin-bottom:8px;">'+lowest.n+' with you, '+esc(first)+'’s supervisor: '+fnum(lowest.v)+' / 5 (Serious)</div>'
-        + '<div style="font-size:14px;margin:6px 0;">This is the gap that decides whether more investment pays off.'+(dr?(' Direct reports rate '+esc(first)+' <b>'+fnum(dr.tp3)+'</b> overall — the split is specifically the working relationship with you, not the ability to lead a team.'):'')+'</div>'
-        + ‘<div style="font-size:14px;font-weight:700;color:#8c2020;border-top:1px solid #f0b9b9;padding-top:10px;margin-top:8px;">This is the number the 90-day plan is built to move. We’ll show you the change at day 45 and 90 — how far to invest from there is your call.</div>’
+        + ‘<div style="color:’+C.red+’;font-size:17px;font-weight:800;font-family:Georgia,serif;margin-bottom:8px;">’+lowest.n+’ with you, ‘+esc(first)+"’s supervisor: "+fnum(lowest.v)+’ / 5 (Serious)</div>’
+        + ‘<div style="font-size:14px;margin:6px 0;">This is the gap that decides whether more investment pays off.’+(dr?(‘ Direct reports rate ‘+esc(first)+’ <b>’+fnum(dr.tp3)+’</b> overall — the split is specifically the working relationship with you, not the ability to lead a team.’):’’)+’</div>’
+        + ‘<div style="font-size:14px;font-weight:700;color:#8c2020;border-top:1px solid #f0b9b9;padding-top:10px;margin-top:8px;">This is the number the 90-day plan is built to move. We\’ll show you the change at day 45 and 90 — how far to invest from there is your call.</div>’
         + ‘</div>’;
       if(DATA.sprint_cta_url){ out += renderSprintCta(DATA.sprint_cta_url, first, true); }
     }

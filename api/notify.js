@@ -792,6 +792,84 @@ export default async function handler(req, res) {
     }
   }
 
+  // ─── RESULTS READY (sent when coach marks debrief complete) ─────────────────
+  // Leader receives their diagnostic-leader.html link + an invitation to review
+  // their results. Template editable in coach.html → Email Templates tab.
+  // Template key: diagnostic_results_ready
+  // Variables: {{first_name}}, {{results_link}}
+  else if (body.type === 'results_ready') {
+    const { leaderEmail, leaderName, resultsLink } = body;
+
+    if (!leaderEmail) {
+      return res.status(400).json({ error: 'No leader email provided.' });
+    }
+
+    const firstName = (leaderName || '').split(' ')[0] || 'there';
+    const FROM = `Alex Tremble – GPS Leadership <${RESEND_FROM}>`;
+
+    // Try editable template first
+    let customSubject = null, customHtml = null;
+    if (SUPABASE_SECRET) {
+      try {
+        const tr = await fetch(
+          `${SUPABASE_URL}/rest/v1/email_templates?template_key=eq.diagnostic_results_ready&is_approved=eq.true&select=subject,body_text&limit=1`,
+          { headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}` } }
+        );
+        if (tr.ok) {
+          const trows = await tr.json();
+          if (Array.isArray(trows) && trows[0] && trows[0].body_text) {
+            const sub = (val, k, v) => val.replace(new RegExp('\\{\\{\\s*' + k + '\\s*\\}\\}', 'gi'), v);
+            let body_text = trows[0].body_text;
+            body_text = sub(body_text, 'first_name', firstName);
+            body_text = sub(body_text, 'results_link', resultsLink || '#');
+            customHtml = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;white-space:pre-wrap;">${body_text}</div>`;
+            if (trows[0].subject) {
+              customSubject = sub(trows[0].subject, 'first_name', firstName);
+            }
+          }
+        }
+      } catch (_) { /* fall back to default */ }
+    }
+
+    subject = customSubject || `${firstName}, your diagnostic results are ready`;
+    html = customHtml || `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
+        <div style="background:#004369;padding:20px 28px;border-radius:8px 8px 0 0;">
+          <div style="color:#E5DDC8;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">GPS Leadership Solutions</div>
+          <div style="color:#ffffff;font-size:20px;font-weight:700;">Your Diagnostic Results Are Ready</div>
+        </div>
+        <div style="background:#ffffff;padding:28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
+          <p>Hi ${firstName},</p>
+          <p>Your 14-Day Executive Leadership Diagnostic results are finalized. You can review them now at the link below.</p>
+          <p>The results show you how your direct reports, colleagues, and supervisor each experience your leadership — with a clear picture of where you are at the standard and where the gaps are.</p>
+          <div style="margin:28px 0;text-align:center;">
+            <a href="${resultsLink || '#'}" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;">Review My Results &rarr;</a>
+          </div>
+          <p style="font-size:13px;color:#666;">This link is unique to you — please don't share it. If you ever lose it, reply to this email and we'll send a new one.</p>
+          <p style="font-size:14px;color:#444;">We'll go through these together in your debrief session. Come in with an open mind — the data will tell you something useful.</p>
+          <div style="margin-top:32px;padding-top:20px;border-top:1px solid #eee;">
+            <p style="margin:0;font-size:14px;font-weight:700;color:#004369;">Alex D. Tremble</p>
+            <p style="margin:4px 0;font-size:13px;color:#555;">Founder &amp; CEO, GPS Leadership Solutions</p>
+            <p style="margin:4px 0;font-size:13px;"><a href="https://www.GPSLeadership.org" style="color:#004369;text-decoration:none;">www.GPSLeadership.org</a></p>
+          </div>
+          <div style="margin-top:24px;padding-top:16px;border-top:1px solid #eee;font-size:11px;color:#999;">
+            You are receiving this because you completed a GPS Leadership 14-Day Executive Leadership Diagnostic. Questions? Reply to this email.
+          </div>
+        </div>
+      </div>`;
+
+    try {
+      const { ok, result } = await sendAndLog({
+        from: FROM, to: [leaderEmail], subject, html,
+        emailType: 'results_ready', clientId: body.diagnosticId, recipientName: leaderName,
+      });
+      if (!ok) return res.status(500).json({ error: 'Email send failed', detail: result });
+      return res.status(200).json({ success: true, sent_to: leaderEmail });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   else {
     return res.status(400).json({ error: 'Unknown notification type' });
   }

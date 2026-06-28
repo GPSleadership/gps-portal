@@ -8815,13 +8815,38 @@ async function finalizeReport() {
 
 async function markDebriefComplete() {
   const hasClient = !!(DIAG_SEL && DIAG_SEL.client_id);
+  const hasLeaderEmail = !!(DIAG_SEL && DIAG_SEL.client_email);
   const msg = hasClient
-    ? 'Mark debrief as complete? This starts the 24-hour plan auto-lock countdown and sends the client their coaching portal welcome email.'
+    ? 'Mark debrief as complete?\n\nThis will:\n• Start the 24-hour plan auto-lock countdown\n• Send the leader their diagnostic results link\n• Send the client their coaching portal welcome email'
     : 'No coaching client is linked to this diagnostic.\n\nThe portal welcome email cannot be sent automatically. You can link one later via the client dashboard.\n\nMark debrief complete anyway?';
   if (!confirm(msg)) return;
 
   await updateDiag({ status: 'debrief_complete', debrief_completed_at: new Date().toISOString() });
 
+  // ── 1. Send leader their results-ready email ──────────────────────────────
+  if (hasLeaderEmail && DIAG_SEL.leader_token) {
+    const DIAG_BASE = (typeof DIAG_BASE_URL !== 'undefined' ? DIAG_BASE_URL : 'https://portal.gpsleadership.org');
+    const resultsLink = DIAG_BASE + '/diagnostic-leader?token=' + encodeURIComponent(DIAG_SEL.leader_token);
+    try {
+      const rr = await fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'results_ready',
+          diagnosticId: DIAG_SEL.id,
+          leaderName: DIAG_SEL.client_name,
+          leaderEmail: DIAG_SEL.client_email,
+          resultsLink,
+        })
+      });
+      const rd = await rr.json().catch(() => ({}));
+      if (!rr.ok) throw new Error(rd.error || 'send failed');
+    } catch(e) {
+      alert('⚠️ Results-ready email FAILED to send to ' + DIAG_SEL.client_email + ' — send their results link manually:\n' + (DIAG_BASE + '/diagnostic-leader?token=' + DIAG_SEL.leader_token) + '\n\n(' + e.message + ')');
+    }
+  }
+
+  // ── 2. Send client their coaching portal welcome email ────────────────────
   if (hasClient) {
     const _cd = await cdSelect('clients', { eq: { id: DIAG_SEL.client_id }, select: 'name,email,token', limit: 1 });
     const clientData = _cd[0];
