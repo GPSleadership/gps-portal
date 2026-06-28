@@ -161,13 +161,21 @@ input:focus,select:focus{outline:none;border-color:var(--blue);}
   <div id="top-alert"></div>
 
   <!-- ── 8-MILESTONE PIPELINE ── -->
-  <div class="card">
+  <div class="card" id="pipeline-card">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
       <div class="card-title">Your Diagnostic Journey</div>
       <span id="pipeline-badge" class="badge badge-blue">In Progress</span>
     </div>
     <div class="card-sub" id="pipeline-sub" style="margin-bottom:18px;"></div>
-    <div id="pipeline-steps"></div>
+    <div id="pipeline-steps-wrap">
+      <div id="pipeline-steps"></div>
+    </div>
+    <div id="pipeline-toggle-row" style="display:none;margin-top:2px;">
+      <button onclick="togglePipelineSteps()" id="pipeline-toggle-btn"
+        style="background:none;border:none;color:var(--mid);font-size:12px;font-weight:600;cursor:pointer;padding:0;font-family:inherit;letter-spacing:0.2px;">
+        Show full journey ▾
+      </button>
+    </div>
   </div>
 
   <!-- ── STATUS-SPECIFIC CARDS (rendered dynamically) ── -->
@@ -357,6 +365,11 @@ function renderPortal() {
   document.getElementById('portal-greeting').textContent = `Welcome back, ${firstName}.`;
   document.getElementById('portal-title-org').textContent =
     [d.client_title, d.client_org].filter(Boolean).join(' · ');
+
+  // Widen the page container when the report is ready — scores + cards need the room
+  const WIDE_STATUSES = ['report_final', 'debrief_complete', 'plan_active'];
+  const pageEl = document.querySelector('.page');
+  if (pageEl) pageEl.style.maxWidth = WIDE_STATUSES.includes(d.status) ? '960px' : '';
 
   renderTopAlert();
   renderPipeline();
@@ -608,6 +621,28 @@ function renderPipeline() {
   });
 
   document.getElementById('pipeline-steps').innerHTML = html;
+
+  // At report_final+ the pipeline is complete — collapse it to a one-liner
+  // so it doesn't compete with the scores and next-step cards.
+  const REPORT_STATUSES = ['report_final', 'debrief_complete', 'plan_active'];
+  const stepsWrap  = document.getElementById('pipeline-steps-wrap');
+  const toggleRow  = document.getElementById('pipeline-toggle-row');
+  if (REPORT_STATUSES.includes(d.status)) {
+    if (stepsWrap)  stepsWrap.style.display  = 'none';
+    if (toggleRow)  toggleRow.style.display  = 'block';
+  } else {
+    if (stepsWrap)  stepsWrap.style.display  = '';
+    if (toggleRow)  toggleRow.style.display  = 'none';
+  }
+}
+
+function togglePipelineSteps() {
+  const wrap = document.getElementById('pipeline-steps-wrap');
+  const btn  = document.getElementById('pipeline-toggle-btn');
+  if (!wrap) return;
+  const isHidden = wrap.style.display === 'none';
+  wrap.style.display = isHidden ? '' : 'none';
+  if (btn) btn.textContent = isHidden ? 'Hide journey ▴' : 'Show full journey ▾';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
