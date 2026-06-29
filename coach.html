@@ -830,6 +830,7 @@
       <div class="section-tab"        id="grp-comms"     onclick="showGroup('comms')">Communication</div>
       <div class="section-tab"        id="grp-workshops" onclick="showGroup('workshops')">Workshops &amp; Assessments</div>
       <div class="section-tab"        id="grp-organizations" onclick="showGroup('organizations')">Organizations</div>
+      <div class="section-tab"        id="grp-aistudio"  onclick="showGroup('aistudio')">AI Studio</div>
       <div class="section-tab"        id="grp-settings"  onclick="showGroup('settings')">Settings</div>
       <div style="flex:1;min-width:12px;"></div>
       <div style="position:relative;">
@@ -1135,6 +1136,101 @@ I'm taking part in a leadership assessment run by GPS Leadership Solutions. Thei
     <div id="section-organizations" style="display:none;">
       <div id="orgSection"></div>
     </div>
+
+    <!-- ═══ AI STUDIO SECTION ═══ -->
+    <div id="section-aistudio" style="display:none;">
+      <div class="toolbar" style="margin-bottom:20px;">
+        <div class="toolbar-title">AI Studio</div>
+        <div class="toolbar-hint">Run your saved prompts against any transcript or notes — output saves directly to the right client record.</div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:280px 1fr 1fr;gap:20px;align-items:start;">
+
+        <!-- LEFT: Prompt Library -->
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <div style="font-size:12px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.04em;">Prompt Library</div>
+            <button class="dbtn dbtn-sm" onclick="aiStudioNewPrompt()">+ Add</button>
+          </div>
+          <div id="aiPromptList" style="display:flex;flex-direction:column;gap:8px;">
+            <div style="font-size:13px;color:var(--d-mid);padding:12px;text-align:center;">Loading prompts…</div>
+          </div>
+        </div>
+
+        <!-- MIDDLE: Input -->
+        <div>
+          <div style="font-size:12px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">Raw Input</div>
+          <div style="margin-bottom:10px;">
+            <select id="aiStudioDiagSelect" style="width:100%;padding:8px 10px;border:1.5px solid var(--d-border);border-radius:6px;font-size:13px;">
+              <option value="">— Select client diagnostic (to save output) —</option>
+            </select>
+          </div>
+          <textarea id="aiStudioInput" placeholder="Paste transcript, notes, or raw content here…" style="min-height:360px;width:100%;box-sizing:border-box;font-size:13px;line-height:1.6;font-family:'Open Sans',sans-serif;padding:12px;border:1.5px solid var(--d-border);border-radius:8px;resize:vertical;"></textarea>
+          <div style="margin-top:10px;display:flex;gap:10px;align-items:center;">
+            <button class="dbtn" id="aiRunBtn" onclick="aiStudioRun()" style="min-width:120px;">Run Prompt</button>
+            <span id="aiStudioStatus" style="font-size:13px;color:var(--d-mid);"></span>
+          </div>
+          <div style="margin-top:8px;">
+            <div id="aiSelectedPromptName" style="font-size:12px;color:var(--d-teal);font-weight:600;"></div>
+          </div>
+        </div>
+
+        <!-- RIGHT: Output -->
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <div style="font-size:12px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.04em;">Output</div>
+            <div style="display:flex;gap:8px;">
+              <button class="dbtn dbtn-outline dbtn-sm" onclick="aiStudioCopy()" id="aiCopyBtn" style="display:none;">Copy</button>
+              <button class="dbtn dbtn-sm" onclick="aiStudioSave()" id="aiSaveBtn" style="display:none;">Save to Diagnostic</button>
+            </div>
+          </div>
+          <textarea id="aiStudioOutput" readonly placeholder="Output will appear here after you run a prompt…" style="min-height:360px;width:100%;box-sizing:border-box;font-size:12px;line-height:1.6;font-family:'Courier New',monospace;padding:12px;border:1.5px solid var(--d-border);border-radius:8px;background:var(--d-surface);resize:vertical;"></textarea>
+          <div id="aiSaveStatus" style="margin-top:8px;font-size:13px;color:var(--d-green);font-weight:600;"></div>
+        </div>
+
+      </div>
+
+      <!-- Edit Prompt Modal -->
+      <div id="aiPromptModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:900;align-items:center;justify-content:center;">
+        <div style="background:#fff;border-radius:12px;padding:28px;max-width:680px;width:95%;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.18);">
+          <div style="font-size:16px;font-weight:700;color:var(--d-navy);margin-bottom:18px;" id="aiModalTitle">New Prompt</div>
+          <input type="hidden" id="aiModalPromptId" value="">
+          <div class="dform-group">
+            <label class="dform-label">Prompt name</label>
+            <input type="text" id="aiModalName" placeholder="e.g. Kickoff Call → Leader Brief" style="width:100%;box-sizing:border-box;">
+          </div>
+          <div class="dform-group">
+            <label class="dform-label">Description (shown in library)</label>
+            <input type="text" id="aiModalDesc" placeholder="One sentence on what this prompt does" style="width:100%;box-sizing:border-box;">
+          </div>
+          <div class="dform-group">
+            <label class="dform-label">Save target</label>
+            <select id="aiModalSaveTarget" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid var(--d-border);border-radius:6px;font-size:13px;">
+              <option value="">None (display only)</option>
+              <option value="diagnostic.kickoff_brief_json">Diagnostic — Kickoff Brief JSON</option>
+              <option value="diagnostic.intake_notes">Diagnostic — Intake Notes (text)</option>
+            </select>
+          </div>
+          <div class="dform-group">
+            <label class="dform-label">Output format</label>
+            <select id="aiModalFormat" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid var(--d-border);border-radius:6px;font-size:13px;">
+              <option value="json">JSON</option>
+              <option value="text">Plain text</option>
+            </select>
+          </div>
+          <div class="dform-group">
+            <label class="dform-label">Prompt text (system prompt sent to Claude)</label>
+            <textarea id="aiModalPromptText" style="min-height:200px;width:100%;box-sizing:border-box;font-size:12px;font-family:'Courier New',monospace;" placeholder="Paste your full prompt here…"></textarea>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:18px;">
+            <button class="dbtn" onclick="aiStudioSavePrompt()">Save Prompt</button>
+            <button class="dbtn dbtn-outline" onclick="aiStudioCloseModal()">Cancel</button>
+            <button class="dbtn dbtn-outline" id="aiModalDeleteBtn" style="margin-left:auto;color:var(--d-red2);border-color:var(--d-red2);display:none;" onclick="aiStudioDeletePrompt()">Delete</button>
+          </div>
+          <div id="aiModalStatus" style="margin-top:10px;font-size:13px;"></div>
+        </div>
+      </div>
+    </div><!-- /section-aistudio -->
 
     <div id="section-diagnostics" style="display:none;">
     <div class="diag-scope">
@@ -4044,8 +4140,8 @@ document.getElementById('addAdminModal').addEventListener('click', function(e) {
 let _currentSection = 'dashboard';
 
 // Refactored IA: 5 top-level groups, each mapping to one or more underlying sections.
-var GROUP_OF = { dashboard:'today', clients:'clients', insights:'insights', diagnostics:'diagteams', decisionroom:'diagteams', emails:'comms', messages:'comms', asklog:'comms', templates:'comms', accesshelp:'comms', admins:'settings', security:'settings', workshops:'workshops', organizations:'organizations' };
-var GROUP_DEFAULT = { today:'dashboard', clients:'clients', insights:'insights', diagteams:'diagnostics', comms:'emails', settings:'admins', workshops:'workshops', organizations:'organizations' };
+var GROUP_OF = { dashboard:'today', clients:'clients', insights:'insights', diagnostics:'diagteams', decisionroom:'diagteams', emails:'comms', messages:'comms', asklog:'comms', templates:'comms', accesshelp:'comms', admins:'settings', security:'settings', workshops:'workshops', organizations:'organizations', aistudio:'aistudio' };
+var GROUP_DEFAULT = { today:'dashboard', clients:'clients', insights:'insights', diagteams:'diagnostics', comms:'emails', settings:'admins', workshops:'workshops', organizations:'organizations', aistudio:'aistudio' };
 function showGroup(group){ showSection(GROUP_DEFAULT[group] || 'dashboard'); }
 
 // ── Client Messages (Contact Your Coach — coach side) ───────────────────────
@@ -10556,6 +10652,250 @@ function diagCopyText(text) {
 // ═══════════════════════════════════════════════════════════════════════════════
 //  END DIAGNOSTICS MODULE
 // ═══════════════════════════════════════════════════════════════════════════════
+</script>
+<script>
+// ── AI Studio ─────────────────────────────────────────────────────────────────
+// Prompt library: load, run, save outputs to the right diagnostic record.
+
+var AI_SELECTED_PROMPT = null;   // { id, name, description, output_format, save_target }
+
+async function coachPost(action, payload) {
+  var token = localStorage.getItem('coach_session_token') || '';
+  var r = await fetch('/api/coach-data', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ action: action, _coach_token: token }, payload))
+  });
+  return r.json();
+}
+
+// Load and render the prompt library
+async function aiStudioLoadPrompts() {
+  var list = document.getElementById('aiPromptList');
+  if (!list) return;
+  try {
+    var token = localStorage.getItem('coach_session_token') || '';
+    var r = await fetch('/api/coach-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ op: 'select', table: 'coach_prompts', filters: { is_active: { eq: true } }, order: 'sort_order.asc', _coach_token: token })
+    });
+    var data = await r.json();
+    var prompts = (data && data.rows) ? data.rows : [];
+    if (!prompts.length) {
+      list.innerHTML = '<div style="font-size:13px;color:var(--d-mid);padding:12px;text-align:center;">No prompts yet. Click + Add to create one.</div>';
+      return;
+    }
+    list.innerHTML = prompts.map(function(p) {
+      var isSelected = AI_SELECTED_PROMPT && AI_SELECTED_PROMPT.id === p.id;
+      return '<div onclick="aiStudioSelectPrompt(' + JSON.stringify(p).replace(/"/g, '&quot;') + ')" style="padding:12px;border-radius:8px;border:1.5px solid ' + (isSelected ? 'var(--d-teal)' : 'var(--d-border)') + ';background:' + (isSelected ? '#f0fafa' : '#fff') + ';cursor:pointer;transition:border-color .15s;">'
+        + '<div style="font-size:13px;font-weight:700;color:var(--d-navy);">' + esc(p.name) + '</div>'
+        + (p.description ? '<div style="font-size:12px;color:var(--d-mid);margin-top:3px;">' + esc(p.description) + '</div>' : '')
+        + '<div style="margin-top:8px;display:flex;gap:6px;">'
+        + '<button class="dbtn dbtn-outline dbtn-sm" onclick="event.stopPropagation();aiStudioEditPrompt(' + JSON.stringify(p).replace(/"/g, '&quot;') + ')">Edit</button>'
+        + '</div>'
+        + '</div>';
+    }).join('');
+  } catch (e) {
+    list.innerHTML = '<div style="font-size:13px;color:var(--d-red2);">Failed to load prompts.</div>';
+  }
+}
+
+// Load active diagnostics into the client selector
+async function aiStudioLoadDiagnostics() {
+  var sel = document.getElementById('aiStudioDiagSelect');
+  if (!sel) return;
+  try {
+    var token = localStorage.getItem('coach_session_token') || '';
+    var r = await fetch('/api/coach-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ op: 'select', table: 'diagnostics', filters: { is_archived: { eq: false } }, select: 'id,client_name,client_org,kickoff_brief_saved_at', order: 'client_name.asc', _coach_token: token })
+    });
+    var data = await r.json();
+    var diags = (data && data.rows) ? data.rows : [];
+    sel.innerHTML = '<option value="">— Select client diagnostic (to save output) —</option>'
+      + diags.map(function(d) {
+          var label = d.client_name + (d.client_org ? ' — ' + d.client_org : '') + (d.kickoff_brief_saved_at ? ' ✓' : '');
+          return '<option value="' + d.id + '">' + label + '</option>';
+        }).join('');
+  } catch (e) { /* non-fatal */ }
+}
+
+function aiStudioSelectPrompt(p) {
+  AI_SELECTED_PROMPT = p;
+  var label = document.getElementById('aiSelectedPromptName');
+  if (label) label.textContent = 'Selected: ' + p.name;
+  aiStudioLoadPrompts(); // re-render to show selection highlight
+}
+
+// Run the selected prompt against the pasted input
+async function aiStudioRun() {
+  if (!AI_SELECTED_PROMPT) { alert('Select a prompt from the library first.'); return; }
+  var input = (document.getElementById('aiStudioInput') || {}).value || '';
+  if (!input.trim()) { alert('Paste your transcript or notes in the input field first.'); return; }
+
+  var btn = document.getElementById('aiRunBtn');
+  var status = document.getElementById('aiStudioStatus');
+  var output = document.getElementById('aiStudioOutput');
+  if (btn) btn.disabled = true;
+  if (status) status.textContent = 'Processing… (this may take 30-60 seconds for long transcripts)';
+  if (output) output.value = '';
+  document.getElementById('aiSaveStatus').textContent = '';
+  document.getElementById('aiCopyBtn').style.display = 'none';
+  document.getElementById('aiSaveBtn').style.display = 'none';
+
+  try {
+    var result = await coachPost('run-prompt', { prompt_id: AI_SELECTED_PROMPT.id, user_input: input });
+    if (!result.ok) throw new Error(result.error || 'Processing failed');
+    if (output) output.value = result.output || '';
+    if (status) status.textContent = 'Done.';
+    document.getElementById('aiCopyBtn').style.display = '';
+    // Show save button if there is a save_target and a diagnostic selected
+    if (result.save_target && document.getElementById('aiStudioDiagSelect').value) {
+      document.getElementById('aiSaveBtn').style.display = '';
+    }
+  } catch (e) {
+    if (status) status.textContent = 'Error: ' + e.message;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function aiStudioCopy() {
+  var output = document.getElementById('aiStudioOutput');
+  if (!output || !output.value) return;
+  navigator.clipboard.writeText(output.value).then(function() {
+    var btn = document.getElementById('aiCopyBtn');
+    if (btn) { var orig = btn.textContent; btn.textContent = 'Copied!'; setTimeout(function(){ btn.textContent = orig; }, 1500); }
+  });
+}
+
+async function aiStudioSave() {
+  var diagId = (document.getElementById('aiStudioDiagSelect') || {}).value || '';
+  var output = (document.getElementById('aiStudioOutput') || {}).value || '';
+  var saveStatus = document.getElementById('aiSaveStatus');
+  if (!diagId) { alert('Select a client diagnostic first.'); return; }
+  if (!output.trim()) { alert('No output to save.'); return; }
+
+  var btn = document.getElementById('aiSaveBtn');
+  if (btn) btn.disabled = true;
+  if (saveStatus) saveStatus.textContent = 'Saving…';
+
+  try {
+    // The kickoff brief action validates JSON on the server before saving.
+    var result = await coachPost('save-kickoff-brief', { diagnostic_id: diagId, brief_json: output });
+    if (!result.ok) throw new Error(result.error || 'Save failed');
+    if (saveStatus) { saveStatus.textContent = 'Saved to diagnostic.'; }
+    // Refresh the diagnostic selector so the ✓ appears
+    await aiStudioLoadDiagnostics();
+  } catch (e) {
+    if (saveStatus) saveStatus.textContent = 'Error: ' + e.message;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// Prompt modal: new
+function aiStudioNewPrompt() {
+  document.getElementById('aiModalTitle').textContent = 'New Prompt';
+  document.getElementById('aiModalPromptId').value = '';
+  document.getElementById('aiModalName').value = '';
+  document.getElementById('aiModalDesc').value = '';
+  document.getElementById('aiModalPromptText').value = '';
+  document.getElementById('aiModalSaveTarget').value = '';
+  document.getElementById('aiModalFormat').value = 'text';
+  document.getElementById('aiModalDeleteBtn').style.display = 'none';
+  document.getElementById('aiModalStatus').textContent = '';
+  document.getElementById('aiPromptModal').style.display = 'flex';
+}
+
+// Prompt modal: edit existing
+function aiStudioEditPrompt(p) {
+  document.getElementById('aiModalTitle').textContent = 'Edit Prompt';
+  document.getElementById('aiModalPromptId').value = p.id || '';
+  document.getElementById('aiModalName').value = p.name || '';
+  document.getElementById('aiModalDesc').value = p.description || '';
+  document.getElementById('aiModalPromptText').value = p.prompt_text || '';
+  document.getElementById('aiModalSaveTarget').value = p.save_target || '';
+  document.getElementById('aiModalFormat').value = p.output_format || 'text';
+  document.getElementById('aiModalDeleteBtn').style.display = '';
+  document.getElementById('aiModalStatus').textContent = '';
+  document.getElementById('aiPromptModal').style.display = 'flex';
+}
+
+function aiStudioCloseModal() {
+  document.getElementById('aiPromptModal').style.display = 'none';
+}
+
+async function aiStudioSavePrompt() {
+  var id         = document.getElementById('aiModalPromptId').value.trim();
+  var name       = document.getElementById('aiModalName').value.trim();
+  var desc       = document.getElementById('aiModalDesc').value.trim();
+  var ptext      = document.getElementById('aiModalPromptText').value.trim();
+  var saveTarget = document.getElementById('aiModalSaveTarget').value;
+  var fmt        = document.getElementById('aiModalFormat').value;
+  var status     = document.getElementById('aiModalStatus');
+  if (!name || !ptext) { if (status) status.textContent = 'Name and prompt text are required.'; return; }
+
+  if (status) status.textContent = 'Saving…';
+  try {
+    var token = localStorage.getItem('coach_session_token') || '';
+    var payload = { name: name, description: desc || null, prompt_text: ptext, save_target: saveTarget || null, output_format: fmt, is_active: true, updated_at: new Date().toISOString() };
+    var r;
+    if (id) {
+      // Update existing
+      r = await fetch('/api/coach-data', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ op: 'update', table: 'coach_prompts', filters: { id: { eq: id } }, values: payload, _coach_token: token })
+      });
+    } else {
+      // Insert new
+      r = await fetch('/api/coach-data', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ op: 'insert', table: 'coach_prompts', values: payload, _coach_token: token })
+      });
+    }
+    var data = await r.json();
+    if (!data.ok && r.status !== 200) throw new Error(data.error || 'Save failed');
+    aiStudioCloseModal();
+    await aiStudioLoadPrompts();
+  } catch (e) {
+    if (status) status.textContent = 'Error: ' + e.message;
+  }
+}
+
+async function aiStudioDeletePrompt() {
+  var id = document.getElementById('aiModalPromptId').value.trim();
+  if (!id || !confirm('Delete this prompt? This cannot be undone.')) return;
+  var status = document.getElementById('aiModalStatus');
+  if (status) status.textContent = 'Deleting…';
+  try {
+    var token = localStorage.getItem('coach_session_token') || '';
+    var r = await fetch('/api/coach-data', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ op: 'update', table: 'coach_prompts', filters: { id: { eq: id } }, values: { is_active: false }, _coach_token: token })
+    });
+    var data = await r.json();
+    if (!data.ok && r.status !== 200) throw new Error(data.error || 'Delete failed');
+    if (AI_SELECTED_PROMPT && AI_SELECTED_PROMPT.id === id) AI_SELECTED_PROMPT = null;
+    aiStudioCloseModal();
+    await aiStudioLoadPrompts();
+  } catch (e) {
+    if (status) status.textContent = 'Error: ' + e.message;
+  }
+}
+
+// Hook into showSection so the studio loads fresh each time
+var _origShowSection = showSection;
+function showSection(name, silent) {
+  _origShowSection(name, silent);
+  if (name === 'aistudio') {
+    aiStudioLoadPrompts();
+    aiStudioLoadDiagnostics();
+  }
+}
+// ── END AI Studio ─────────────────────────────────────────────────────────────
 </script>
 <script>
 /* ====================================================================

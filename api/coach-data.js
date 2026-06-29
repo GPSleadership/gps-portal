@@ -18,6 +18,8 @@ import crypto from 'node:crypto';
 const SUPABASE_URL         = process.env.SUPABASE_URL || 'https://pbnkefuqpoztcxfagiod.supabase.co';
 const SUPABASE_SECRET      = process.env.SUPABASE_SECRET_KEY;
 const COACH_SESSION_SECRET = process.env.COACH_SESSION_SECRET || '';
+const ANTHROPIC_KEY        = process.env.ANTHROPIC_API_KEY || '';
+const AI_STUDIO_MODEL      = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6'; // full Sonnet for long transcripts
 const PORTAL_BASE          = process.env.PORTAL_BASE_URL || 'https://portal.gpsleadership.org';
 const RESEND_API_KEY       = process.env.RESEND_API_KEY || '';
 const RESEND_FROM          = process.env.RESEND_FROM_EMAIL || 'noreply@portal.gpsleadership.org';
@@ -81,6 +83,8 @@ const READ_TABLES = new Set([
   'organizations',
   // Renewal / payment (v74)
   'renewal_config', 'renewals',
+  // AI Studio prompt library (v76)
+  'coach_prompts',
 ]);
 // Tables the dashboard may write through the generic proxy.
 const WRITE_TABLES = new Set([
@@ -96,6 +100,8 @@ const WRITE_TABLES = new Set([
   'organizations',
   // Renewal / payment (v74) — owner-only write (payment links live here)
   'renewal_config',
+  // AI Studio prompt library (v76) — owner-only write
+  'coach_prompts',
 ]);
 // NOTE: admin_accounts and coach_settings are intentionally NOT in either set —
 // they are served only by the dedicated, hardened actions below.
@@ -151,7 +157,7 @@ export default async function handler(req, res) {
   const senderAid   = (session.aid != null) ? session.aid : null;
   const senderFirst = String(senderName).split(' ')[0] || 'GPS Leadership';
   // Global IP / templates / automation: assistants may READ but never WRITE.
-  const OWNER_ONLY_WRITE = new Set(['email_templates', 'coach_settings', 'diagnostic_question_overrides', 'workshop_questions', 'renewal_config']);
+  const OWNER_ONLY_WRITE = new Set(['email_templates', 'coach_settings', 'diagnostic_question_overrides', 'workshop_questions', 'renewal_config', 'coach_prompts']);
   // Permanent deletion of core records: owner only (assistants run ops, not nukes).
   const OWNER_ONLY_DELETE = new Set(['clients', 'diagnostics', 'teams', 'workshops', 'diagnostic_team_reports', 'diagnostic_raters', 'diagnostic_responses']);
 
@@ -453,6 +459,81 @@ export default async function handler(req, res) {
         { Prefer: 'return=minimal' }
       );
       if (!r.ok) { const d = await r.json().catch(() => ({})); return res.status(500).json({ error: 'Reset failed', detail: d }); }
+      return res.status(200).json({ ok: true });
+    }
+
+    // ── AI Studio: run a saved prompt against pasted input ───────────────────
+    // Fetches the prompt from coach_prompts, prepends the stored system prompt,
+    // sends the user's raw input (transcript, notes, etc.) to Claude, and returns
+    // the text response. This never streams — transcripts are large but output is
+    // bounded, so synchronous response is fine for Vercel's 30s limit.
+    if (action === 'run-prompt') {
+      if (!ANTHROPIC_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
+      const promptId  = body.prompt_id;
+      const userInput = String(body.user_input || '').trim();
+      if (!promptId)   return res.status(400).json({ error: 'prompt_id required' });
+      if (!userInput)  return res.status(400).json({ error: 'user_input required' });
+
+      // Fetch the stored prompt
+      const pr = await sb(`/rest/v1/coach_prompts?id=eq.${encodeURIComponent(promptId)}&is_active=eq.true&select=name,prompt_text,output_format,save_target&limit=1`);
+      if (!pr.ok) return res.status(500).json({ error: 'Failed to fetch prompt' });
+      const prompts = await pr.json();
+      if (!prompts || !prompts[0]) return res.status(404).json({ error: 'Prompt not found' });
+      const prompt = prompts[0];
+
+      // Call Claude with the stored system prompt + user's pasted input
+      const claude = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': ANTHROPIC_KEY,
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: AI_STUDIO_MODEL,
+          max_tokens: 4096,
+          system: prompt.prompt_text,
+          messages: [{ role: 'user', content: userInput }],
+        }),
+      });
+      if (!claude.ok) {
+        const cd = await claude.json().catch(() => ({}));
+        return res.status(502).json({ error: 'Claude API error', detail: cd });
+      }
+      const claudeData = await claude.json();
+      const outputText = (claudeData.content && claudeData.content[0] && claudeData.content[0].text) || '';
+      return res.status(200).json({
+        ok: true,
+        output: outputText,
+        output_format: prompt.output_format,
+        save_target:   prompt.save_target,
+        prompt_name:   prompt.name,
+        usage:         claudeData.usage || null,
+      });
+    }
+
+    // ── AI Studio: save kickoff brief JSON to a diagnostic ───────────────────
+    // Stores the KICKOFF_LEADER_BRIEF JSON produced by run-prompt into
+    // diagnostics.kickoff_brief_json. Validates JSON before saving so bad output
+    // from a truncated response doesn't corrupt the row.
+    if (action === 'save-kickoff-brief') {
+      if (!isOwner) return ownerOnly();
+      const diagId    = body.diagnostic_id;
+      const briefStr  = String(body.brief_json || '').trim();
+      if (!diagId)    return res.status(400).json({ error: 'diagnostic_id required' });
+      if (!briefStr)  return res.status(400).json({ error: 'brief_json required' });
+
+      let parsed;
+      try { parsed = JSON.parse(briefStr); }
+      catch (_) { return res.status(400).json({ error: 'brief_json is not valid JSON — copy the full output from AI Studio' }); }
+
+      const r = await sb(
+        `/rest/v1/diagnostics?id=eq.${encodeURIComponent(diagId)}`,
+        'PATCH',
+        { kickoff_brief_json: parsed, kickoff_brief_saved_at: new Date().toISOString() },
+        { Prefer: 'return=minimal' }
+      );
+      if (!r.ok) { const d = await r.json().catch(() => ({})); return res.status(500).json({ error: 'Save failed', detail: d }); }
       return res.status(200).json({ ok: true });
     }
 
