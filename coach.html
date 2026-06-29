@@ -830,7 +830,7 @@
       <div class="section-tab"        id="grp-comms"     onclick="showGroup('comms')">Communication</div>
       <div class="section-tab"        id="grp-workshops" onclick="showGroup('workshops')">Workshops &amp; Assessments</div>
       <div class="section-tab"        id="grp-organizations" onclick="showGroup('organizations')">Organizations</div>
-      <div class="section-tab"        id="grp-aistudio"  onclick="showGroup('aistudio')">AI Studio</div>
+      <div class="section-tab owner-only" id="grp-aistudio"  onclick="showGroup('aistudio')">AI Studio</div>
       <div class="section-tab"        id="grp-settings"  onclick="showGroup('settings')">Settings</div>
       <div style="flex:1;min-width:12px;"></div>
       <div style="position:relative;">
@@ -4314,13 +4314,13 @@ function showSection(name, skipHooks) {
   _currentSection = name;
   try { localStorage.setItem('gps_coach_section', name); } catch (_) {}
   // Toggle the underlying content sections.
-  ['dashboard', 'clients', 'insights', 'emails', 'messages', 'asklog', 'templates', 'accesshelp', 'admins', 'security', 'diagnostics', 'decisionroom', 'workshops', 'organizations'].forEach(s => {
+  ['dashboard', 'clients', 'insights', 'emails', 'messages', 'asklog', 'templates', 'accesshelp', 'admins', 'security', 'diagnostics', 'decisionroom', 'workshops', 'organizations', 'aistudio'].forEach(s => {
     var sec = document.getElementById('section-' + s);
     if (sec) sec.style.display = s === name ? 'block' : 'none';
   });
   // Light up the parent group tab.
   var grp = GROUP_OF[name] || 'today';
-  ['today', 'clients', 'insights', 'diagteams', 'comms', 'settings', 'workshops', 'organizations'].forEach(g => {
+  ['today', 'clients', 'insights', 'diagteams', 'comms', 'settings', 'workshops', 'organizations', 'aistudio'].forEach(g => {
     var t = document.getElementById('grp-' + g);
     if (t) t.classList.toggle('active', g === grp);
   });
