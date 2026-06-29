@@ -407,10 +407,12 @@ export default async function handler(req, res) {
     case 'generate-email-drafts':  return handleGenerateEmailDrafts(req, res);
     case 'get-email-drafts':       return handleGetEmailDrafts(req, res);
     case 'update-email-draft':     return handleUpdateEmailDraft(req, res);
-    case 'approve-email-sequence': return handleApproveEmailSequence(req, res);
-    case 'mark-sprint-purchased':  return handleMarkSprintPurchased(req, res);
+    case 'approve-email-sequence':    return handleApproveEmailSequence(req, res);
+    case 'mark-sprint-purchased':     return handleMarkSprintPurchased(req, res);
+    case 'schedule-debrief-emails':   return handleScheduleDebriefEmails(req, res);
+    case 'cancel-scheduled-email':    return handleCancelScheduledEmail(req, res);
     default:
-      return res.status(400).json({ error: `Unknown action: "${action}". Valid: send-invites, schedule-invites, send-scheduled, trial-sweep, send-leader-link, generate-question, generate-g2-question, generate-report, generate-team-report, finalize-report, sign-report-upload, generate-dr-content, request-external-feedback, feedback-context, submit-external-feedback, reminders, generate-email-drafts, get-email-drafts, update-email-draft, approve-email-sequence, mark-sprint-purchased` });
+      return res.status(400).json({ error: `Unknown action: "${action}". Valid: send-invites, schedule-invites, send-scheduled, trial-sweep, send-leader-link, generate-question, generate-g2-question, generate-report, generate-team-report, finalize-report, sign-report-upload, generate-dr-content, request-external-feedback, feedback-context, submit-external-feedback, reminders, generate-email-drafts, get-email-drafts, update-email-draft, approve-email-sequence, mark-sprint-purchased, schedule-debrief-emails, cancel-scheduled-email` });
   }
 }
 
@@ -4102,6 +4104,130 @@ async function handleMarkSprintPurchased(req, res) {
     await sb('/rest/v1/email_drafts?diagnostic_id=eq.' + encodeURIComponent(diagnostic_id) + '&sequence=eq.sponsor&email_key=in.(E4,E5,E6,E7)&status=in.(draft,scheduled)',
       'PATCH', { status: 'cancelled', updated_at: now }, { Prefer: 'return=minimal' });
     return res.status(200).json({ ok: true, sprint_purchased_at: now });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+}
+
+// ── ACTION: schedule-debrief-emails ──────────────────────────────────────────
+// Auto-creates email_drafts with status='scheduled' when debrief dates are set.
+// email_key suffix '_auto' identifies auto-scheduled vs. AI-generated drafts.
+// Emails send automatically when scheduled_for arrives (cron picks them up).
+// Calling again re-upserts — safe to call whenever dates change.
+async function handleScheduleDebriefEmails(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const { diagnostic_id, session } = req.body || {};
+  if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
+  if (!diagnostic_id) return res.status(400).json({ error: 'diagnostic_id required' });
+  const enc = encodeURIComponent;
+  try {
+    // Load diagnostic + client
+    const diagR = await sb(`/rest/v1/diagnostics?id=eq.${enc(diagnostic_id)}&select=*&limit=1`);
+    const diagRows = await diagR.json();
+    const diag = diagRows[0];
+    if (!diag) return res.status(404).json({ error: 'Diagnostic not found' });
+
+    const clientR = await sb(`/rest/v1/clients?id=eq.${enc(diag.client_id)}&select=name,email&limit=1`);
+    const client = (await clientR.json())[0] || {};
+
+    const now = new Date().toISOString();
+    const created = [];
+
+    // Helper: upsert a draft (overwrite if same email_key + diagnostic_id, skip if sent/cancelled)
+    async function upsertDraft(row) {
+      // Don't overwrite already-sent or manually-cancelled drafts
+      const existing = await sb(`/rest/v1/email_drafts?diagnostic_id=eq.${enc(diagnostic_id)}&email_key=eq.${enc(row.email_key)}&select=id,status&limit=1`);
+      const existRows = await existing.json();
+      if (existRows[0] && ['sent', 'cancelled'].includes(existRows[0].status)) return; // don't overwrite
+      if (existRows[0]) {
+        // Update scheduled_for and body in case date changed
+        await sb(`/rest/v1/email_drafts?id=eq.${enc(existRows[0].id)}`, 'PATCH',
+          { ...row, updated_at: now }, { Prefer: 'return=minimal' });
+      } else {
+        await sb('/rest/v1/email_drafts', 'POST',
+          { ...row, diagnostic_id, created_at: now, updated_at: now }, { Prefer: 'return=minimal' });
+      }
+    }
+
+    // ── Leader report-ready email (noon ET = 16:00 UTC day before debrief) ──
+    if (diag.debrief_date && client.email) {
+      const pts = diag.debrief_date.split('-');
+      const sendAt = new Date(Date.UTC(+pts[0], +pts[1]-1, +pts[2]-1, 16, 0, 0)).toISOString();
+      const firstName = (client.name || '').split(' ')[0] || client.name || 'there';
+      const portalLink = `${PORTAL_BASE}/diagnostic-leader.html?token=${enc(diag.leader_token)}`;
+      const debriefFmt = new Date(diag.debrief_date + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+      await upsertDraft({
+        email_key: 'report_ready_auto',
+        sequence: 'auto',
+        subject: `Your leadership report is ready`,
+        body: `Hi ${firstName},\n\nYour GPS Leadership Diagnostic report is ready. You can view it now in your leader portal:\n\n${portalLink}\n\nI look forward to our debrief on ${debriefFmt}${diag.debrief_time ? ' at ' + diag.debrief_time : ''}. If you have any questions before we meet, feel free to reply to this email.\n\nSee you then.`,
+        to_name: client.name || '',
+        to_email: client.email,
+        scheduled_for: sendAt,
+        status: 'scheduled',
+      });
+      created.push('report_ready_auto');
+    }
+
+    // ── Sponsor emails (per sponsor_teams row with a sponsor_debrief_date) ──
+    const stR = await sb(`/rest/v1/sponsor_teams?diagnostic_id=eq.${enc(diagnostic_id)}&sponsor_debrief_date=not.is.null&select=sponsor_id,sponsor_debrief_date`);
+    const stRows = await stR.json();
+    for (const st of (Array.isArray(stRows) ? stRows : [])) {
+      if (!st.sponsor_debrief_date) continue;
+      const spR = await sb(`/rest/v1/sponsors?id=eq.${enc(st.sponsor_id)}&select=id,name,email,sponsor_token&limit=1`);
+      const sp = (await spR.json())[0];
+      if (!sp || !sp.email) continue;
+
+      const spts = st.sponsor_debrief_date.split('-');
+      const drLink = `${PORTAL_BASE}/decision-room.html?token=${enc(sp.sponsor_token)}`;
+
+      // Review request: noon ET day before their meeting
+      const reviewAt = new Date(Date.UTC(+spts[0], +spts[1]-1, +spts[2]-1, 16, 0, 0)).toISOString();
+      await upsertDraft({
+        email_key: `sponsor_review_auto_${sp.id}`,
+        sequence: 'auto',
+        subject: `Please review ${diag.client_name}'s 90-day plan before our meeting`,
+        body: `Hi ${sp.name},\n\nJust a heads-up before tomorrow's meeting. ${diag.client_name}'s 90-day development plan is ready for your review in the Decision Room:\n\n${drLink}\n\nYou can approve the plan, back specific recommendations, or request any changes — all before we sit down.\n\nSee you tomorrow.`,
+        to_name: sp.name,
+        to_email: sp.email,
+        scheduled_for: reviewAt,
+        status: 'scheduled',
+      });
+      created.push(`sponsor_review_auto_${sp.id}`);
+
+      // Day-of reminder: 8am ET = 12:00 UTC
+      const dayOfAt = new Date(Date.UTC(+spts[0], +spts[1]-1, +spts[2], 12, 0, 0)).toISOString();
+      await upsertDraft({
+        email_key: `sponsor_day_of_auto_${sp.id}`,
+        sequence: 'auto',
+        subject: `Today: ${diag.client_name}'s leadership development review`,
+        body: `Hi ${sp.name},\n\nJust a quick reminder — we're meeting today to discuss ${diag.client_name}'s development plan.\n\n${drLink}\n\nLooking forward to it.`,
+        to_name: sp.name,
+        to_email: sp.email,
+        scheduled_for: dayOfAt,
+        status: 'scheduled',
+      });
+      created.push(`sponsor_day_of_auto_${sp.id}`);
+    }
+
+    return res.status(200).json({ ok: true, created });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+}
+
+// ── ACTION: cancel-scheduled-email ───────────────────────────────────────────
+// Moves a single email_draft to 'cancelled'. Coach uses this from the Today
+// list to stop an auto-scheduled email before it goes out.
+async function handleCancelScheduledEmail(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const { draft_id, session } = req.body || {};
+  if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
+  if (!draft_id) return res.status(400).json({ error: 'draft_id required' });
+  try {
+    await sb(`/rest/v1/email_drafts?id=eq.${encodeURIComponent(draft_id)}`,
+      'PATCH', { status: 'cancelled', updated_at: new Date().toISOString() }, { Prefer: 'return=minimal' });
+    return res.status(200).json({ ok: true });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }

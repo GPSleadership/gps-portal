@@ -6708,6 +6708,8 @@ function renderDiagHome() {
 
   ${needsSection}
 
+  <div id="autoEmailFlags"></div>
+
   <div id="testimonialApprovalFlags"></div>
 
   <div id="emailFailFlags"></div>
@@ -6726,6 +6728,7 @@ function renderDiagHome() {
 
   loadEmailFailureFlags();
   loadTestimonialApprovalFlags();
+  loadAutoEmailFlags();
 }
 
 // ── Testimonial flywheel: pending approvals as an Action Required card on Today ──
@@ -6869,6 +6872,74 @@ async function loadEmailFailureFlags() {
       ${rows}
     </div>`;
   } catch (_) { box.innerHTML = ''; }
+}
+
+// ── Auto-scheduled email flags ─────────────────────────────────────────────
+// Shows opt-out cards in the Today list for any auto emails sending within
+// 48 hours. Emails are already scheduled — Alex must actively cancel to stop them.
+async function loadAutoEmailFlags() {
+  const box = document.getElementById('autoEmailFlags');
+  if (!box) return;
+  try {
+    const now   = new Date();
+    const cutoff = new Date(now.getTime() + 48 * 3600 * 1000).toISOString();
+    const drafts = await cdSelect('email_drafts', {
+      eq:    { status: 'scheduled' },
+      ilike: { email_key: '%_auto' },
+      gte:   { scheduled_for: now.toISOString() },
+      lte:   { scheduled_for: cutoff },
+      order: { col: 'scheduled_for', asc: true },
+      limit: 20,
+      select: 'id,diagnostic_id,email_key,to_name,to_email,subject,scheduled_for',
+    });
+    if (!drafts || !drafts.length) { box.innerHTML = ''; return; }
+
+    // Map diagnostic_id → client_name using ALL_DIAGS
+    const diagMap = {};
+    (ALL_DIAGS || []).forEach(d => { diagMap[d.id] = d.client_name; });
+
+    const cards = drafts.map(function(d) {
+      const sendTime = new Date(d.scheduled_for);
+      const hoursUntil = Math.round((sendTime - now) / 3600000);
+      const timeLabel  = hoursUntil <= 1 ? 'within the hour' : hoursUntil < 24 ? 'in ' + hoursUntil + ' hours' : 'tomorrow at noon';
+      const typeLabel  = d.email_key.startsWith('report_ready') ? 'Report ready email'
+        : d.email_key.startsWith('sponsor_review') ? 'Sponsor review request'
+        : d.email_key.startsWith('sponsor_day_of') ? 'Sponsor day-of reminder'
+        : 'Scheduled email';
+      const who = d.to_name || d.to_email || 'recipient';
+      const forLeader = diagMap[d.diagnostic_id] ? ' for ' + diagMap[d.diagnostic_id] : '';
+      return '<div class="dflag" style="border-left:3px solid #0369a1;background:#eff6ff;">'
+        + '<div style="font-size:22px;flex-shrink:0;margin-top:-2px;">📤</div>'
+        + '<div style="flex:1;">'
+        + '<div style="font-size:13px;font-weight:700;color:#0369a1;">' + esc(typeLabel + forLeader) + ' sends ' + timeLabel + '</div>'
+        + '<div style="font-size:12px;color:var(--d-mid);margin-top:3px;">To: ' + esc(who) + ' · "' + esc((d.subject || '').slice(0, 60)) + '"</div>'
+        + '<div style="font-size:11px;color:var(--d-mid);margin-top:2px;">Auto-scheduled — will send unless you cancel.</div>'
+        + '<div style="margin-top:10px;"><button class="dbtn dbtn-outline dbtn-sm" style="border-color:#dc2626;color:#dc2626;" onclick="cancelAutoEmail(' + "'" + d.id + "'" + ')">Cancel this email</button></div>'
+        + '</div>'
+        + '</div>';
+    }).join('');
+
+    box.innerHTML = '<div class="card" style="margin-bottom:20px;">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">'
+      + '<div class="card-title">Sending Soon — Auto-Scheduled</div>'
+      + '<span style="font-size:12px;color:var(--d-mid);">Sending in the next 48 hours. Cancel to stop.</span>'
+      + '</div>'
+      + cards
+      + '</div>';
+  } catch (_) { box.innerHTML = ''; }
+}
+
+async function cancelAutoEmail(draftId) {
+  if (!confirm('Cancel this scheduled email? It will not be sent.')) return;
+  try {
+    const resp = await fetch('/api/diagnostic?action=cancel-scheduled-email', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ draft_id: draftId, session: getCoachSessionToken() }),
+    });
+    const data = resp.ok ? await resp.json() : {};
+    if (!data.ok) { alert('Cancel failed — please try again.'); return; }
+    loadAutoEmailFlags(); // refresh the section
+  } catch (e) { alert('Error: ' + e.message); }
 }
 
 
@@ -9333,6 +9404,12 @@ async function saveDebriefDate(dateStr) {
     22, 0, 0
   )).toISOString();
   await updateDiag({ debrief_date: dateStr, report_release_at: releaseAt });
+  // Auto-schedule the leader report-ready email + any sponsor emails with dates already set.
+  // Fire-and-forget: non-fatal if it fails (re-fires next time date is changed).
+  fetch('/api/diagnostic?action=schedule-debrief-emails', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ diagnostic_id: DIAG_SEL.id, session: getCoachSessionToken() }),
+  }).then(() => loadAutoEmailFlags()).catch(() => {});
   await refreshSelected();
 }
 
