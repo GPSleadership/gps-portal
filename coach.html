@@ -6631,7 +6631,7 @@ function renderDiagHome() {
       + '<div style="flex:1;">'
       + '<div style="font-size:13px;font-weight:700;color:#7c3aed;">' + esc(d.client_name) + " — email sequence needs approval before " + debriefFmt + ' debrief</div>'
       + '<div style="font-size:12px;color:var(--d-mid);margin-top:3px;">Generate or review the E1-E7 follow-up emails, then approve so they schedule automatically.</div>'
-      + '<div style="margin-top:10px;"><button class="dbtn dbtn-outline dbtn-sm" style="border-color:#7c3aed;color:#7c3aed;" onclick="showSection(\'diagnostics\');openDiag(\'' + d.id + '\');setTimeout(function(){switchDiagTab(null,\'dtab\',\'emails\');},400);">Review Emails →</button></div>'
+      + '<div style="margin-top:10px;"><button class="dbtn dbtn-outline dbtn-sm" style="border-color:#7c3aed;color:#7c3aed;" onclick="showSection(\'diagnostics\');openDiag(\'' + d.id + '\');setTimeout(function(){switchDiagTabById(\'dtab-emails\');},400);">Review Emails →</button></div>'
       + '</div>'
       + '<span class="dbadge dbadge-standard" style="flex-shrink:0;align-self:flex-start;">Diagnostic</span>'
       + '</div>';
@@ -10253,9 +10253,9 @@ function switchDiagTabById(id) {
   document.querySelectorAll('#view-diag-detail .dtab-pane').forEach(p => p.classList.remove('active'));
   const pane = document.getElementById(id);
   if (pane) pane.classList.add('active');
-  const labelMap = { 'dtab-overview':'Overview','dtab-raters':'Raters','dtab-survey':'Survey Status','dtab-questions':'Questions','dtab-report':'Report' };
+  const labelMap = { 'dtab-overview':'Overview','dtab-raters':'Raters','dtab-survey':'Survey Status','dtab-questions':'Questions','dtab-report':'Report','dtab-emails':'Emails' };
   document.querySelectorAll('#view-diag-detail .dtab').forEach(t => {
-    t.classList.toggle('active', labelMap[id] === t.textContent.trim().replace(/\s*\d+$/,''));
+    t.classList.toggle('active', labelMap[id] != null && t.textContent.trim().startsWith(labelMap[id]));
   });
 }
 
