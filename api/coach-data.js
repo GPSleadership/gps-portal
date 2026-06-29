@@ -449,7 +449,7 @@ export default async function handler(req, res) {
       const r = await sb(
         `/rest/v1/diagnostics?id=eq.${encodeURIComponent(did)}`,
         'PATCH',
-        { plan_sponsor_status: null, plan_sponsor_note: null, plan_sponsor_decided_at: null },
+        { plan_sponsor_status: 'none', plan_sponsor_note: null, plan_sponsor_decided_at: null },
         { Prefer: 'return=minimal' }
       );
       if (!r.ok) { const d = await r.json().catch(() => ({})); return res.status(500).json({ error: 'Reset failed', detail: d }); }

@@ -7136,7 +7136,7 @@ function renderDetailHeader() {
     actions.push(`<button class="dbtn dbtn-primary dbtn-sm" onclick="switchDiagTabById('dtab-report')">Generate Report →</button>`);
   }
   // Reset plan sponsor review (shows when a sponsor has already decided)
-  if (d.plan_sponsor_status) {
+  if (d.plan_sponsor_status && d.plan_sponsor_status !== 'none') {
     const srLabel = d.plan_sponsor_status === 'approved' ? 'Approved' : 'Changes requested';
     actions.push(`<button class="dbtn dbtn-outline dbtn-sm" style="color:#b45309;border-color:#b45309;" onclick="resetPlanReview()" title="Clear the sponsor decision so they can re-review after you update the plan">Reset plan review (${srLabel})</button>`);
   }
@@ -9965,10 +9965,10 @@ async function resetPlanReview() {
   try {
     await coachData({ action: 'resetPlanReview', diagnostic_id: DIAG_SEL.id });
   } catch (e) { alert('Reset failed: ' + e.message); return; }
-  DIAG_SEL.plan_sponsor_status = null;
+  DIAG_SEL.plan_sponsor_status = 'none';
   DIAG_SEL.plan_sponsor_note = null;
   DIAG_SEL.plan_sponsor_decided_at = null;
-  ALL_DIAGS = ALL_DIAGS.map(d => d.id === DIAG_SEL.id ? { ...d, plan_sponsor_status: null, plan_sponsor_note: null, plan_sponsor_decided_at: null } : d);
+  ALL_DIAGS = ALL_DIAGS.map(d => d.id === DIAG_SEL.id ? { ...d, plan_sponsor_status: 'none', plan_sponsor_note: null, plan_sponsor_decided_at: null } : d);
   renderDetailHeader();
 }
 
