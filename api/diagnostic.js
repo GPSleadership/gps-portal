@@ -3885,7 +3885,7 @@ async function handleGenerateEmailDrafts(req, res) {
 
   try {
     // ── 1. Load diagnostic ───────────────────────────────────────────────────
-    const diagR = await sb(`/rest/v1/diagnostics?id=eq.${encodeURIComponent(diagnostic_id)}&select=id,client_id,client_name,client_title,client_org,client_email,debrief_date,report_doc&limit=1`);
+    const diagR = await sb(`/rest/v1/diagnostics?id=eq.${encodeURIComponent(diagnostic_id)}&select=id,client_id,client_name,client_title,client_org,client_email,debrief_date,report_doc,leader_token&limit=1`);
     const diag = diagR.ok ? ((await diagR.json())[0] || null) : null;
     if (!diag) return res.status(404).json({ error: 'Diagnostic not found' });
 
@@ -3894,20 +3894,32 @@ async function handleGenerateEmailDrafts(req, res) {
     const scores = scoresR.ok ? (((await scoresR.json())[0] || {}).scores_json || {}) : {};
 
     // ── 3. Find primary sponsor team for this leader ─────────────────────────
+    // Proper 3-step join: team_members → sponsor_teams → sponsors
     let sponsor = null;
+    let stLink = null;
     var backedRecs = [];
     if (diag.client_id) {
-      const stFilter = encodeURIComponent(JSON.stringify([{ client_id: diag.client_id }]));
-      const stR = await sb(`/rest/v1/sponsor_teams?members=cs.${stFilter}&select=id,sponsor_name,sponsor_email,sponsor_title,client_org_name,rec_commitments&limit=1`);
-      var stRows = stR.ok ? await stR.json() : [];
-      if (Array.isArray(stRows) && stRows[0]) {
-        sponsor = stRows[0];
-        var rcMap = sponsor.rec_commitments || {};
-        var backedKeys = Object.entries(rcMap).filter(function(e) { return e[1] === 'commit'; }).map(function(e) { return e[0]; });
-        if (backedKeys.length) {
-          var recR = await sb('/rest/v1/recommendations?id=in.(' + backedKeys.map(function(k) { return encodeURIComponent(k); }).join(',') + ')&select=short_title&limit=20');
-          var recRows = recR.ok ? await recR.json() : [];
-          backedRecs = (Array.isArray(recRows) ? recRows : []).map(function(r) { return r.short_title; }).filter(Boolean);
+      const tmR = await sb('/rest/v1/team_members?client_id=eq.' + encodeURIComponent(diag.client_id) + '&select=team_id&limit=1');
+      var tmRows = tmR.ok ? await tmR.json() : [];
+      var tmTeamId = (Array.isArray(tmRows) && tmRows[0]) ? tmRows[0].team_id : null;
+      if (tmTeamId) {
+        const stLinkR = await sb('/rest/v1/sponsor_teams?team_id=eq.' + encodeURIComponent(tmTeamId) + '&select=id,sponsor_id,rec_commitments,sponsor_debrief_date&limit=1');
+        var stLinkRows = stLinkR.ok ? await stLinkR.json() : [];
+        stLink = (Array.isArray(stLinkRows) && stLinkRows[0]) ? stLinkRows[0] : null;
+        if (stLink && stLink.sponsor_id) {
+          const spR = await sb('/rest/v1/sponsors?id=eq.' + encodeURIComponent(stLink.sponsor_id) + '&select=id,name,email,sponsor_token&limit=1');
+          var spRows = spR.ok ? await spR.json() : [];
+          var sponsorInfo = (Array.isArray(spRows) && spRows[0]) ? spRows[0] : null;
+          if (sponsorInfo) {
+            sponsor = { sponsor_name: sponsorInfo.name || '', sponsor_email: sponsorInfo.email || '', sponsor_token: sponsorInfo.sponsor_token || '' };
+            var rcMap = stLink.rec_commitments || {};
+            var backedKeys = Object.entries(rcMap).filter(function(e) { return e[1] === 'commit'; }).map(function(e) { return e[0]; });
+            if (backedKeys.length) {
+              var recR = await sb('/rest/v1/recommendations?id=in.(' + backedKeys.map(function(k) { return encodeURIComponent(k); }).join(',') + ')&select=short_title&limit=20');
+              var recRows = recR.ok ? await recR.json() : [];
+              backedRecs = (Array.isArray(recRows) ? recRows : []).map(function(r) { return r.short_title; }).filter(Boolean);
+            }
+          }
         }
       }
     }
@@ -3916,6 +3928,9 @@ async function handleGenerateEmailDrafts(req, res) {
     var debriefDateFmt = diag.debrief_date
       ? new Date(diag.debrief_date + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
       : 'the upcoming debrief';
+    var leaderReportUrl = diag.leader_token ? (PORTAL_BASE + '/diagnostic-leader?token=' + encodeURIComponent(diag.leader_token)) : '[leader report link]';
+    var decisionRoomUrl = (sponsor && sponsor.sponsor_token) ? (PORTAL_BASE + '/decision-room?token=' + encodeURIComponent(sponsor.sponsor_token)) : null;
+    var drUrl = decisionRoomUrl || '[Decision Room link]';
 
     // Pull a few report themes for context if available
     var reportThemes = '';
@@ -3926,15 +3941,72 @@ async function handleGenerateEmailDrafts(req, res) {
 
     // ── 4. Build Claude prompt ───────────────────────────────────────────────
     var emailCount = sponsor ? 8 : 2;
-    var seqSystem = 'You are drafting a personalized diagnostic follow-up email sequence for GPS Leadership Solutions. Write in Alex Tremble\'s voice: direct, candid, warm, plain language, short sentences. No hype, no buzzwords, no emoji. Avoid em dashes; use commas, periods, or semicolons.\n\nGenerate ' + emailCount + ' emails as a JSON array. Each email object: { "email_key": "E1", "subject": "...", "body_text": "..." }\n\nbody_text rules: plain paragraphs separated by blank lines; "- " at line start for bullets; 100-250 words per email; close with one clear next step; never mention pricing; no invented facts.\n\nEmails to generate:\n\nE1 (TO LEADER, pre-debrief, sent 1 day before call on ' + debriefDateFmt + '): Heads-up email to ' + (diag.client_name || 'the leader') + '. What to expect tomorrow. What to bring to the conversation. Keep under 150 words.\n\nE1b (TO LEADER, post-debrief, sent same day as debrief): Thank you and recap. Brief summary of what we covered (keep general -- no invented specifics), key themes identified, next step is the 90-day plan.' + (sponsor ? '\n\nE2 (TO SPONSOR, pre-debrief, sent 1 day before): Heads-up to ' + (sponsor.sponsor_name || 'the sponsor') + ' that debrief is tomorrow with ' + (diag.client_name || 'the leader') + '. Brief context on what happens next. Keep it under 150 words.\n\nE3 (TO SPONSOR, post-debrief day +1): Summary of where things stand after the debrief. Development focus identified. Point them to the Decision Room to review and back recommendations.\n\nE4 (TO SPONSOR, day +3): Reference the backed recommendations' + (backedRecs.length ? ' they committed to: ' + backedRecs.join(', ') : '') + '. These shape the 90-day sprint. Invite them to lock in the sprint -- 7-day window is open.\n\nE5 (TO SPONSOR, day +5): Short reminder. Sprint window closes in 2 days. Direct, no pressure, but clear stakes.\n\nE6 (TO SPONSOR, day +7 -- last day of sprint window): Very short. Today is the last day. One clear call to action.\n\nE7 (TO SPONSOR, day +10 -- post-window): Sprint window has passed. If they still want to move forward there is a path. No pressure, keep it open.' : '') + '\n\nReturn ONLY a JSON object: { "emails": [ ... ] }. No prose, no code fences.';
+    var spName = sponsor ? (sponsor.sponsor_name || 'the sponsor') : '';
+    var backedLine = backedRecs.length
+      ? ('The sponsor has already committed to these recommendations: ' + backedRecs.join(', ') + '.')
+      : 'No recommendations have been backed yet in the Decision Room.';
+
+    var seqSystem = 'You are drafting a personalized diagnostic follow-up email sequence for GPS Leadership Solutions. Write in Alex Tremble\'s voice: direct, candid, warm, plain language, short sentences. No hype, no buzzwords, no emoji. Avoid em dashes; use commas, periods, or semicolons.\n\n'
+      + 'Return ONLY a JSON object: { "emails": [ { "email_key": "E1", "subject": "...", "body_text": "..." }, ... ] }. No prose, no code fences.\n\n'
+      + 'body_text rules: plain paragraphs separated by blank lines; bullets use "- " prefix on a new line; no markdown headers; no invented facts beyond what is provided; never mention pricing.\n\n'
+      + 'EMAILS TO GENERATE:\n\n'
+
+      // E1: pre-debrief to leader
+      + 'E1 (TO LEADER: ' + (diag.client_name || 'the leader') + ', sent 24 hours before debrief on ' + debriefDateFmt + '):\n'
+      + 'Subject: something like "Your report is ready" or "Before tomorrow."\n'
+      + 'This email must include all of the following points:\n'
+      + '1. Their Diagnostic Leader Report is ready. Include this link on its own line: ' + leaderReportUrl + '\n'
+      + '2. "Skim it once before we meet. Note anything that surprises you, or that you want to push back on."\n'
+      + '3. "Please do not share the report with anyone yet -- we will interpret it together."\n'
+      + '4. One sentence on what to expect: we will go through the findings together and discuss what comes next.\n'
+      + 'Tone: warm, direct. Under 175 words.\n\n'
+
+      // E1b: post-debrief to leader
+      + 'E1b (TO LEADER: ' + (diag.client_name || 'the leader') + ', sent afternoon of the debrief day):\n'
+      + 'Subject: something like "Thank you" or "What comes next."\n'
+      + 'Thank them for the conversation today. Reference the key themes that came out of it (keep high-level and general -- do not invent specifics). The next step is the 90-day sprint: this is how they take the diagnostic findings and build a concrete development plan with real coaching support behind it. Close by saying Alex will be in touch with the details. Under 200 words.\n\n'
+
+      + (sponsor ? (
+        // E2: pre-debrief to sponsor
+          'E2 (TO SPONSOR: ' + spName + ', sent 24 hours before debrief on ' + debriefDateFmt + '):\n'
+        + 'Subject: something like "Heads up before tomorrow."\n'
+        + 'Brief note that the debrief with ' + (diag.client_name || 'the leader') + ' is tomorrow. Context: this is where we go through the diagnostic findings and identify the key development focus for the next 90 days. After the debrief, the sponsor will hear from Alex with next steps and access to the recommendations. Keep it short and professional. Under 150 words.\n\n'
+
+        // E3: post-debrief to sponsor
+        + 'E3 (TO SPONSOR: ' + spName + ', sent the day after the debrief):\n'
+        + 'Subject: something like "The debrief is done -- here is what comes next."\n'
+        + 'The debrief with ' + (diag.client_name || 'the leader') + ' is complete. Key development themes have been identified. Their role as sponsor is to review the recommendations and back the ones they are willing to support going into the 90-day sprint. Give them the Decision Room link:\n'
+        + drUrl + '\n'
+        + 'Brief and professional. Under 175 words.\n\n'
+
+        // E4: sprint invite to sponsor
+        + 'E4 (TO SPONSOR: ' + spName + ', sent 3 days after debrief):\n'
+        + 'Subject: something like "The sprint window is open."\n'
+        + backedLine + ' The 90-day sprint is how those commitments become real behavior change with accountability. The sprint window is open for 7 days. Invite them to confirm their commitment so we can move forward. Include the Decision Room link: ' + drUrl + '. Under 175 words.\n\n'
+
+        // E5: reminder to sponsor
+        + 'E5 (TO SPONSOR: ' + spName + ', sent 5 days after debrief):\n'
+        + 'Subject: something like "2 days left."\n'
+        + 'Short, direct reminder. Sprint window closes in 2 days. No pressure, but clear on what is at stake. Include the link: ' + drUrl + '. Under 100 words.\n\n'
+
+        // E6: last day to sponsor
+        + 'E6 (TO SPONSOR: ' + spName + ', sent 7 days after debrief -- last day of sprint window):\n'
+        + 'Subject: something like "Last day."\n'
+        + 'Very short. Today is the last day of the sprint window. One clear call to action. Link: ' + drUrl + '. Under 75 words.\n\n'
+
+        // E7: post-window to sponsor
+        + 'E7 (TO SPONSOR: ' + spName + ', sent 10 days after debrief):\n'
+        + 'Subject: something like "The window has closed -- but there is still a path."\n'
+        + 'The sprint window has passed. If they still want to move forward, the door is open. No pressure, keep it honest. Link: ' + drUrl + '. Under 150 words.'
+      ) : '');
 
     var seqUser = [
       'Leader: ' + (diag.client_name || '') + (diag.client_title ? ', ' + diag.client_title : '') + (diag.client_org ? ' (' + diag.client_org + ')' : ''),
       'Debrief date: ' + debriefDateFmt,
-      'TP3 focus pillar: ' + (diag.tp3_pillar || scores.tp3_pillar || 'not set'),
       'TP3 scores (1-5): Trust ' + (scores.trust != null ? scores.trust : 'n/a') + ', Proactivity ' + (scores.proactivity != null ? scores.proactivity : 'n/a') + ', Productivity ' + (scores.productivity != null ? scores.productivity : 'n/a'),
-      sponsor ? 'Sponsor: ' + (sponsor.sponsor_name || '') + (sponsor.sponsor_title ? ', ' + sponsor.sponsor_title : '') + ' (' + (diag.client_org || sponsor.client_org_name || 'the company') + ')' : 'No sponsor team on file -- generating leader emails only.',
-      backedRecs.length ? 'Backed recommendations (sponsor committed to these): ' + backedRecs.join('; ') : 'No recommendations backed yet.',
+      'TP3 focus pillar: ' + (scores.tp3_pillar || 'not set'),
+      sponsor ? 'Sponsor: ' + (sponsor.sponsor_name || '') + ' (' + (diag.client_org || 'the company') + ')' : 'No sponsor team on file -- generating leader emails only.',
+      backedRecs.length ? 'Backed recommendations (sponsor committed): ' + backedRecs.join('; ') : 'No recommendations backed yet.',
       reportThemes ? 'Report themes (context only -- do not quote directly):\n' + reportThemes : '',
       '',
       'Draft all ' + emailCount + ' emails now.',
