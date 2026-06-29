@@ -410,9 +410,11 @@ export default async function handler(req, res) {
     case 'approve-email-sequence':    return handleApproveEmailSequence(req, res);
     case 'mark-sprint-purchased':     return handleMarkSprintPurchased(req, res);
     case 'schedule-debrief-emails':   return handleScheduleDebriefEmails(req, res);
+    case 'approve-email-draft':        return handleApproveEmailDraft(req, res);
+    case 'hold-email-draft':           return handleHoldEmailDraft(req, res);
     case 'cancel-scheduled-email':    return handleCancelScheduledEmail(req, res);
     default:
-      return res.status(400).json({ error: `Unknown action: "${action}". Valid: send-invites, schedule-invites, send-scheduled, trial-sweep, send-leader-link, generate-question, generate-g2-question, generate-report, generate-team-report, finalize-report, sign-report-upload, generate-dr-content, request-external-feedback, feedback-context, submit-external-feedback, reminders, generate-email-drafts, get-email-drafts, update-email-draft, approve-email-sequence, mark-sprint-purchased, schedule-debrief-emails, cancel-scheduled-email` });
+      return res.status(400).json({ error: `Unknown action: "${action}". Valid: send-invites, schedule-invites, send-scheduled, trial-sweep, send-leader-link, generate-question, generate-g2-question, generate-report, generate-team-report, finalize-report, sign-report-upload, generate-dr-content, request-external-feedback, feedback-context, submit-external-feedback, reminders, generate-email-drafts, get-email-drafts, update-email-draft, approve-email-draft, hold-email-draft, approve-email-sequence, mark-sprint-purchased, schedule-debrief-emails, cancel-scheduled-email` });
   }
 }
 
@@ -4283,6 +4285,46 @@ async function handleScheduleDebriefEmails(req, res) {
     }
 
     return res.status(200).json({ ok: true, created });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+}
+
+// ── ACTION: approve-email-draft ──────────────────────────────────────────────
+// POST /api/diagnostic?action=approve-email-draft
+// Body: { draft_id, session }
+// Promotes a single email draft from 'draft' → 'scheduled'.
+// ─────────────────────────────────────────────────────────────────────────────
+async function handleApproveEmailDraft(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const { draft_id, session } = req.body || {};
+  if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
+  if (!draft_id) return res.status(400).json({ error: 'draft_id required' });
+  try {
+    const r = await sb('/rest/v1/email_drafts?id=eq.' + encodeURIComponent(draft_id) + '&status=eq.draft',
+      'PATCH', { status: 'scheduled', updated_at: new Date().toISOString() }, { Prefer: 'return=minimal' });
+    if (!r.ok) return res.status(400).json({ error: 'Could not approve draft -- it may already be scheduled or sent.' });
+    return res.status(200).json({ ok: true });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+}
+
+// ── ACTION: hold-email-draft ──────────────────────────────────────────────────
+// POST /api/diagnostic?action=hold-email-draft
+// Body: { draft_id, session }
+// Moves a scheduled email back to 'draft' so it will not send until re-approved.
+// ─────────────────────────────────────────────────────────────────────────────
+async function handleHoldEmailDraft(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const { draft_id, session } = req.body || {};
+  if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
+  if (!draft_id) return res.status(400).json({ error: 'draft_id required' });
+  try {
+    const r = await sb('/rest/v1/email_drafts?id=eq.' + encodeURIComponent(draft_id) + '&status=eq.scheduled',
+      'PATCH', { status: 'draft', updated_at: new Date().toISOString() }, { Prefer: 'return=minimal' });
+    if (!r.ok) return res.status(400).json({ error: 'Could not hold this email -- it may already be sent or cancelled.' });
+    return res.status(200).json({ ok: true });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }

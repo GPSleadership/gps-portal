@@ -8015,10 +8015,20 @@ function _renderEmailDraftsUI(el, data) {
   var html = '<div style="padding:20px 4px 4px;">';
 
   // Status bar
-  if (approved) {
-    html += '<div style="margin-bottom:16px;padding:10px 14px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;font-size:13px;color:#15803d;font-weight:600;">Sequence approved — emails are scheduled and will send automatically.</div>';
-  } else if (drafts.length > 0) {
-    html += '<div style="margin-bottom:16px;padding:10px 14px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;font-size:13px;color:#92400e;font-weight:600;">Review and edit the drafts below, then approve the sequence to activate sending.</div>';
+  if (drafts.length > 0) {
+    var scheduledCount = drafts.filter(function(d) { return d.status === 'scheduled'; }).length;
+    var draftCount = drafts.filter(function(d) { return d.status === 'draft'; }).length;
+    var sentCount = drafts.filter(function(d) { return d.status === 'sent'; }).length;
+    if (draftCount === 0 && scheduledCount > 0) {
+      html += '<div style="margin-bottom:16px;padding:10px 14px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;font-size:13px;color:#15803d;font-weight:600;">All emails approved and scheduled to send automatically.</div>';
+    } else if (scheduledCount > 0 && draftCount > 0) {
+      html += '<div style="margin-bottom:16px;padding:10px 14px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;font-size:13px;color:#92400e;">'
+        + '<strong>' + scheduledCount + ' of ' + (scheduledCount + draftCount) + ' approved</strong> — '
+        + draftCount + ' still in draft and will not send until you approve them.'
+        + '</div>';
+    } else if (draftCount > 0) {
+      html += '<div style="margin-bottom:16px;padding:10px 14px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;font-size:13px;color:#92400e;font-weight:600;">Review and edit the drafts below. Approve each email individually, or use "Approve All" to schedule everything at once.</div>';
+    }
   }
   if (purchased) {
     html += '<div style="margin-bottom:16px;padding:10px 14px;background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;font-size:13px;color:#1d4ed8;">Sprint marked as purchased — E4-E7 sponsor follow-ups have been cancelled.</div>';
@@ -8027,8 +8037,10 @@ function _renderEmailDraftsUI(el, data) {
   // Action buttons
   html += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">';
   html += '<button class="dbtn dbtn-outline" onclick="_generateEmailDrafts()" style="font-size:13px;">' + (drafts.length > 0 ? 'Regenerate Drafts' : 'Generate Email Drafts') + '</button>';
-  if (drafts.length > 0 && !approved) {
-    html += '<button class="dbtn dbtn-primary" onclick="_approveEmailSequence()" style="font-size:13px;">Approve &amp; Schedule Sequence</button>';
+  var hasDrafts = drafts.some(function(d) { return d.status === 'draft'; });
+  if (hasDrafts) {
+    var hasScheduled = drafts.some(function(d) { return d.status === 'scheduled'; });
+    html += '<button class="dbtn dbtn-primary" onclick="_approveEmailSequence()" style="font-size:13px;">' + (hasScheduled ? 'Approve All Remaining' : 'Approve All') + '</button>';
   }
   if (drafts.length > 0 && !purchased) {
     html += '<button class="dbtn dbtn-outline" onclick="_markSprintPurchased()" style="font-size:13px;border-color:var(--d-green);color:var(--d-green);">Mark Sprint Purchased</button>';
@@ -8058,16 +8070,41 @@ function _renderEmailDraftsUI(el, data) {
 
 function _renderDraftCard(d, seqLabel, statusColor, approved) {
   var label = seqLabel[d.email_key] || d.email_key;
-  var sc = statusColor[d.status] || '#6b7280';
   var schFmt = d.scheduled_for ? new Date(d.scheduled_for).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Unscheduled';
   var toLine = (d.to_name || d.to_email) ? ((d.to_name || '') + (d.to_email ? ' <' + d.to_email + '>' : '')) : 'No recipient set';
   var editable = ['draft', 'scheduled'].includes(d.status);
-  var html = '<div style="border:1px solid var(--d-border);border-radius:8px;margin-bottom:10px;overflow:hidden;">';
-  html += '<details><summary style="padding:12px 16px;cursor:pointer;background:var(--d-light);list-style:none;display:flex;justify-content:space-between;align-items:center;gap:8px;">';
-  html += '<span style="font-weight:700;font-size:13px;color:var(--d-dark);">' + esc(label) + '</span>';
+
+  // Visual style per status
+  var borderColor, bgColor, pillBg, pillColor, pillText, rowIcon;
+  if (d.status === 'scheduled') {
+    borderColor = '#2563eb'; bgColor = '#eff6ff'; pillBg = '#dbeafe'; pillColor = '#1d4ed8';
+    pillText = 'Scheduled'; rowIcon = '&#10003; ';
+  } else if (d.status === 'sent') {
+    borderColor = '#16a34a'; bgColor = '#f0fdf4'; pillBg = '#dcfce7'; pillColor = '#15803d';
+    pillText = 'Sent'; rowIcon = '&#10003; ';
+  } else if (d.status === 'cancelled') {
+    borderColor = '#9ca3af'; bgColor = '#f9fafb'; pillBg = '#f3f4f6'; pillColor = '#6b7280';
+    pillText = 'Cancelled'; rowIcon = '';
+  } else {
+    // draft
+    borderColor = '#f59e0b'; bgColor = '#fffbeb'; pillBg = '#fef3c7'; pillColor = '#92400e';
+    pillText = 'Draft'; rowIcon = '';
+  }
+
+  var html = '<div style="border:1px solid ' + borderColor + ';border-left:4px solid ' + borderColor + ';border-radius:8px;margin-bottom:10px;overflow:hidden;">';
+  html += '<details><summary style="padding:12px 16px;cursor:pointer;background:' + bgColor + ';list-style:none;display:flex;justify-content:space-between;align-items:center;gap:8px;">';
+  html += '<span style="font-weight:700;font-size:13px;color:var(--d-dark);">' + rowIcon + esc(label) + '</span>';
   html += '<div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">';
-  html += '<span style="font-size:11px;color:' + sc + ';font-weight:700;text-transform:uppercase;">' + d.status + '</span>';
-  html += '<span style="font-size:11px;color:var(--d-mid);">' + schFmt + '</span>';
+  html += '<span style="font-size:11px;font-weight:700;background:' + pillBg + ';color:' + pillColor + ';padding:2px 9px;border-radius:20px;white-space:nowrap;">' + pillText + '</span>';
+  html += '<span style="font-size:11px;color:var(--d-mid);white-space:nowrap;">' + schFmt + '</span>';
+
+  // Per-row action button — stopPropagation so clicks don't toggle the <details>
+  if (d.status === 'draft') {
+    html += '<button class="dbtn dbtn-sm" onclick="event.stopPropagation();event.preventDefault();_approveEmailDraft(\'' + d.id + '\')" style="font-size:11px;background:#16a34a;color:#fff;border:none;padding:3px 10px;border-radius:5px;cursor:pointer;white-space:nowrap;">Approve</button>';
+  } else if (d.status === 'scheduled') {
+    html += '<button class="dbtn dbtn-sm dbtn-outline" onclick="event.stopPropagation();event.preventDefault();_holdEmailDraft(\'' + d.id + '\')" style="font-size:11px;padding:3px 10px;border-radius:5px;cursor:pointer;white-space:nowrap;">Hold</button>';
+  }
+
   html += '</div></summary>';
   html += '<div style="padding:14px 16px;">';
   html += '<div style="font-size:11px;color:var(--d-mid);margin-bottom:10px;">To: ' + esc(toLine) + '</div>';
@@ -8077,7 +8114,15 @@ function _renderDraftCard(d, seqLabel, statusColor, approved) {
     html += '<input id="esubj-' + d.id + '" type="text" value="' + esc(d.subject || '') + '" style="width:100%;padding:6px 10px;border:1px solid var(--d-border);border-radius:6px;font-size:13px;box-sizing:border-box;" /></div>';
     html += '<div><label style="font-size:11px;font-weight:700;color:var(--d-mid);display:block;margin-bottom:4px;">Body</label>';
     html += '<textarea id="ebody-' + d.id + '" rows="8" style="width:100%;padding:8px 10px;border:1px solid var(--d-border);border-radius:6px;font-size:13px;box-sizing:border-box;resize:vertical;font-family:inherit;">' + esc(d.body || '') + '</textarea></div>';
-    html += '<div style="margin-top:10px;"><button class="dbtn dbtn-outline dbtn-sm" onclick="_saveDraftEdit(\'' + d.id + '\')">Save edits</button><span id="esave-status-' + d.id + '" style="font-size:12px;color:var(--d-mid);margin-left:10px;"></span></div>';
+    html += '<div style="margin-top:10px;display:flex;gap:8px;align-items:center;">';
+    html += '<button class="dbtn dbtn-outline dbtn-sm" onclick="_saveDraftEdit(\'' + d.id + '\')">Save edits</button>';
+    if (d.status === 'draft') {
+      html += '<button class="dbtn dbtn-sm" onclick="_approveEmailDraft(\'' + d.id + '\')" style="font-size:12px;background:#16a34a;color:#fff;border:none;padding:4px 12px;border-radius:5px;cursor:pointer;">Approve &amp; Schedule</button>';
+    } else if (d.status === 'scheduled') {
+      html += '<button class="dbtn dbtn-sm dbtn-outline" onclick="_holdEmailDraft(\'' + d.id + '\')" style="font-size:12px;">Put on Hold</button>';
+    }
+    html += '<span id="esave-status-' + d.id + '" style="font-size:12px;color:var(--d-mid);"></span>';
+    html += '</div>';
   } else {
     html += '<div style="font-size:12px;font-weight:700;color:var(--d-dark);margin-bottom:4px;">Subject: ' + esc(d.subject || '') + '</div>';
     html += '<div style="font-size:13px;color:var(--d-dark);white-space:pre-wrap;background:#f8f9fb;padding:10px;border-radius:6px;border:1px solid var(--d-border);">' + esc(d.body || '') + '</div>';
@@ -8085,6 +8130,30 @@ function _renderDraftCard(d, seqLabel, statusColor, approved) {
 
   html += '</div></details></div>';
   return html;
+}
+
+async function _approveEmailDraft(draftId) {
+  try {
+    const resp = await fetch('/api/diagnostic?action=approve-email-draft', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ draft_id: draftId, session: getCoachSessionToken() }),
+    });
+    const data = await resp.json().catch(function() { return {}; });
+    if (data.ok) { _loadEmailDrafts(); }
+    else { toast('Could not approve: ' + (data.error || 'unknown error')); }
+  } catch (e) { toast('Approve failed. Please try again.'); }
+}
+
+async function _holdEmailDraft(draftId) {
+  try {
+    const resp = await fetch('/api/diagnostic?action=hold-email-draft', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ draft_id: draftId, session: getCoachSessionToken() }),
+    });
+    const data = await resp.json().catch(function() { return {}; });
+    if (data.ok) { _loadEmailDrafts(); }
+    else { toast('Could not hold: ' + (data.error || 'unknown error')); }
+  } catch (e) { toast('Hold failed. Please try again.'); }
 }
 
 async function _saveDraftEdit(draftId) {
