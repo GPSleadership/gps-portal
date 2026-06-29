@@ -569,6 +569,10 @@ export default async function handler(req, res) {
       const recKey   = body.rec_key;   // rec UUID
       const decision = body.decision;  // 'commit' | 'pass' | null (clear)
       if (!teamId || !recKey) return res.status(400).json({ error: 'team_id and rec_key required' });
+      // Allowlist decision values -- reject anything unexpected before touching the DB
+      if (!['commit', 'pass', null].includes(decision)) return res.status(400).json({ error: 'invalid decision' });
+      // rec_key must be a UUID (rec.id format) to prevent injection / key confusion
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(recKey)) return res.status(400).json({ error: 'invalid rec_key' });
       if (!teamIds.includes(teamId)) return res.status(403).json({ error: 'Not authorized for this team' });
       const link = links.find(l => l.team_id === teamId);
       if (!link) return res.status(403).json({ error: 'No sponsor link for this team' });

@@ -221,6 +221,7 @@ function loadTeam(teamId){
     if(res.gated){ renderGate(res); return; }
     DATA = res;
     window.REC_COMMITMENTS = res.rec_commitments || {};
+    window._hasCommitted = Object.values(window.REC_COMMITMENTS).some(function(v){ return v==='commit'; });
     var t=res.team;
     document.getElementById('teamMeta').textContent = (t.team_type||'')+' team · Sponsor: '+(t.primary_sponsor||'');
     renderTeam();
@@ -297,7 +298,7 @@ function renderSprintCta(url, firstName, compact){
     +'<div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#9FC0D6;font-weight:700;margin-bottom:6px;">Ready to build on this?</div>'
     +'<div style="font-family:Georgia,serif;font-size:20px;font-weight:800;color:#fff;margin-bottom:8px;">'+titleLine+'</div>'
     +'<div style="font-size:14px;color:#cfe0ea;line-height:1.6;margin-bottom:12px;">The diagnostic tells you where the gaps are. The Sprint closes them -- with structured coaching, weekly accountability, and a 90-day plan built around what this leader needs to deliver. Three months · bi-weekly coaching sessions · 45-day and 90-day re-score · $10,000</div>'
-    +'<details style="margin-bottom:16px;"><summary style="cursor:pointer;font-size:13px;color:#9FC0D6;font-weight:700;letter-spacing:.02em;outline:none;user-select:none;list-style:none;">What 90 days buys you ▸</summary>'
+    +'<details open style="margin-bottom:16px;"><summary style="cursor:pointer;font-size:13px;color:#9FC0D6;font-weight:700;letter-spacing:.02em;outline:none;user-select:none;list-style:none;">What 90 days buys you ▸</summary>'
     +'<div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">'
     +'<div style="font-size:13px;color:#eaf2f7;line-height:1.5;display:flex;gap:10px;"><span style="color:#01949A;font-weight:900;min-width:16px;">1</span><span>A 90-day plan built specifically around the trust gap -- not a generic program.</span></div>'
     +'<div style="font-size:13px;color:#eaf2f7;line-height:1.5;display:flex;gap:10px;"><span style="color:#01949A;font-weight:900;min-width:16px;">2</span><span>A 45-day re-score -- you see movement in the data before you decide how far to invest.</span></div>'
@@ -549,71 +550,82 @@ function renderRecs(recs){
       ? '<div style="margin-top:8px;font-size:12.5px;line-height:1.5;color:var(--navy-dark);background:var(--light-sand);border-radius:7px;padding:8px 11px;">'+(r.quick_start_today?'<div><b>By end of today:</b> '+esc(r.quick_start_today)+'</div>':'')+(r.quick_start_week?'<div style="margin-top:3px;"><b>By end of this week:</b> '+esc(r.quick_start_week)+'</div>':'')+'</div>'
       : '';
     var meta = ((r.owner||r.timeframe)?'<div class="rec-meta">'+(r.owner?'Owner: '+esc(r.owner):'')+(r.owner&&r.timeframe?' &middot; ':'')+(r.timeframe?'Timeframe: '+esc(r.timeframe):'')+'</div>':'');
-    var body = '<div class="rec-desc">'+esc(r.description)+'</div>'+ qs +(r.updated_at?'<div class="rec-foot">Updated '+fmtDate(r.updated_at)+'</div>':'');
-    // Commit / Pass buttons
-    var cbStyle = 'font-size:12px;font-weight:700;padding:7px 18px;border-radius:20px;cursor:pointer;border:2px solid #01949A;transition:all .15s;'
+    // Show a one-sentence teaser outside the details so Peter can decide without clicking
+    var rawDesc = r.description || '';
+    var teaserEnd = rawDesc.indexOf('.');
+    var teaser = teaserEnd > 0 ? rawDesc.slice(0, teaserEnd+1) : rawDesc.slice(0, 120);
+    var body = '<div class="rec-desc">'+esc(rawDesc)+'</div>'+ qs +(r.updated_at?'<div class="rec-foot">Updated '+fmtDate(r.updated_at)+'</div>':'');
+    // Commit / Pass buttons — 8px radius to match GPS brand system (not pill shape)
+    var cbStyle = 'font-size:12px;font-weight:700;font-family:Montserrat,sans-serif;padding:8px 22px;border-radius:8px;cursor:pointer;border:2px solid #01949A;transition:all .15s;'
       +(isCommit?'background:#01949A;color:#fff;':'background:#fff;color:#01949A;');
-    var pbStyle = 'font-size:12px;font-weight:700;padding:7px 16px;border-radius:20px;cursor:pointer;border:2px solid;transition:all .15s;margin-left:8px;'
+    var pbStyle = 'font-size:12px;font-weight:700;font-family:Montserrat,sans-serif;padding:8px 18px;border-radius:8px;cursor:pointer;border:2px solid;transition:all .15s;margin-left:8px;'
       +(isPass?'background:#6b7280;color:#fff;border-color:#6b7280;':'background:#fff;color:#9ca3af;border-color:#d1d5db;');
     var clrStyle = 'font-size:11px;background:none;border:none;color:#9ca3af;cursor:pointer;padding:0 0 0 12px;text-decoration:underline;display:'+(curDec?'inline':'none')+';';
     var commitRow = '<div style="display:flex;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid #f0f0f0;flex-wrap:wrap;gap:4px;">'
-      +'<span style="font-size:11px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-right:8px;">Your call:</span>'
-      +'<button id="cbtn-'+recKey+'" style="'+cbStyle+'" onclick="setRecCommitment('+JSON.stringify(recKey)+",'commit',event)\">"+(isCommit ? '&#10003; Committed' : "I'm in &rarr;")+'</button>'
+      +'<span style="font-size:12px;color:var(--navy);font-weight:700;font-family:Montserrat,sans-serif;text-transform:uppercase;letter-spacing:.04em;margin-right:8px;">Your call:</span>'
+      +'<button id="cbtn-'+recKey+'" style="'+cbStyle+'" onclick="setRecCommitment('+JSON.stringify(recKey)+",'commit',event)\">"+(isCommit ? '&#10003; Committed' : "Back this &rarr;")+'</button>'
       +'<button id="pbtn-'+recKey+'" style="'+pbStyle+'" onclick="setRecCommitment('+JSON.stringify(recKey)+",'pass',event)\">"+(isPass ? 'Not this time' : 'Pass')+'</button>'
       +'<button id="clr-'+recKey+'" style="'+clrStyle+'" onclick="setRecCommitment('+JSON.stringify(recKey)+',null,event)">Clear</button>'
       +'<span id="rcerr-'+recKey+'" style="font-size:11px;color:#dc2626;margin-left:8px;"></span>'
-      +'</div>';
+      +'</div>'
+      +'<div style="font-size:11px;color:#9ca3af;margin-top:5px;">Your selections go to Alex — no charge here. Alex will build the sprint around what you back.</div>';
     return '<div class="rec '+recCat(r)+'" id="reccard-'+recKey+'">'
     + '<div class="rec-title">'+esc(r.short_title)+'</div>'
     + meta
     + (bands?'<div style="margin-top:4px;">'+bands+'</div>':'')
-    + '<details style="margin-top:6px;"><summary style="cursor:pointer;font-size:12px;color:var(--navy);font-weight:700;letter-spacing:.01em;list-style:none;outline:none;user-select:none;">Details &#9658;</summary>'
+    + (teaser?'<div style="font-size:13px;color:#4a5568;margin-top:5px;line-height:1.5;">'+esc(teaser)+'</div>':'')
+    + '<details style="margin-top:6px;"><summary style="cursor:pointer;font-size:12px;color:var(--navy);font-weight:700;letter-spacing:.01em;list-style:none;outline:none;user-select:none;">Full detail &#9658;</summary>'
     + '<div style="margin-top:6px;">' + body + '</div>'
     + '</details>'
     + commitRow
     + '</div>';
   }
-  // Until there's actual content, keep this neutral -- no scope/accelerator framing
-  // and no CTA when empty (reads like a sales pitch on an empty page).
   var all = scope.concat(accel);
+  // Orientation sentence — tells Peter what the buttons do before he sees them
+  var leaderFirst = (DATA&&DATA.members&&DATA.members.length===1) ? String(DATA.members[0].name||'').split(' ')[0] : null;
+  var introText = all.length
+    ? '<p style="font-size:13.5px;color:#1B2A3A;margin:0 0 10px;line-height:1.6;">'
+      +(leaderFirst ? 'Alex has identified '+all.length+' priorities for '+esc(leaderFirst)+"'s development. " : '')
+      +'Back the ones you would invest in -- your selections go directly to Alex and shape what gets built into the sprint. No charge here.</p>'
+    : '';
   var summaryBar = all.length
     ? '<div id="rec-summary-bar" style="font-size:12px;padding:9px 14px;background:#f0faf9;border:1px solid #b2e0de;border-radius:8px;margin-bottom:12px;display:none;"></div>'
     : '';
   var body = all.length ? all.map(card).join('') : '<div class="empty">Nothing in motion yet.</div>';
-  // "Discuss these options" -- only show if there are recs AND we have a sprint URL to point to
-  var cta = '';
-  if(all.length && DATA && DATA.sprint_cta_url){
-    cta = '<div style="text-align:center;margin-top:20px;"><a class="cta-btn" href="'+esc(DATA.sprint_cta_url)+'">Discuss these options</a></div>';
-  }
-  return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Recommendations</div></div>'+summaryBar+body+cta+'</div>';
+  // Sprint CTA is handled by the bottom renderSprintCta block -- no duplicate CTA here
+  return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Recommendations</div></div>'+introText+summaryBar+body+'</div>';
 }
 
 // ── Rec commitment helpers ────────────────────────────────────────────────────
 async function setRecCommitment(recKey, decision, evt){
   if(evt && evt.stopPropagation) evt.stopPropagation();
   window.REC_COMMITMENTS = window.REC_COMMITMENTS || {};
+  // Capture prior state BEFORE optimistic update so we can restore it on error
+  var _priorDec = Object.prototype.hasOwnProperty.call(window.REC_COMMITMENTS, recKey)
+    ? window.REC_COMMITMENTS[recKey] : undefined;
   // Optimistic update
   if(decision === null){ delete window.REC_COMMITMENTS[recKey]; }
   else { window.REC_COMMITMENTS[recKey] = decision; }
+  if(decision === 'commit') window._hasCommitted = true;
   updateRecCardButtons(recKey);
   updateRecSummaryBar();
   // Clear any prior error
   var errEl = document.getElementById('rcerr-'+recKey);
   if(errEl) errEl.textContent = '';
-  // Persist via API (uses the sponsor session cookie already on the request)
+  // Persist via API — token is required for sponsor auth
   try {
     var teamId = DATA && DATA.team && DATA.team.id;
     var r = await fetch('/api/sponsor-data', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ action:'saveRecCommitment', team_id:teamId, rec_key:recKey, decision:decision })
+      body: JSON.stringify({ action:'saveRecCommitment', token:TOKEN, team_id:teamId, rec_key:recKey, decision:decision })
     });
     var j = await r.json().catch(function(){ return {}; });
     if(!r.ok || !j.ok) throw new Error(j.error || ('HTTP '+r.status));
   } catch(err) {
-    // Revert on failure
-    if(decision === null){ delete window.REC_COMMITMENTS[recKey]; }
-    else if(decision === 'commit'){ window.REC_COMMITMENTS[recKey] = decision === 'commit' ? 'pass' : 'commit'; }
+    // Revert to the exact state before the click
+    if(_priorDec === undefined){ delete window.REC_COMMITMENTS[recKey]; }
+    else { window.REC_COMMITMENTS[recKey] = _priorDec; }
     updateRecCardButtons(recKey);
     updateRecSummaryBar();
     if(errEl) errEl.textContent = 'Save failed — try again';
@@ -658,6 +670,8 @@ function updateRecSummaryBar(){
   bar.innerHTML = (committed?'<span style="color:#01949A;font-weight:700;">'+committed+' committed</span> &nbsp;':'')
     +(passed?'<span style="color:#6b7280;font-weight:600;">'+passed+' passed</span> &nbsp;':'')
     +(remaining&&(committed||passed)?'<span style="color:#b45309;">'+remaining+' no decision yet</span>':'');
+  // Update sticky bar label/visibility whenever commitment state changes
+  if(window._updateSticky) window._updateSticky();
 }
 
 var SIG={green:'On track',yellow:'Watch',red:'Off track'};
@@ -980,31 +994,38 @@ function sponsorDecide(clientId, kind){
 
 init();
 
-// ── Sticky sprint bar -- shows after 400px scroll when sprint URL is set ──
+// ── Sticky sprint bar -- shows immediately on first commit, or after 400px scroll ──
 (function(){
-  var shown = false, bar = document.getElementById('stickyCta');
+  var hrefSet = false, bar = document.getElementById('stickyCta');
   function updateSticky(){
-    if(!DATA || !DATA.sprint_cta_url){ if(bar) bar.style.display='none'; return; }
-    // Set link + label once
-    if(!shown){
-      var btn=document.getElementById('stickyBtn');
-      var lbl=document.getElementById('stickyLabel');
-      if(btn) btn.href = DATA.sprint_cta_url;
-      // Personalise with the leader first name if one-person team
-      var members = DATA.members||[];
-      if(members.length===1){
-        var leaderFirst = String(members[0].name||'').split(' ')[0];
-        if(leaderFirst && lbl) lbl.textContent = 'Start '+leaderFirst+"'s Sprint";
-        if(leaderFirst && btn) btn.textContent = 'Start '+leaderFirst+"'s Sprint \u2192";
-      }
-      shown = true;
+    if(!bar || !DATA || !DATA.sprint_cta_url){ if(bar) bar.style.display='none'; return; }
+    var btn=document.getElementById('stickyBtn');
+    var lbl=document.getElementById('stickyLabel');
+    if(!hrefSet){ if(btn) btn.href = DATA.sprint_cta_url; hrefSet = true; }
+    // Count committed recs
+    var commitCount = Object.values(window.REC_COMMITMENTS||{}).filter(function(v){ return v==='commit'; }).length;
+    var members = DATA.members||[];
+    var leaderFirst = members.length===1 ? String(members[0].name||'').split(' ')[0] : null;
+    // Label: once committed, call out their investment; otherwise generic
+    if(window._hasCommitted && commitCount > 0){
+      if(lbl) lbl.textContent = "You are in on "+commitCount+" -- here is the Sprint that delivers them";
+      if(btn) btn.textContent = 'Review the Sprint \u2192';
+    } else if(leaderFirst){
+      if(lbl) lbl.textContent = 'The 90-Day Sprint';
+      if(btn) btn.textContent = 'Start '+leaderFirst+"'s Sprint \u2192";
+    } else {
+      if(lbl) lbl.textContent = 'The 90-Day Sprint';
+      if(btn) btn.textContent = 'Get started \u2192';
     }
-    if(window.scrollY > 400){ bar.style.display='block'; } else { bar.style.display='none'; }
+    // Show immediately on first commit; otherwise on scroll
+    if(window._hasCommitted || window.scrollY > 400){ bar.style.display='block'; } else { bar.style.display='none'; }
   }
   window.addEventListener('scroll', updateSticky, {passive:true});
-  // Also hook into loadTeam so bar updates when data changes
+  // Expose so commitment buttons can trigger a re-render
+  window._updateSticky = updateSticky;
+  // Reset href flag when team changes
   var _origLoadTeam = loadTeam;
-  loadTeam = function(id){ shown=false; _origLoadTeam(id); };
+  loadTeam = function(id){ hrefSet=false; _origLoadTeam(id); };
 })();
 </script>
 <!-- ── Save-to-device prompt (PWA install) ── -->
