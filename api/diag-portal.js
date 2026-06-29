@@ -237,8 +237,12 @@ export default async function handler(req, res) {
         }
         // Report-release gate: if report_release_at is set and still in the future,
         // override the leader's visible status to 'report_pending' so the page shows
-        // a "coming soon" holding screen instead of the actual report. The report data
-        // is never sent — the gate lives here server-side, not in the browser.
+        // a "coming soon" holding screen. We save the real status first so that scores
+        // are still included in the response — the coach preview uses ?preview= on the
+        // client side to override status and render the full page, and it needs data.
+        // Scores being in the JSON while a leader sees a holding screen is acceptable:
+        // the client never renders them in report_pending state.
+        const _statusForScores = diag.status;
         if (
           ['report_final','debrief_complete','plan_active'].includes(diag.status) &&
           diag.report_release_at &&
@@ -247,10 +251,10 @@ export default async function handler(req, res) {
           diag._release_at = diag.report_release_at; // pass through so the page can show the date
           diag.status = 'report_pending';             // synthetic holding status
         }
-        // When the report is released, attach the latest draft's numeric scores so the
-        // leader sees their color-coded visual results page (TP3, pillars, impact, bench,
-        // self-vs-others). Gated to released states; never exposes the AI narrative here.
-        if (['report_final','debrief_complete','plan_active'].includes(diag.status)) {
+        // Attach the latest draft's numeric scores for any released state (including when
+        // the gate is active — preview mode needs these even while the leader cannot yet
+        // see them). Never exposes the AI narrative here.
+        if (['report_final','debrief_complete','plan_active'].includes(_statusForScores)) {
           try {
             const sr = await sb(`/rest/v1/diagnostic_report_drafts?diagnostic_id=eq.${diag.id}&select=scores_json,raw_markdown,generated_at&order=generated_at.desc&limit=1`);
             const srows = sr.ok ? await sr.json() : [];
