@@ -10567,6 +10567,7 @@ async function drManageTeam(teamId){
   var panelRecs=drRecsPanel(team, recs);
   var panelSignals=drSignalsPanel(team, signals, fbInvites);
   var panelSponsors=drSponsorsPanel(team, links, sponsors, members, nameById, recs);
+  if(window._drSpEdit) window._drSpEdit.diags=diags;  // used by drEditSponsor to schedule sponsor emails
   var panelPOC=drPocPanel(team, clients);
   var panelNarr=drNarrativePanel(team);
 
@@ -11162,7 +11163,20 @@ function drEditSponsor(linkId){
     var sdd=document.getElementById('drspe_debrief').value||null;
     var supIds=[]; document.querySelectorAll('.dr_supedit').forEach(function(c){ if(c.checked) supIds.push(c.value); });
     this.disabled=true; this.textContent='Saving…';
-    try{ await cdUpdate('sponsor_teams',{ confidentiality_mode:conf, sponsor_debrief_date:sdd, supervises_client_ids:supIds }, { eq:{ id:linkId } }); close(); drManageTeam(teamId); }
+    try{
+      await cdUpdate('sponsor_teams',{ confidentiality_mode:conf, sponsor_debrief_date:sdd, supervises_client_ids:supIds }, { eq:{ id:linkId } });
+      if(sdd && supIds.length){
+        var allDiags=(window._drSpEdit&&window._drSpEdit.diags)||[];
+        var latestByClient={};
+        allDiags.filter(function(d){ return supIds.indexOf(d.client_id)>=0; }).forEach(function(d){
+          if(!latestByClient[d.client_id]||d.created_at>latestByClient[d.client_id].created_at) latestByClient[d.client_id]=d;
+        });
+        Object.keys(latestByClient).forEach(function(cid){
+          fetch('/api/diagnostic?action=schedule-debrief-emails',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({diagnostic_id:latestByClient[cid].id,session:getCoachSessionToken()})}).catch(function(){});
+        });
+      }
+      close(); drManageTeam(teamId);
+    }
     catch(e){ document.getElementById('drspe_err').textContent=e.message; this.disabled=false; this.textContent='Save changes'; }
   };
 }
