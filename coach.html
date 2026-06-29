@@ -7188,6 +7188,17 @@ function renderOverviewTab() {
         <div style="font-size:11px;color:var(--d-mid);margin-top:4px;">What you actually charged — Standard ≈ $5K, Pro ≈ $10K, override as needed. Feeds the Insights revenue total.</div>
       </div>
 
+      <div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--d-border);">
+        <div style="font-size:11px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Report release date</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="diag-release-date" type="date" value="${d.report_release_at ? d.report_release_at.slice(0,10) : ''}" style="font-size:13px;">
+          <button class="dbtn dbtn-primary dbtn-sm" onclick="saveReportReleaseAt()">Save</button>
+          <button class="dbtn dbtn-outline dbtn-sm" onclick="saveReportReleaseAt(true)" title="Clear the release date — report is visible now">Clear</button>
+          <span id="diag-release-msg" style="font-size:11px;color:var(--d-green);display:none;">✓ Saved</span>
+        </div>
+        <div style="font-size:11px;color:var(--d-mid);margin-top:4px;">${d.report_release_at ? ('Report unlocks for leader on ' + diagFormatDate(d.report_release_at) + '. Set to a past date or clear to release now.') : 'Leave blank to release immediately. Set a future date to hold the report until that day.'}</div>
+      </div>
+
       <div style="margin-bottom:14px;">
         <div style="font-size:11px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Kick-off / Intake Notes</div>
         <textarea id="intake-notes-field" style="min-height:100px;" onblur="saveIntakeNotes(this.value)">${d.intake_notes || ''}</textarea>
@@ -7522,6 +7533,26 @@ async function saveDiagFee() {
   await updateDiag({ fee: fee });
   const msg = document.getElementById('diag-fee-msg');
   if (msg) { msg.style.display = 'inline'; setTimeout(() => msg.style.display = 'none', 2500); }
+}
+
+async function saveReportReleaseAt(clear) {
+  let val = null;
+  if (!clear) {
+    const el = document.getElementById('diag-release-date');
+    const raw = el ? el.value.trim() : '';
+    // Convert YYYY-MM-DD date input to noon UTC ISO string to avoid timezone edge cases
+    val = raw ? (raw + 'T12:00:00.000Z') : null;
+  }
+  await updateDiag({ report_release_at: val });
+  if (DIAG_SEL) DIAG_SEL.report_release_at = val;
+  ALL_DIAGS = ALL_DIAGS.map(d => d.id === DIAG_SEL.id ? { ...d, report_release_at: val } : d);
+  const msg = document.getElementById('diag-release-msg');
+  if (msg) { msg.style.display = 'inline'; setTimeout(() => msg.style.display = 'none', 2500); }
+  // Re-render the hint text under the field
+  const hint = document.querySelector('#diag-release-date')?.closest('div[style*="padding-bottom"]')?.querySelector('div[style*="margin-top:4px"]');
+  if (hint) hint.textContent = val
+    ? ('Report unlocks for leader on ' + diagFormatDate(val) + '. Set to a past date or clear to release now.')
+    : 'Leave blank to release immediately. Set a future date to hold the report until that day.';
 }
 
 async function saveInterviewSettings() {
