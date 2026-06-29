@@ -275,7 +275,9 @@ export default async function handler(req, res) {
         // Sprint conversion offer — shown from debrief_date forward.
         // Computes credit window and selects the right link/price from renewal_config.
         // Never blocks the page: any failure here is swallowed.
-        if (diag.debrief_date) {
+        // Demo leaders (token starts with 'demo-') suppress this CTA entirely so
+        // the sales flow is invisible during product demos.
+        if (diag.debrief_date && !String(diag.leader_token || '').startsWith('demo-')) {
           const today      = new Date();
           const debriefDay = new Date(diag.debrief_date + 'T12:00:00');
           if (today >= debriefDay) {
