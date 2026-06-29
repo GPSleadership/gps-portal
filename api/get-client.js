@@ -229,12 +229,12 @@ async function coachLogin(body, res) {
   if (!ok) return res.status(401).json({ error: 'Incorrect password' });
 
   const session = signSession({ role: 'coach', lvl: identity.lvl, nm: identity.nm, em: identity.em, aid: identity.aid, exp: Date.now() + COACH_SESSION_TTL_MS });
-  return res.status(200).json({ ok: true, session, expires_in_ms: COACH_SESSION_TTL_MS });
+  return res.status(200).json({ ok: true, session, lvl: identity.lvl, expires_in_ms: COACH_SESSION_TTL_MS });
 }
 async function coachSession(body, res) {
   const payload = verifySession(body.session);
   if (!payload) return res.status(401).json({ ok: false });
-  return res.status(200).json({ ok: true, role: payload.role, exp: payload.exp });
+  return res.status(200).json({ ok: true, role: payload.role, lvl: payload.lvl || 'owner', exp: payload.exp });
 }
 
 // ── Break-glass: email-gated coach password reset (works when locked out) ────
