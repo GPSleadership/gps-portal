@@ -195,6 +195,12 @@ async function buildMemberReport(m, confidential) {
     // the sponsor's OWN written comments (they wrote them), bench/succession, plan-approval
     // state, debrief. Peer/direct-report verbatims are NEVER fetched here — confidentiality.
     report.sponsorReadout = await buildSponsorReadout(m.client_id);
+    // Demo/test fallback: serve sponsorReadout from report_json when no diagnostic
+    // rater data exists (e.g. demo engagements). Real data always wins — this only
+    // fires when buildSponsorReadout returns null (no diagnostic_report_drafts row).
+    if (!report.sponsorReadout && m.report_json && m.report_json.sponsorReadout) {
+      report.sponsorReadout = m.report_json.sponsorReadout;
+    }
   }
   // In private mode selfVsRaters/sponsorReadout are never set, so the browser never receives them.
   return report;
