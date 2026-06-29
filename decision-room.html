@@ -564,9 +564,9 @@ function renderRecs(recs){
     var clrStyle = 'font-size:11px;background:none;border:none;color:#9ca3af;cursor:pointer;padding:0 0 0 12px;text-decoration:underline;display:'+(curDec?'inline':'none')+';';
     var commitRow = '<div style="display:flex;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid #f0f0f0;flex-wrap:wrap;gap:4px;">'
       +'<span style="font-size:12px;color:var(--navy);font-weight:700;font-family:Montserrat,sans-serif;text-transform:uppercase;letter-spacing:.04em;margin-right:8px;">Your call:</span>'
-      +'<button id="cbtn-'+recKey+'" style="'+cbStyle+'" onclick="setRecCommitment('+JSON.stringify(recKey)+",'commit',event)\">"+(isCommit ? '&#10003; Committed' : "Back this &rarr;")+'</button>'
-      +'<button id="pbtn-'+recKey+'" style="'+pbStyle+'" onclick="setRecCommitment('+JSON.stringify(recKey)+",'pass',event)\">"+(isPass ? 'Not this time' : 'Pass')+'</button>'
-      +'<button id="clr-'+recKey+'" style="'+clrStyle+'" onclick="setRecCommitment('+JSON.stringify(recKey)+',null,event)">Clear</button>'
+      +'<button id="cbtn-'+recKey+'" style="'+cbStyle+'" onclick="setRecCommitment(\''+recKey+"','commit',event)\">"+(isCommit ? '&#10003; Committed' : "Back this &rarr;")+'</button>'
+      +'<button id="pbtn-'+recKey+'" style="'+pbStyle+'" onclick="setRecCommitment(\''+recKey+"','pass',event)\">"+(isPass ? 'Not this time' : 'Pass')+'</button>'
+      +'<button id="clr-'+recKey+'" style="'+clrStyle+'" onclick="setRecCommitment(\''+recKey+"',null,event)\">Clear</button>"
       +'<span id="rcerr-'+recKey+'" style="font-size:11px;color:#dc2626;margin-left:8px;"></span>'
       +'</div>'
       +'<div style="font-size:11px;color:#9ca3af;margin-top:5px;">Your selections shape the sprint — Alex builds the 90-day plan around what you back.</div>';
