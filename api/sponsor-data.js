@@ -143,6 +143,12 @@ async function feedbackOwed(supervisesClientIds, members) {
 
 // Assemble one member's report. `confidential` => omit the self-vs-raters card
 // and any diagnostic-derived flag entirely (never fetched/sent).
+//
+// Performance: ALL independent data sources are fetched in a single Promise.all batch.
+// This reduces per-member latency from 7-10 chained round trips to 2 sequential steps:
+//   Step 1 (parallel): clients, scoreboard, engagement, pipeline, selfVsRaters, sponsorReadout
+//   Step 2 (sequential): planFocus — depends on scoreboard from Step 1
+// The two former clients queries (name, business_outcome_goal) are merged into one.
 async function buildMemberReport(m, confidential) {
   const report = {};
   report.id = m.id;
@@ -158,19 +164,46 @@ async function buildMemberReport(m, confidential) {
   // name only exists after a report is generated, so fall back to the client record.
   // (Confidentiality hides individual SCORES, not identities, so names are fine.)
   report.name = report.report_json.name || null;
-  if (!report.name) {
-    try {
-      const crow = await sbGet(`/rest/v1/clients?id=eq.${enc(m.client_id)}&select=name&limit=1`);
-      if (crow && crow[0] && crow[0].name) report.name = crow[0].name;
-    } catch (_) { /* non-fatal: falls back to role/Leader N */ }
-  }
 
-  // 90-day stakeholder scoreboard + engagement (post-diagnostic — always shown)
-  report.scoreboard = await buildScoreboard(m.client_id);
-  report.engagement = await buildEngagement(m.client_id);
-  // Process pipeline — where this leader is in the diagnostic (shown to sponsors too).
-  report.pipeline = await buildPipeline(m.client_id);
+  // Fetch all independent data sources in parallel. planFocus depends on scoreboard,
+  // so it runs after this batch (Step 2 below).
+  const [
+    clientRow,
+    scoreboard,
+    engagement,
+    pipeline,
+    selfVsRaters,
+    sponsorReadout,
+  ] = await Promise.all([
+    // Single clients query combining both needed field sets (was two separate queries).
+    sbGet(`/rest/v1/clients?id=eq.${enc(m.client_id)}&select=name,business_outcome_goal,sponsor_outcome_focus&limit=1`).catch(() => null),
+    // 90-day stakeholder scoreboard + engagement (post-diagnostic — always shown)
+    buildScoreboard(m.client_id),
+    buildEngagement(m.client_id),
+    // Process pipeline — where this leader is in the diagnostic (shown to sponsors too).
+    buildPipeline(m.client_id),
+    // Confidential 360 detail — fetched here but only attached when !confidential.
+    confidential ? Promise.resolve(null) : buildSelfVsRaters(m.client_id),
+    // Sponsor manager-view readout: aggregate by-group scores (incl "Other colleagues"),
+    // the sponsor's OWN written comments, bench/succession, plan-approval state, debrief.
+    // Peer/direct-report verbatims are NEVER fetched here — confidentiality.
+    confidential ? Promise.resolve(null) : buildSponsorReadout(m.client_id),
+  ]);
 
+  // Resolve client-level fields from the merged query
+  const clientData = clientRow && clientRow[0];
+  if (!report.name && clientData && clientData.name) report.name = clientData.name;
+  // Engagement-level business outcome the dev plan ladders up to (e.g. "Drive 3-5%
+  // annual revenue growth"). Only sponsor-driven engagements expose a business outcome.
+  report.business_outcome_goal = (clientData && clientData.sponsor_outcome_focus && clientData.business_outcome_goal)
+    ? clientData.business_outcome_goal
+    : null;
+
+  report.scoreboard = scoreboard;
+  report.engagement = engagement;
+  report.pipeline = pipeline;
+
+  // Step 2: planFocus depends on scoreboard — runs after the parallel batch.
   // The leader's REAL 90-day focus: the goal + metric they actually chose in their
   // own portal. Pulled live from the plan so the sponsor sees what the leader sees,
   // and so it isn't overwritten by the AI content generation. Falls back to the
@@ -178,30 +211,15 @@ async function buildMemberReport(m, confidential) {
   const planFocus = await buildPlanFocus(m.client_id, report.scoreboard);
   if (planFocus) report.report_json.focus = planFocus;
 
-  // Engagement-level business outcome the dev plan ladders up to (e.g. "Drive 3-5%
-  // annual revenue growth"). Shown to the sponsor regardless of whether the leader
-  // has built their 90-day plan yet. Not confidential — it's the business target.
-  try {
-    const bo = await sbGet(`/rest/v1/clients?id=eq.${enc(m.client_id)}&select=business_outcome_goal,sponsor_outcome_focus&limit=1`);
-    const boRow = bo && bo[0];
-    // Only sponsor-driven engagements expose a business outcome (omit server-side otherwise).
-    report.business_outcome_goal = (boRow && boRow.sponsor_outcome_focus && boRow.business_outcome_goal) ? boRow.business_outcome_goal : null;
-  } catch (_) { report.business_outcome_goal = null; }
-
   if (!confidential) {
-    // Confidential 360 detail — ONLY assembled for non-private engagements.
-    report.selfVsRaters = await buildSelfVsRaters(m.client_id);
-    // Sponsor manager-view readout: aggregate by-group scores (incl "Other colleagues"),
-    // the sponsor's OWN written comments (they wrote them), bench/succession, plan-approval
-    // state, debrief. Peer/direct-report verbatims are NEVER fetched here — confidentiality.
-    report.sponsorReadout = await buildSponsorReadout(m.client_id);
+    report.selfVsRaters = selfVsRaters;
     // Demo/test fallback: serve sponsorReadout from report_json when rater data
     // produced no scores. buildSponsorReadout returns a truthy object even when
     // diagnostic_report_drafts is empty (scores: null), so we check scores too.
     // Real engagements always have scores — this only fires for demo records.
-    if ((!report.sponsorReadout || !report.sponsorReadout.scores) && m.report_json && m.report_json.sponsorReadout) {
-      report.sponsorReadout = m.report_json.sponsorReadout;
-    }
+    report.sponsorReadout = (sponsorReadout && sponsorReadout.scores)
+      ? sponsorReadout
+      : (m.report_json && m.report_json.sponsorReadout ? m.report_json.sponsorReadout : sponsorReadout);
   }
   // In private mode selfVsRaters/sponsorReadout are never set, so the browser never receives them.
   return report;
@@ -505,40 +523,49 @@ export default async function handler(req, res) {
       // A 'progress' sponsor (coordinating POC) sees only WHERE each leader is in
       // the process — never another leader's scores, summary, succession, or 360.
       // They DO see their OWN full report, matched by the sponsor's linked client id.
-      const memberReports = [];
-      for (const m of members) {
+      // All member reports are built in PARALLEL — a sequential for-await loop was
+      // causing 30-40 chained Supabase round trips for a 4-person team (~4-5s load).
+      const memberReports = await Promise.all(members.map(m => {
         if (isProgress) {
-          if (ownClientId && m.client_id === ownClientId) memberReports.push(await buildMemberReport(m, false));
-          else memberReports.push(await buildMemberStatus(m));
-        } else {
-          memberReports.push(await buildMemberReport(m, isPrivate));
+          if (ownClientId && m.client_id === ownClientId) return buildMemberReport(m, false);
+          return buildMemberStatus(m);
         }
-      }
+        return buildMemberReport(m, isPrivate);
+      }));
 
-      // Results-level content (recommendations, signals, written team report) is
-      // never assembled for a progress POC — they only get process status.
-      // Omit the coach-only internal tags (gps_support_type, source_section) from the sponsor payload.
-      const recsRaw = isProgress ? [] : await sbGet(`/rest/v1/recommendations?team_id=eq.${enc(teamId)}&status=eq.approved&visible_to_client=eq.true&select=id,short_title,description,owner,timeframe,category,target_band,quick_start_today,quick_start_week,updated_at&order=updated_at.desc`);
-      const signalsRaw = isProgress ? [] : await sbGet(`/rest/v1/external_signals?team_id=eq.${enc(teamId)}&visible_to_client=eq.true&select=*&order=date_observed.desc`);
+      // Results-level content (recommendations, signals, written team report, sprint config)
+      // are independent of each other — fetch all in parallel instead of sequentially.
+      // Progress sponsors never see results content, so those resolve immediately.
+      const [recsRaw, signalsRaw, trRaw, rcRow] = await Promise.all([
+        isProgress
+          ? Promise.resolve([])
+          : sbGet(`/rest/v1/recommendations?team_id=eq.${enc(teamId)}&status=eq.approved&visible_to_client=eq.true&select=id,short_title,description,owner,timeframe,category,target_band,quick_start_today,quick_start_week,updated_at&order=updated_at.desc`).catch(() => []),
+        isProgress
+          ? Promise.resolve([])
+          : sbGet(`/rest/v1/external_signals?team_id=eq.${enc(teamId)}&visible_to_client=eq.true&select=*&order=date_observed.desc`).catch(() => []),
+        // Written team report — sponsor sees branded PDF, never draft text. Only when
+        // published (sponsor_visible) AND a PDF URL exists.
+        isProgress
+          ? Promise.resolve(null)
+          : sbGet(`/rest/v1/diagnostic_team_reports?team_id=eq.${enc(teamId)}&sponsor_visible=eq.true&report_pdf_url=not.is.null&select=report_pdf_url,generated_at&order=generated_at.desc&limit=1`).catch(() => null),
+        // Sprint CTA config — only needed for fully-revealed (non-progress, non-private) mode.
+        (!isProgress && !isPrivate)
+          ? sbGet(`/rest/v1/renewal_config?id=eq.1&select=first_sprint_credit_url,booking_url&limit=1`).catch(() => null)
+          : Promise.resolve(null),
+      ]);
 
-      // Written team report — the sponsor sees the coach-uploaded branded PDF,
-      // never the draft text. Only when published (sponsor_visible) AND a PDF exists.
-      const trRaw = isProgress ? null : await sbGet(`/rest/v1/diagnostic_team_reports?team_id=eq.${enc(teamId)}&sponsor_visible=eq.true&report_pdf_url=not.is.null&select=report_pdf_url,generated_at&order=generated_at.desc&limit=1`);
       const teamReport = (trRaw && trRaw[0]) ? { report_pdf_url: trRaw[0].report_pdf_url, generated_at: trRaw[0].generated_at } : null;
 
       // Sprint CTA + booking link — only in standard (fully revealed) mode.
       let sprintCtaUrl = null;
       let bookingUrl   = null;
-      if (!isProgress && !isPrivate) {
-        try {
-          const rc = await sbGet(`/rest/v1/renewal_config?id=eq.1&select=first_sprint_credit_url,booking_url&limit=1`);
-          sprintCtaUrl = (rc && rc[0] && rc[0].first_sprint_credit_url) || null;
-          bookingUrl   = (rc && rc[0] && rc[0].booking_url) || null;
-          // Per-engagement override (custom_cta_url on the sponsor_teams row).
-          // 'disabled' suppresses the sprint CTA (used for demo/test engagements).
-          if (link.custom_cta_url === 'disabled') sprintCtaUrl = null;
-          else if (link.custom_cta_url) sprintCtaUrl = link.custom_cta_url;
-        } catch (_) { /* non-fatal */ }
+      if (!isProgress && !isPrivate && rcRow) {
+        sprintCtaUrl = (rcRow[0] && rcRow[0].first_sprint_credit_url) || null;
+        bookingUrl   = (rcRow[0] && rcRow[0].booking_url) || null;
+        // Per-engagement override (custom_cta_url on the sponsor_teams row).
+        // 'disabled' suppresses the sprint CTA (used for demo/test engagements).
+        if (link.custom_cta_url === 'disabled') sprintCtaUrl = null;
+        else if (link.custom_cta_url) sprintCtaUrl = link.custom_cta_url;
       }
 
       return res.status(200).json({
