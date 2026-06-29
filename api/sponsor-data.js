@@ -503,12 +503,14 @@ export default async function handler(req, res) {
       const trRaw = isProgress ? null : await sbGet(`/rest/v1/diagnostic_team_reports?team_id=eq.${enc(teamId)}&sponsor_visible=eq.true&report_pdf_url=not.is.null&select=report_pdf_url,generated_at&order=generated_at.desc&limit=1`);
       const teamReport = (trRaw && trRaw[0]) ? { report_pdf_url: trRaw[0].report_pdf_url, generated_at: trRaw[0].generated_at } : null;
 
-      // Sprint CTA — only in standard (fully revealed) mode.
+      // Sprint CTA + booking link — only in standard (fully revealed) mode.
       let sprintCtaUrl = null;
+      let bookingUrl   = null;
       if (!isProgress && !isPrivate) {
         try {
-          const rc = await sbGet(`/rest/v1/renewal_config?id=eq.1&select=first_sprint_credit_url&limit=1`);
+          const rc = await sbGet(`/rest/v1/renewal_config?id=eq.1&select=first_sprint_credit_url,booking_url&limit=1`);
           sprintCtaUrl = (rc && rc[0] && rc[0].first_sprint_credit_url) || null;
+          bookingUrl   = (rc && rc[0] && rc[0].booking_url) || null;
           // Per-engagement override (custom_cta_url on the sponsor_teams row).
           if (link.custom_cta_url) sprintCtaUrl = link.custom_cta_url;
         } catch (_) { /* non-fatal */ }
@@ -535,6 +537,7 @@ export default async function handler(req, res) {
         signals: signalsRaw,
         team_report: teamReport,
         sprint_cta_url: sprintCtaUrl,
+        booking_url: bookingUrl,
       });
     }
 
