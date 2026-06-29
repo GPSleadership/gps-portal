@@ -6353,8 +6353,10 @@ async function loadActionItems() {
   try {
     var st = await cdSelect('stakeholders', { eq: { is_active: true }, select: 'client_id' }) || [];
     var cids = Array.from(new Set(st.map(function(s){ return s.client_id; }).filter(Boolean)));
-    var tk = cids.length ? (await cdSelect('survey_tokens', { in: { client_id: cids }, select: 'client_id,sent_at,used_at' }) || []) : [];
+    var tk = cids.length ? (await cdSelect('survey_tokens', { in: { client_id: cids }, select: 'client_id,sent_at,used_at,reminder_1_sent_at,reminder_2_sent_at,reminder_3_sent_at' }) || []) : [];
     DIAG_SEND_STAKE = []; DIAG_AWAITING_STAKE = [];
+    var STAKE_SNOOZE_MS = 48 * 3600 * 1000;
+    var stakeSnoozeCount = 0;
     cids.forEach(function(cid){
       var cli = (typeof allClients !== 'undefined' ? allClients : []).find(function(c){ return c.id === cid; });
       if (!cli || cli.is_archived) return;
@@ -6362,10 +6364,25 @@ async function loadActionItems() {
       if (!isCoach) return;
       var shCount = st.filter(function(s){ return s.client_id === cid; }).length;
       var sentCount = tk.filter(function(t){ return t.client_id === cid && t.sent_at; }).length;
-      var outstanding = tk.filter(function(t){ return t.client_id === cid && t.sent_at && !t.used_at; }).length;
+      var outstandingTokens = tk.filter(function(t){ return t.client_id === cid && t.sent_at && !t.used_at; });
+      var outstanding = outstandingTokens.length;
       if (shCount > 0 && sentCount === 0) DIAG_SEND_STAKE.push({ id: cid, who: cli.name, count: shCount });
-      if (outstanding > 0) DIAG_AWAITING_STAKE.push({ id: cid, who: cli.name, outstanding: outstanding });
+      if (outstanding > 0) {
+        // Suppress for 48h if the most recent reminder across all outstanding tokens is recent
+        var latestReminder = 0;
+        outstandingTokens.forEach(function(t){
+          [t.reminder_1_sent_at, t.reminder_2_sent_at, t.reminder_3_sent_at].forEach(function(r){
+            if (r) { var ts = new Date(r).getTime(); if (ts > latestReminder) latestReminder = ts; }
+          });
+        });
+        if (latestReminder && (Date.now() - latestReminder) < STAKE_SNOOZE_MS) {
+          stakeSnoozeCount++;
+        } else {
+          DIAG_AWAITING_STAKE.push({ id: cid, who: cli.name, outstanding: outstanding });
+        }
+      }
     });
+    if (typeof window !== 'undefined') window._stakeSnoozeCount = stakeSnoozeCount;
   } catch (e) { DIAG_SEND_STAKE = []; DIAG_AWAITING_STAKE = []; }
 }
 
@@ -6656,7 +6673,14 @@ function renderDiagHome() {
       + awaitingRows.map(r => `• <a href="#" onclick="${r.go};return false;" style="color:var(--d-blue);text-decoration:none;">${r.label}</a> — ${r.txt}`).join('<br>')
       + `</div></div></div>`;
   }
-  if (snoozedCount > 0) flagsHtml += `<div style="font-size:12px;color:var(--d-mid);padding:10px 4px 0;border-top:1px dashed #e3e8ec;margin-top:6px;">✓ ${snoozedCount} recently nudged — hidden for 48 hours. They'll reappear if there's still no check-in.</div>`;
+  const _stakeSnooze = (typeof window !== 'undefined' && window._stakeSnoozeCount) || 0;
+  const _totalSnoozed = snoozedCount + _stakeSnooze;
+  if (_totalSnoozed > 0) {
+    const parts = [];
+    if (snoozedCount > 0) parts.push(snoozedCount + ' check-in' + (snoozedCount > 1 ? 's' : ''));
+    if (_stakeSnooze > 0) parts.push(_stakeSnooze + ' stakeholder survey' + (_stakeSnooze > 1 ? 's' : ''));
+    flagsHtml += `<div style="font-size:12px;color:var(--d-mid);padding:10px 4px 0;border-top:1px dashed #e3e8ec;margin-top:6px;">✓ ${parts.join(' + ')} recently nudged — hidden for 48 hours.</div>`;
+  }
   const needsSection = flagsHtml
     ? `<div class="card" style="margin-bottom:20px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
