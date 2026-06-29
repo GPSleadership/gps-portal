@@ -495,7 +495,7 @@ export default async function handler(req, res) {
       // Results-level content (recommendations, signals, written team report) is
       // never assembled for a progress POC — they only get process status.
       // Omit the coach-only internal tags (gps_support_type, source_section) from the sponsor payload.
-      const recsRaw = isProgress ? [] : await sbGet(`/rest/v1/recommendations?team_id=eq.${enc(teamId)}&status=eq.approved&visible_to_client=eq.true&select=short_title,description,owner,timeframe,category,target_band,quick_start_today,quick_start_week,updated_at&order=updated_at.desc`);
+      const recsRaw = isProgress ? [] : await sbGet(`/rest/v1/recommendations?team_id=eq.${enc(teamId)}&status=eq.approved&visible_to_client=eq.true&select=id,short_title,description,owner,timeframe,category,target_band,quick_start_today,quick_start_week,updated_at&order=updated_at.desc`);
       const signalsRaw = isProgress ? [] : await sbGet(`/rest/v1/external_signals?team_id=eq.${enc(teamId)}&visible_to_client=eq.true&select=*&order=date_observed.desc`);
 
       // Written team report — the sponsor sees the coach-uploaded branded PDF,
@@ -520,6 +520,7 @@ export default async function handler(req, res) {
         coach_preview: isCoachPreview || undefined,
         confidentiality: isCoachPreview ? 'standard' : link.confidentiality_mode,
         show_succession: link.show_succession_to_sponsor !== false,
+        rec_commitments: link.rec_commitments || {},
         team: Object.assign({
           id: team.id, name: team.name, client_org_name: team.client_org_name, team_type: team.team_type,
           org_logo_url: orgLogo,
@@ -557,6 +558,31 @@ export default async function handler(req, res) {
         { plan_sponsor_status: status, plan_sponsor_decided_at: new Date().toISOString(), plan_sponsor_note: note, updated_at: new Date().toISOString() },
         { Prefer: 'return=minimal' });
       return res.status(200).json({ ok: true, status });
+    }
+
+    // ── Sponsor commits to or passes on a recommendation ─────────────────────
+    // Saves the sponsor's decision (commit / pass / null=clear) for a single rec
+    // into the sponsor_teams.rec_commitments JSONB. Scoped: the team must belong
+    // to this sponsor.
+    if (body.action === 'saveRecCommitment') {
+      const teamId   = body.team_id;
+      const recKey   = body.rec_key;   // rec UUID
+      const decision = body.decision;  // 'commit' | 'pass' | null (clear)
+      if (!teamId || !recKey) return res.status(400).json({ error: 'team_id and rec_key required' });
+      if (!teamIds.includes(teamId)) return res.status(403).json({ error: 'Not authorized for this team' });
+      const link = links.find(l => l.team_id === teamId);
+      if (!link) return res.status(403).json({ error: 'No sponsor link for this team' });
+      const current = typeof link.rec_commitments === 'object' && link.rec_commitments !== null
+        ? { ...link.rec_commitments } : {};
+      if (decision === null || decision === undefined) {
+        delete current[recKey];
+      } else {
+        current[recKey] = decision;
+      }
+      await sb(`/rest/v1/sponsor_teams?id=eq.${enc(link.id)}`, 'PATCH',
+        { rec_commitments: current },
+        { Prefer: 'return=minimal' });
+      return res.status(200).json({ ok: true, rec_commitments: current });
     }
 
     return res.status(400).json({ error: 'Unknown action: ' + body.action });

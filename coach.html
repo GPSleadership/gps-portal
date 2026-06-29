@@ -10215,7 +10215,7 @@ async function drManageTeam(teamId){
   var panelReport=drTeamReportPanel(team, reports, members, nameById, diags);
   var panelRecs=drRecsPanel(team, recs);
   var panelSignals=drSignalsPanel(team, signals, fbInvites);
-  var panelSponsors=drSponsorsPanel(team, links, sponsors, members, nameById);
+  var panelSponsors=drSponsorsPanel(team, links, sponsors, members, nameById, recs);
   var panelPOC=drPocPanel(team, clients);
   var panelNarr=drNarrativePanel(team);
 
@@ -10725,22 +10725,44 @@ async function drRequestFeedback(teamId){
 }
 async function drSigVis(id, vis, teamId){ try{ await cdUpdate('external_signals',{ visible_to_client:vis },{ eq:{id:id} }); drManageTeam(teamId); }catch(e){ alert(e.message); } }
 
-function drSponsorsPanel(t, links, sponsors, members, nameById){
+function drSponsorsPanel(t, links, sponsors, members, nameById, recs){
   var byId={}; sponsors.forEach(function(s){ byId[s.id]=s; });
   window._drSpEdit={ links:links, members:members, nameById:nameById, teamId:t.id };  // for drEditSponsor
+  // Build rec id→title map so we can label commitment rows
+  var recById={}; (recs||[]).forEach(function(r){ if(r.id) recById[r.id]=r.short_title||r.title||r.id; });
   var list=links.map(function(l){
     var s=byId[l.sponsor_id]||{}; var url='/decision-room?token='+(s.sponsor_token||'');
     var isProg=l.confidentiality_mode==='progress';
     var modeLabel=isProg?'Process only':(l.confidentiality_mode==='private'?'Full (private)':'Full (standard)');
+    // Commitment summary — show if sponsor has made any decisions
+    var commitments = (typeof l.rec_commitments==='object' && l.rec_commitments) ? l.rec_commitments : {};
+    var commitKeys = Object.keys(commitments);
+    var commitSummary = '';
+    if(commitKeys.length){
+      var committed = commitKeys.filter(function(k){ return commitments[k]==='commit'; });
+      var passed    = commitKeys.filter(function(k){ return commitments[k]==='pass'; });
+      var rows = '';
+      if(committed.length) rows += committed.map(function(k){
+        return '<div style="display:flex;align-items:center;gap:6px;margin:2px 0;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#01949A;flex-shrink:0;"></span><span style="font-size:12px;">'+drEsc(recById[k]||k)+'</span></div>';
+      }).join('');
+      if(passed.length) rows += passed.map(function(k){
+        return '<div style="display:flex;align-items:center;gap:6px;margin:2px 0;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#9ca3af;flex-shrink:0;"></span><span style="font-size:12px;color:#6b7280;text-decoration:line-through;">'+drEsc(recById[k]||k)+'</span></div>';
+      }).join('');
+      commitSummary = '<div style="margin-top:8px;background:#f0faf9;border:1px solid #b2e0de;border-radius:8px;padding:10px 14px;">'
+        +'<div style="font-size:11px;font-weight:700;color:#01949A;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Commitment decisions — '+(committed.length)+' in &middot; '+(passed.length)+' passed</div>'
+        +rows+'</div>';
+    }
     return '<div style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:13px;"><b>'+drEsc(s.name||'')+'</b> <span style="font-size:11px;font-weight:700;color:'+(isProg?'#b45309':'#0f766e')+';">· '+modeLabel+'</span><span style="font-size:11px;color:#666;">'+(s.email?' · '+drEsc(s.email):'')+'</span>'
       +'<div style="margin-top:4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><code style="font-size:11px;background:#f5f5f5;padding:3px 7px;border-radius:4px;">'+drEsc(url)+'</code>'
       +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#01949A;" onclick="window.open(location.origin+\''+url+'\',\'_blank\')">Open ↗</button>'
       +'<button class="btn-add" style="padding:3px 9px;font-size:11px;" onclick="navigator.clipboard&&navigator.clipboard.writeText(location.origin+\''+url+'\');this.textContent=\'Copied\';">Copy link</button>'
       +(s.email?'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#004369;" onclick="drSendSponsor(\''+s.id+'\')">Email link</button>':'')
-      +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#7c3aed;" onclick="(function(){var previewUrl=location.origin+\''+url+'\'+(\''+url+'\'.indexOf(\'?\')>=0?\'&\':\'?\')+\'coach_session=\'+encodeURIComponent(getCoachSessionToken()||\'\')+\'&preview=1\';window.open(previewUrl,\'_blank\');})()">Preview as sponsor ▸</button>'
-      +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:'+(isProg?'#01949A':'#b45309')+';" onclick="drToggleSponsorReveal(\''+l.id+'\',\''+drEsc(l.confidentiality_mode||'')+'\',\''+t.id+'\')">'+(isProg?'Reveal full report ▸':'Switch to process-only ▸')+'</button>'
+      +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#7c3aed;" onclick="(function(){var previewUrl=location.origin+\''+url+'\'+(\''+url+'\'.indexOf(\'?\')>=0?\'&\':\'?\')+\'coach_session=\'+encodeURIComponent(getCoachSessionToken()||\'\')+\'&preview=1\';window.open(previewUrl,\'_blank\');})()">Preview as sponsor &#9658;</button>'
+      +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:'+(isProg?'#01949A':'#b45309')+';" onclick="drToggleSponsorReveal(\''+l.id+'\',\''+drEsc(l.confidentiality_mode||'')+'\',\''+t.id+'\')">'+(isProg?'Reveal full report &#9658;':'Switch to process-only &#9658;')+'</button>'
       +'<button class="btn-add" style="padding:3px 9px;font-size:11px;background:#6b7280;" onclick="drEditSponsor(\''+l.id+'\')">Edit</button>'
-      +'</div></div>';
+      +'</div>'
+      +commitSummary
+      +'</div>';
   }).join('') || '<div style="color:#666;font-size:13px;">No sponsors linked yet.</div>';
   return drCard('Sponsors (Decision Room access)', list
     +'<div style="margin-top:12px;border-top:1px solid #eee;padding-top:12px;"><button class="btn-add" onclick="drOpenSponsor(\''+t.id+'\')">+ Add sponsor to this team</button></div>');

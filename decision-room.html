@@ -220,9 +220,11 @@ function loadTeam(teamId){
     setHeaderOrgLogo(res.team);
     if(res.gated){ renderGate(res); return; }
     DATA = res;
+    window.REC_COMMITMENTS = res.rec_commitments || {};
     var t=res.team;
     document.getElementById('teamMeta').textContent = (t.team_type||'')+' team · Sponsor: '+(t.primary_sponsor||'');
     renderTeam();
+    updateRecSummaryBar();
     window.scrollTo(0,0);
   }).catch(showError);
 }
@@ -538,31 +540,124 @@ function renderRecs(recs){
   var scope=recs.filter(function(r){ return r.category==='included_in_current_scope'; });
   var accel=recs.filter(function(r){ return r.category!=='included_in_current_scope'; });
   function card(r){
+    var recKey = r.id || r.short_title;
+    var curDec = (window.REC_COMMITMENTS||{})[recKey];
+    var isCommit = curDec === 'commit';
+    var isPass   = curDec === 'pass';
     var bands = r.target_band ? String(r.target_band).split(',').map(function(b){ b=b.trim(); var lbl={top:'Top performers',middle:'Mid-band',bottom:'At-risk',system:'Team system'}[b]; return lbl?'<span style="display:inline-block;font-size:10px;font-weight:700;color:#1A3D6E;background:#eef3fb;border-radius:8px;padding:1px 8px;margin:0 4px 6px 0;text-transform:uppercase;letter-spacing:.03em;">'+lbl+'</span>':''; }).join('') : '';
     var qs = (r.quick_start_today||r.quick_start_week)
       ? '<div style="margin-top:8px;font-size:12.5px;line-height:1.5;color:var(--navy-dark);background:var(--light-sand);border-radius:7px;padding:8px 11px;">'+(r.quick_start_today?'<div><b>By end of today:</b> '+esc(r.quick_start_today)+'</div>':'')+(r.quick_start_week?'<div style="margin-top:3px;"><b>By end of this week:</b> '+esc(r.quick_start_week)+'</div>':'')+'</div>'
       : '';
     var meta = ((r.owner||r.timeframe)?'<div class="rec-meta">'+(r.owner?'Owner: '+esc(r.owner):'')+(r.owner&&r.timeframe?' &middot; ':'')+(r.timeframe?'Timeframe: '+esc(r.timeframe):'')+'</div>':'');
     var body = '<div class="rec-desc">'+esc(r.description)+'</div>'+ qs +(r.updated_at?'<div class="rec-foot">Updated '+fmtDate(r.updated_at)+'</div>':'');
-    return '<div class="rec '+recCat(r)+'">'
+    // Commit / Pass buttons
+    var cbStyle = 'font-size:12px;font-weight:700;padding:7px 18px;border-radius:20px;cursor:pointer;border:2px solid #01949A;transition:all .15s;'
+      +(isCommit?'background:#01949A;color:#fff;':'background:#fff;color:#01949A;');
+    var pbStyle = 'font-size:12px;font-weight:700;padding:7px 16px;border-radius:20px;cursor:pointer;border:2px solid;transition:all .15s;margin-left:8px;'
+      +(isPass?'background:#6b7280;color:#fff;border-color:#6b7280;':'background:#fff;color:#9ca3af;border-color:#d1d5db;');
+    var clrStyle = 'font-size:11px;background:none;border:none;color:#9ca3af;cursor:pointer;padding:0 0 0 12px;text-decoration:underline;display:'+(curDec?'inline':'none')+';';
+    var commitRow = '<div style="display:flex;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid #f0f0f0;flex-wrap:wrap;gap:4px;">'
+      +'<span style="font-size:11px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-right:8px;">Your call:</span>'
+      +'<button id="cbtn-'+recKey+'" style="'+cbStyle+'" onclick="setRecCommitment('+JSON.stringify(recKey)+",'commit',event)\">"+(isCommit ? '&#10003; Committed' : "I'm in &rarr;")+'</button>'
+      +'<button id="pbtn-'+recKey+'" style="'+pbStyle+'" onclick="setRecCommitment('+JSON.stringify(recKey)+",'pass',event)\">"+(isPass ? 'Not this time' : 'Pass')+'</button>'
+      +'<button id="clr-'+recKey+'" style="'+clrStyle+'" onclick="setRecCommitment('+JSON.stringify(recKey)+',null,event)">Clear</button>'
+      +'<span id="rcerr-'+recKey+'" style="font-size:11px;color:#dc2626;margin-left:8px;"></span>'
+      +'</div>';
+    return '<div class="rec '+recCat(r)+'" id="reccard-'+recKey+'">'
     + '<div class="rec-title">'+esc(r.short_title)+'</div>'
     + meta
     + (bands?'<div style="margin-top:4px;">'+bands+'</div>':'')
-    + '<details style="margin-top:6px;"><summary style="cursor:pointer;font-size:12px;color:var(--navy);font-weight:700;letter-spacing:.01em;list-style:none;outline:none;user-select:none;">Details ▸</summary>'
+    + '<details style="margin-top:6px;"><summary style="cursor:pointer;font-size:12px;color:var(--navy);font-weight:700;letter-spacing:.01em;list-style:none;outline:none;user-select:none;">Details &#9658;</summary>'
     + '<div style="margin-top:6px;">' + body + '</div>'
     + '</details>'
+    + commitRow
     + '</div>';
   }
   // Until there's actual content, keep this neutral -- no scope/accelerator framing
   // and no CTA when empty (reads like a sales pitch on an empty page).
   var all = scope.concat(accel);
+  var summaryBar = all.length
+    ? '<div id="rec-summary-bar" style="font-size:12px;padding:9px 14px;background:#f0faf9;border:1px solid #b2e0de;border-radius:8px;margin-bottom:12px;display:none;"></div>'
+    : '';
   var body = all.length ? all.map(card).join('') : '<div class="empty">Nothing in motion yet.</div>';
   // "Discuss these options" -- only show if there are recs AND we have a sprint URL to point to
   var cta = '';
   if(all.length && DATA && DATA.sprint_cta_url){
     cta = '<div style="text-align:center;margin-top:20px;"><a class="cta-btn" href="'+esc(DATA.sprint_cta_url)+'">Discuss these options</a></div>';
   }
-  return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Recommendations</div></div>'+body+cta+'</div>';
+  return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Recommendations</div></div>'+summaryBar+body+cta+'</div>';
+}
+
+// ── Rec commitment helpers ────────────────────────────────────────────────────
+async function setRecCommitment(recKey, decision, evt){
+  if(evt && evt.stopPropagation) evt.stopPropagation();
+  window.REC_COMMITMENTS = window.REC_COMMITMENTS || {};
+  // Optimistic update
+  if(decision === null){ delete window.REC_COMMITMENTS[recKey]; }
+  else { window.REC_COMMITMENTS[recKey] = decision; }
+  updateRecCardButtons(recKey);
+  updateRecSummaryBar();
+  // Clear any prior error
+  var errEl = document.getElementById('rcerr-'+recKey);
+  if(errEl) errEl.textContent = '';
+  // Persist via API (uses the sponsor session cookie already on the request)
+  try {
+    var teamId = DATA && DATA.team && DATA.team.id;
+    var r = await fetch('/api/sponsor-data', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ action:'saveRecCommitment', team_id:teamId, rec_key:recKey, decision:decision })
+    });
+    var j = await r.json().catch(function(){ return {}; });
+    if(!r.ok || !j.ok) throw new Error(j.error || ('HTTP '+r.status));
+  } catch(err) {
+    // Revert on failure
+    if(decision === null){ delete window.REC_COMMITMENTS[recKey]; }
+    else if(decision === 'commit'){ window.REC_COMMITMENTS[recKey] = decision === 'commit' ? 'pass' : 'commit'; }
+    updateRecCardButtons(recKey);
+    updateRecSummaryBar();
+    if(errEl) errEl.textContent = 'Save failed — try again';
+  }
+}
+
+function updateRecCardButtons(recKey){
+  var dec = (window.REC_COMMITMENTS||{})[recKey];
+  var isCommit = dec === 'commit', isPass = dec === 'pass';
+  var cb = document.getElementById('cbtn-'+recKey);
+  if(cb){
+    cb.innerHTML = isCommit ? '&#10003; Committed' : "I'm in &rarr;";
+    cb.style.background = isCommit ? '#01949A' : '#fff';
+    cb.style.color = isCommit ? '#fff' : '#01949A';
+    cb.style.borderColor = '#01949A';
+  }
+  var pb = document.getElementById('pbtn-'+recKey);
+  if(pb){
+    pb.textContent = isPass ? 'Not this time' : 'Pass';
+    pb.style.background = isPass ? '#6b7280' : '#fff';
+    pb.style.color = isPass ? '#fff' : '#9ca3af';
+    pb.style.borderColor = isPass ? '#6b7280' : '#d1d5db';
+  }
+  var clr = document.getElementById('clr-'+recKey);
+  if(clr) clr.style.display = dec ? 'inline' : 'none';
+}
+
+function updateRecSummaryBar(){
+  var bar = document.getElementById('rec-summary-bar');
+  if(!bar) return;
+  var all = DATA && DATA.recommendations || [];
+  if(!all.length){ bar.style.display='none'; return; }
+  var committed=0, passed=0;
+  all.forEach(function(r){
+    var k=r.id||r.short_title;
+    var d=(window.REC_COMMITMENTS||{})[k];
+    if(d==='commit') committed++;
+    else if(d==='pass') passed++;
+  });
+  var remaining = all.length - committed - passed;
+  bar.style.display = (committed||passed) ? 'block' : 'none';
+  bar.innerHTML = (committed?'<span style="color:#01949A;font-weight:700;">'+committed+' committed</span> &nbsp;':'')
+    +(passed?'<span style="color:#6b7280;font-weight:600;">'+passed+' passed</span> &nbsp;':'')
+    +(remaining&&(committed||passed)?'<span style="color:#b45309;">'+remaining+' no decision yet</span>':'');
 }
 
 var SIG={green:'On track',yellow:'Watch',red:'Off track'};
