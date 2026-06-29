@@ -8114,9 +8114,9 @@ async function _generateEmailDrafts() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ diagnostic_id: DIAG_SEL.id, session: getCoachSessionToken() }),
     });
-    const data = resp.ok ? await resp.json() : {};
+    const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data.ok) {
-      el.innerHTML = '<div style="padding:20px;color:var(--d-red);font-size:13px;">Could not generate drafts: ' + esc(data.error || 'Unknown error') + '</div>';
+      el.innerHTML = '<div style="padding:20px;color:var(--d-red);font-size:13px;">Could not generate drafts: ' + esc(data.error || 'HTTP ' + resp.status) + '</div>';
       return;
     }
     _loadEmailDrafts();

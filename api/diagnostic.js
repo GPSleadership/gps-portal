@@ -3885,7 +3885,7 @@ async function handleGenerateEmailDrafts(req, res) {
 
   try {
     // ── 1. Load diagnostic ───────────────────────────────────────────────────
-    const diagR = await sb(`/rest/v1/diagnostics?id=eq.${encodeURIComponent(diagnostic_id)}&select=id,client_id,client_name,client_title,client_org,client_email,debrief_date,tp3_pillar,report_doc&limit=1`);
+    const diagR = await sb(`/rest/v1/diagnostics?id=eq.${encodeURIComponent(diagnostic_id)}&select=id,client_id,client_name,client_title,client_org,client_email,debrief_date,report_doc&limit=1`);
     const diag = diagR.ok ? ((await diagR.json())[0] || null) : null;
     if (!diag) return res.status(404).json({ error: 'Diagnostic not found' });
 
