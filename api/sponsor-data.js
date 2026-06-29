@@ -13,22 +13,38 @@
 //   action = 'list-teams' | 'team'
 // ENV: SUPABASE_URL, SUPABASE_SECRET_KEY, COACH_SESSION_SECRET
 
-const SUPABASE_URL    = process.env.SUPABASE_URL || 'https://pbnkefuqpoztcxfagiod.supabase.co';
-const SUPABASE_SECRET = process.env.SUPABASE_SECRET_KEY;
+const SUPABASE_URL         = process.env.SUPABASE_URL || 'https://pbnkefuqpoztcxfagiod.supabase.co';
+const SUPABASE_SECRET      = process.env.SUPABASE_SECRET_KEY;
 const COACH_SESSION_SECRET = process.env.COACH_SESSION_SECRET || '';
+const RESEND_API_KEY       = process.env.RESEND_API_KEY;
+const RESEND_FROM          = process.env.RESEND_FROM_EMAIL || 'noreply@portal.gpsleadership.org';
+const COACH_ALERT_EMAIL    = process.env.COACH_ALERT_EMAIL || 'alex@gpsleadership.org';
 
 const enc = encodeURIComponent;
 
 const crypto = require('crypto');
-// Mirrors the same HMAC-based session verification used in api/diagnostic.js.
+// Session tokens are base64url-encoded (matching get-client.js signSession).
+// Previous version decoded parts[1] as hex — wrong encoding, always failed.
 function verifyCoachSession(tok) {
   if (!tok || !COACH_SESSION_SECRET) return false;
   const parts = String(tok).split('.');
   if (parts.length !== 2) return false;
-  const expected = Buffer.from(crypto.createHmac('sha256', COACH_SESSION_SECRET).update(parts[0]).digest());
-  const actual   = Buffer.from(parts[1], 'hex');
-  if (expected.length !== actual.length) return false;
-  return crypto.timingSafeEqual(expected, actual);
+  const expected = Buffer.from(crypto.createHmac('sha256', COACH_SESSION_SECRET).update(parts[0]).digest())
+    .toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const a = Buffer.from(parts[1]), b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
+async function sendCoachAlert(subject, html) {
+  if (!RESEND_API_KEY) return;
+  try {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: `GPS Portal <${RESEND_FROM}>`, to: [COACH_ALERT_EMAIL], subject, html }),
+    });
+  } catch (_) { /* non-fatal */ }
 }
 
 function sb(path, method = 'GET', body = null, extra = {}) {
@@ -557,9 +573,21 @@ export default async function handler(req, res) {
       if (!diag) return res.status(404).json({ error: 'No diagnostic for this leader' });
       const status = body.action === 'approve-plan' ? 'approved' : 'changes_requested';
       const note = (body.action === 'request-changes' && typeof body.note === 'string') ? body.note.trim().slice(0, 1000) : null;
+      // Fetch leader name for the alert email
+      const cliRow = await sbGet(`/rest/v1/clients?id=eq.${enc(clientId)}&select=name&limit=1`);
+      const leaderName = (cliRow && cliRow[0] && cliRow[0].name) ? cliRow[0].name : 'a leader';
       await sb(`/rest/v1/diagnostics?id=eq.${enc(diag.id)}`, 'PATCH',
         { plan_sponsor_status: status, plan_sponsor_decided_at: new Date().toISOString(), plan_sponsor_note: note, updated_at: new Date().toISOString() },
         { Prefer: 'return=minimal' });
+      // Notify Alex — fire-and-forget
+      const alertSubject = status === 'approved'
+        ? `${sponsor.name} approved ${leaderName}'s 90-day plan`
+        : `${sponsor.name} requested changes to ${leaderName}'s 90-day plan`;
+      const alertHtml = `<p><b>${sponsor.name}</b> just took action on <b>${leaderName}</b>'s 90-day plan via the Decision Room.</p>`
+        + `<p><b>Decision:</b> ${status === 'approved' ? '✅ Approved — plan is locked.' : '⚠️ Changes requested.'}</p>`
+        + (note ? `<p><b>Note from sponsor:</b> "${note}"</p>` : '')
+        + `<p>Log in to coach.html to review.</p>`;
+      sendCoachAlert(alertSubject, alertHtml).catch(() => {});
       return res.status(200).json({ ok: true, status });
     }
 

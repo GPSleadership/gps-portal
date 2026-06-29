@@ -7064,6 +7064,11 @@ function renderDetailHeader() {
   if (d.status === 'survey_closed' || d.status === 'report_draft') {
     actions.push(`<button class="dbtn dbtn-primary dbtn-sm" onclick="switchDiagTabById('dtab-report')">Generate Report →</button>`);
   }
+  // Reset plan sponsor review (shows when a sponsor has already decided)
+  if (d.plan_sponsor_status) {
+    const srLabel = d.plan_sponsor_status === 'approved' ? 'Approved' : 'Changes requested';
+    actions.push(`<button class="dbtn dbtn-outline dbtn-sm" style="color:#b45309;border-color:#b45309;" onclick="resetPlanReview()" title="Clear the sponsor decision so they can re-review after you update the plan">Reset plan review (${srLabel})</button>`);
+  }
   // Archive / Unarchive (always available)
   if (d.is_archived) {
     actions.push(`<button class="dbtn dbtn-outline dbtn-sm" style="color:var(--d-green);border-color:var(--d-green);" onclick="archiveDiag(false)">↩ Unarchive</button>`);
@@ -9841,6 +9846,22 @@ async function exportDiagData(format = 'csv') {
   } finally {
     if (btn) { btn.textContent = format === 'excel' ? '⬇ Excel' : '⬇ CSV'; btn.disabled = false; }
   }
+}
+
+// ── Reset Plan Sponsor Review ─────────────────────────────────────────────────
+// Clears plan_sponsor_status so the sponsor can re-review after plan changes.
+async function resetPlanReview() {
+  if (!DIAG_SEL) return;
+  const statusLabel = DIAG_SEL.plan_sponsor_status === 'approved' ? 'approved' : 'changes requested';
+  if (!confirm('Clear the sponsor plan decision (' + statusLabel + ')?\n\nThis lets the sponsor re-review and approve the updated plan. Do this after you have made the changes they requested.')) return;
+  try {
+    await coachData({ action: 'resetPlanReview', diagnostic_id: DIAG_SEL.id });
+  } catch (e) { alert('Reset failed: ' + e.message); return; }
+  DIAG_SEL.plan_sponsor_status = null;
+  DIAG_SEL.plan_sponsor_note = null;
+  DIAG_SEL.plan_sponsor_decided_at = null;
+  ALL_DIAGS = ALL_DIAGS.map(d => d.id === DIAG_SEL.id ? { ...d, plan_sponsor_status: null, plan_sponsor_note: null, plan_sponsor_decided_at: null } : d);
+  renderDetailHeader();
 }
 
 // ── Archive / Unarchive ───────────────────────────────────────────────────────

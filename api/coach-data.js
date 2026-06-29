@@ -439,6 +439,23 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
+    // ── Reset plan sponsor review (owner only) ───────────────────────────────
+    // Clears plan_sponsor_status so the sponsor can re-review after Alex edits
+    // the 90-day plan in response to a changes_requested decision.
+    if (action === 'resetPlanReview') {
+      if (!isOwner) return ownerOnly();
+      const did = body.diagnostic_id;
+      if (!did) return res.status(400).json({ error: 'diagnostic_id required' });
+      const r = await sb(
+        `/rest/v1/diagnostics?id=eq.${encodeURIComponent(did)}`,
+        'PATCH',
+        { plan_sponsor_status: null, plan_sponsor_note: null, plan_sponsor_decided_at: null },
+        { Prefer: 'return=minimal' }
+      );
+      if (!r.ok) { const d = await r.json().catch(() => ({})); return res.status(500).json({ error: 'Reset failed', detail: d }); }
+      return res.status(200).json({ ok: true });
+    }
+
     // ── Generic allowlisted query proxy ─────────────────────────────────────
     const op    = body.op;
     const table = body.table;

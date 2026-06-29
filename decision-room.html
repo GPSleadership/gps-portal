@@ -970,7 +970,12 @@ function sponsorReadoutCards(m){
         : '';
       pbtns='<div style="background:#EAF5F0;border:1px solid #b7ddc9;border-radius:8px;padding:12px 14px;"><span style="color:'+C.green+';font-weight:700;">You approved this plan'+(pa.decided_at?' on '+fmtDate(pa.decided_at):'')+'. The plan is locked.</span><div style="font-size:13px;color:#1f4d36;margin-top:4px;">'+esc(first)+"'s plan is locked. The 90-day sprint is what puts it into motion."+'</div>'+_sprintNext+'</div>';
     }
-    else if(pa.status==='changes_requested'){ pbtns='<div style="background:'+C.redbg+';border:1px solid #f0b9b9;border-radius:8px;padding:12px 14px;color:#8c2020;"><b>Changes requested.</b>'+(pa.note?' "'+esc(pa.note)+'"':'')+' We\'ll adjust with you before anything starts.</div>'; }
+    else if(pa.status==='changes_requested'){
+      pbtns='<div style="background:'+C.redbg+';border:1px solid #f0b9b9;border-radius:8px;padding:12px 14px;color:#8c2020;margin-bottom:10px;"><b>Changes requested'+(pa.decided_at?' on '+fmtDate(pa.decided_at):'')+'. </b>'+(pa.note?'"'+esc(pa.note)+'" ':'')+' Alex will adjust with you before anything starts.</div>'
+        +'<div style="display:flex;gap:10px;flex-wrap:wrap;">'
+        +'<button onclick="sponsorDecide(\''+m.client_id+'\',\'approve\')" style="background:'+C.green+';color:#fff;border:none;border-radius:8px;padding:10px 18px;font-weight:700;font-size:13px;cursor:pointer;">Approve this plan instead</button>'
+        +'</div><div style="font-size:12px;color:'+C.mid+';margin-top:8px;">Changed your mind? Approving here locks the plan and notifies Alex.</div>';
+    }
     else { pbtns='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;">'
       + '<button onclick="sponsorDecide(\''+esc(m.client_id)+'\',\'approve\')" style="background:'+C.green+';color:#fff;border:none;border-radius:8px;padding:10px 18px;font-weight:700;font-size:13px;cursor:pointer;">Approve this plan</button>'
       + '<button onclick="sponsorDecide(\''+esc(m.client_id)+'\',\'changes\')" style="background:#fff;border:1px solid '+C.amberbar+';color:'+C.amber+';border-radius:8px;padding:10px 18px;font-weight:700;font-size:13px;cursor:pointer;">Request changes</button>'
