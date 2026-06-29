@@ -235,9 +235,21 @@ export default async function handler(req, res) {
             }
           } catch (_) { /* client portal link is optional */ }
         }
-        // When the report is finalized, attach the latest draft's numeric scores so the
+        // Report-release gate: if report_release_at is set and still in the future,
+        // override the leader's visible status to 'report_pending' so the page shows
+        // a "coming soon" holding screen instead of the actual report. The report data
+        // is never sent — the gate lives here server-side, not in the browser.
+        if (
+          ['report_final','debrief_complete','plan_active'].includes(diag.status) &&
+          diag.report_release_at &&
+          new Date(diag.report_release_at) > new Date()
+        ) {
+          diag._release_at = diag.report_release_at; // pass through so the page can show the date
+          diag.status = 'report_pending';             // synthetic holding status
+        }
+        // When the report is released, attach the latest draft's numeric scores so the
         // leader sees their color-coded visual results page (TP3, pillars, impact, bench,
-        // self-vs-others). Gated to finalized states; never exposes the AI narrative here.
+        // self-vs-others). Gated to released states; never exposes the AI narrative here.
         if (['report_final','debrief_complete','plan_active'].includes(diag.status)) {
           try {
             const sr = await sb(`/rest/v1/diagnostic_report_drafts?diagnostic_id=eq.${diag.id}&select=scores_json,raw_markdown,generated_at&order=generated_at.desc&limit=1`);

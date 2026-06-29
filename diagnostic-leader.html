@@ -387,7 +387,7 @@ function renderPortal() {
     [d.client_title, d.client_org].filter(Boolean).join(' · ');
 
   // Widen the page container when the report is ready — scores + cards need the room
-  const WIDE_STATUSES = ['report_final', 'debrief_complete', 'plan_active'];
+  const WIDE_STATUSES = ['report_pending', 'report_final', 'debrief_complete', 'plan_active'];
   const pageEl = document.querySelector('.page');
   if (pageEl) pageEl.style.maxWidth = WIDE_STATUSES.includes(d.status) ? '960px' : '';
 
@@ -448,6 +448,16 @@ function renderTopAlert() {
         Survey closes ${formatDate(DIAGNOSTIC.close_date)}. ${daysLeft} day${daysLeft !== 1 ? 's' : ''} remaining.</div>
       </div>`;
     }
+  } else if (s === 'report_pending') {
+    const releaseDate = DIAGNOSTIC._release_at ? new Date(DIAGNOSTIC._release_at) : null;
+    const releaseFmt  = releaseDate
+      ? releaseDate.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' })
+        + ' at ' + releaseDate.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', timeZoneName:'short' })
+      : (DIAGNOSTIC.debrief_date ? 'the day before your debrief' : 'shortly');
+    el.innerHTML = `<div class="alert alert-blue">
+      <span class="alert-icon">📋</span>
+      <div><strong>Your report has been finalized.</strong> It will be available to you on <strong>${releaseFmt}</strong>${DIAGNOSTIC.debrief_date ? ' &mdash; one day before your debrief on ' + formatDate(DIAGNOSTIC.debrief_date) + '.' : '.'}</div>
+    </div>`;
   } else if (s === 'report_final') {
     el.innerHTML = `<div class="alert alert-green">
       <span class="alert-icon">✓</span>
@@ -528,7 +538,7 @@ function currentStep(status) {
     'self_assessment_complete': 3,
     'survey_open': 5,              // step 4 (send heads-up) sits between list and surveys
     'survey_closed': 6,
-    'report_draft': 7, 'report_final': 7,
+    'report_draft': 7, 'report_pending': 7, 'report_final': 7,
     'debrief_complete': 8,
     'plan_active': 9,
   };
@@ -723,6 +733,24 @@ function renderStatusCards() {
       <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;"></div></div>
       <div style="font-size:11px;color:var(--mid);margin-top:4px;">${pct}% response rate · Minimum 7 responses needed for the report</div>
       ${catRows ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">${catRows}</div>` : ''}
+    </div>`;
+  }
+
+  if (s === 'report_pending') {
+    const releaseDate = DIAGNOSTIC._release_at ? new Date(DIAGNOSTIC._release_at) : null;
+    const releaseFmt  = releaseDate
+      ? releaseDate.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' })
+        + ' at ' + releaseDate.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', timeZoneName:'short' })
+      : 'shortly before your debrief';
+    html += `
+    <div class="card" style="border-top:3px solid var(--teal);text-align:center;padding:40px 24px;">
+      <div style="font-size:40px;margin-bottom:16px;">📋</div>
+      <div class="card-title" style="font-size:18px;margin-bottom:8px;">Your report has been finalized</div>
+      <div style="font-size:14px;color:var(--mid);line-height:1.6;max-width:480px;margin:0 auto;">
+        It will be available to you on <strong style="color:var(--navy);">${releaseFmt}</strong> &mdash;
+        giving you time to review it before your debrief session.
+      </div>
+      ${DIAGNOSTIC.debrief_date ? `<div style="margin-top:20px;font-size:13px;color:var(--mid);">Your debrief is scheduled for <strong>${formatDate(DIAGNOSTIC.debrief_date)}${DIAGNOSTIC.debrief_time ? ' at ' + DIAGNOSTIC.debrief_time : ''}</strong>.</div>` : ''}
     </div>`;
   }
 

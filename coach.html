@@ -7751,6 +7751,25 @@ function renderReportTab() {
       <span class="dalert-icon">✓</span>
       <div><strong>Report finalized</strong> ${diagFormatDate(d.report_finalized_at)}. Ready to deliver at debrief.</div>
     </div>` : ''}
+    ${d.report_finalized_at ? (function(){
+      var _releaseVal = d.report_release_at
+        ? new Date(d.report_release_at).toISOString().slice(0,16)
+        : (d.debrief_date
+            ? new Date(new Date(d.debrief_date+'T12:00:00').getTime()-86400000).toISOString().slice(0,10)+'T08:00'
+            : '');
+      var _releaseLbl = d.report_release_at
+        ? ('<span style="font-size:12px;color:var(--d-mid);">Currently set: '+diagFormatDate(d.report_release_at)+'</span>')
+        : '<span style="font-size:12px;color:var(--d-amber);font-weight:700;">Not set — leader sees report immediately.</span>';
+      return '<div style="margin-top:10px;padding:12px 14px;background:#f0f7ff;border:1px solid #bdd8f5;border-radius:8px;">'
+        +'<div style="font-size:12px;font-weight:700;color:var(--d-blue);margin-bottom:4px;">Report release date &amp; time</div>'
+        +'<div style="font-size:12px;color:var(--d-mid);margin-bottom:10px;">When the leader can first open their report and PDF. Default: 8am the day before their debrief. Leave blank to release immediately.</div>'
+        +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">'
+        +'<input type="datetime-local" id="diag-release-at" value="'+_releaseVal+'" style="border:1px solid var(--d-border);border-radius:6px;padding:7px 10px;font-size:13px;font-family:inherit;" />'
+        +'<button class="dbtn dbtn-outline" style="font-size:12px;padding:7px 14px;" onclick="saveReleaseAt(event)">Save release time</button>'
+        +_releaseLbl
+        +'</div>'
+        +'</div>';
+    })() : ''}
     ${d.client_id && DIAG_LINKED_CLIENT && !DIAG_LINKED_CLIENT.token ? `
     <div class="dalert" style="background:#fff3cd;border-color:#ffc107;margin-bottom:12px;">
       <span class="dalert-icon">⚠</span>
@@ -9755,6 +9774,26 @@ async function updateDiag(fields) {
       ALL_DIAGS = ALL_DIAGS.map(d => d.id === DIAG_SEL.id ? DIAG_SEL : d);
     }
   } catch (e) { /* non-fatal: keep prior DIAG_SEL */ }
+}
+
+// Save the report_release_at datetime for the selected diagnostic.
+// Called from the "Save release time" button in the coach diagnostic card.
+async function saveReleaseAt(e){
+  e.stopPropagation();
+  var inp = document.getElementById('diag-release-at');
+  if(!inp) return;
+  var val = inp.value ? new Date(inp.value).toISOString() : null;
+  var btn = e.currentTarget;
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+  try {
+    await updateDiag({ report_release_at: val });
+    btn.textContent = 'Saved';
+    setTimeout(function(){ refreshSelected(); }, 800);
+  } catch(err){
+    btn.textContent = 'Error — try again';
+    btn.disabled = false;
+  }
 }
 
 // Coach toggle: require the sponsor to approve this leader's 90-day plan before launch.
