@@ -474,12 +474,78 @@ export default async function handler(req, res) {
       if (!promptId)   return res.status(400).json({ error: 'prompt_id required' });
       if (!userInput)  return res.status(400).json({ error: 'user_input required' });
 
-      // Fetch the stored prompt (including examples for few-shot calibration)
-      const pr = await sb(`/rest/v1/coach_prompts?id=eq.${encodeURIComponent(promptId)}&is_active=eq.true&select=name,prompt_text,output_format,save_target,examples_json&limit=1`);
+      // Fetch the stored prompt (including examples, context flags, and token limit)
+      const pr = await sb(`/rest/v1/coach_prompts?id=eq.${encodeURIComponent(promptId)}&is_active=eq.true&select=name,prompt_text,output_format,save_target,examples_json,auto_inject_context,max_output_tokens&limit=1`);
       if (!pr.ok) return res.status(500).json({ error: 'Failed to fetch prompt' });
       const prompts = await pr.json();
       if (!prompts || !prompts[0]) return res.status(404).json({ error: 'Prompt not found' });
       const prompt = prompts[0];
+
+      // ── Auto-inject client context ───────────────────────────────────────────
+      // When a prompt has auto_inject_context=true AND a diagnostic_id is provided,
+      // fetch the leader's profile data from the portal and prepend it to the input
+      // so the coach only needs to paste quantitative scores and qualitative comments.
+      let effectiveInput = userInput;
+      const diagId = body.diagnostic_id ? String(body.diagnostic_id).trim() : null;
+      if (prompt.auto_inject_context && diagId) {
+        const dr = await sb(
+          `/rest/v1/diagnostics?id=eq.${encodeURIComponent(diagId)}&select=client_name,client_title,client_org,kickoff_brief_json,kickoff_brief_saved_at,interview_summaries_json&limit=1`
+        );
+        if (dr.ok) {
+          const dRows = await dr.json();
+          const d = dRows && dRows[0];
+          if (d) {
+            const lines = [
+              '━━━ AUTO-INJECTED LEADER PROFILE — GPS Leadership Portal ━━━',
+              d.client_name  ? `Leader Name : ${d.client_name}`  : 'Leader Name : [CLIENT NAME]',
+              d.client_title ? `Title       : ${d.client_title}` : 'Title       : [TITLE]',
+              d.client_org   ? `Organization: ${d.client_org}`   : 'Organization: [ORGANIZATION]',
+            ];
+
+            // Kickoff brief (structured JSON from the portal intake call)
+            if (d.kickoff_brief_json) {
+              lines.push('');
+              lines.push(`KICKOFF BRIEF (captured ${d.kickoff_brief_saved_at ? new Date(d.kickoff_brief_saved_at).toLocaleDateString() : 'date unknown'}):`);
+              try {
+                const kb = typeof d.kickoff_brief_json === 'string'
+                  ? JSON.parse(d.kickoff_brief_json)
+                  : d.kickoff_brief_json;
+                lines.push(JSON.stringify(kb, null, 2));
+              } catch (_) {
+                lines.push(String(d.kickoff_brief_json));
+              }
+            } else {
+              lines.push('');
+              lines.push('KICKOFF BRIEF: [Not yet captured in portal]');
+            }
+
+            // Interview summaries (array of structured JSON objects)
+            const summaries = Array.isArray(d.interview_summaries_json) ? d.interview_summaries_json : [];
+            if (summaries.length > 0) {
+              lines.push('');
+              lines.push(`INTERVIEW SUMMARIES (${summaries.length} captured):`);
+              summaries.forEach((s, i) => {
+                lines.push(`\n--- Interview ${i + 1} ---`);
+                try {
+                  const obj = typeof s === 'string' ? JSON.parse(s) : s;
+                  lines.push(JSON.stringify(obj, null, 2));
+                } catch (_) {
+                  lines.push(String(s));
+                }
+              });
+            } else {
+              lines.push('');
+              lines.push('INTERVIEW SUMMARIES: [None captured yet]');
+            }
+
+            lines.push('━━━ END AUTO-INJECTED CONTEXT ━━━');
+            lines.push('');
+            lines.push('--- YOUR PASTED INPUT BELOW ---');
+            effectiveInput = lines.join('\n') + '\n' + userInput;
+          }
+        }
+        // If context fetch fails, fall through silently and use original userInput
+      }
 
       // Build messages array — prepend few-shot examples if the prompt has any.
       // Examples are {input, output} pairs stored in examples_json; they're sent as
@@ -491,8 +557,12 @@ export default async function handler(req, res) {
           { role: 'user',      content: String(ex.input  || '') },
           { role: 'assistant', content: String(ex.output || '') },
         ]),
-        { role: 'user', content: userInput },
+        { role: 'user', content: effectiveInput },
       ];
+
+      const maxTokens = (prompt.max_output_tokens && prompt.max_output_tokens > 0)
+        ? prompt.max_output_tokens
+        : 4096;
 
       // Call Claude with the stored system prompt + (optional examples +) user input
       const claude = await fetch('https://api.anthropic.com/v1/messages', {
@@ -504,7 +574,7 @@ export default async function handler(req, res) {
         },
         body: JSON.stringify({
           model: AI_STUDIO_MODEL,
-          max_tokens: 4096,
+          max_tokens: maxTokens,
           system: prompt.prompt_text,
           messages,
         }),
@@ -516,12 +586,14 @@ export default async function handler(req, res) {
       const claudeData = await claude.json();
       const outputText = (claudeData.content && claudeData.content[0] && claudeData.content[0].text) || '';
       return res.status(200).json({
-        ok: true,
-        output: outputText,
-        output_format: prompt.output_format,
-        save_target:   prompt.save_target,
-        prompt_name:   prompt.name,
-        usage:         claudeData.usage || null,
+        ok:                   true,
+        output:               outputText,
+        output_format:        prompt.output_format,
+        save_target:          prompt.save_target,
+        prompt_name:          prompt.name,
+        auto_inject_context:  !!prompt.auto_inject_context,
+        context_injected:     !!(prompt.auto_inject_context && diagId),
+        usage:                claudeData.usage || null,
       });
     }
 

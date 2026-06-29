@@ -1161,9 +1161,12 @@ I'm taking part in a leadership assessment run by GPS Leadership Solutions. Thei
         <div>
           <div style="font-size:12px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">Raw Input</div>
           <div style="margin-bottom:10px;">
-            <select id="aiStudioDiagSelect" style="width:100%;padding:8px 10px;border:1.5px solid var(--d-border);border-radius:6px;font-size:13px;">
+            <select id="aiStudioDiagSelect" onchange="aiStudioUpdateContextBanner()" style="width:100%;padding:8px 10px;border:1.5px solid var(--d-border);border-radius:6px;font-size:13px;">
               <option value="">— Select client diagnostic (to save output) —</option>
             </select>
+          </div>
+          <div id="aiContextBanner" style="display:none;background:#f0fafa;border:1.5px solid var(--d-teal);border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:12px;color:var(--d-teal);">
+            <strong>Auto-inject ON</strong> — the portal will prepend this leader's profile, kickoff brief, and interview summaries before your input. Only paste quantitative scores and qualitative comments below.
           </div>
           <textarea id="aiStudioInput" placeholder="Paste transcript, notes, or raw content here…" style="min-height:360px;width:100%;box-sizing:border-box;font-size:13px;line-height:1.6;font-family:'Open Sans',sans-serif;padding:12px;border:1.5px solid var(--d-border);border-radius:8px;resize:vertical;"></textarea>
           <div style="margin-top:10px;display:flex;gap:10px;align-items:center;">
@@ -6565,6 +6568,70 @@ function fmtLastReminder(clientId){
   var rel=n<=0?'today':n===1?'yesterday':n+' days ago';
   return '<div style="font-size:11px;color:var(--d-mid);margin-top:6px;">Last reminder sent '+d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' · '+rel+'</div>';
 }
+// ── Today page: dismiss / snooze helpers ────────────────────────────────────
+// Items can be dismissed permanently (test rows, N/A items) or snoozed for N
+// days (real clients that are on hold). State lives in localStorage keyed by a
+// stable item key so it survives page refreshes but resets on cache clear.
+function _notifStorageKey(k) { return 'gps_notif_' + k; }
+function isNotifHidden(k) {
+  try {
+    var v = localStorage.getItem(_notifStorageKey(k));
+    if (!v) return false;
+    if (v === 'permanent') return true;
+    return new Date() < new Date(v); // snoozed: hide until expiry date
+  } catch (_) { return false; }
+}
+function notifDismiss(k) {
+  try { localStorage.setItem(_notifStorageKey(k), 'permanent'); } catch (_) {}
+  renderDiagHome();
+}
+function notifSnooze(k, days) {
+  try {
+    var until = new Date(Date.now() + days * 86400000).toISOString();
+    localStorage.setItem(_notifStorageKey(k), until);
+  } catch (_) {}
+  renderDiagHome();
+}
+function notifClearAll() {
+  try {
+    Object.keys(localStorage).filter(function(k){ return k.startsWith('gps_notif_'); })
+      .forEach(function(k){ localStorage.removeItem(k); });
+  } catch (_) {}
+  renderDiagHome();
+}
+// Returns the small dismiss/snooze control strip added to each flag card.
+// The containing div must have position:relative for the snooze picker to anchor correctly.
+function notifCtrl(k) {
+  return '<div style="display:flex;gap:2px;flex-shrink:0;align-self:flex-start;position:relative;" id="notifCtrl_' + k + '">'
+    + '<button onclick="event.stopPropagation();notifOpenSnooze(\'' + k + '\')" title="Snooze" style="background:none;border:1px solid transparent;border-radius:4px;cursor:pointer;font-size:13px;color:var(--d-mid);padding:2px 5px;line-height:1;" onmouseover="this.style.borderColor=\'var(--d-border)\'" onmouseout="this.style.borderColor=\'transparent\'">🔕</button>'
+    + '<button onclick="event.stopPropagation();notifDismiss(\'' + k + '\')" title="Dismiss permanently" style="background:none;border:1px solid transparent;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;color:var(--d-mid);padding:2px 5px;line-height:1;" onmouseover="this.style.borderColor=\'var(--d-border)\'" onmouseout="this.style.borderColor=\'transparent\'">✕</button>'
+    + '</div>';
+}
+function notifOpenSnooze(k) {
+  var anchor = document.getElementById('notifCtrl_' + k);
+  if (!anchor) return;
+  var existing = document.getElementById('notifPicker_' + k);
+  if (existing) { existing.remove(); return; }
+  var picker = document.createElement('div');
+  picker.id = 'notifPicker_' + k;
+  picker.style.cssText = 'position:absolute;right:0;top:28px;background:#fff;border:1px solid var(--d-border);border-radius:8px;padding:6px;z-index:200;min-width:130px;box-shadow:0 4px 16px rgba(0,0,0,.12);';
+  picker.innerHTML = '<div style="font-size:11px;color:var(--d-mid);padding:3px 6px 6px;font-weight:600;border-bottom:1px solid #eee;margin-bottom:4px;">Snooze for…</div>'
+    + [3,7,14].map(function(d){
+        return '<div onclick="event.stopPropagation();notifSnooze(\'' + k + '\',' + d + ');document.getElementById(\'notifPicker_' + k + '\').remove();" style="padding:6px 8px;border-radius:4px;cursor:pointer;font-size:12px;color:var(--d-dark);" onmouseover="this.style.background=\'#f4f6f8\'" onmouseout="this.style.background=\'\'">'+d+' days</div>';
+      }).join('');
+  anchor.appendChild(picker);
+  setTimeout(function() {
+    function closePicker(e) {
+      if (picker.parentNode && !picker.contains(e.target)) {
+        picker.remove();
+        document.removeEventListener('click', closePicker);
+      }
+    }
+    document.addEventListener('click', closePicker);
+  }, 0);
+}
+// ── END dismiss/snooze helpers ───────────────────────────────────────────────
+
 function renderDiagHome() {
   const el = document.getElementById('dashboardContent');
   if (!el) return;
@@ -6626,9 +6693,12 @@ function renderDiagHome() {
 
   // ── Needs Attention flags ────────────────────────────────────────────────────
   let flagsHtml = '';
+  let _hiddenCount = 0;  // count of items currently dismissed or snoozed
 
   // Waiting on YOU — shown first because the action is yours.
   sendDiag.forEach(d => {
+    const _nk = 'diag_send_' + d.id;
+    if (isNotifHidden(_nk)) { _hiddenCount++; return; }
     flagsHtml += `<div class="dflag" style="border-left:3px solid var(--d-blue);background:#eef4fb;">
       <div style="font-size:22px;flex-shrink:0;margin-top:-2px;">📨</div>
       <div style="flex:1;">
@@ -6636,10 +6706,12 @@ function renderDiagHome() {
         <div style="font-size:12px;color:var(--d-mid);margin-top:3px;">Rater list submitted ${diagFormatDate(d.raters_finalized_at)}. Open the diagnostic and send the survey.</div>
         <div style="margin-top:10px;"><button class="dbtn dbtn-outline dbtn-sm" onclick="showSection('diagnostics');openDiag('${d.id}')">Open &amp; send invites →</button></div>
       </div>
-      <span class="dbadge dbadge-standard" style="flex-shrink:0;align-self:flex-start;">Diagnostic</span>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">${notifCtrl(_nk)}<span class="dbadge dbadge-standard">Diagnostic</span></div>
     </div>`;
   });
   wsSend.forEach(w => {
+    const _nk = 'ws_send_' + w.id;
+    if (isNotifHidden(_nk)) { _hiddenCount++; return; }
     const kindLabel = w.kind === 'assessment' ? 'assessment' : 'workshop';
     flagsHtml += `<div class="dflag" style="border-left:3px solid var(--d-blue);background:#eef4fb;">
       <div style="font-size:22px;flex-shrink:0;margin-top:-2px;">📨</div>
@@ -6648,10 +6720,12 @@ function renderDiagHome() {
         <div style="font-size:12px;color:var(--d-mid);margin-top:3px;">The roster is uploaded. Open it and send the survey to whoever hasn't been invited.</div>
         <div style="margin-top:10px;"><button class="dbtn dbtn-outline dbtn-sm" onclick="showSection('workshops', true);wsOpen('${w.id}')">Open &amp; send survey →</button></div>
       </div>
-      <span class="dbadge dbadge-standard" style="flex-shrink:0;align-self:flex-start;">${w.kind === 'assessment' ? 'Assessment' : 'Workshop'}</span>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">${notifCtrl(_nk)}<span class="dbadge dbadge-standard">${w.kind === 'assessment' ? 'Assessment' : 'Workshop'}</span></div>
     </div>`;
   });
   stakeSend.forEach(s => {
+    const _nk = 'stake_send_' + s.id;
+    if (isNotifHidden(_nk)) { _hiddenCount++; return; }
     flagsHtml += `<div class="dflag" style="border-left:3px solid var(--d-blue);background:#eef4fb;">
       <div style="font-size:22px;flex-shrink:0;margin-top:-2px;">📨</div>
       <div style="flex:1;">
@@ -6659,11 +6733,13 @@ function renderDiagHome() {
         <div style="font-size:12px;color:var(--d-mid);margin-top:3px;">${s.count} stakeholder${s.count !== 1 ? 's' : ''} saved, no survey sent yet. Open their profile and send it.</div>
         <div style="margin-top:10px;"><button class="dbtn dbtn-outline dbtn-sm" onclick="openClientProfile('${s.id}')">Open profile →</button></div>
       </div>
-      <span class="dbadge dbadge-standard" style="flex-shrink:0;align-self:flex-start;">Coaching</span>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">${notifCtrl(_nk)}<span class="dbadge dbadge-standard">Coaching</span></div>
     </div>`;
   });
 
   closingUrgent.forEach(d => {
+    const _nk = 'diag_close_' + d.id;
+    if (isNotifHidden(_nk)) { _hiddenCount++; return; }
     const days  = diagDaysUntil(d.close_date);
     const stats = DIAG_RATER_STATS[d.id] || { total:0, responded:0, pct:0 };
     const label = days <= 0 ? 'closes today' : `closes in ${days} day${days!==1?'s':''}`;
@@ -6677,7 +6753,7 @@ function renderDiagHome() {
         <div style="font-size:12px;color:var(--d-mid);margin-top:3px;">${detail}</div>
         <div style="margin-top:10px;"><button class="dbtn dbtn-outline dbtn-sm" onclick="showSection('diagnostics');openDiag('${d.id}')">View Diagnostic →</button></div>
       </div>
-      <span class="dbadge ${d.tier==='pro'?'dbadge-pro':'dbadge-standard'}" style="flex-shrink:0;align-self:flex-start;">${d.tier==='pro'?'Pro':'Standard'}</span>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">${notifCtrl(_nk)}<span class="dbadge ${d.tier==='pro'?'dbadge-pro':'dbadge-standard'}">${d.tier==='pro'?'Pro':'Standard'}</span></div>
     </div>`;
   });
 
@@ -6693,6 +6769,8 @@ function renderDiagHome() {
   });
 
   lowResponse.forEach(d => {
+    const _nk = 'diag_lowrsp_' + d.id;
+    if (isNotifHidden(_nk)) { _hiddenCount++; return; }
     const stats = DIAG_RATER_STATS[d.id] || { total:0, responded:0, pct:0 };
     const days  = diagDaysUntil(d.close_date);
     flagsHtml += `<div class="dflag dflag-gray">
@@ -6702,11 +6780,13 @@ function renderDiagHome() {
         <div style="font-size:12px;color:var(--d-mid);margin-top:3px;">Closes ${diagFormatDate(d.close_date)} · ${days} days left. Consider following up with non-responders.</div>
         <div style="margin-top:10px;"><button class="dbtn dbtn-outline dbtn-sm" onclick="showSection('diagnostics');openDiag('${d.id}')">View Diagnostic →</button></div>
       </div>
-      <span class="dbadge ${d.tier==='pro'?'dbadge-pro':'dbadge-standard'}" style="flex-shrink:0;align-self:flex-start;">${d.tier==='pro'?'Pro':'Standard'}</span>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">${notifCtrl(_nk)}<span class="dbadge ${d.tier==='pro'?'dbadge-pro':'dbadge-standard'}">${d.tier==='pro'?'Pro':'Standard'}</span></div>
     </div>`;
   });
 
   stalledClients.forEach(c => {
+    const _nk = 'client_stall_' + c.id;
+    if (isNotifHidden(_nk)) { _hiddenCount++; return; }
     const gapTxt = c.lastCIWeek != null
       ? `Last check-in was week ${c.lastCIWeek}, about ${c.gapWeeks} week${c.gapWeeks!==1?'s':''} ago.`
       : `Plan submitted but no check-ins yet.`;
@@ -6718,11 +6798,13 @@ function renderDiagHome() {
         <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;"><button class="dbtn dbtn-outline dbtn-sm" onclick="drNudgeClient('${c.id}','${(c.name||'').replace(/'/g,"\\'")}')">Send reminder</button><button class="dbtn dbtn-outline dbtn-sm" onclick="openClientProfile('${c.id}')">View profile →</button></div>
         ${fmtLastReminder(c.id)}
       </div>
-      <span class="dbadge dbadge-standard" style="flex-shrink:0;align-self:flex-start;">Coaching</span>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">${notifCtrl(_nk)}<span class="dbadge dbadge-standard">Coaching</span></div>
     </div>`;
   });
 
   missingCIs.forEach(c => {
+    const _nk = 'client_ci_' + c.id;
+    if (isNotifHidden(_nk)) { _hiddenCount++; return; }
     flagsHtml += `<div class="dflag dflag-gray">
       <div style="font-size:22px;flex-shrink:0;margin-top:-2px;">📋</div>
       <div style="flex:1;">
@@ -6731,6 +6813,7 @@ function renderDiagHome() {
         ${fmtLastReminder(c.id)}
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;align-self:flex-start;flex-wrap:wrap;justify-content:flex-end;">
+        ${notifCtrl(_nk)}
         <button class="dbtn dbtn-outline dbtn-sm" onclick="drNudgeClient('${c.id}','${(c.name||'').replace(/'/g,"\\'")}')">Send reminder</button>
         <button class="dbtn dbtn-outline dbtn-sm" onclick="openClientProfile('${c.id}')">View profile →</button>
         <span class="dbadge dbadge-standard">Coaching</span>
@@ -6739,6 +6822,8 @@ function renderDiagHome() {
   });
 
   reportsReviewReady.forEach(d => {
+    const _nk = 'diag_review_' + d.id;
+    if (isNotifHidden(_nk)) { _hiddenCount++; return; }
     flagsHtml += `<div class="dflag dflag-gray">
       <div style="font-size:22px;flex-shrink:0;margin-top:-2px;">📑</div>
       <div style="flex:1;">
@@ -6746,11 +6831,14 @@ function renderDiagHome() {
         <div style="font-size:12px;color:var(--d-mid);margin-top:3px;">Open the diagnostic → Report tab to review, edit, and finalize.</div>
         <div style="margin-top:10px;"><button class="dbtn dbtn-outline dbtn-sm" onclick="showSection('diagnostics');openDiag('${d.id}')">Review report →</button></div>
       </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">${notifCtrl(_nk)}</div>
     </div>`;
   });
 
   // Email sequence approval reminder — surfaces 3 days before debrief if not yet approved.
   emailApprovalNeeded.forEach(function(d) {
+    const _nk = 'diag_email_' + d.id;
+    if (isNotifHidden(_nk)) { _hiddenCount++; return; }
     const debriefFmt = new Date(d.debrief_date + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     flagsHtml += '<div class="dflag" style="border-left:3px solid #7c3aed;background:#f5f3ff;">'
       + '<div style="font-size:22px;flex-shrink:0;margin-top:-2px;">📧</div>'
@@ -6759,9 +6847,17 @@ function renderDiagHome() {
       + '<div style="font-size:12px;color:var(--d-mid);margin-top:3px;">Generate or review the E1-E7 follow-up emails, then approve so they schedule automatically.</div>'
       + '<div style="margin-top:10px;"><button class="dbtn dbtn-outline dbtn-sm" style="border-color:#7c3aed;color:#7c3aed;" onclick="showSection(\'diagnostics\');openDiag(\'' + d.id + '\');setTimeout(function(){switchDiagTabById(\'dtab-emails\');},400);">Review Emails →</button></div>'
       + '</div>'
-      + '<span class="dbadge dbadge-standard" style="flex-shrink:0;align-self:flex-start;">Diagnostic</span>'
+      + '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">' + notifCtrl(_nk) + '<span class="dbadge dbadge-standard">Diagnostic</span></div>'
       + '</div>';
   });
+
+  // ── Hidden count footer ──────────────────────────────────────────────────────────
+  if (_hiddenCount > 0) {
+    flagsHtml += '<div style="font-size:12px;color:var(--d-mid);padding:8px 4px 0;border-top:1px dashed #e3e8ec;margin-top:4px;">'
+      + _hiddenCount + ' item' + (_hiddenCount > 1 ? 's' : '') + ' hidden (dismissed or snoozed) · '
+      + '<a href="#" onclick="notifClearAll();return false;" style="color:var(--d-teal);">Show all</a>'
+      + '</div>';
+  }
 
   // ── Awaiting responses (you've sent — they haven't finished). Info, not action. ─
   const _flaggedDiag = new Set([].concat(closingUrgent, lowResponse).map(d => d.id));
@@ -10691,7 +10787,7 @@ async function aiStudioLoadPrompts() {
     var r = await fetch('/api/coach-data', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ op: 'select', table: 'coach_prompts', filters: { is_active: { eq: true } }, select: 'id,name,description,action_type,prompt_text,output_format,save_target,examples_json,sort_order', order: 'sort_order.asc', _coach_token: token })
+      body: JSON.stringify({ op: 'select', table: 'coach_prompts', filters: { is_active: { eq: true } }, select: 'id,name,description,action_type,prompt_text,output_format,save_target,examples_json,auto_inject_context,max_output_tokens,sort_order', order: 'sort_order.asc', _coach_token: token })
     });
     var data = await r.json();
     var prompts = (data && data.rows) ? data.rows : [];
@@ -10740,6 +10836,16 @@ function aiStudioSelectPrompt(p) {
   var label = document.getElementById('aiSelectedPromptName');
   if (label) label.textContent = 'Selected: ' + p.name;
   aiStudioLoadPrompts(); // re-render to show selection highlight
+  aiStudioUpdateContextBanner();
+}
+
+// Show/hide the auto-inject banner based on selected prompt + client
+function aiStudioUpdateContextBanner() {
+  var banner = document.getElementById('aiContextBanner');
+  if (!banner) return;
+  var hasAutoInject = !!(AI_SELECTED_PROMPT && AI_SELECTED_PROMPT.auto_inject_context);
+  var hasClient    = !!(document.getElementById('aiStudioDiagSelect') || {}).value;
+  banner.style.display = (hasAutoInject && hasClient) ? 'block' : 'none';
 }
 
 // Run the selected prompt against the pasted input
@@ -10759,7 +10865,8 @@ async function aiStudioRun() {
   document.getElementById('aiSaveBtn').style.display = 'none';
 
   try {
-    var result = await coachPost('run-prompt', { prompt_id: AI_SELECTED_PROMPT.id, user_input: input });
+    var diagId = (document.getElementById('aiStudioDiagSelect') || {}).value || '';
+    var result = await coachPost('run-prompt', { prompt_id: AI_SELECTED_PROMPT.id, user_input: input, diagnostic_id: diagId || undefined });
     if (!result.ok) throw new Error(result.error || 'Processing failed');
     if (output) output.value = result.output || '';
     if (status) status.textContent = 'Done.';
