@@ -404,8 +404,13 @@ export default async function handler(req, res) {
     case 'reminders':            return handleReminders(req, res);
     case 'draft-kickoff-email':  return handleDraftKickoffEmail(req, res);
     case 'send-kickoff-email':   return handleSendKickoffEmail(req, res);
+    case 'generate-email-drafts':  return handleGenerateEmailDrafts(req, res);
+    case 'get-email-drafts':       return handleGetEmailDrafts(req, res);
+    case 'update-email-draft':     return handleUpdateEmailDraft(req, res);
+    case 'approve-email-sequence': return handleApproveEmailSequence(req, res);
+    case 'mark-sprint-purchased':  return handleMarkSprintPurchased(req, res);
     default:
-      return res.status(400).json({ error: `Unknown action: "${action}". Valid: send-invites, schedule-invites, send-scheduled, trial-sweep, send-leader-link, generate-question, generate-g2-question, generate-report, generate-team-report, finalize-report, sign-report-upload, generate-dr-content, request-external-feedback, feedback-context, submit-external-feedback, reminders` });
+      return res.status(400).json({ error: `Unknown action: "${action}". Valid: send-invites, schedule-invites, send-scheduled, trial-sweep, send-leader-link, generate-question, generate-g2-question, generate-report, generate-team-report, finalize-report, sign-report-upload, generate-dr-content, request-external-feedback, feedback-context, submit-external-feedback, reminders, generate-email-drafts, get-email-drafts, update-email-draft, approve-email-sequence, mark-sprint-purchased` });
   }
 }
 
@@ -3824,5 +3829,280 @@ async function handleGenerateTeamReport(req, res) {
   } catch (err) {
     console.error('[diagnostic/generate-team-report] error:', err);
     return res.status(500).json({ error: err.message });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EMAIL SEQUENCE SYSTEM
+// DiagnosticFinalized → coach generates drafts → reviews/edits → approves →
+// cron (send-reminders.js hourly pass) sends on schedule.
+// Sponsor E4-E7 auto-cancel when sprint_purchased_at is set.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GPS-branded email shell for sequence emails.
+function diagEmailShell(title, inner) {
+  return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
+    <div style="background:#004369;padding:20px 28px;border-radius:8px 8px 0 0;">
+      <div style="color:#E5DDC8;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">GPS Leadership Solutions</div>
+      <div style="color:#ffffff;font-size:20px;font-weight:700;">${title}</div>
+    </div>
+    <div style="background:#ffffff;padding:28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
+      ${inner}
+      <p style="margin-top:28px;">– Alex Tremble<br><span style="color:#666;font-size:13px;">GPS Leadership Solutions</span></p>
+      <div style="margin-top:28px;padding-top:16px;border-top:1px solid #eee;font-size:11px;color:#999;">
+        Questions? Reply to this email or reach out to alex@gpsleadership.org.
+      </div>
+    </div>
+  </div>`;
+}
+
+// Add calendar days to a YYYY-MM-DD date string, return ISO timestamptz (UTC).
+function addDaysToDate(dateStr, days, hourUtc) {
+  if (!dateStr) return null;
+  var h = typeof hourUtc === 'number' ? hourUtc : 14;
+  var d = new Date(dateStr + 'T' + String(h).padStart(2, '0') + ':00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ACTION: generate-email-drafts
+// POST /api/diagnostic?action=generate-email-drafts
+// Body: { diagnostic_id, session }
+//
+// Generates all E1/E1b (leader) + E2-E7 (sponsor) drafts via Claude and stores
+// them in email_drafts. Deletes any prior drafts for this diagnostic first.
+// Coach must call approve-email-sequence before any draft sends.
+// ─────────────────────────────────────────────────────────────────────────────
+async function handleGenerateEmailDrafts(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
+  const { diagnostic_id, session } = req.body || {};
+  if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
+  if (!diagnostic_id) return res.status(400).json({ error: 'diagnostic_id required' });
+
+  try {
+    // ── 1. Load diagnostic ───────────────────────────────────────────────────
+    const diagR = await sb(`/rest/v1/diagnostics?id=eq.${encodeURIComponent(diagnostic_id)}&select=id,client_id,client_name,client_title,client_org,client_email,debrief_date,tp3_pillar,report_doc&limit=1`);
+    const diag = diagR.ok ? ((await diagR.json())[0] || null) : null;
+    if (!diag) return res.status(404).json({ error: 'Diagnostic not found' });
+
+    // ── 2. Load TP3 scores ───────────────────────────────────────────────────
+    const scoresR = await sb(`/rest/v1/diagnostic_report_drafts?diagnostic_id=eq.${encodeURIComponent(diagnostic_id)}&select=scores_json&order=generated_at.desc&limit=1`);
+    const scores = scoresR.ok ? (((await scoresR.json())[0] || {}).scores_json || {}) : {};
+
+    // ── 3. Find primary sponsor team for this leader ─────────────────────────
+    let sponsor = null;
+    var backedRecs = [];
+    if (diag.client_id) {
+      const stFilter = encodeURIComponent(JSON.stringify([{ client_id: diag.client_id }]));
+      const stR = await sb(`/rest/v1/sponsor_teams?members=cs.${stFilter}&select=id,sponsor_name,sponsor_email,sponsor_title,client_org_name,rec_commitments&limit=1`);
+      var stRows = stR.ok ? await stR.json() : [];
+      if (Array.isArray(stRows) && stRows[0]) {
+        sponsor = stRows[0];
+        var rcMap = sponsor.rec_commitments || {};
+        var backedKeys = Object.entries(rcMap).filter(function(e) { return e[1] === 'commit'; }).map(function(e) { return e[0]; });
+        if (backedKeys.length) {
+          var recR = await sb('/rest/v1/recommendations?id=in.(' + backedKeys.map(function(k) { return encodeURIComponent(k); }).join(',') + ')&select=short_title&limit=20');
+          var recRows = recR.ok ? await recR.json() : [];
+          backedRecs = (Array.isArray(recRows) ? recRows : []).map(function(r) { return r.short_title; }).filter(Boolean);
+        }
+      }
+    }
+
+    var leaderFirst = String(diag.client_name || '').trim().split(/\s+/)[0] || 'the leader';
+    var debriefDateFmt = diag.debrief_date
+      ? new Date(diag.debrief_date + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+      : 'the upcoming debrief';
+
+    // Pull a few report themes for context if available
+    var reportThemes = '';
+    if (diag.report_doc && Array.isArray(diag.report_doc.sections)) {
+      var themeSection = diag.report_doc.sections.find(function(s) { return s.key === 'key_strengths' || s.key === 'blind_spots'; });
+      if (themeSection && themeSection.body) reportThemes = String(themeSection.body).slice(0, 600);
+    }
+
+    // ── 4. Build Claude prompt ───────────────────────────────────────────────
+    var emailCount = sponsor ? 8 : 2;
+    var seqSystem = 'You are drafting a personalized diagnostic follow-up email sequence for GPS Leadership Solutions. Write in Alex Tremble\'s voice: direct, candid, warm, plain language, short sentences. No hype, no buzzwords, no emoji. Avoid em dashes; use commas, periods, or semicolons.\n\nGenerate ' + emailCount + ' emails as a JSON array. Each email object: { "email_key": "E1", "subject": "...", "body_text": "..." }\n\nbody_text rules: plain paragraphs separated by blank lines; "- " at line start for bullets; 100-250 words per email; close with one clear next step; never mention pricing; no invented facts.\n\nEmails to generate:\n\nE1 (TO LEADER, pre-debrief, sent 1 day before call on ' + debriefDateFmt + '): Heads-up email to ' + (diag.client_name || 'the leader') + '. What to expect tomorrow. What to bring to the conversation. Keep under 150 words.\n\nE1b (TO LEADER, post-debrief, sent same day as debrief): Thank you and recap. Brief summary of what we covered (keep general -- no invented specifics), key themes identified, next step is the 90-day plan.' + (sponsor ? '\n\nE2 (TO SPONSOR, pre-debrief, sent 1 day before): Heads-up to ' + (sponsor.sponsor_name || 'the sponsor') + ' that debrief is tomorrow with ' + (diag.client_name || 'the leader') + '. Brief context on what happens next. Keep it under 150 words.\n\nE3 (TO SPONSOR, post-debrief day +1): Summary of where things stand after the debrief. Development focus identified. Point them to the Decision Room to review and back recommendations.\n\nE4 (TO SPONSOR, day +3): Reference the backed recommendations' + (backedRecs.length ? ' they committed to: ' + backedRecs.join(', ') : '') + '. These shape the 90-day sprint. Invite them to lock in the sprint -- 7-day window is open.\n\nE5 (TO SPONSOR, day +5): Short reminder. Sprint window closes in 2 days. Direct, no pressure, but clear stakes.\n\nE6 (TO SPONSOR, day +7 -- last day of sprint window): Very short. Today is the last day. One clear call to action.\n\nE7 (TO SPONSOR, day +10 -- post-window): Sprint window has passed. If they still want to move forward there is a path. No pressure, keep it open.' : '') + '\n\nReturn ONLY a JSON object: { "emails": [ ... ] }. No prose, no code fences.';
+
+    var seqUser = [
+      'Leader: ' + (diag.client_name || '') + (diag.client_title ? ', ' + diag.client_title : '') + (diag.client_org ? ' (' + diag.client_org + ')' : ''),
+      'Debrief date: ' + debriefDateFmt,
+      'TP3 focus pillar: ' + (diag.tp3_pillar || scores.tp3_pillar || 'not set'),
+      'TP3 scores (1-5): Trust ' + (scores.trust != null ? scores.trust : 'n/a') + ', Proactivity ' + (scores.proactivity != null ? scores.proactivity : 'n/a') + ', Productivity ' + (scores.productivity != null ? scores.productivity : 'n/a'),
+      sponsor ? 'Sponsor: ' + (sponsor.sponsor_name || '') + (sponsor.sponsor_title ? ', ' + sponsor.sponsor_title : '') + ' (' + (diag.client_org || sponsor.client_org_name || 'the company') + ')' : 'No sponsor team on file -- generating leader emails only.',
+      backedRecs.length ? 'Backed recommendations (sponsor committed to these): ' + backedRecs.join('; ') : 'No recommendations backed yet.',
+      reportThemes ? 'Report themes (context only -- do not quote directly):\n' + reportThemes : '',
+      '',
+      'Draft all ' + emailCount + ' emails now.',
+    ].filter(Boolean).join('\n');
+
+    var raw = await callClaude(seqSystem, seqUser, 4000, { model: CLAUDE_REPORT_MODEL, timeoutMs: 110000, temperature: 0.3, retries: 1 });
+    var parsed = parseJsonLoose(raw);
+    if (!parsed || !Array.isArray(parsed.emails) || !parsed.emails.length) {
+      return res.status(502).json({ error: 'Could not generate email drafts. Please try again.' });
+    }
+
+    // ── 5. Compute scheduled_for for each draft ──────────────────────────────
+    var OFFSETS = {
+      'E1':  { days: -1, hour: 14 },  // 10am ET day before
+      'E1B': { days:  0, hour: 21 },  // 5pm ET day of debrief
+      'E1b': { days:  0, hour: 21 },
+      'E2':  { days: -1, hour: 14 },
+      'E3':  { days:  1, hour: 14 },
+      'E4':  { days:  3, hour: 14 },
+      'E5':  { days:  5, hour: 14 },
+      'E6':  { days:  7, hour: 14 },
+      'E7':  { days: 10, hour: 14 },
+    };
+
+    // ── 6. Delete existing drafts ────────────────────────────────────────────
+    await sb('/rest/v1/email_drafts?diagnostic_id=eq.' + encodeURIComponent(diagnostic_id), 'DELETE');
+
+    // ── 7. Build and insert new rows ─────────────────────────────────────────
+    var now = new Date().toISOString();
+    var rows = parsed.emails.map(function(e) {
+      var key = String(e.email_key || '').trim().toUpperCase().replace('1B', '1b').replace(/^E1B$/, 'E1b');
+      var isLeader = ['E1', 'E1b'].includes(key);
+      var off = OFFSETS[key];
+      var scheduledFor = (off && diag.debrief_date) ? addDaysToDate(diag.debrief_date, off.days, off.hour) : null;
+      return {
+        diagnostic_id: diagnostic_id,
+        email_key: key,
+        sequence: isLeader ? 'leader' : 'sponsor',
+        subject: String(e.subject || ''),
+        body: String(e.body_text || e.body || ''),
+        to_name:  isLeader ? (diag.client_name || '') : (sponsor ? (sponsor.sponsor_name || '') : ''),
+        to_email: isLeader ? (diag.client_email || '') : (sponsor ? (sponsor.sponsor_email || '') : ''),
+        scheduled_for: scheduledFor,
+        status: 'draft',
+        created_at: now,
+        updated_at: now,
+      };
+    });
+
+    var insertR = await sb('/rest/v1/email_drafts', 'POST', rows, { Prefer: 'return=representation' });
+    var inserted = insertR.ok ? await insertR.json() : rows;
+
+    return res.status(200).json({ ok: true, count: (Array.isArray(inserted) ? inserted : rows).length, drafts: Array.isArray(inserted) ? inserted : rows });
+  } catch (e) {
+    console.error('[generate-email-drafts]', e);
+    return res.status(500).json({ error: e.message });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ACTION: get-email-drafts
+// POST /api/diagnostic?action=get-email-drafts
+// Body: { diagnostic_id, session }
+// Returns all drafts for a diagnostic plus approval / purchased state.
+// ─────────────────────────────────────────────────────────────────────────────
+async function handleGetEmailDrafts(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const { diagnostic_id, session } = req.body || {};
+  if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
+  if (!diagnostic_id) return res.status(400).json({ error: 'diagnostic_id required' });
+  try {
+    const r = await sb('/rest/v1/email_drafts?diagnostic_id=eq.' + encodeURIComponent(diagnostic_id) + '&order=email_key.asc');
+    const rows = r.ok ? await r.json() : [];
+    const dr = await sb('/rest/v1/diagnostics?id=eq.' + encodeURIComponent(diagnostic_id) + '&select=emails_approved_by_coach,sprint_purchased_at&limit=1');
+    const diagInfo = dr.ok ? ((await dr.json())[0] || {}) : {};
+    return res.status(200).json({
+      ok: true,
+      drafts: Array.isArray(rows) ? rows : [],
+      emails_approved_by_coach: !!(diagInfo.emails_approved_by_coach),
+      sprint_purchased_at: diagInfo.sprint_purchased_at || null,
+    });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ACTION: update-email-draft
+// POST /api/diagnostic?action=update-email-draft
+// Body: { draft_id, subject, body, session }
+// Saves coach edits to a draft (subject and/or body). Only works on draft/scheduled rows.
+// ─────────────────────────────────────────────────────────────────────────────
+async function handleUpdateEmailDraft(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const { draft_id, subject, body, session } = req.body || {};
+  if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
+  if (!draft_id) return res.status(400).json({ error: 'draft_id required' });
+  try {
+    var update = { updated_at: new Date().toISOString() };
+    if (subject !== undefined) update.subject = String(subject);
+    if (body !== undefined) update.body = String(body);
+    const r = await sb('/rest/v1/email_drafts?id=eq.' + encodeURIComponent(draft_id) + '&status=in.(draft,scheduled)', 'PATCH', update, { Prefer: 'return=minimal' });
+    if (!r.ok) return res.status(400).json({ error: 'Could not update draft -- it may already be sent or cancelled.' });
+    return res.status(200).json({ ok: true });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ACTION: approve-email-sequence
+// POST /api/diagnostic?action=approve-email-sequence
+// Body: { diagnostic_id, session }
+//
+// Sets emails_approved_by_coach=true and promotes all draft→scheduled.
+// Leader emails (E1, E1b) always schedule. Sponsor emails (E2-E7) only
+// schedule if sprint_purchased_at is null (sprint not yet bought).
+// ─────────────────────────────────────────────────────────────────────────────
+async function handleApproveEmailSequence(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const { diagnostic_id, session } = req.body || {};
+  if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
+  if (!diagnostic_id) return res.status(400).json({ error: 'diagnostic_id required' });
+  try {
+    const dr = await sb('/rest/v1/diagnostics?id=eq.' + encodeURIComponent(diagnostic_id) + '&select=sprint_purchased_at&limit=1');
+    const diagInfo = dr.ok ? ((await dr.json())[0] || {}) : {};
+    const now = new Date().toISOString();
+
+    // Promote leader drafts unconditionally
+    await sb('/rest/v1/email_drafts?diagnostic_id=eq.' + encodeURIComponent(diagnostic_id) + '&sequence=eq.leader&status=eq.draft',
+      'PATCH', { status: 'scheduled', updated_at: now }, { Prefer: 'return=minimal' });
+
+    // Promote sponsor drafts only if sprint not yet purchased
+    if (!diagInfo.sprint_purchased_at) {
+      await sb('/rest/v1/email_drafts?diagnostic_id=eq.' + encodeURIComponent(diagnostic_id) + '&sequence=eq.sponsor&status=eq.draft',
+        'PATCH', { status: 'scheduled', updated_at: now }, { Prefer: 'return=minimal' });
+    }
+
+    // Mark approved on the diagnostic record
+    await sb('/rest/v1/diagnostics?id=eq.' + encodeURIComponent(diagnostic_id),
+      'PATCH', { emails_approved_by_coach: true, updated_at: now }, { Prefer: 'return=minimal' });
+
+    return res.status(200).json({ ok: true });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ACTION: mark-sprint-purchased
+// POST /api/diagnostic?action=mark-sprint-purchased
+// Body: { diagnostic_id, session }
+//
+// Sets sprint_purchased_at = now(). Immediately cancels any unsent E4-E7
+// sponsor follow-ups (the urgency sequence is no longer needed once bought).
+// ─────────────────────────────────────────────────────────────────────────────
+async function handleMarkSprintPurchased(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const { diagnostic_id, session } = req.body || {};
+  if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
+  if (!diagnostic_id) return res.status(400).json({ error: 'diagnostic_id required' });
+  try {
+    const now = new Date().toISOString();
+    await sb('/rest/v1/diagnostics?id=eq.' + encodeURIComponent(diagnostic_id),
+      'PATCH', { sprint_purchased_at: now, updated_at: now }, { Prefer: 'return=minimal' });
+    // Cancel unsent E4-E7 sponsor follow-ups
+    await sb('/rest/v1/email_drafts?diagnostic_id=eq.' + encodeURIComponent(diagnostic_id) + '&sequence=eq.sponsor&email_key=in.(E4,E5,E6,E7)&status=in.(draft,scheduled)',
+      'PATCH', { status: 'cancelled', updated_at: now }, { Prefer: 'return=minimal' });
+    return res.status(200).json({ ok: true, sprint_purchased_at: now });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
   }
 }

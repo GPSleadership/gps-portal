@@ -1189,12 +1189,14 @@ I'm taking part in a leadership assessment run by GPS Leadership Solutions. Thei
           <div class="dtab" onclick="switchDiagTab(event,'dtab','survey')">Survey Status</div>
           <div class="dtab" onclick="switchDiagTab(event,'dtab','questions')">Questions</div>
           <div class="dtab" onclick="switchDiagTab(event,'dtab','report')">Report</div>
+          <div class="dtab" onclick="switchDiagTab(event,'dtab','emails')">Emails <span id="tab-email-badge" style="font-size:11px;background:#dc2626;color:#fff;padding:1px 6px;border-radius:10px;margin-left:4px;display:none;">!</span></div>
         </div>
         <div id="dtab-overview" class="dtab-pane active"><div id="overview-content"></div></div>
         <div id="dtab-raters"   class="dtab-pane"><div id="raters-content"></div></div>
         <div id="dtab-survey"   class="dtab-pane"><div id="survey-content"></div></div>
         <div id="dtab-questions" class="dtab-pane"><div id="questions-content"></div></div>
         <div id="dtab-report"   class="dtab-pane"><div id="report-content"></div></div>
+        <div id="dtab-emails"   class="dtab-pane"><div id="emails-content"></div></div>
       </div>
 
       <!-- TEAM REPORT VIEWER -->
@@ -6485,8 +6487,16 @@ function renderDiagHome() {
   const sendDiag  = (ALL_DIAGS || []).filter(d => d.raters_finalized_at && !d.invites_sent_at && !d.invites_scheduled_at && !d.survey_closed_at && !d.is_archived);
   const wsSend    = (DIAG_SEND_WS || []).filter(w => w.notSent > 0);
   const stakeSend = DIAG_SEND_STAKE || [];
+  // Email sequence approval: surfaces 3 days before debrief when not yet approved.
+  const emailApprovalNeeded = ALL_DIAGS.filter(function(d) {
+    if (d.emails_approved_by_coach) return false;
+    if (!d.debrief_date) return false;
+    const debriefMs = new Date(d.debrief_date + 'T12:00:00Z').getTime();
+    const daysUntil = (debriefMs - now.getTime()) / (1000 * 60 * 60 * 24);
+    return daysUntil >= 0 && daysUntil <= 3;
+  });
   const waitingOnYou = sendDiag.length + wsSend.length + stakeSend.length;
-  const attention    = waitingOnYou + closingUrgent.length + needReport.length + lowResponse.length + stalledClients.length + missingCIs.length + reportsReviewReady.length;
+  const attention    = waitingOnYou + closingUrgent.length + needReport.length + lowResponse.length + stalledClients.length + missingCIs.length + reportsReviewReady.length + emailApprovalNeeded.length;
 
   // ── Needs Attention flags ────────────────────────────────────────────────────
   let flagsHtml = '';
@@ -6611,6 +6621,20 @@ function renderDiagHome() {
         <div style="margin-top:10px;"><button class="dbtn dbtn-outline dbtn-sm" onclick="showSection('diagnostics');openDiag('${d.id}')">Review report →</button></div>
       </div>
     </div>`;
+  });
+
+  // Email sequence approval reminder — surfaces 3 days before debrief if not yet approved.
+  emailApprovalNeeded.forEach(function(d) {
+    const debriefFmt = new Date(d.debrief_date + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    flagsHtml += '<div class="dflag" style="border-left:3px solid #7c3aed;background:#f5f3ff;">'
+      + '<div style="font-size:22px;flex-shrink:0;margin-top:-2px;">📧</div>'
+      + '<div style="flex:1;">'
+      + '<div style="font-size:13px;font-weight:700;color:#7c3aed;">' + esc(d.client_name) + " — email sequence needs approval before " + debriefFmt + ' debrief</div>'
+      + '<div style="font-size:12px;color:var(--d-mid);margin-top:3px;">Generate or review the E1-E7 follow-up emails, then approve so they schedule automatically.</div>'
+      + '<div style="margin-top:10px;"><button class="dbtn dbtn-outline dbtn-sm" style="border-color:#7c3aed;color:#7c3aed;" onclick="showSection(\'diagnostics\');openDiag(\'' + d.id + '\');setTimeout(function(){switchDiagTab(null,\'dtab\',\'emails\');},400);">Review Emails →</button></div>'
+      + '</div>'
+      + '<span class="dbadge dbadge-standard" style="flex-shrink:0;align-self:flex-start;">Diagnostic</span>'
+      + '</div>';
   });
 
   // ── Awaiting responses (you've sent — they haven't finished). Info, not action. ─
@@ -6984,6 +7008,7 @@ async function openDiag(id) {
   renderSurveyTab();
   renderQuestionsTab();
   renderReportTab();
+  renderEmailsTab();
   showDiagView('detail');
 
   document.querySelectorAll('#view-diag-detail .dtab').forEach(t => t.classList.remove('active'));
@@ -7815,6 +7840,201 @@ function renderReportTab() {
       <button class="dbtn dbtn-primary" id="finalReportSaveBtn" style="display:none;" onclick="uploadFinalReport()">Upload &amp; Finalize Report</button>
     </div>
   </div>`;
+}
+
+// ── Tab: Emails ───────────────────────────────────────────────────────────────
+// Email sequence for this diagnostic: E1/E1b (leader) + E2-E7 (sponsor).
+// Coach reviews, edits inline, then approves before sponsor emails send.
+var _emailDraftsCache = null; // { drafts, emails_approved_by_coach, sprint_purchased_at }
+
+function renderEmailsTab() {
+  const el = document.getElementById('emails-content');
+  if (!el || !DIAG_SEL) return;
+  _emailDraftsCache = null;
+  el.innerHTML = '<div style="padding:20px;color:var(--d-mid);font-size:13px;">Loading email sequence...</div>';
+  _loadEmailDrafts();
+}
+
+async function _loadEmailDrafts() {
+  const el = document.getElementById('emails-content');
+  if (!el || !DIAG_SEL) return;
+  try {
+    const resp = await fetch('/api/diagnostic?action=get-email-drafts', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ diagnostic_id: DIAG_SEL.id, session: getCoachSessionToken() }),
+    });
+    const data = resp.ok ? await resp.json() : {};
+    _emailDraftsCache = data;
+    _renderEmailDraftsUI(el, data);
+  } catch (e) {
+    el.innerHTML = '<div style="padding:20px;color:var(--d-red);font-size:13px;">Could not load email drafts. Please try again.</div>';
+  }
+}
+
+function _renderEmailDraftsUI(el, data) {
+  const drafts = Array.isArray(data.drafts) ? data.drafts : [];
+  const approved = !!(data.emails_approved_by_coach);
+  const purchased = !!(data.sprint_purchased_at);
+  const badge = document.getElementById('tab-email-badge');
+  if (badge) badge.style.display = (!approved && drafts.length > 0) ? 'inline' : 'none';
+
+  const seqLabel = { E1:'Leader — Pre-Debrief', E1b:'Leader — Post-Debrief', E2:'Sponsor — Pre-Debrief', E3:'Sponsor — Post-Debrief (Day +1)', E4:'Sponsor — Day +3 (Sprint Offer)', E5:'Sponsor — Day +5 (Reminder)', E6:'Sponsor — Day +7 (Last Day)', E7:'Sponsor — Day +10 (Follow-up)' };
+  const statusColor = { draft:'#6b7280', scheduled:'#2563eb', sent:'#16a34a', cancelled:'#dc2626' };
+
+  var html = '<div style="padding:20px 4px 4px;">';
+
+  // Status bar
+  if (approved) {
+    html += '<div style="margin-bottom:16px;padding:10px 14px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;font-size:13px;color:#15803d;font-weight:600;">Sequence approved — emails are scheduled and will send automatically.</div>';
+  } else if (drafts.length > 0) {
+    html += '<div style="margin-bottom:16px;padding:10px 14px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;font-size:13px;color:#92400e;font-weight:600;">Review and edit the drafts below, then approve the sequence to activate sending.</div>';
+  }
+  if (purchased) {
+    html += '<div style="margin-bottom:16px;padding:10px 14px;background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;font-size:13px;color:#1d4ed8;">Sprint marked as purchased — E4-E7 sponsor follow-ups have been cancelled.</div>';
+  }
+
+  // Action buttons
+  html += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">';
+  html += '<button class="dbtn dbtn-outline" onclick="_generateEmailDrafts()" style="font-size:13px;">' + (drafts.length > 0 ? 'Regenerate Drafts' : 'Generate Email Drafts') + '</button>';
+  if (drafts.length > 0 && !approved) {
+    html += '<button class="dbtn dbtn-primary" onclick="_approveEmailSequence()" style="font-size:13px;">Approve &amp; Schedule Sequence</button>';
+  }
+  if (drafts.length > 0 && !purchased) {
+    html += '<button class="dbtn dbtn-outline" onclick="_markSprintPurchased()" style="font-size:13px;border-color:var(--d-green);color:var(--d-green);">Mark Sprint Purchased</button>';
+  }
+  html += '</div>';
+
+  if (drafts.length === 0) {
+    html += '<div style="padding:32px;text-align:center;color:var(--d-mid);font-size:13px;background:var(--d-light);border-radius:8px;border:1px dashed var(--d-border);">No email drafts yet. Click "Generate Email Drafts" to create the sequence using diagnostic data and backed recommendations.</div>';
+  } else {
+    // Group by sequence
+    const leaderDrafts = drafts.filter(function(d) { return d.sequence === 'leader'; });
+    const sponsorDrafts = drafts.filter(function(d) { return d.sequence === 'sponsor'; });
+
+    if (leaderDrafts.length) {
+      html += '<div style="font-size:12px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Leader Emails</div>';
+      leaderDrafts.forEach(function(d) { html += _renderDraftCard(d, seqLabel, statusColor, approved); });
+    }
+    if (sponsorDrafts.length) {
+      html += '<div style="font-size:12px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 8px;">Sponsor Emails</div>';
+      sponsorDrafts.forEach(function(d) { html += _renderDraftCard(d, seqLabel, statusColor, approved); });
+    }
+  }
+
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function _renderDraftCard(d, seqLabel, statusColor, approved) {
+  var label = seqLabel[d.email_key] || d.email_key;
+  var sc = statusColor[d.status] || '#6b7280';
+  var schFmt = d.scheduled_for ? new Date(d.scheduled_for).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Unscheduled';
+  var toLine = (d.to_name || d.to_email) ? ((d.to_name || '') + (d.to_email ? ' <' + d.to_email + '>' : '')) : 'No recipient set';
+  var editable = ['draft', 'scheduled'].includes(d.status);
+  var html = '<div style="border:1px solid var(--d-border);border-radius:8px;margin-bottom:10px;overflow:hidden;">';
+  html += '<details><summary style="padding:12px 16px;cursor:pointer;background:var(--d-light);list-style:none;display:flex;justify-content:space-between;align-items:center;gap:8px;">';
+  html += '<span style="font-weight:700;font-size:13px;color:var(--d-dark);">' + esc(label) + '</span>';
+  html += '<div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">';
+  html += '<span style="font-size:11px;color:' + sc + ';font-weight:700;text-transform:uppercase;">' + d.status + '</span>';
+  html += '<span style="font-size:11px;color:var(--d-mid);">' + schFmt + '</span>';
+  html += '</div></summary>';
+  html += '<div style="padding:14px 16px;">';
+  html += '<div style="font-size:11px;color:var(--d-mid);margin-bottom:10px;">To: ' + esc(toLine) + '</div>';
+
+  if (editable) {
+    html += '<div style="margin-bottom:8px;"><label style="font-size:11px;font-weight:700;color:var(--d-mid);display:block;margin-bottom:4px;">Subject</label>';
+    html += '<input id="esubj-' + d.id + '" type="text" value="' + esc(d.subject || '') + '" style="width:100%;padding:6px 10px;border:1px solid var(--d-border);border-radius:6px;font-size:13px;box-sizing:border-box;" /></div>';
+    html += '<div><label style="font-size:11px;font-weight:700;color:var(--d-mid);display:block;margin-bottom:4px;">Body</label>';
+    html += '<textarea id="ebody-' + d.id + '" rows="8" style="width:100%;padding:8px 10px;border:1px solid var(--d-border);border-radius:6px;font-size:13px;box-sizing:border-box;resize:vertical;font-family:inherit;">' + esc(d.body || '') + '</textarea></div>';
+    html += '<div style="margin-top:10px;"><button class="dbtn dbtn-outline dbtn-sm" onclick="_saveDraftEdit(\'' + d.id + '\')">Save edits</button><span id="esave-status-' + d.id + '" style="font-size:12px;color:var(--d-mid);margin-left:10px;"></span></div>';
+  } else {
+    html += '<div style="font-size:12px;font-weight:700;color:var(--d-dark);margin-bottom:4px;">Subject: ' + esc(d.subject || '') + '</div>';
+    html += '<div style="font-size:13px;color:var(--d-dark);white-space:pre-wrap;background:#f8f9fb;padding:10px;border-radius:6px;border:1px solid var(--d-border);">' + esc(d.body || '') + '</div>';
+  }
+
+  html += '</div></details></div>';
+  return html;
+}
+
+async function _saveDraftEdit(draftId) {
+  const statusEl = document.getElementById('esave-status-' + draftId);
+  const subj = (document.getElementById('esubj-' + draftId) || {}).value;
+  const body = (document.getElementById('ebody-' + draftId) || {}).value;
+  if (statusEl) statusEl.textContent = 'Saving...';
+  try {
+    const resp = await fetch('/api/diagnostic?action=update-email-draft', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ draft_id: draftId, subject: subj, body: body, session: getCoachSessionToken() }),
+    });
+    const data = resp.ok ? await resp.json() : {};
+    if (statusEl) statusEl.textContent = data.ok ? 'Saved.' : ('Error: ' + (data.error || 'unknown'));
+    setTimeout(function() { if (statusEl) statusEl.textContent = ''; }, 3000);
+  } catch (e) {
+    if (statusEl) statusEl.textContent = 'Save failed.';
+  }
+}
+
+async function _generateEmailDrafts() {
+  const el = document.getElementById('emails-content');
+  if (!el || !DIAG_SEL) return;
+  el.innerHTML = '<div style="padding:20px;color:var(--d-mid);font-size:13px;">Generating email drafts via AI — this may take 30-60 seconds...</div>';
+  try {
+    const resp = await fetch('/api/diagnostic?action=generate-email-drafts', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ diagnostic_id: DIAG_SEL.id, session: getCoachSessionToken() }),
+    });
+    const data = resp.ok ? await resp.json() : {};
+    if (!resp.ok || !data.ok) {
+      el.innerHTML = '<div style="padding:20px;color:var(--d-red);font-size:13px;">Could not generate drafts: ' + esc(data.error || 'Unknown error') + '</div>';
+      return;
+    }
+    _loadEmailDrafts();
+  } catch (e) {
+    el.innerHTML = '<div style="padding:20px;color:var(--d-red);font-size:13px;">Generation failed. Please try again.</div>';
+  }
+}
+
+async function _approveEmailSequence() {
+  if (!DIAG_SEL) return;
+  if (!confirm('Approve the email sequence? This will schedule all emails to send automatically at their planned times. You can still edit drafts before they send.')) return;
+  try {
+    const resp = await fetch('/api/diagnostic?action=approve-email-sequence', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ diagnostic_id: DIAG_SEL.id, session: getCoachSessionToken() }),
+    });
+    const data = resp.ok ? await resp.json() : {};
+    if (data.ok) {
+      // Update ALL_DIAGS so the Today badge clears
+      const d = ALL_DIAGS.find(function(x) { return x.id === DIAG_SEL.id; });
+      if (d) d.emails_approved_by_coach = true;
+      _loadEmailDrafts();
+    } else {
+      alert('Could not approve: ' + (data.error || 'unknown error'));
+    }
+  } catch (e) {
+    alert('Approval failed. Please try again.');
+  }
+}
+
+async function _markSprintPurchased() {
+  if (!DIAG_SEL) return;
+  if (!confirm('Mark the sprint as purchased? This will cancel unsent E4-E7 sponsor follow-ups.')) return;
+  try {
+    const resp = await fetch('/api/diagnostic?action=mark-sprint-purchased', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ diagnostic_id: DIAG_SEL.id, session: getCoachSessionToken() }),
+    });
+    const data = resp.ok ? await resp.json() : {};
+    if (data.ok) {
+      const d = ALL_DIAGS.find(function(x) { return x.id === DIAG_SEL.id; });
+      if (d) d.sprint_purchased_at = data.sprint_purchased_at;
+      _loadEmailDrafts();
+    } else {
+      alert('Could not mark purchased: ' + (data.error || 'unknown error'));
+    }
+  } catch (e) {
+    alert('Request failed. Please try again.');
+  }
 }
 
 // ── Actions ───────────────────────────────────────────────────────────────────

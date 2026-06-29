@@ -569,7 +569,7 @@ function renderRecs(recs){
       +'<button id="clr-'+recKey+'" style="'+clrStyle+'" onclick="setRecCommitment('+JSON.stringify(recKey)+',null,event)">Clear</button>'
       +'<span id="rcerr-'+recKey+'" style="font-size:11px;color:#dc2626;margin-left:8px;"></span>'
       +'</div>'
-      +'<div style="font-size:11px;color:#9ca3af;margin-top:5px;">Your selections go to Alex — no charge here. Alex will build the sprint around what you back.</div>';
+      +'<div style="font-size:11px;color:#9ca3af;margin-top:5px;">Your selections shape the sprint — Alex builds the 90-day plan around what you back.</div>';
     return '<div class="rec '+recCat(r)+'" id="reccard-'+recKey+'">'
     + '<div class="rec-title">'+esc(r.short_title)+'</div>'
     + meta
@@ -587,7 +587,7 @@ function renderRecs(recs){
   var introText = all.length
     ? '<p style="font-size:13.5px;color:#1B2A3A;margin:0 0 10px;line-height:1.6;">'
       +(leaderFirst ? 'Alex has identified '+all.length+' priorities for '+esc(leaderFirst)+"'s development. " : '')
-      +'Back the ones you would invest in -- your selections go directly to Alex and shape what gets built into the sprint. No charge here.</p>'
+      +'Back the ones you would invest in — your selections go directly to Alex and shape what gets built into the sprint.</p>'
     : '';
   var summaryBar = all.length
     ? '<div id="rec-summary-bar" style="font-size:12px;padding:9px 14px;background:#f0faf9;border:1px solid #b2e0de;border-radius:8px;margin-bottom:12px;display:none;"></div>'

@@ -336,12 +336,102 @@ export default async function handler(req, res) {
     }
   }
 
-  await recordHeartbeat('send-reminders', 'ok', `sent ${sent} of ${toRemind.length}`);
+  // ─── SEND SCHEDULED EMAIL DRAFTS ──────────────────────────────────────────
+  // Each cron pass delivers any email_drafts rows where:
+  //   status = 'scheduled'  AND  scheduled_for <= now()
+  // After sending, status is updated to 'sent' and sent_at is recorded.
+  const draftsSent = [];
+  const draftsErrors = [];
+  try {
+    const now = new Date();
+    const draftsRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/email_drafts?status=eq.scheduled&scheduled_for=lte.${encodeURIComponent(now.toISOString())}&select=id,diagnostic_id,email_key,sequence,subject,body,to_name,to_email&limit=50`,
+      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+    );
+    const dueDrafts = draftsRes.ok ? await draftsRes.json() : [];
+
+    for (const draft of (Array.isArray(dueDrafts) ? dueDrafts : [])) {
+      if (!draft.to_email) {
+        draftsErrors.push({ id: draft.id, error: 'no to_email' });
+        continue;
+      }
+
+      const bodyHtml = tplProse(draft.body || '');
+      const titleMap = {
+        E1:  'Preparing for our call tomorrow',
+        E1b: 'Following up on our debrief',
+        E2:  'A note before tomorrow',
+        E3:  'Where things stand after the debrief',
+        E4:  'The recommendations that shape the sprint',
+        E5:  'Quick reminder — sprint window closing',
+        E6:  'Last day to lock in the sprint',
+        E7:  'Checking in on the development plan',
+      };
+      const title = titleMap[draft.email_key] || 'GPS Leadership Solutions';
+      const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
+        <div style="background:#004369;padding:20px 28px;border-radius:8px 8px 0 0;">
+          <div style="color:#E5DDC8;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">GPS Leadership Solutions</div>
+          <div style="color:#ffffff;font-size:20px;font-weight:700;">${title}</div>
+        </div>
+        <div style="background:#ffffff;padding:28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
+          ${bodyHtml}
+          <p style="margin-top:28px;">– Alex Tremble<br><span style="color:#666;font-size:13px;">GPS Leadership Solutions</span></p>
+          <div style="margin-top:28px;padding-top:16px;border-top:1px solid #eee;font-size:11px;color:#999;">
+            Questions? Reply to this email or reach out to alex@gpsleadership.org.
+          </div>
+        </div>
+      </div>`;
+
+      try {
+        const sendRes = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from: `Alex Tremble – GPS Leadership <${RESEND_FROM}>`,
+            to: [draft.to_email],
+            subject: draft.subject || 'A note from Alex at GPS Leadership',
+            html,
+            text: String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
+            reply_to: 'alex@gpsleadership.org',
+          }),
+        });
+        const sendResult = await sendRes.json();
+        const sentAt = new Date().toISOString();
+        if (sendRes.ok) {
+          await fetch(`${SUPABASE_URL}/rest/v1/email_drafts?id=eq.${draft.id}`, {
+            method: 'PATCH',
+            headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+            body: JSON.stringify({ status: 'sent', sent_at: sentAt, updated_at: sentAt }),
+          });
+          draftsSent.push({ id: draft.id, email_key: draft.email_key, to: draft.to_email });
+          await logEmail({
+            clientId: null, recipientEmail: draft.to_email, recipientName: draft.to_name || '',
+            emailType: 'seq_' + String(draft.email_key || '').toLowerCase(),
+            subject: draft.subject || '', status: 'sent', resendId: sendResult.id || null,
+          });
+        } else {
+          draftsErrors.push({ id: draft.id, email_key: draft.email_key, error: sendResult });
+          await logEmail({
+            clientId: null, recipientEmail: draft.to_email, recipientName: draft.to_name || '',
+            emailType: 'seq_' + String(draft.email_key || '').toLowerCase(),
+            subject: draft.subject || '', status: 'error', errorDetails: sendResult,
+          });
+        }
+      } catch (draftErr) {
+        draftsErrors.push({ id: draft.id, email_key: draft.email_key, error: draftErr.message });
+      }
+    }
+  } catch (seqErr) {
+    draftsErrors.push({ error: 'Email sequence sweep failed: ' + seqErr.message });
+  }
+
+  await recordHeartbeat('send-reminders', 'ok', `sent ${sent} of ${toRemind.length}; seq=${draftsSent.length}`);
   return res.status(200).json({
     message: `Reminders sent: ${sent} of ${toRemind.length}`,
     sent,
     sentList,
     skipped,
     errors: errors.length > 0 ? errors : [],
+    email_sequence: { sent: draftsSent.length, errors: draftsErrors.length > 0 ? draftsErrors : [] },
   });
 }
