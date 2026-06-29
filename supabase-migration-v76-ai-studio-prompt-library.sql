@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS coach_prompts (
   prompt_text   TEXT        NOT NULL,
   output_format TEXT        NOT NULL DEFAULT 'text',   -- 'text' or 'json'
   save_target   TEXT,        -- e.g. 'diagnostic.kickoff_brief_json' — controls where output is saved
+  examples_json JSONB,       -- array of {input, output} few-shot examples used to calibrate Claude
   sort_order    INT         NOT NULL DEFAULT 0,
   is_active     BOOLEAN     NOT NULL DEFAULT TRUE,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -20,11 +21,13 @@ CREATE TABLE IF NOT EXISTS coach_prompts (
 ALTER TABLE coach_prompts ENABLE ROW LEVEL SECURITY;
 -- No anon/authenticated policies — service-role only.
 
--- ── diagnostics: structured kickoff brief storage ────────────────────────────
--- Stores the KICKOFF_LEADER_BRIEF JSON from the AI Studio processor.
--- Lives alongside intake_notes (plain text) — both fields can coexist.
+-- ── diagnostics: structured kickoff brief + interview summary storage ────────
+-- Kickoff brief: KICKOFF_LEADER_BRIEF JSON from AI Studio (alongside intake_notes text).
 ALTER TABLE diagnostics ADD COLUMN IF NOT EXISTS kickoff_brief_json JSONB;
 ALTER TABLE diagnostics ADD COLUMN IF NOT EXISTS kickoff_brief_saved_at TIMESTAMPTZ;
+-- Interview summaries: array of INTERVIEW_SUMMARY JSON objects, one per stakeholder.
+-- Transcripts are NEVER stored — only the structured output JSON is saved here.
+ALTER TABLE diagnostics ADD COLUMN IF NOT EXISTS interview_summaries_json JSONB DEFAULT '[]'::jsonb;
 
 -- ── Seed: KICKOFF_LEADER_BRIEF prompt ────────────────────────────────────────
 INSERT INTO coach_prompts (name, description, action_type, prompt_text, output_format, save_target, sort_order)
@@ -142,8 +145,95 @@ Now ingest the transcript and return ONLY the KICKOFF_LEADER_BRIEF JSON object.'
   10
 );
 
+-- ── Seed: Stakeholder Interview → Summary ─────────────────────────────────────
+-- Used after each Pro interview. Transcript is the input; only the JSON summary
+-- is saved to diagnostics.interview_summaries_json — transcripts are never stored.
+INSERT INTO coach_prompts (name, description, action_type, prompt_text, output_format, save_target, sort_order)
+VALUES (
+  'Stakeholder Interview → Summary',
+  'Paste a stakeholder interview transcript. Returns INTERVIEW_SUMMARY JSON — appended to the diagnostic record. Transcript is discarded after processing; only the structured summary is saved.',
+  'interview',
+  'You are the GPS Leadership 360 Interview Summarizer. You will receive a transcript of a confidential 1:1 stakeholder interview about a specific leader. Your job is to turn it into a structured JSON object called INTERVIEW_SUMMARY using the schema below so it can be: 1) combined with other interviews for pattern analysis, and 2) used later to draft the 360 report and 90-day plan.
+
+INSTRUCTIONS:
+- Read the entire transcript.
+- Use ONLY information in the transcript or obvious inferences from it. Do NOT invent facts.
+- Prefer the stakeholder''s exact phrases for strengths, pains, and advice where possible (short quotes).
+- If a field is missing, set it to null or [] and briefly note that in MISC_NOTES.
+- REDACT any names of other individuals; refer to roles instead (e.g., "warehouse manager," "owner").
+
+SCHEMA (fill all fields):
+{
+  "META": {
+    "LEADER_NAME": "",
+    "RATER_ID": "",
+    "RATER_RELATIONSHIP": "",
+    "TENURE_WITH_LEADER_YEARS": null,
+    "INTERACTION_FREQUENCY": "",
+    "INTERVIEW_DATE": ""
+  },
+  "RATER_CONTEXT": {
+    "ROLE_SUMMARY": "",
+    "HOW_THEY_WORK_TOGETHER": ""
+  },
+  "LEADER_STRENGTHS": {
+    "BULLETS": [],
+    "TOP_3_IN_RATER_WORDS": []
+  },
+  "TRUST": {
+    "SUMMARY": "",
+    "WHAT_BUILDS_TRUST": [],
+    "WHAT_ERODES_TRUST": [],
+    "EXAMPLES": []
+  },
+  "PROACTIVITY_OWNERSHIP": {
+    "HOW_LEADER_ENABLES_OWNERSHIP": [],
+    "HOW_LEADER_CREATES_DEPENDENCE": [],
+    "EXAMPLES": []
+  },
+  "PRODUCTIVITY_SCALE": {
+    "DEPENDENCIES_ON_LEADER": [],
+    "BOTTLENECK_PATTERNS": [],
+    "EXAMPLES": []
+  },
+  "CUSTOM_FOCUS": {
+    "AREA_LABEL": "",
+    "WHAT_WORKS": [],
+    "WHAT_DOES_NOT_WORK": [],
+    "SUGGESTED_CHANGES": []
+  },
+  "ADVICE_12_MONTHS": {
+    "ONE_SENTENCE_ADVICE": "",
+    "BEHAVIOR_CHANGES_SUGGESTED": []
+  },
+  "RISKS_AND_OPPORTUNITIES": {
+    "RISKS_IF_NOTHING_CHANGES": [],
+    "OPPORTUNITIES_IF_LEADER_GROWS": []
+  },
+  "KEY_QUOTES": [],
+  "SENTIMENT_SUMMARY": {
+    "OVERALL_TONE": "",
+    "ONE_LINE_SUMMARY": ""
+  },
+  "MISC_NOTES": {
+    "NOTES": []
+  }
+}
+
+SPECIAL HANDLING:
+- CUSTOM_FOCUS.AREA_LABEL should match the extra focus for this leader (e.g., "Corrective feedback & temperament," "Delegation and ownership").
+- SENTIMENT_SUMMARY.OVERALL_TONE must be exactly one of: "very_positive", "positive_mixed", "neutral_mixed", "negative_mixed", "very_negative".
+- KEY_QUOTES should contain 3–7 short, anonymized quotes that are vivid and decision-useful.
+
+OUTPUT: Return ONLY the INTERVIEW_SUMMARY JSON object, no narration or explanation.',
+  'json',
+  'diagnostic.interview_summaries_json',
+  20
+);
+
 -- ROLLBACK:
 -- DELETE FROM coach_prompts;
 -- DROP TABLE IF EXISTS coach_prompts;
 -- ALTER TABLE diagnostics DROP COLUMN IF EXISTS kickoff_brief_json;
 -- ALTER TABLE diagnostics DROP COLUMN IF EXISTS kickoff_brief_saved_at;
+-- ALTER TABLE diagnostics DROP COLUMN IF EXISTS interview_summaries_json;

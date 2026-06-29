@@ -1172,6 +1172,7 @@ I'm taking part in a leadership assessment run by GPS Leadership Solutions. Thei
           </div>
           <div style="margin-top:8px;">
             <div id="aiSelectedPromptName" style="font-size:12px;color:var(--d-teal);font-weight:600;"></div>
+            <div style="font-size:11px;color:var(--d-mid);margin-top:4px;">Pasted transcripts are never saved — only the structured output is stored.</div>
           </div>
         </div>
 
@@ -1207,7 +1208,8 @@ I'm taking part in a leadership assessment run by GPS Leadership Solutions. Thei
             <label class="dform-label">Save target</label>
             <select id="aiModalSaveTarget" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid var(--d-border);border-radius:6px;font-size:13px;">
               <option value="">None (display only)</option>
-              <option value="diagnostic.kickoff_brief_json">Diagnostic — Kickoff Brief JSON</option>
+              <option value="diagnostic.kickoff_brief_json">Diagnostic — Kickoff Brief JSON (replaces)</option>
+              <option value="diagnostic.interview_summaries_json">Diagnostic — Interview Summaries (appends)</option>
               <option value="diagnostic.intake_notes">Diagnostic — Intake Notes (text)</option>
             </select>
           </div>
@@ -1221,6 +1223,17 @@ I'm taking part in a leadership assessment run by GPS Leadership Solutions. Thei
           <div class="dform-group">
             <label class="dform-label">Prompt text (system prompt sent to Claude)</label>
             <textarea id="aiModalPromptText" style="min-height:200px;width:100%;box-sizing:border-box;font-size:12px;font-family:'Courier New',monospace;" placeholder="Paste your full prompt here…"></textarea>
+          </div>
+          <!-- Few-shot examples -->
+          <div style="margin-top:18px;border-top:1px solid var(--d-border);padding-top:16px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+              <div>
+                <div style="font-size:13px;font-weight:700;color:var(--d-navy);">Examples <span style="font-weight:400;color:var(--d-mid);">(optional)</span></div>
+                <div style="font-size:11px;color:var(--d-mid);margin-top:2px;">Sample input/output pairs that show Claude what "good" looks like for this prompt. Add them when you have a result you want to use as a gold standard.</div>
+              </div>
+              <button class="dbtn dbtn-sm dbtn-outline" onclick="aiModalAddExample()">+ Add example</button>
+            </div>
+            <div id="aiModalExamplesList" style="display:flex;flex-direction:column;gap:10px;"></div>
           </div>
           <div style="display:flex;gap:10px;margin-top:18px;">
             <button class="dbtn" onclick="aiStudioSavePrompt()">Save Prompt</button>
@@ -10678,7 +10691,7 @@ async function aiStudioLoadPrompts() {
     var r = await fetch('/api/coach-data', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ op: 'select', table: 'coach_prompts', filters: { is_active: { eq: true } }, order: 'sort_order.asc', _coach_token: token })
+      body: JSON.stringify({ op: 'select', table: 'coach_prompts', filters: { is_active: { eq: true } }, select: 'id,name,description,action_type,prompt_text,output_format,save_target,examples_json,sort_order', order: 'sort_order.asc', _coach_token: token })
     });
     var data = await r.json();
     var prompts = (data && data.rows) ? data.rows : [];
@@ -10750,10 +10763,18 @@ async function aiStudioRun() {
     if (!result.ok) throw new Error(result.error || 'Processing failed');
     if (output) output.value = result.output || '';
     if (status) status.textContent = 'Done.';
+    AI_LAST_SAVE_TARGET = result.save_target || null;
     document.getElementById('aiCopyBtn').style.display = '';
-    // Show save button if there is a save_target and a diagnostic selected
+    // Show save button if there is a save_target and a diagnostic is selected
     if (result.save_target && document.getElementById('aiStudioDiagSelect').value) {
-      document.getElementById('aiSaveBtn').style.display = '';
+      var saveBtn = document.getElementById('aiSaveBtn');
+      // Label the save button based on what it will do
+      if (result.save_target === 'diagnostic.interview_summaries_json') {
+        saveBtn.textContent = 'Append Interview Summary';
+      } else {
+        saveBtn.textContent = 'Save to Diagnostic';
+      }
+      saveBtn.style.display = '';
     }
   } catch (e) {
     if (status) status.textContent = 'Error: ' + e.message;
@@ -10771,6 +10792,9 @@ function aiStudioCopy() {
   });
 }
 
+// Route the save to the right action based on the save_target from the last run-prompt response.
+var AI_LAST_SAVE_TARGET = null;
+
 async function aiStudioSave() {
   var diagId = (document.getElementById('aiStudioDiagSelect') || {}).value || '';
   var output = (document.getElementById('aiStudioOutput') || {}).value || '';
@@ -10783,12 +10807,20 @@ async function aiStudioSave() {
   if (saveStatus) saveStatus.textContent = 'Saving…';
 
   try {
-    // The kickoff brief action validates JSON on the server before saving.
-    var result = await coachPost('save-kickoff-brief', { diagnostic_id: diagId, brief_json: output });
-    if (!result.ok) throw new Error(result.error || 'Save failed');
-    if (saveStatus) { saveStatus.textContent = 'Saved to diagnostic.'; }
-    // Refresh the diagnostic selector so the ✓ appears
-    await aiStudioLoadDiagnostics();
+    var result;
+    var target = AI_LAST_SAVE_TARGET || '';
+    if (target === 'diagnostic.interview_summaries_json') {
+      // Append — each interview summary is added to the array, never overwrites
+      result = await coachPost('save-interview-summary', { diagnostic_id: diagId, brief_json: output });
+      if (!result.ok) throw new Error(result.error || 'Save failed');
+      if (saveStatus) saveStatus.textContent = 'Interview summary saved (' + (result.total || '?') + ' total on this diagnostic).';
+    } else {
+      // Default: save as kickoff brief (replaces)
+      result = await coachPost('save-kickoff-brief', { diagnostic_id: diagId, brief_json: output });
+      if (!result.ok) throw new Error(result.error || 'Save failed');
+      if (saveStatus) saveStatus.textContent = 'Saved to diagnostic.';
+    }
+    await aiStudioLoadDiagnostics(); // refresh so check badge updates
   } catch (e) {
     if (saveStatus) saveStatus.textContent = 'Error: ' + e.message;
   } finally {
@@ -10796,8 +10828,47 @@ async function aiStudioSave() {
   }
 }
 
+// In-memory list of examples being edited in the modal
+var AI_MODAL_EXAMPLES = [];
+
+function aiModalRenderExamples() {
+  var list = document.getElementById('aiModalExamplesList');
+  if (!list) return;
+  if (!AI_MODAL_EXAMPLES.length) {
+    list.innerHTML = '<div style="font-size:12px;color:var(--d-mid);padding:8px 0;">No examples yet. Add one to help Claude calibrate its output.</div>';
+    return;
+  }
+  list.innerHTML = AI_MODAL_EXAMPLES.map(function(ex, i) {
+    return '<div style="border:1px solid var(--d-border);border-radius:8px;padding:12px;">'
+      + '<div style="display:flex;justify-content:space-between;margin-bottom:8px;">'
+      + '<span style="font-size:12px;font-weight:700;color:var(--d-navy);">Example ' + (i+1) + '</span>'
+      + '<button class="dbtn dbtn-sm dbtn-outline" style="color:var(--d-red2);border-color:var(--d-red2);" onclick="aiModalRemoveExample(' + i + ')">Remove</button>'
+      + '</div>'
+      + '<div style="font-size:11px;color:var(--d-mid);font-weight:700;margin-bottom:3px;">INPUT (transcript snippet or note)</div>'
+      + '<textarea style="width:100%;box-sizing:border-box;min-height:70px;font-size:11px;font-family:monospace;" onchange="aiModalExampleChange(' + i + ',\'input\',this.value)">' + (ex.input || '').replace(/</g, '&lt;') + '</textarea>'
+      + '<div style="font-size:11px;color:var(--d-mid);font-weight:700;margin-top:8px;margin-bottom:3px;">OUTPUT (ideal JSON or text Claude should return)</div>'
+      + '<textarea style="width:100%;box-sizing:border-box;min-height:100px;font-size:11px;font-family:monospace;" onchange="aiModalExampleChange(' + i + ',\'output\',this.value)">' + (ex.output || '').replace(/</g, '&lt;') + '</textarea>'
+      + '</div>';
+  }).join('');
+}
+
+function aiModalAddExample() {
+  AI_MODAL_EXAMPLES.push({ input: '', output: '' });
+  aiModalRenderExamples();
+}
+
+function aiModalRemoveExample(i) {
+  AI_MODAL_EXAMPLES.splice(i, 1);
+  aiModalRenderExamples();
+}
+
+function aiModalExampleChange(i, field, val) {
+  if (AI_MODAL_EXAMPLES[i]) AI_MODAL_EXAMPLES[i][field] = val;
+}
+
 // Prompt modal: new
 function aiStudioNewPrompt() {
+  AI_MODAL_EXAMPLES = [];
   document.getElementById('aiModalTitle').textContent = 'New Prompt';
   document.getElementById('aiModalPromptId').value = '';
   document.getElementById('aiModalName').value = '';
@@ -10807,11 +10878,13 @@ function aiStudioNewPrompt() {
   document.getElementById('aiModalFormat').value = 'text';
   document.getElementById('aiModalDeleteBtn').style.display = 'none';
   document.getElementById('aiModalStatus').textContent = '';
+  aiModalRenderExamples();
   document.getElementById('aiPromptModal').style.display = 'flex';
 }
 
 // Prompt modal: edit existing
 function aiStudioEditPrompt(p) {
+  AI_MODAL_EXAMPLES = Array.isArray(p.examples_json) ? JSON.parse(JSON.stringify(p.examples_json)) : [];
   document.getElementById('aiModalTitle').textContent = 'Edit Prompt';
   document.getElementById('aiModalPromptId').value = p.id || '';
   document.getElementById('aiModalName').value = p.name || '';
@@ -10821,6 +10894,7 @@ function aiStudioEditPrompt(p) {
   document.getElementById('aiModalFormat').value = p.output_format || 'text';
   document.getElementById('aiModalDeleteBtn').style.display = '';
   document.getElementById('aiModalStatus').textContent = '';
+  aiModalRenderExamples();
   document.getElementById('aiPromptModal').style.display = 'flex';
 }
 
@@ -10841,7 +10915,9 @@ async function aiStudioSavePrompt() {
   if (status) status.textContent = 'Saving…';
   try {
     var token = localStorage.getItem('coach_session_token') || '';
-    var payload = { name: name, description: desc || null, prompt_text: ptext, save_target: saveTarget || null, output_format: fmt, is_active: true, updated_at: new Date().toISOString() };
+    // Filter out empty examples before saving
+    var examplesClean = AI_MODAL_EXAMPLES.filter(function(ex) { return (ex.input || '').trim() && (ex.output || '').trim(); });
+    var payload = { name: name, description: desc || null, prompt_text: ptext, save_target: saveTarget || null, output_format: fmt, examples_json: examplesClean.length ? examplesClean : null, is_active: true, updated_at: new Date().toISOString() };
     var r;
     if (id) {
       // Update existing

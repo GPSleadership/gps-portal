@@ -474,14 +474,27 @@ export default async function handler(req, res) {
       if (!promptId)   return res.status(400).json({ error: 'prompt_id required' });
       if (!userInput)  return res.status(400).json({ error: 'user_input required' });
 
-      // Fetch the stored prompt
-      const pr = await sb(`/rest/v1/coach_prompts?id=eq.${encodeURIComponent(promptId)}&is_active=eq.true&select=name,prompt_text,output_format,save_target&limit=1`);
+      // Fetch the stored prompt (including examples for few-shot calibration)
+      const pr = await sb(`/rest/v1/coach_prompts?id=eq.${encodeURIComponent(promptId)}&is_active=eq.true&select=name,prompt_text,output_format,save_target,examples_json&limit=1`);
       if (!pr.ok) return res.status(500).json({ error: 'Failed to fetch prompt' });
       const prompts = await pr.json();
       if (!prompts || !prompts[0]) return res.status(404).json({ error: 'Prompt not found' });
       const prompt = prompts[0];
 
-      // Call Claude with the stored system prompt + user's pasted input
+      // Build messages array — prepend few-shot examples if the prompt has any.
+      // Examples are {input, output} pairs stored in examples_json; they're sent as
+      // alternating user/assistant turns so Claude calibrates its output format
+      // against real examples before seeing the actual transcript/input.
+      const examples = Array.isArray(prompt.examples_json) ? prompt.examples_json : [];
+      const messages = [
+        ...examples.flatMap(ex => [
+          { role: 'user',      content: String(ex.input  || '') },
+          { role: 'assistant', content: String(ex.output || '') },
+        ]),
+        { role: 'user', content: userInput },
+      ];
+
+      // Call Claude with the stored system prompt + (optional examples +) user input
       const claude = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -493,7 +506,7 @@ export default async function handler(req, res) {
           model: AI_STUDIO_MODEL,
           max_tokens: 4096,
           system: prompt.prompt_text,
-          messages: [{ role: 'user', content: userInput }],
+          messages,
         }),
       });
       if (!claude.ok) {
@@ -510,6 +523,39 @@ export default async function handler(req, res) {
         prompt_name:   prompt.name,
         usage:         claudeData.usage || null,
       });
+    }
+
+    // ── AI Studio: append one interview summary to diagnostics.interview_summaries_json ──
+    // Each call appends a new INTERVIEW_SUMMARY object to the array — does NOT overwrite.
+    // Transcripts are never stored; only the structured JSON summary lands here.
+    if (action === 'save-interview-summary') {
+      if (!isOwner) return ownerOnly();
+      const diagId    = body.diagnostic_id;
+      const briefStr  = String(body.brief_json || '').trim();
+      if (!diagId)    return res.status(400).json({ error: 'diagnostic_id required' });
+      if (!briefStr)  return res.status(400).json({ error: 'brief_json required' });
+
+      let parsed;
+      try { parsed = JSON.parse(briefStr); }
+      catch (_) { return res.status(400).json({ error: 'brief_json is not valid JSON — copy the full output from AI Studio' }); }
+
+      // Fetch the current array, append the new summary, then write back.
+      const cur = await sb(`/rest/v1/diagnostics?id=eq.${encodeURIComponent(diagId)}&select=interview_summaries_json&limit=1`);
+      if (!cur.ok) return res.status(500).json({ error: 'Failed to read diagnostic' });
+      const curData = await cur.json();
+      const existing = (curData && curData[0] && Array.isArray(curData[0].interview_summaries_json))
+        ? curData[0].interview_summaries_json
+        : [];
+      existing.push(parsed);
+
+      const r = await sb(
+        `/rest/v1/diagnostics?id=eq.${encodeURIComponent(diagId)}`,
+        'PATCH',
+        { interview_summaries_json: existing },
+        { Prefer: 'return=minimal' }
+      );
+      if (!r.ok) { const d = await r.json().catch(() => ({})); return res.status(500).json({ error: 'Save failed', detail: d }); }
+      return res.status(200).json({ ok: true, total: existing.length });
     }
 
     // ── AI Studio: save kickoff brief JSON to a diagnostic ───────────────────
