@@ -765,20 +765,6 @@ function sponsorReadoutCards(m){
       : '')
     + '</div>';
 
-  // ── SPONSOR-LEADER MIRROR: show the gap explicitly when supervisor rated leader lower than team ──
-  if(sup && dr && sup.tp3!=null && dr.tp3!=null && (dr.tp3-sup.tp3)>=0.5){
-    var _gap=(dr.tp3-sup.tp3).toFixed(2);
-    out += '<div style="background:#EEF4F8;border-left:4px solid '+C.navy+';border-radius:10px;padding:14px 18px;margin-top:12px;">'
-      +'<div style="font-size:11px;font-weight:700;letter-spacing:.05em;color:'+C.mid+';text-transform:uppercase;margin-bottom:6px;">The split, in plain terms</div>'
-      +'<div style="font-size:15px;font-weight:800;color:'+C.ink+';">'+(sponsorFirst?esc(sponsorFirst)+' rated':('You rated'))+' '+esc(first)+' <span style="color:'+C.red+';">'+fnum(sup.tp3)+'</span>. The team rated '+esc(first)+' <span style="color:'+C.green+';">'+fnum(dr.tp3)+'</span>. That '+esc(_gap)+'-point gap is what the plan is built to close.</div>'
-      +'<div style="font-size:13px;color:'+C.mid+';margin-top:6px;">The team sees something you don\'t -- or there\'s a pattern specific to the working relationship between you and '+esc(first)+'. Either way, the 90-day plan targets this gap directly. Your re-score at day 45 tells you if it\'s working.</div>'
-      +'</div>';
-    // Sprint CTA inline -- catch the sponsor at peak engagement, right after the gap is named
-    if(DATA.sprint_cta_url){
-      out += renderSprintCta(DATA.sprint_cta_url, first, true);
-    }
-  }
-
   // ── KPIs ──
   function kpi(l,vHtml,s){ return '<div style="background:#fff;border:1px solid '+C.line+';border-radius:12px;padding:14px 16px;"><div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:'+C.mid+';font-weight:700;">'+l+'</div><div style="font-size:23px;font-weight:800;margin-top:4px;font-family:Georgia,serif;">'+vHtml+'</div><div style="font-size:11.5px;color:'+C.mid+';margin-top:2px;">'+s+'</div></div>'; }
   out += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-top:14px;">'
@@ -806,7 +792,6 @@ function sponsorReadoutCards(m){
         + '<div style="font-size:14px;margin:6px 0;">This is the gap that decides whether more investment pays off.'+(dr?(' Direct reports rate '+esc(first)+' <b>'+fnum(dr.tp3)+'</b> overall -- the split is specifically the working relationship with you, not the ability to lead a team.'):'')+'</div>'
         + '<div style="font-size:14px;font-weight:700;color:#8c2020;border-top:1px solid #f0b9b9;padding-top:10px;margin-top:8px;">This is the number the 90-day plan is built to move. We\'ll show you the change at day 45 and 90 -- how far to invest from there is your call.</div>'
         + '</div>';
-      if(DATA.sprint_cta_url){ out += renderSprintCta(DATA.sprint_cta_url, first, true); }
     }
   }
 
