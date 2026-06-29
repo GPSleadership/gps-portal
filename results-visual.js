@@ -350,8 +350,27 @@
         <div class="bring">Bring this summary, with your notes and examples, to the debrief.</div>
       </div>`;
 
+    // ── 7. Stop / Start / Continue highlights (rater-sourced, optional) ────────
+    // Populated from scores_json.ssc = { stop: [...], start: [...], continue: [...] }
+    // Each array holds 1–3 anonymised rater quotes. Absent = section is hidden.
+    const ssc = sc.ssc || {};
+    const _sscRow = (label, color, items) => {
+      if(!items || !items.length) return '';
+      const qs = items.map(q => `<div style="border-left:3px solid ${color};padding:6px 0 6px 12px;margin:8px 0;font-size:13.5px;font-style:italic;color:#2a3a4a;line-height:1.5;">${_rvEsc(q)}</div>`).join('');
+      return `<div style="margin-bottom:18px;"><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.09em;color:${color};margin-bottom:4px;">${label}</div>${qs}</div>`;
+    };
+    const sscHtml = (ssc.stop||ssc.start||ssc.continue) ? `
+      <div class="rvlabel">What your raters said</div>
+      <div class="rvcard">
+        <h2>Stop &middot; Start &middot; Continue</h2>
+        <div style="font-size:12.5px;color:var(--rvmid);margin-bottom:18px;">Selected open-ended feedback from your raters, anonymised. Your full report includes the complete set.</div>
+        ${_sscRow('Stop',   '#A32D2D', ssc.stop)}
+        ${_sscRow('Start',  '#0F6E56', ssc.start)}
+        ${_sscRow('Continue','#004369', ssc.continue)}
+      </div>` : '';
+
     const who = D.client_name ? _rvEsc(D.client_name) : '';
-    return `<div class="gps-rv">${summary}${numbers}${flags}${supQuote}${band}${detail}${selfVs}${prep}<div class="rvfoot">GPS Leadership Solutions · Confidential${who?` · Prepared for ${who}`:''}</div></div>`;
+    return `<div class="gps-rv">${summary}${numbers}${flags}${supQuote}${band}${detail}${selfVs}${sscHtml}${prep}<div class="rvfoot">GPS Leadership Solutions · Confidential${who?` · Prepared for ${who}`:''}</div></div>`;
   }
   if (typeof window !== 'undefined') window.renderGpsResults = renderGpsResults;
 })();
