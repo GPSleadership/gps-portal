@@ -412,9 +412,10 @@ export default async function handler(req, res) {
     case 'schedule-debrief-emails':   return handleScheduleDebriefEmails(req, res);
     case 'approve-email-draft':        return handleApproveEmailDraft(req, res);
     case 'hold-email-draft':           return handleHoldEmailDraft(req, res);
+    case 'send-email-draft-now':       return handleSendEmailDraftNow(req, res);
     case 'cancel-scheduled-email':    return handleCancelScheduledEmail(req, res);
     default:
-      return res.status(400).json({ error: `Unknown action: "${action}". Valid: send-invites, schedule-invites, send-scheduled, trial-sweep, send-leader-link, generate-question, generate-g2-question, generate-report, generate-team-report, finalize-report, sign-report-upload, generate-dr-content, request-external-feedback, feedback-context, submit-external-feedback, reminders, generate-email-drafts, get-email-drafts, update-email-draft, approve-email-draft, hold-email-draft, approve-email-sequence, mark-sprint-purchased, schedule-debrief-emails, cancel-scheduled-email` });
+      return res.status(400).json({ error: `Unknown action: "${action}". Valid: send-invites, schedule-invites, send-scheduled, trial-sweep, send-leader-link, generate-question, generate-g2-question, generate-report, generate-team-report, finalize-report, sign-report-upload, generate-dr-content, request-external-feedback, feedback-context, submit-external-feedback, reminders, generate-email-drafts, get-email-drafts, update-email-draft, approve-email-draft, hold-email-draft, send-email-draft-now, approve-email-sequence, mark-sprint-purchased, schedule-debrief-emails, cancel-scheduled-email` });
   }
 }
 
@@ -786,6 +787,23 @@ async function handleSendScheduled(req, res) {
         // guard means already-invited raters are never re-emailed).
         await sb(`/rest/v1/diagnostics?id=eq.${d.id}`, 'PATCH', { invites_schedule_claimed_at: null }, { Prefer: 'return=minimal' });
         log.errors.push({ id: d.id, error: err.message });
+      }
+    }
+
+    // ── Send any due email_drafts (status=scheduled, scheduled_for<=now) ─────
+    // This runs every 15 min so emails send close to their scheduled_for time.
+    // send-reminders.js is the Monday backup; both are safe to run concurrently
+    // because sendEmailDraft immediately PATCHes to 'sent', preventing re-send.
+    const dueEmailsRes = await sb(
+      '/rest/v1/email_drafts?status=eq.scheduled&scheduled_for=lte.' + encodeURIComponent(new Date().toISOString()) + '&select=id,email_key,subject,body,to_name,to_email&limit=50'
+    );
+    const dueDraftEmails = dueEmailsRes.ok ? await dueEmailsRes.json() : [];
+    for (const draft of (Array.isArray(dueDraftEmails) ? dueDraftEmails : [])) {
+      try {
+        await sendEmailDraft(draft);
+        log.processed.push({ id: draft.id, email_key: draft.email_key, to: draft.to_email });
+      } catch (draftErr) {
+        log.errors.push({ id: draft.id, email_key: draft.email_key, error: draftErr.message });
       }
     }
 
@@ -4286,6 +4304,65 @@ async function handleScheduleDebriefEmails(req, res) {
 
     return res.status(200).json({ ok: true, created });
   } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+}
+
+// Converts plain-text email body (paragraphs + "- " bullets) to simple HTML.
+function diagBodyToHtml(text) {
+  return String(text || '').split(/\n/).map(function(line) {
+    if (/^-\s/.test(line)) return '<li style="margin-bottom:4px;">' + line.slice(2) + '</li>';
+    return line.trim() ? '<p style="margin:0 0 14px;">' + line + '</p>' : '';
+  }).join('\n').replace(/(<li[\s\S]*?<\/li>\n?)+/g, function(m) {
+    return '<ul style="margin:0 0 14px;padding-left:20px;">' + m + '</ul>';
+  });
+}
+
+// Sends a single scheduled email_draft immediately regardless of scheduled_for.
+// Used by the "Send Now" button in coach.html, and by handleSendScheduled batch.
+async function sendEmailDraft(draft) {
+  if (!draft || !draft.to_email) throw new Error('Draft missing to_email');
+  const titleMap = {
+    E1: 'Preparing for our call tomorrow', E1b: 'Following up on our debrief',
+    E2: 'A note before tomorrow', E3: 'Where things stand after the debrief',
+    E4: 'The recommendations that shape the sprint', E5: 'Quick reminder — sprint window closing',
+    E6: 'Last day to lock in the sprint', E7: 'Checking in on the development plan',
+  };
+  const title = titleMap[draft.email_key] || 'GPS Leadership Solutions';
+  const html = diagEmailShell(title, diagBodyToHtml(draft.body || ''));
+  await sendEmail({
+    to: draft.to_email,
+    subject: draft.subject || 'A note from Alex at GPS Leadership',
+    html,
+    text: String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
+    emailType: 'seq_' + String(draft.email_key || '').toLowerCase(),
+    recipientName: draft.to_name || '',
+  });
+  const sentAt = new Date().toISOString();
+  await sb('/rest/v1/email_drafts?id=eq.' + encodeURIComponent(draft.id),
+    'PATCH', { status: 'sent', sent_at: sentAt, updated_at: sentAt }, { Prefer: 'return=minimal' });
+}
+
+// ── ACTION: send-email-draft-now ─────────────────────────────────────────────
+// POST /api/diagnostic?action=send-email-draft-now
+// Body: { draft_id, session }
+// Sends a single draft immediately, bypassing the scheduled_for time.
+// Works on status=draft or status=scheduled. Marks it sent.
+// ─────────────────────────────────────────────────────────────────────────────
+async function handleSendEmailDraftNow(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const { draft_id, session } = req.body || {};
+  if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
+  if (!draft_id) return res.status(400).json({ error: 'draft_id required' });
+  try {
+    const r = await sb('/rest/v1/email_drafts?id=eq.' + encodeURIComponent(draft_id) + '&status=in.(draft,scheduled)&select=id,email_key,subject,body,to_name,to_email&limit=1');
+    const rows = r.ok ? await r.json() : [];
+    const draft = Array.isArray(rows) ? rows[0] : null;
+    if (!draft) return res.status(404).json({ error: 'Draft not found or already sent/cancelled.' });
+    await sendEmailDraft(draft);
+    return res.status(200).json({ ok: true });
+  } catch (e) {
+    console.error('[send-email-draft-now]', e);
     return res.status(500).json({ error: e.message });
   }
 }

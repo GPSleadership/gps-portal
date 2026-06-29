@@ -8098,11 +8098,13 @@ function _renderDraftCard(d, seqLabel, statusColor, approved) {
   html += '<span style="font-size:11px;font-weight:700;background:' + pillBg + ';color:' + pillColor + ';padding:2px 9px;border-radius:20px;white-space:nowrap;">' + pillText + '</span>';
   html += '<span style="font-size:11px;color:var(--d-mid);white-space:nowrap;">' + schFmt + '</span>';
 
-  // Per-row action button — stopPropagation so clicks don't toggle the <details>
+  // Per-row action buttons — stopPropagation so clicks don't toggle the <details>
   if (d.status === 'draft') {
     html += '<button class="dbtn dbtn-sm" onclick="event.stopPropagation();event.preventDefault();_approveEmailDraft(\'' + d.id + '\')" style="font-size:11px;background:#16a34a;color:#fff;border:none;padding:3px 10px;border-radius:5px;cursor:pointer;white-space:nowrap;">Approve</button>';
+    html += '<button class="dbtn dbtn-sm" onclick="event.stopPropagation();event.preventDefault();_sendEmailDraftNow(\'' + d.id + '\')" style="font-size:11px;background:#004369;color:#fff;border:none;padding:3px 10px;border-radius:5px;cursor:pointer;white-space:nowrap;">Send Now</button>';
   } else if (d.status === 'scheduled') {
     html += '<button class="dbtn dbtn-sm dbtn-outline" onclick="event.stopPropagation();event.preventDefault();_holdEmailDraft(\'' + d.id + '\')" style="font-size:11px;padding:3px 10px;border-radius:5px;cursor:pointer;white-space:nowrap;">Hold</button>';
+    html += '<button class="dbtn dbtn-sm" onclick="event.stopPropagation();event.preventDefault();_sendEmailDraftNow(\'' + d.id + '\')" style="font-size:11px;background:#004369;color:#fff;border:none;padding:3px 10px;border-radius:5px;cursor:pointer;white-space:nowrap;">Send Now</button>';
   }
 
   html += '</div></summary>';
@@ -8120,6 +8122,9 @@ function _renderDraftCard(d, seqLabel, statusColor, approved) {
       html += '<button class="dbtn dbtn-sm" onclick="_approveEmailDraft(\'' + d.id + '\')" style="font-size:12px;background:#16a34a;color:#fff;border:none;padding:4px 12px;border-radius:5px;cursor:pointer;">Approve &amp; Schedule</button>';
     } else if (d.status === 'scheduled') {
       html += '<button class="dbtn dbtn-sm dbtn-outline" onclick="_holdEmailDraft(\'' + d.id + '\')" style="font-size:12px;">Put on Hold</button>';
+    }
+    if (d.status === 'draft' || d.status === 'scheduled') {
+      html += '<button class="dbtn dbtn-sm" onclick="_sendEmailDraftNow(\'' + d.id + '\')" style="font-size:12px;background:#004369;color:#fff;border:none;padding:4px 12px;border-radius:5px;cursor:pointer;">Send Now</button>';
     }
     html += '<span id="esave-status-' + d.id + '" style="font-size:12px;color:var(--d-mid);"></span>';
     html += '</div>';
@@ -8154,6 +8159,19 @@ async function _holdEmailDraft(draftId) {
     if (data.ok) { _loadEmailDrafts(); }
     else { toast('Could not hold: ' + (data.error || 'unknown error')); }
   } catch (e) { toast('Hold failed. Please try again.'); }
+}
+
+async function _sendEmailDraftNow(draftId) {
+  if (!confirm('Send this email now? This cannot be undone.')) return;
+  try {
+    const resp = await fetch('/api/diagnostic?action=send-email-draft-now', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ draft_id: draftId, session: getCoachSessionToken() }),
+    });
+    const data = await resp.json().catch(function() { return {}; });
+    if (data.ok) { toast('Email sent.'); _loadEmailDrafts(); }
+    else { toast('Send failed: ' + (data.error || 'unknown error')); }
+  } catch (e) { toast('Send failed. Please try again.'); }
 }
 
 async function _saveDraftEdit(draftId) {
