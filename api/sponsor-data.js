@@ -528,7 +528,9 @@ export default async function handler(req, res) {
           sprintCtaUrl = (rc && rc[0] && rc[0].first_sprint_credit_url) || null;
           bookingUrl   = (rc && rc[0] && rc[0].booking_url) || null;
           // Per-engagement override (custom_cta_url on the sponsor_teams row).
-          if (link.custom_cta_url) sprintCtaUrl = link.custom_cta_url;
+          // 'disabled' suppresses the sprint CTA (used for demo/test engagements).
+          if (link.custom_cta_url === 'disabled') sprintCtaUrl = null;
+          else if (link.custom_cta_url) sprintCtaUrl = link.custom_cta_url;
         } catch (_) { /* non-fatal */ }
       }
 
