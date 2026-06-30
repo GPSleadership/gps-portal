@@ -3219,6 +3219,23 @@ function renderDiagReportMode(d, reportDraft) {
     return;
   }
 
+  // leader_token — embed the full diagnostic-leader.html view directly.
+  // This gives the client their TP3 scores, rater breakdown, narrative sections,
+  // and PDF download all in one place without duplicating rendering logic.
+  if (d.leader_token) {
+    const leaderUrl = '/diagnostic-leader.html?token=' + encodeURIComponent(d.leader_token);
+    el.innerHTML = `
+      <div class="dc-report-header">
+        <h2>TP3™ Leadership Diagnostic Report</h2>
+        <div class="dc-rh-meta">${escD(leaderName)}${finDate ? ' · Finalized ' + finDate : ''}</div>
+      </div>
+      <div style="width:100%;border-radius:8px;overflow:hidden;border:1px solid var(--gray-300);margin-bottom:24px;">
+        <iframe src="${leaderUrl}" style="width:100%;min-height:1100px;border:none;display:block;" title="TP3 Leadership Diagnostic" onload="this.style.minHeight=(this.contentWindow.document.body&&this.contentWindow.document.body.scrollHeight>800?this.contentWindow.document.body.scrollHeight+'px':'1100px')"></iframe>
+      </div>
+      ${renderLeaderRecs(CLIENT_DIAG_RECS)}`;
+    return;
+  }
+
   // report_pdf_url — a hosted PDF stored in Supabase Storage (or any public URL).
   // Shown when there is no in-portal structured content but a final PDF exists.
   if (d.report_pdf_url) {
