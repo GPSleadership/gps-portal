@@ -136,6 +136,11 @@
   .sk-p { height:12px; margin-bottom:8px; }
   .sk-short { width:60%; }
   .sk-shorter { width:35%; }
+  @media (max-width:600px){
+    .doc-row { flex-direction:column; align-items:flex-start; gap:8px; }
+    .roster-chips { flex-shrink:1; width:100%; justify-content:flex-start; padding-top:2px; }
+    .roster-chips .btn-sm { margin-top:4px; }
+  }
 </style>
 </head>
 <body>
