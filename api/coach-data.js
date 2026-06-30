@@ -462,6 +462,29 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
+    // ── Reset plan wizard (owner only) ──────────────────────────────────────────
+    // Clears plan_submitted_at + plan_start_date on the linked client so they see
+    // the 90-day plan wizard from step 1 again. Used when coach accidentally went
+    // through the wizard on a client's behalf, or the client needs a fresh start.
+    if (action === 'resetPlanWizard') {
+      if (!isOwner) return ownerOnly();
+      const did = body.diagnostic_id;
+      if (!did) return res.status(400).json({ error: 'diagnostic_id required' });
+      const dr = await sb(`/rest/v1/diagnostics?id=eq.${encodeURIComponent(did)}&select=client_id`);
+      if (!dr.ok) return res.status(500).json({ error: 'Diagnostic lookup failed' });
+      const diagRows = await dr.json();
+      const clientId = diagRows[0]?.client_id;
+      if (!clientId) return res.status(400).json({ error: 'Diagnostic has no linked client' });
+      const r = await sb(
+        `/rest/v1/clients?id=eq.${encodeURIComponent(clientId)}`,
+        'PATCH',
+        { plan_submitted_at: null, plan_start_date: null, continuation_step: 0 },
+        { Prefer: 'return=minimal' }
+      );
+      if (!r.ok) { const d = await r.json().catch(() => ({})); return res.status(500).json({ error: 'Reset failed', detail: d }); }
+      return res.status(200).json({ ok: true });
+    }
+
     // ── AI Studio: run a saved prompt against pasted input ───────────────────
     // Fetches the prompt from coach_prompts, prepends the stored system prompt,
     // sends the user's raw input (transcript, notes, etc.) to Claude, and returns

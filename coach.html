@@ -7370,6 +7370,10 @@ function renderDetailHeader() {
     const srLabel = d.plan_sponsor_status === 'approved' ? 'Approved' : 'Changes requested';
     actions.push(`<button class="dbtn dbtn-outline dbtn-sm" style="color:#b45309;border-color:#b45309;" onclick="resetPlanReview()" title="Clear the sponsor decision so they can re-review after you update the plan">Reset plan review (${srLabel})</button>`);
   }
+  // Reset plan wizard (shows when wizard was submitted but plan not yet locked)
+  if (DIAG_LINKED_CLIENT && DIAG_LINKED_CLIENT.plan_submitted_at && !d.plan_locked_at) {
+    actions.push(`<button class="dbtn dbtn-outline dbtn-sm" style="color:#b45309;border-color:#b45309;" onclick="resetPlanWizard()" title="Clear the client's wizard progress so they can redo the 90-day plan from the beginning">↩ Reset plan wizard</button>`);
+  }
   // Archive / Unarchive (always available)
   if (d.is_archived) {
     actions.push(`<button class="dbtn dbtn-outline dbtn-sm" style="color:var(--d-green);border-color:var(--d-green);" onclick="archiveDiag(false)">↩ Unarchive</button>`);
@@ -10294,6 +10298,26 @@ async function resetPlanReview() {
   DIAG_SEL.plan_sponsor_decided_at = null;
   ALL_DIAGS = ALL_DIAGS.map(d => d.id === DIAG_SEL.id ? { ...d, plan_sponsor_status: 'none', plan_sponsor_note: null, plan_sponsor_decided_at: null } : d);
   renderDetailHeader();
+}
+
+// ── Reset Plan Wizard ─────────────────────────────────────────────────────────
+// Clears plan_submitted_at / plan_start_date on the linked client so the wizard
+// resets to step 1. TP3 scores and wizard_prefill_data are untouched — only the
+// "wizard completed" marker is cleared. Use when the wizard was accidentally
+// submitted or the client needs a clean restart.
+async function resetPlanWizard() {
+  if (!DIAG_SEL) return;
+  if (!confirm("Reset this leader's 90-day plan wizard?\n\nThis clears their saved wizard progress so they see the first screen again. Their TP3 scores and prefill suggestions are preserved.\n\nUse this if the wizard was accidentally submitted.")) return;
+  try {
+    await coachData({ action: 'resetPlanWizard', diagnostic_id: DIAG_SEL.id });
+  } catch (e) { alert('Reset failed: ' + e.message); return; }
+  if (DIAG_LINKED_CLIENT) {
+    DIAG_LINKED_CLIENT.plan_submitted_at = null;
+    DIAG_LINKED_CLIENT.plan_start_date = null;
+    DIAG_LINKED_CLIENT.continuation_step = 0;
+  }
+  renderDetailHeader();
+  alert('Done — the leader will see the first screen when they next open their portal.');
 }
 
 // ── Archive / Unarchive ───────────────────────────────────────────────────────
