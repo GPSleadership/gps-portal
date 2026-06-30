@@ -8155,7 +8155,8 @@ function renderReportTab() {
       </button>` : ''}
       ${d.report_generated_at && !d.report_finalized_at ? `
       <button class="dbtn dbtn-gold" onclick="openReportPreview()">👁 Preview &amp; Finalize Report</button>` : ''}
-      ${d.debrief_completed_at ? '' : d.report_finalized_at ? `
+      ${d.debrief_completed_at && !d.plan_locked_at ? `
+      <button class="dbtn dbtn-outline" style="color:#b91c1c;border-color:#b91c1c;" onclick="undoDebriefComplete()">↩ Undo Debrief Complete</button>` : d.debrief_completed_at ? '' : d.report_finalized_at ? `
       <button class="dbtn dbtn-outline" onclick="markDebriefComplete()">Mark Debrief Complete →</button>` : ''}
     </div>
     <label style="display:flex;align-items:flex-start;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--d-border);font-size:13px;cursor:pointer;">
@@ -9621,6 +9622,12 @@ async function markDebriefComplete() {
     }
   }
 
+  await refreshSelected();
+}
+
+async function undoDebriefComplete() {
+  if (!confirm('Undo debrief complete?\n\nThis will reset the status back to "Report Finalized" and clear the debrief timestamp. Use this only if you clicked it by mistake — no emails will be sent.')) return;
+  await updateDiag({ status: 'report_final', debrief_completed_at: null });
   await refreshSelected();
 }
 
