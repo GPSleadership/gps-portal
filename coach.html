@@ -10770,7 +10770,7 @@ function diagCopyText(text) {
 var AI_SELECTED_PROMPT = null;   // { id, name, description, output_format, save_target }
 
 async function coachPost(action, payload) {
-  var token = localStorage.getItem('coach_session_token') || '';
+  var token = localStorage.getItem('gps_coach_session') || '';
   var r = await fetch('/api/coach-data', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -10784,7 +10784,7 @@ async function aiStudioLoadPrompts() {
   var list = document.getElementById('aiPromptList');
   if (!list) return;
   try {
-    var token = localStorage.getItem('coach_session_token') || '';
+    var token = localStorage.getItem('gps_coach_session') || '';
     var r = await fetch('/api/coach-data', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -10816,7 +10816,7 @@ async function aiStudioLoadDiagnostics() {
   var sel = document.getElementById('aiStudioDiagSelect');
   if (!sel) return;
   try {
-    var token = localStorage.getItem('coach_session_token') || '';
+    var token = localStorage.getItem('gps_coach_session') || '';
     var r = await fetch('/api/coach-data', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -11022,7 +11022,7 @@ async function aiStudioSavePrompt() {
 
   if (status) status.textContent = 'Saving…';
   try {
-    var token = localStorage.getItem('coach_session_token') || '';
+    var token = localStorage.getItem('gps_coach_session') || '';
     // Filter out empty examples before saving
     var examplesClean = AI_MODAL_EXAMPLES.filter(function(ex) { return (ex.input || '').trim() && (ex.output || '').trim(); });
     var payload = { name: name, description: desc || null, prompt_text: ptext, save_target: saveTarget || null, output_format: fmt, examples_json: examplesClean.length ? examplesClean : null, is_active: true, updated_at: new Date().toISOString() };
@@ -11055,7 +11055,7 @@ async function aiStudioDeletePrompt() {
   var status = document.getElementById('aiModalStatus');
   if (status) status.textContent = 'Deleting…';
   try {
-    var token = localStorage.getItem('coach_session_token') || '';
+    var token = localStorage.getItem('gps_coach_session') || '';
     var r = await fetch('/api/coach-data', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ op: 'update', table: 'coach_prompts', filters: { id: { eq: id } }, values: { is_active: false }, _coach_token: token })
