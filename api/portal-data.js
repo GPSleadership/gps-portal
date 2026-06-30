@@ -371,9 +371,9 @@ export default async function handler(req, res) {
           });
         }
         // Recommendations: surface the leader's team recommendations that the coach
-        // has BOTH approved and released to clients. Identical gate to the sponsor
-        // view (status=approved, visible_to_client=true) so nothing the coach hasn't
-        // cleared can reach the leader. Scoped to teams this client belongs to.
+        // has BOTH approved and released to clients, AND that the sponsor has committed
+        // to ("I'm in"). Only sponsor-committed recs reach the leader — pending or passed
+        // recs stay hidden until the sponsor session happens.
         let recommendations = [];
         try {
           const tmRes = await sb(`/rest/v1/team_members?client_id=eq.${encodeURIComponent(clientId)}&select=team_id`);
@@ -381,8 +381,22 @@ export default async function handler(req, res) {
           const teamIds = Array.from(new Set((Array.isArray(tms) ? tms : []).map(function (t) { return t.team_id; }).filter(Boolean)));
           if (teamIds.length) {
             const inList = teamIds.map(function (id) { return encodeURIComponent(id); }).join(',');
-            const rc = await sb(`/rest/v1/recommendations?team_id=in.(${inList})&status=eq.approved&visible_to_client=eq.true&select=short_title,description,owner,timeframe,category,target_band,quick_start_today,quick_start_week,updated_at&order=updated_at.desc`);
-            recommendations = rc.ok ? await rc.json() : [];
+            // Fetch recs with id so we can cross-check sponsor commitments
+            const rc = await sb(`/rest/v1/recommendations?team_id=in.(${inList})&status=eq.approved&visible_to_client=eq.true&select=id,short_title,description,owner,timeframe,category,target_band,quick_start_today,quick_start_week,updated_at&order=updated_at.desc`);
+            const allRecs = rc.ok ? await rc.json() : [];
+            // Collect rec IDs the sponsor(s) have committed to across all teams
+            const stRes = await sb(`/rest/v1/sponsor_teams?team_id=in.(${inList})&select=rec_commitments`);
+            const stRows = stRes.ok ? await stRes.json() : [];
+            const committedIds = new Set();
+            for (const st of (Array.isArray(stRows) ? stRows : [])) {
+              if (st.rec_commitments && typeof st.rec_commitments === 'object') {
+                for (const [recId, decision] of Object.entries(st.rec_commitments)) {
+                  if (decision === 'commit') committedIds.add(recId);
+                }
+              }
+            }
+            // Only show recs the sponsor clicked "I'm in" on
+            recommendations = allRecs.filter(function (r) { return committedIds.has(r.id); });
           }
         } catch (_) { recommendations = []; }
         return res.status(200).json({ ok: true, diagnostic: diag, raters, report, recommendations });

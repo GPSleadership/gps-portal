@@ -3219,6 +3219,31 @@ function renderDiagReportMode(d, reportDraft) {
     return;
   }
 
+  // report_pdf_url — a hosted PDF stored in Supabase Storage (or any public URL).
+  // Shown when there is no in-portal structured content but a final PDF exists.
+  if (d.report_pdf_url) {
+    el.innerHTML = `
+      <div class="dc-report-header">
+        <h2>TP3™ Leadership Diagnostic Report</h2>
+        <div class="dc-rh-meta">${escD(leaderName)}${finDate ? ' · Finalized ' + finDate : ''}</div>
+      </div>
+      <div style="text-align:center;margin-bottom:16px;">
+        <a href="${escD(d.report_pdf_url)}" target="_blank" rel="noopener"
+          style="display:inline-flex;align-items:center;gap:7px;padding:10px 22px;background:var(--navy);color:#fff;border-radius:7px;font-family:'Montserrat',sans-serif;font-size:13px;font-weight:700;text-decoration:none;margin-bottom:12px;">
+          ⬇ Download Report (PDF)
+        </a>
+      </div>
+      <div style="width:100%;border-radius:8px;overflow:hidden;border:1px solid var(--gray-300);background:#f5f5f5;">
+        <iframe src="${escD(d.report_pdf_url)}" style="width:100%;min-height:800px;border:none;display:block;" title="GPS Diagnostic Report"></iframe>
+      </div>
+      ${renderLeaderRecs(CLIENT_DIAG_RECS)}
+      <div style="text-align:center;padding:24px 0 32px;">
+        <p style="font-size:13px;color:#6b7280;">Questions about your results? Reach out to Alex directly.</p>
+        <a href="mailto:alex@gpsleadership.org" class="dc-btn dc-btn-outline" style="text-decoration:none;display:inline-block;">Contact Alex →</a>
+      </div>`;
+    return;
+  }
+
   el.innerHTML = `
     <div class="dc-report-header">
       <h2>TP3™ Leadership Diagnostic Report</h2>
@@ -3530,12 +3555,12 @@ async function loadClient() {
       // Always show tab nav once plan is submitted
       document.getElementById('portalTabNav').style.display = 'flex';
 
-      // Ask Alex: coaching clients only. Coach can still disable via ask_alex_enabled === false.
-      // Non-coaching clients (diagnostic-only, workshop participants) never see it unlocked.
+      // Ask Alex: available to ALL portal clients on day one.
+      // Coach can still disable per-client via ask_alex_enabled === false.
       const _tabAsk = document.getElementById('tabAsk');
       if (_tabAsk) {
         _tabAsk.style.display = '';
-        if (client.is_coaching_client && client.ask_alex_enabled !== false) {
+        if (client.ask_alex_enabled !== false) {
           _tabAsk.classList.remove('ptab-locked'); qaInitUI();
         } else {
           _tabAsk.classList.add('ptab-locked');
