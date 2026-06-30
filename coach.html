@@ -10774,7 +10774,7 @@ async function coachPost(action, payload) {
   var r = await fetch('/api/coach-data', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(Object.assign({ action: action, _coach_token: token }, payload))
+    body: JSON.stringify(Object.assign({ action: action, session: token }, payload))
   });
   return r.json();
 }
@@ -10788,7 +10788,7 @@ async function aiStudioLoadPrompts() {
     var r = await fetch('/api/coach-data', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ op: 'select', table: 'coach_prompts', filters: { is_active: { eq: true } }, select: 'id,name,description,action_type,prompt_text,output_format,save_target,examples_json,auto_inject_context,max_output_tokens,sort_order', order: 'sort_order.asc', _coach_token: token })
+      body: JSON.stringify({ op: 'select', table: 'coach_prompts', filters: { is_active: { eq: true } }, select: 'id,name,description,action_type,prompt_text,output_format,save_target,examples_json,auto_inject_context,max_output_tokens,sort_order', order: 'sort_order.asc', session: token })
     });
     var data = await r.json();
     var prompts = (data && data.rows) ? data.rows : [];
@@ -10820,7 +10820,7 @@ async function aiStudioLoadDiagnostics() {
     var r = await fetch('/api/coach-data', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ op: 'select', table: 'diagnostics', filters: { is_archived: { eq: false } }, select: 'id,client_name,client_org,kickoff_brief_saved_at', order: 'client_name.asc', _coach_token: token })
+      body: JSON.stringify({ op: 'select', table: 'diagnostics', filters: { is_archived: { eq: false } }, select: 'id,client_name,client_org,kickoff_brief_saved_at', order: 'client_name.asc', session: token })
     });
     var data = await r.json();
     var diags = (data && data.rows) ? data.rows : [];
@@ -11031,13 +11031,13 @@ async function aiStudioSavePrompt() {
       // Update existing
       r = await fetch('/api/coach-data', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ op: 'update', table: 'coach_prompts', filters: { id: { eq: id } }, values: payload, _coach_token: token })
+        body: JSON.stringify({ op: 'update', table: 'coach_prompts', filters: { id: { eq: id } }, values: payload, session: token })
       });
     } else {
       // Insert new
       r = await fetch('/api/coach-data', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ op: 'insert', table: 'coach_prompts', values: payload, _coach_token: token })
+        body: JSON.stringify({ op: 'insert', table: 'coach_prompts', values: payload, session: token })
       });
     }
     var data = await r.json();
@@ -11058,7 +11058,7 @@ async function aiStudioDeletePrompt() {
     var token = localStorage.getItem('gps_coach_session') || '';
     var r = await fetch('/api/coach-data', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ op: 'update', table: 'coach_prompts', filters: { id: { eq: id } }, values: { is_active: false }, _coach_token: token })
+      body: JSON.stringify({ op: 'update', table: 'coach_prompts', filters: { id: { eq: id } }, values: { is_active: false }, session: token })
     });
     var data = await r.json();
     if (!data.ok && r.status !== 200) throw new Error(data.error || 'Delete failed');
