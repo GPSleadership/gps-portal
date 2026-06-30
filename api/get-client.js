@@ -405,11 +405,18 @@ export default async function handler(req, res) {
   const isSponsor     = client.is_sponsor === true;
   const isParticipant = client.is_workshop_participant === true;
   const hasPlan       = !!client.plan_submitted_at;          // completed the 90-day plan wizard
-  const hasDiagnostic = client.has_diagnostic === true;      // diagnostic client (no coaching required)
+  // Check if this client has a released diagnostic (has_diagnostic column doesn't exist in clients table)
+  let hasDiagnostic = false;
+  try {
+    const now = new Date().toISOString();
+    const dchk = await sbSecret(
+      `/rest/v1/diagnostics?client_id=eq.${encodeURIComponent(client.id)}&is_archived=eq.false&report_release_at=lte.${encodeURIComponent(now)}&limit=1&select=id`
+    );
+    if (dchk.ok) { const rows = await dchk.json(); hasDiagnostic = Array.isArray(rows) && rows.length > 0; }
+  } catch (_) { /* non-blocking — other gate conditions still checked */ }
   // A valid token already identifies the client; this gate only blocks records with
   // NO engagement at all (e.g. a stub). Coaching, workshop, a submitted plan, or a
-  // diagnostic all qualify — non-coaching clients must load so they can see the
-  // locked-tab / Request-a-Diagnostic experience (#123).
+  // released diagnostic all qualify.
   if (!isCoaching && !isSponsor && !isParticipant && !hasPlan && !hasDiagnostic) {
     return res.status(403).json({ error: 'Access not available. Contact your coach.' });
   }
