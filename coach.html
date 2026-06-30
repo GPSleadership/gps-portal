@@ -10788,7 +10788,7 @@ async function aiStudioLoadPrompts() {
     var r = await fetch('/api/coach-data', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ op: 'select', table: 'coach_prompts', filters: { is_active: { eq: true } }, select: 'id,name,description,action_type,prompt_text,output_format,save_target,examples_json,auto_inject_context,max_output_tokens,sort_order', order: 'sort_order.asc', session: token })
+      body: JSON.stringify({ op: 'select', table: 'coach_prompts', eq: { is_active: true }, select: 'id,name,description,action_type,prompt_text,output_format,save_target,examples_json,auto_inject_context,max_output_tokens,sort_order', order: { col: 'sort_order', asc: true }, session: token })
     });
     var data = await r.json();
     var prompts = (data && data.rows) ? data.rows : [];
@@ -10820,7 +10820,7 @@ async function aiStudioLoadDiagnostics() {
     var r = await fetch('/api/coach-data', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ op: 'select', table: 'diagnostics', filters: { is_archived: { eq: false } }, select: 'id,client_name,client_org,kickoff_brief_saved_at', order: 'client_name.asc', session: token })
+      body: JSON.stringify({ op: 'select', table: 'diagnostics', eq: { is_archived: false }, neq: { status: 'debrief_complete' }, select: 'id,client_name,client_org,kickoff_brief_saved_at', order: { col: 'client_name', asc: true }, session: token })
     });
     var data = await r.json();
     var diags = (data && data.rows) ? data.rows : [];
