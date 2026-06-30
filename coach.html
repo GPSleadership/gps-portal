@@ -4351,6 +4351,7 @@ function showSection(name, skipHooks) {
   if (name === 'diagnostics') { diagBoot(); renderDiagTable(); }
   if (name === 'organizations') renderOrganizations();
   if (name === 'insights')    renderCoachInsights();
+  if (name === 'aistudio') { if (typeof aiStudioLoadPrompts === 'function') aiStudioLoadPrompts(); if (typeof aiStudioLoadDiagnostics === 'function') aiStudioLoadDiagnostics(); }
 }
 
 // ── Ask Alex Log (what clients are asking the in-portal assistant) ──────────
@@ -11069,15 +11070,6 @@ async function aiStudioDeletePrompt() {
   }
 }
 
-// Hook into showSection so the studio loads fresh each time
-var _origShowSection = showSection;
-function showSection(name, silent) {
-  _origShowSection(name, silent);
-  if (name === 'aistudio') {
-    aiStudioLoadPrompts();
-    aiStudioLoadDiagnostics();
-  }
-}
 // ── END AI Studio ─────────────────────────────────────────────────────────────
 </script>
 <script>
