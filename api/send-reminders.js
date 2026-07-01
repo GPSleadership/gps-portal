@@ -170,6 +170,35 @@ async function sendSms(toRaw, body) {
   } catch (_) { return false; }
 }
 
+// ── Load reminder config from DB (singleton row, cached per invocation) ──────
+async function loadReminderConfig() {
+  const defaults = {
+    sms_enabled:          true,
+    sms_day_of_week:      1,   // Monday
+    sms_hour_utc:         14,
+    sms_template:         'Hi {{first_name}}, your Week {{week}} check-in is ready — takes 90 sec. {{link}}',
+    followup_enabled:     true,
+    followup_day_of_week: 4,   // Thursday
+    followup_hour_utc:    17,
+    sms_provider:         'twilio',
+  };
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/reminder_config?id=eq.1&limit=1`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+    });
+    if (!r.ok) return defaults;
+    const rows = await r.json();
+    return (Array.isArray(rows) && rows[0]) ? { ...defaults, ...rows[0] } : defaults;
+  } catch (_) { return defaults; }
+}
+
+function fillSmsTemplate(template, { first_name, week, link }) {
+  return String(template || '')
+    .replace(/\{\{\s*first_name\s*\}\}/gi, first_name)
+    .replace(/\{\{\s*week\s*\}\}/gi,       String(week))
+    .replace(/\{\{\s*link\s*\}\}/gi,       link);
+}
+
 export default async function handler(req, res) {
   // Allow GET (Vercel cron) or POST (manual trigger)
   if (req.method !== 'GET' && req.method !== 'POST') {
@@ -188,7 +217,34 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
+  // Load reminder config once per invocation
+  const cfg = await loadReminderConfig();
+
+  const nowUtc   = new Date();
+  const dayUtc   = nowUtc.getUTCDay();
+  const hourUtc  = nowUtc.getUTCHours();
+
   const action = (req.query && req.query.action) || '';
+
+  // ─── HOURLY GATE: SMS reminder (previously Monday-only cron) ────────────────
+  // Now fires every hour; runtime checks day+hour against reminder_config.
+  // If this invocation is NOT the configured SMS day+hour, skip straight to
+  // other actions. action='' is the legacy Monday path; we keep backward compat.
+  const isSmsWindow = (action === '' || action === 'checkin-sms') &&
+                      cfg.sms_enabled &&
+                      dayUtc === cfg.sms_day_of_week &&
+                      hourUtc === cfg.sms_hour_utc;
+
+  // ─── HOURLY GATE: Thursday follow-up ────────────────────────────────────────
+  const isFollowupWindow = (action === '' || action === 'checkin-thursday') &&
+                           cfg.followup_enabled &&
+                           dayUtc === cfg.followup_day_of_week &&
+                           hourUtc === cfg.followup_hour_utc;
+
+  // If neither window applies and no specific action was requested, exit early.
+  if (action === '' && !isSmsWindow && !isFollowupWindow) {
+    return res.status(200).json({ message: 'Not the configured reminder window — skipped.', skipped: true });
+  }
 
   // ─── ACTION: msg-overdue — daily M–F escalation for unreplied client messages
   // Fires at 0 12 * * 1-5 (noon UTC = 8am ET). Finds every open conversation
@@ -315,11 +371,11 @@ export default async function handler(req, res) {
     }
   }
 
-  // ─── THURSDAY FOLLOW-UP: email anyone who still hasn't submitted mid-week ───
-  // Runs every Thursday at noon ET (vercel.json: "0 17 * * 4").
-  // Logic mirrors the Monday handler — same eligibility, same week calculation —
-  // but email-only (no SMS) and uses a distinct template key + email type.
-  if (action === 'checkin-thursday') {
+  // ─── FOLLOW-UP REMINDER: email anyone who still hasn't submitted mid-week ────
+  // Previously Thursday-only via cron; now config-driven (followup_day_of_week /
+  // followup_hour_utc). Fires when action='checkin-thursday' (legacy) OR when the
+  // hourly cron hits the configured follow-up window.
+  if (isFollowupWindow || action === 'checkin-thursday') {
     try {
       const thuClientsRes = await fetch(
         `${SUPABASE_URL}/rest/v1/clients?is_active=eq.true&is_archived=eq.false&plan_start_date=not.is.null&email=not.is.null&select=id,name,email,token,plan_start_date`,
@@ -414,7 +470,14 @@ export default async function handler(req, res) {
     }
   }
 
-  // ─── FETCH ALL ACTIVE CLIENTS WITH A PLAN (Monday SMS + email handler) ─────
+  // ─── SMS + EMAIL REMINDERS (config-driven, previously Monday-only) ──────────
+  // Gate: only runs when isSmsWindow is true (hourly cron matches configured day+hour)
+  // or when action='checkin-sms' (manual trigger / legacy).
+  if (!isSmsWindow && action !== 'checkin-sms') {
+    return res.status(200).json({ message: 'No matching reminder window for this hour.', skipped: true });
+  }
+
+  // ─── FETCH ALL ACTIVE CLIENTS WITH A PLAN (SMS + email handler) ──────────
   const clientsRes = await fetch(
     `${SUPABASE_URL}/rest/v1/clients?is_active=eq.true&is_archived=eq.false&plan_start_date=not.is.null&email=not.is.null&select=id,name,email,token,plan_start_date,phone`,
     { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
@@ -549,8 +612,8 @@ export default async function handler(req, res) {
 
     // ── SMS if phone on file, email otherwise ──────────────────────────────
     if (client.phone && toE164(client.phone) && TWILIO_SID) {
-      // Short, tap-friendly message with direct portal link (< 160 chars typical)
-      const smsBody = `Hi ${firstName}, your Week ${currentWeek} check-in is ready — takes 90 sec. ${portalLink}`;
+      // Short, tap-friendly message — text driven by reminder_config.sms_template
+      const smsBody = fillSmsTemplate(cfg.sms_template, { first_name: firstName, week: currentWeek, link: portalLink });
       try {
         const smsSent = await sendSms(client.phone, smsBody);
         if (smsSent) {

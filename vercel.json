@@ -56,7 +56,7 @@
   "crons": [
     {
       "path": "/api/send-reminders",
-      "schedule": "0 14 * * 1"
+      "schedule": "0 * * * *"
     },
     {
       "path": "/api/survey-reminders",
@@ -85,10 +85,6 @@
     {
       "path": "/api/send-reminders?action=msg-overdue",
       "schedule": "0 12 * * 1-5"
-    },
-    {
-      "path": "/api/send-reminders?action=checkin-thursday",
-      "schedule": "0 17 * * 4"
     },
     {
       "path": "/api/ops-monitor",

@@ -760,6 +760,45 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
+    // ── Reminder config: get ─────────────────────────────────────────────────
+    if (action === 'get-reminder-config') {
+      const r = await sb('/rest/v1/reminder_config?id=eq.1&limit=1');
+      if (!r.ok) { const d = await r.json().catch(() => ({})); return res.status(500).json({ error: 'Failed to load reminder config', detail: d }); }
+      const rows = await r.json();
+      const cfg = (Array.isArray(rows) && rows[0]) ? rows[0] : {
+        sms_enabled: true, sms_day_of_week: 1, sms_hour_utc: 14,
+        sms_template: 'Hi {{first_name}}, your Week {{week}} check-in is ready — takes 90 sec. {{link}}',
+        followup_enabled: true, followup_day_of_week: 4, followup_hour_utc: 17,
+        sms_provider: 'twilio',
+      };
+      return res.status(200).json({ ok: true, config: cfg });
+    }
+
+    // ── Reminder config: save ────────────────────────────────────────────────
+    if (action === 'save-reminder-config') {
+      if (!isOwner) return ownerOnly();
+      const { sms_enabled, sms_day_of_week, sms_hour_utc, sms_template,
+              followup_enabled, followup_day_of_week, followup_hour_utc, sms_provider } = body;
+      const patch = {
+        sms_enabled:          typeof sms_enabled === 'boolean'          ? sms_enabled         : true,
+        sms_day_of_week:      Number.isInteger(sms_day_of_week)         ? sms_day_of_week     : 1,
+        sms_hour_utc:         Number.isInteger(sms_hour_utc)            ? sms_hour_utc        : 14,
+        sms_template:         typeof sms_template === 'string'          ? sms_template.trim() : 'Hi {{first_name}}, your Week {{week}} check-in is ready — takes 90 sec. {{link}}',
+        followup_enabled:     typeof followup_enabled === 'boolean'     ? followup_enabled    : true,
+        followup_day_of_week: Number.isInteger(followup_day_of_week)    ? followup_day_of_week : 4,
+        followup_hour_utc:    Number.isInteger(followup_hour_utc)       ? followup_hour_utc   : 17,
+        sms_provider:         typeof sms_provider === 'string'          ? sms_provider.trim() : 'twilio',
+        updated_at:           new Date().toISOString(),
+      };
+      const r = await sb('/rest/v1/reminder_config?id=eq.1', 'PATCH', patch, { Prefer: 'return=minimal' });
+      if (!r.ok) {
+        // Row might not exist yet — upsert
+        const r2 = await sb('/rest/v1/reminder_config?on_conflict=id', 'POST', { id: 1, ...patch }, { Prefer: 'resolution=merge-duplicates,return=minimal' });
+        if (!r2.ok) { const d = await r2.json().catch(() => ({})); return res.status(500).json({ error: 'Save failed', detail: d }); }
+      }
+      return res.status(200).json({ ok: true });
+    }
+
     // ── Generic allowlisted query proxy ─────────────────────────────────────
     const op    = body.op;
     const table = body.table;

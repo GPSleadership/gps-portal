@@ -853,6 +853,7 @@
       <div class="section-subtab"        id="sub-asklog"    onclick="showSection('asklog')">Ask Alex Log</div>
       <div class="section-subtab"        id="sub-templates" onclick="showSection('templates')">Templates &amp; Automation</div>
       <div class="section-subtab"        id="sub-accesshelp" onclick="showSection('accesshelp')">Access &amp; IT</div>
+      <div class="section-subtab"        id="sub-reminders"  onclick="showSection('reminders')">Reminders</div>
     </div>
     <div id="subnav-settings" class="section-subnav" style="display:none;">
       <div class="section-subtab active" id="sub-admins"   onclick="showSection('admins')">Admin Accounts</div>
@@ -883,6 +884,17 @@ I'm taking part in a leadership assessment run by GPS Leadership Solutions. Thei
           • Email senders: <strong>alex@gpsleadership.org</strong>, <strong>team@gpsleadership.org</strong><br>
           • Email auth: mail authenticates as gpsleadership.org (SPF/DKIM/DMARC) via Resend<br>
           • Links point only to https://portal.gpsleadership.org — don't alter the token in the address
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ REMINDERS SECTION ═══ -->
+    <div id="section-reminders" style="display:none;">
+      <div class="card" style="max-width:680px;">
+        <div style="font-family:'Montserrat',sans-serif;font-size:18px;font-weight:800;color:var(--navy);margin-bottom:4px;">Check-In Reminder Settings</div>
+        <p style="font-size:13px;color:var(--gray-600);line-height:1.6;margin:0 0 22px;">Control when and how clients receive weekly check-in reminders. Changes take effect on the next hourly cron pass — no redeploy needed.</p>
+        <div id="reminderConfigForm">
+          <div style="color:#8a97a0;font-size:13px;padding:18px 0;">Loading config…</div>
         </div>
       </div>
     </div>
@@ -4159,7 +4171,7 @@ document.getElementById('addAdminModal').addEventListener('click', function(e) {
 let _currentSection = 'dashboard';
 
 // Refactored IA: 5 top-level groups, each mapping to one or more underlying sections.
-var GROUP_OF = { dashboard:'today', clients:'clients', insights:'insights', diagnostics:'diagteams', decisionroom:'diagteams', emails:'comms', messages:'comms', asklog:'comms', templates:'comms', accesshelp:'comms', admins:'settings', security:'settings', workshops:'workshops', organizations:'organizations', aistudio:'aistudio' };
+var GROUP_OF = { dashboard:'today', clients:'clients', insights:'insights', diagnostics:'diagteams', decisionroom:'diagteams', emails:'comms', messages:'comms', asklog:'comms', templates:'comms', accesshelp:'comms', reminders:'comms', admins:'settings', security:'settings', workshops:'workshops', organizations:'organizations', aistudio:'aistudio' };
 var GROUP_DEFAULT = { today:'dashboard', clients:'clients', insights:'insights', diagteams:'diagnostics', comms:'emails', settings:'admins', workshops:'workshops', organizations:'organizations', aistudio:'aistudio' };
 function showGroup(group){ showSection(GROUP_DEFAULT[group] || 'dashboard'); }
 
@@ -4360,11 +4372,124 @@ async function sendNewClientMessage(){
   }
 }
 
+// ── Reminder Config Panel ────────────────────────────────────────────────────
+var _reminderCfgLoaded = false;
+var DAYS_OF_WEEK = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+async function loadReminderConfigPanel() {
+  var wrap = document.getElementById('reminderConfigForm');
+  if (!wrap) return;
+  wrap.innerHTML = '<div style="color:#8a97a0;font-size:13px;padding:18px 0;">Loading…</div>';
+  var data;
+  try { data = await coachData({ action: 'get-reminder-config' }); }
+  catch(e) { wrap.innerHTML = '<div style="color:#dc2626;font-size:13px;padding:12px 0;">Could not load config: ' + esc(e.message) + '</div>'; return; }
+  var c = data.config || {};
+
+  function dayOpts(selected) {
+    return DAYS_OF_WEEK.map(function(d,i){ return '<option value="' + i + '"' + (i === selected ? ' selected' : '') + '>' + d + '</option>'; }).join('');
+  }
+  function hourOpts(selected) {
+    var opts = [];
+    for (var h = 0; h < 24; h++) {
+      var ampm = h < 12 ? 'am' : 'pm';
+      var h12  = h === 0 ? 12 : (h > 12 ? h - 12 : h);
+      opts.push('<option value="' + h + '"' + (h === selected ? ' selected' : '') + '>' + h12 + ':00 ' + ampm + ' UTC</option>');
+    }
+    return opts.join('');
+  }
+
+  var fl = 'font-size:13px;font-weight:700;color:#1a2a35;margin-bottom:5px;display:block;';
+  var inp = 'width:100%;padding:9px 12px;border:1px solid #d0d8de;border-radius:7px;font-size:13px;font-family:inherit;box-sizing:border-box;';
+  var sel = inp;
+  var hint = 'font-size:11.5px;color:#8a97a0;margin-top:4px;';
+  var row = 'margin-bottom:18px;';
+
+  wrap.innerHTML = [
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 28px;">',
+
+    // SMS block
+    '<div style="grid-column:1/-1;font-family:\'Montserrat\',sans-serif;font-size:14px;font-weight:800;color:var(--navy);border-bottom:1px solid #e8edf1;padding-bottom:6px;margin-bottom:18px;">SMS Reminder</div>',
+
+    '<div style="' + row + '">',
+      '<label style="' + fl + '">SMS enabled</label>',
+      '<select id="rc_sms_enabled" style="' + sel + '"><option value="1"' + (c.sms_enabled ? ' selected' : '') + '>Yes — send SMS</option><option value="0"' + (!c.sms_enabled ? ' selected' : '') + '>No — email only</option></select>',
+    '</div>',
+
+    '<div style="' + row + '">',
+      '<label style="' + fl + '">Provider</label>',
+      '<select id="rc_sms_provider" style="' + sel + '"><option value="twilio"' + (c.sms_provider === 'twilio' ? ' selected' : '') + '>Twilio</option></select>',
+      '<div style="' + hint + '">Only Twilio is supported today. More options coming.</div>',
+    '</div>',
+
+    '<div style="' + row + '">',
+      '<label style="' + fl + '">Send day (UTC)</label>',
+      '<select id="rc_sms_day" style="' + sel + '">' + dayOpts(Number(c.sms_day_of_week)) + '</select>',
+    '</div>',
+
+    '<div style="' + row + '">',
+      '<label style="' + fl + '">Send time (UTC)</label>',
+      '<select id="rc_sms_hour" style="' + sel + '">' + hourOpts(Number(c.sms_hour_utc)) + '</select>',
+      '<div style="' + hint + '">14:00 UTC = 10am ET. Adjust for daylight saving time.</div>',
+    '</div>',
+
+    '<div style="grid-column:1/-1;' + row + '">',
+      '<label style="' + fl + '">SMS message template</label>',
+      '<textarea id="rc_sms_template" rows="3" style="' + inp + 'resize:vertical;">' + esc(c.sms_template || '') + '</textarea>',
+      '<div style="' + hint + '">Placeholders: <strong>{{first_name}}</strong> &nbsp; <strong>{{week}}</strong> &nbsp; <strong>{{link}}</strong></div>',
+    '</div>',
+
+    // Follow-up block
+    '<div style="grid-column:1/-1;font-family:\'Montserrat\',sans-serif;font-size:14px;font-weight:800;color:var(--navy);border-bottom:1px solid #e8edf1;padding-bottom:6px;margin-bottom:18px;margin-top:8px;">Mid-Week Follow-Up Email</div>',
+
+    '<div style="' + row + '">',
+      '<label style="' + fl + '">Follow-up enabled</label>',
+      '<select id="rc_followup_enabled" style="' + sel + '"><option value="1"' + (c.followup_enabled ? ' selected' : '') + '>Yes — send follow-up email</option><option value="0"' + (!c.followup_enabled ? ' selected' : '') + '>No</option></select>',
+      '<div style="' + hint + '">Sent to clients who still haven"t submitted after the SMS day.</div>',
+    '</div>',
+
+    '<div style="' + row + '">',
+      '<label style="' + fl + '">Follow-up day (UTC)</label>',
+      '<select id="rc_followup_day" style="' + sel + '">' + dayOpts(Number(c.followup_day_of_week)) + '</select>',
+    '</div>',
+
+    '<div style="' + row + '">',
+      '<label style="' + fl + '">Follow-up time (UTC)</label>',
+      '<select id="rc_followup_hour" style="' + sel + '">' + hourOpts(Number(c.followup_hour_utc)) + '</select>',
+    '</div>',
+
+    '</div>',
+
+    '<div id="rcSaveMsg" style="display:none;margin-bottom:12px;padding:10px 14px;border-radius:7px;font-size:13px;font-weight:700;"></div>',
+    '<button onclick="saveReminderConfig()" style="padding:10px 24px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;font-family:\'Montserrat\',sans-serif;cursor:pointer;">Save Reminder Settings</button>',
+  ].join('');
+}
+
+async function saveReminderConfig() {
+  var msg = document.getElementById('rcSaveMsg');
+  if (msg) { msg.style.display = 'none'; }
+  var payload = {
+    action:               'save-reminder-config',
+    sms_enabled:          document.getElementById('rc_sms_enabled')?.value === '1',
+    sms_day_of_week:      Number(document.getElementById('rc_sms_day')?.value),
+    sms_hour_utc:         Number(document.getElementById('rc_sms_hour')?.value),
+    sms_template:         (document.getElementById('rc_sms_template')?.value || '').trim(),
+    followup_enabled:     document.getElementById('rc_followup_enabled')?.value === '1',
+    followup_day_of_week: Number(document.getElementById('rc_followup_day')?.value),
+    followup_hour_utc:    Number(document.getElementById('rc_followup_hour')?.value),
+    sms_provider:         document.getElementById('rc_sms_provider')?.value || 'twilio',
+  };
+  try {
+    await coachData(payload);
+    if (msg) { msg.style.display = 'block'; msg.style.background = '#ecfdf5'; msg.style.color = '#065f46'; msg.textContent = 'Saved. Changes take effect on the next hourly cron pass.'; }
+  } catch(e) {
+    if (msg) { msg.style.display = 'block'; msg.style.background = '#fef2f2'; msg.style.color = '#b91c1c'; msg.textContent = 'Save failed: ' + e.message; }
+  }
+}
+
 function showSection(name, skipHooks) {
   _currentSection = name;
   try { localStorage.setItem('gps_coach_section', name); } catch (_) {}
   // Toggle the underlying content sections.
-  ['dashboard', 'clients', 'insights', 'emails', 'messages', 'asklog', 'templates', 'accesshelp', 'admins', 'security', 'diagnostics', 'decisionroom', 'workshops', 'organizations', 'aistudio'].forEach(s => {
+  ['dashboard', 'clients', 'insights', 'emails', 'messages', 'asklog', 'templates', 'accesshelp', 'reminders', 'admins', 'security', 'diagnostics', 'decisionroom', 'workshops', 'organizations', 'aistudio'].forEach(s => {
     var sec = document.getElementById('section-' + s);
     if (sec) sec.style.display = s === name ? 'block' : 'none';
   });
@@ -4399,6 +4524,7 @@ function showSection(name, skipHooks) {
   if (name === 'organizations') renderOrganizations();
   if (name === 'insights')    renderCoachInsights();
   if (name === 'aistudio') { if (typeof aiStudioLoadPrompts === 'function') aiStudioLoadPrompts(); if (typeof aiStudioLoadDiagnostics === 'function') aiStudioLoadDiagnostics(); }
+  if (name === 'reminders') loadReminderConfigPanel();
 }
 
 // ── Ask Alex Log (what clients are asking the in-portal assistant) ──────────
