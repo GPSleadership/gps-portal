@@ -339,6 +339,58 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, messages });
     }
 
+    // ── Contact Your Coach: AI reply draft for coach ─────────────────────────
+    // Fetches the thread + client name, calls Claude Haiku, returns a short
+    // draft reply. Fire-and-forget from the browser — empty string on any error.
+    if (action === 'coach-msg-draft') {
+      const cid = body.conversation_id;
+      if (!cid) return res.status(400).json({ error: 'conversation_id required' });
+      if (!ANTHROPIC_KEY) return res.status(200).json({ ok: true, draft: '' });
+
+      // Fetch thread (last 20 messages ascending)
+      const mr = await sb(`/rest/v1/coach_messages?conversation_id=eq.${encodeURIComponent(cid)}&select=sender_role,sender_name,message_type,message_text,created_at&order=created_at.asc&limit=20`);
+      const msgs = mr.ok ? await mr.json() : [];
+      if (!Array.isArray(msgs) || msgs.length === 0) return res.status(200).json({ ok: true, draft: '' });
+      // Only draft when the last message is from the client
+      const lastMsg = msgs[msgs.length - 1];
+      if (!lastMsg || lastMsg.sender_role !== 'client') return res.status(200).json({ ok: true, draft: '' });
+
+      // Client context (name + org for the prompt)
+      const cr = await sb(`/rest/v1/coach_conversations?id=eq.${encodeURIComponent(cid)}&select=client_id&limit=1`);
+      const convRow = (cr.ok ? await cr.json() : [])[0];
+      let clientCtx = '';
+      if (convRow && convRow.client_id) {
+        const clr = await sb(`/rest/v1/clients?id=eq.${encodeURIComponent(convRow.client_id)}&select=name,organization&limit=1`);
+        const cl = (clr.ok ? await clr.json() : [])[0];
+        if (cl) clientCtx = `Client: ${cl.name || 'Unknown'}${cl.organization ? ' at ' + cl.organization : ''}.\n`;
+      }
+
+      // Build plain transcript
+      const transcript = msgs.map(m => {
+        const who = m.sender_role === 'coach' ? (m.sender_name || 'Alex') : 'Client';
+        return `${who}: ${m.message_text || ''}`;
+      }).join('\n\n');
+
+      let draft = '';
+      try {
+        const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+          body: JSON.stringify({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 250,
+            system: `You draft short reply suggestions for Alex Tremble, an executive leadership coach at GPS Leadership Solutions. Alex coaches CEOs of multi-location, operations-heavy companies.\n\nAlex's voice: direct, candid, warm but not effusive. Short sentences. No corporate buzzwords. No "Great question!" No emojis. He gets to the point and gives clients something concrete.\n\nWrite a draft reply in Alex's voice — 2-4 sentences. Address what the client said. Give them something useful. No greeting. No sign-off. Draft only.`,
+            messages: [{ role: 'user', content: `${clientCtx}\nConversation:\n${transcript}\n\nDraft a reply from Alex to the client's most recent message.` }],
+          }),
+        });
+        if (aiRes.ok) {
+          const aiJson = await aiRes.json();
+          draft = ((aiJson.content && aiJson.content[0] && aiJson.content[0].text) || '').trim();
+        }
+      } catch (_) { /* best-effort — return empty if AI unavailable */ }
+      return res.status(200).json({ ok: true, draft });
+    }
+
     // ── Contact Your Coach: coach reply (owner only) ──────────────────────────
     if (action === 'coach-msg-reply') {
       // Any authenticated coach (owner or assistant) may reply; the message is

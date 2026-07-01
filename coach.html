@@ -4263,9 +4263,33 @@ async function openCoachConversation(convId){
     + '</select></div>'
     + '<div style="display:flex;flex-direction:column;max-height:46vh;overflow:auto;padding-right:4px;">'+thread+'</div>'
     + '<div style="margin-top:14px;border-top:1px solid #eef1f2;padding-top:12px;">'
+      + '<div id="msgDraftIndicator" style="display:none;align-items:center;gap:8px;margin-bottom:8px;padding:6px 10px;background:#f0f9f9;border:1px solid #b2dfdb;border-radius:6px;font-size:11.5px;color:#5a6b76;">'
+        + '<span style="background:#01949A;color:#fff;border-radius:4px;padding:1px 7px;font-size:10px;font-weight:700;letter-spacing:0.3px;white-space:nowrap;">AI DRAFT</span>'
+        + '<span style="flex:1;">Edit before sending.</span>'
+        + '<button onclick="document.getElementById(\'msgReplyText\').value=\'\';document.getElementById(\'msgDraftIndicator\').style.display=\'none\';" style="background:none;border:none;color:#8a97a0;font-size:11px;cursor:pointer;padding:0;white-space:nowrap;">Clear</button>'
+      + '</div>'
       + '<textarea id="msgReplyText" rows="3" placeholder="Write your reply…" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #ccc;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;"></textarea>'
       + '<div style="display:flex;justify-content:flex-end;margin-top:8px;"><button id="msgReplyBtn" onclick="sendCoachReply(\''+convId+'\')" style="background:#01949A;color:#fff;border:none;border-radius:7px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;">Send reply</button></div>'
     + '</div>';
+  if (conv.needs_reply || conv.overdue) { loadMsgDraft(convId); }
+}
+async function loadMsgDraft(convId) {
+  var ta = document.getElementById('msgReplyText');
+  if (ta) ta.placeholder = 'Drafting a reply suggestion…';
+  try {
+    var r = await coachData({ action: 'coach-msg-draft', conversation_id: convId });
+    var ta2 = document.getElementById('msgReplyText');
+    if (!ta2) return; // user navigated away before draft arrived
+    ta2.placeholder = 'Write your reply…';
+    if (r && r.draft) {
+      ta2.value = r.draft;
+      var ind = document.getElementById('msgDraftIndicator');
+      if (ind) ind.style.display = 'flex';
+    }
+  } catch(_) {
+    var ta3 = document.getElementById('msgReplyText');
+    if (ta3) ta3.placeholder = 'Write your reply…';
+  }
 }
 async function sendCoachReply(convId){
   var ta = document.getElementById('msgReplyText'), btn = document.getElementById('msgReplyBtn');
