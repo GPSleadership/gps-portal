@@ -4266,16 +4266,20 @@ async function openCoachConversation(convId){
       + '<div id="msgDraftIndicator" style="display:none;align-items:center;gap:8px;margin-bottom:8px;padding:6px 10px;background:#f0f9f9;border:1px solid #b2dfdb;border-radius:6px;font-size:11.5px;color:#5a6b76;">'
         + '<span style="background:#01949A;color:#fff;border-radius:4px;padding:1px 7px;font-size:10px;font-weight:700;letter-spacing:0.3px;white-space:nowrap;">AI DRAFT</span>'
         + '<span style="flex:1;">Edit before sending.</span>'
+        + '<button onclick="loadMsgDraft(\''+convId+'\')" style="background:none;border:none;color:#01949A;font-size:11px;cursor:pointer;padding:0 10px 0 0;white-space:nowrap;">↺ Regenerate</button>'
         + '<button onclick="document.getElementById(\'msgReplyText\').value=\'\';document.getElementById(\'msgDraftIndicator\').style.display=\'none\';" style="background:none;border:none;color:#8a97a0;font-size:11px;cursor:pointer;padding:0;white-space:nowrap;">Clear</button>'
       + '</div>'
-      + '<textarea id="msgReplyText" rows="3" placeholder="Write your reply…" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #ccc;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;"></textarea>'
+      + '<textarea id="msgReplyText" rows="3" placeholder="Write your reply…" onkeydown="if((event.metaKey||event.ctrlKey)&&event.key===\'Enter\'){event.preventDefault();sendCoachReply(\''+convId+'\');}" oninput="if(!this.value.trim()){var _ind=document.getElementById(\'msgDraftIndicator\');if(_ind)_ind.style.display=\'none\';}" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #ccc;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;"></textarea>'
       + '<div style="display:flex;justify-content:flex-end;margin-top:8px;"><button id="msgReplyBtn" onclick="sendCoachReply(\''+convId+'\')" style="background:#01949A;color:#fff;border:none;border-radius:7px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;">Send reply</button></div>'
     + '</div>';
   if (conv.needs_reply || conv.overdue) { loadMsgDraft(convId); }
 }
 async function loadMsgDraft(convId) {
   var ta = document.getElementById('msgReplyText');
-  if (ta) ta.placeholder = 'Drafting a reply suggestion…';
+  var ind0 = document.getElementById('msgDraftIndicator');
+  // Reset state so Regenerate feels clean
+  if (ta) { ta.value = ''; ta.placeholder = 'Drafting a reply suggestion…'; }
+  if (ind0) ind0.style.display = 'none';
   try {
     var r = await coachData({ action: 'coach-msg-draft', conversation_id: convId });
     var ta2 = document.getElementById('msgReplyText');
@@ -4388,7 +4392,7 @@ function showSection(name, skipHooks) {
   if (name === 'messages')    loadCoachInbox();
   if (name === 'admins')      loadAdminAccounts();
   if (name === 'templates')   { loadEmailTemplates(); loadCcSettingsPanel(); loadRenewalConfigPanel(); }
-  if (name === 'dashboard')   { _actionItemsLoaded = false; renderDiagHome(); refreshMsgBadge(); }
+  if (name === 'dashboard')   { _actionItemsLoaded = false; _checkinNudgesLoaded = false; renderDiagHome(); refreshMsgBadge(); }
   if (name === 'diagnostics') { diagBoot(); renderDiagTable(); }
   if (name === 'organizations') renderOrganizations();
   if (name === 'insights')    renderCoachInsights();
@@ -6977,6 +6981,8 @@ function renderDiagHome() {
 
   <div id="todayMsgFlags"></div>
 
+  <div id="todayCheckinFlags"></div>
+
   ${needsSection}
 
   <div id="autoEmailFlags"></div>
@@ -7001,6 +7007,41 @@ function renderDiagHome() {
   loadTestimonialApprovalFlags();
   loadAutoEmailFlags();
   renderTodayMessageFlags(); // re-draw message flags after Today tab is rebuilt
+  loadCheckInNudges();       // re-draw check-in staleness flags after Today tab is rebuilt
+}
+
+// ── Check-in staleness nudge — coaching clients who haven't checked in recently ──
+// Fires after renderDiagHome() rebuilds the Today tab. Shows a yellow flag card
+// for each coaching client who hasn't submitted a check-in in 14+ days.
+var _checkinNudgesLoaded = false;
+var _checkinNudges = [];
+async function loadCheckInNudges() {
+  var host = document.getElementById('todayCheckinFlags'); if (!host) return;
+  // Use cached result if we already fetched this render cycle; refetch on full reload.
+  if (!_checkinNudgesLoaded) {
+    try {
+      var r = await coachData({ action: 'coach-checkin-stale', days: 14 });
+      _checkinNudges = (r && Array.isArray(r.stale)) ? r.stale : [];
+      _checkinNudgesLoaded = true;
+    } catch(_) { _checkinNudges = []; }
+  }
+  var host2 = document.getElementById('todayCheckinFlags'); if (!host2) return;
+  if (!_checkinNudges.length) { host2.innerHTML = ''; return; }
+  var html = _checkinNudges.map(function(c) {
+    var daysLabel = c.days_since === null ? 'No check-ins yet' : ('No check-in in ' + c.days_since + ' day' + (c.days_since !== 1 ? 's' : ''));
+    var sub = c.days_since === null ? 'This client has never submitted a check-in.' : ('Last check-in was ' + c.days_since + ' day' + (c.days_since !== 1 ? 's' : '') + ' ago. Consider sending a quick nudge.');
+    return '<div style="background:#fffbea;border:2px solid #e6b800;border-left:5px solid #e6b800;border-radius:10px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:flex-start;gap:12px;">'
+      + '<div style="font-size:20px;flex-shrink:0;margin-top:1px;">📋</div>'
+      + '<div style="flex:1;">'
+        + '<div style="font-size:13px;font-weight:700;color:#7a4f00;">' + esc(c.name) + ' — ' + daysLabel + '</div>'
+        + (c.organization ? '<div style="font-size:11.5px;color:#8a97a0;margin-top:1px;">' + esc(c.organization) + '</div>' : '')
+        + '<div style="font-size:12px;color:#6b4c00;margin-top:4px;">' + sub + '</div>'
+        + '<div style="margin-top:10px;"><button class="dbtn dbtn-outline dbtn-sm" onclick="openClientProfile(\'' + c.id + '\')">Open profile →</button></div>'
+      + '</div>'
+      + '<div style="flex-shrink:0;"><span style="background:#e6b800;color:#3a2a00;border-radius:5px;padding:2px 8px;font-size:10.5px;font-weight:700;">' + (c.days_since !== null ? c.days_since + 'd silent' : 'Never') + '</span></div>'
+    + '</div>';
+  }).join('');
+  host2.innerHTML = html;
 }
 
 // ── Testimonial flywheel: pending approvals as an Action Required card on Today ──

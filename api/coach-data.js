@@ -488,6 +488,36 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, conversation_id: cid });
     }
 
+    // ── Coaching: check-in staleness — clients who haven't checked in recently ─
+    // Returns coaching clients where last check-in is > threshold days ago (or
+    // never). Threshold defaults to 14 days. Used by Today tab flag cards.
+    if (action === 'coach-checkin-stale') {
+      const threshold = parseInt(body.days || 14, 10);
+      // All active coaching clients
+      const clr = await sb(`/rest/v1/clients?select=id,name,organization&is_archived=eq.false&or=(in_coaching_program.eq.true,coaching_sessions_enabled.eq.true,is_active_coaching.eq.true)&order=name.asc`);
+      const clients = clr.ok ? await clr.json() : [];
+      if (!Array.isArray(clients) || clients.length === 0) return res.status(200).json({ ok: true, stale: [] });
+      const clientIds = clients.map(c => c.id);
+      // Fetch recent check-ins for those clients (bulk — last 1000, desc)
+      const chr = await sb(`/rest/v1/checkins?client_id=in.(${clientIds.join(',')})&select=client_id,created_at&order=created_at.desc&limit=1000`);
+      const checkins = chr.ok ? await chr.json() : [];
+      // Last check-in per client
+      const lastCheckin = {};
+      for (const ch of (Array.isArray(checkins) ? checkins : [])) {
+        if (!lastCheckin[ch.client_id]) lastCheckin[ch.client_id] = ch.created_at;
+      }
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - threshold);
+      const stale = clients
+        .filter(c => { const last = lastCheckin[c.id]; return !last || new Date(last) < cutoff; })
+        .map(c => {
+          const last = lastCheckin[c.id];
+          const days = last ? Math.floor((Date.now() - new Date(last).getTime()) / 86400000) : null;
+          return { id: c.id, name: c.name, organization: c.organization || '', days_since: days };
+        });
+      return res.status(200).json({ ok: true, stale });
+    }
+
     // ── Contact Your Coach: change conversation status (owner only) ───────────
     if (action === 'coach-msg-status') {
       if (!isOwner) return ownerOnly();

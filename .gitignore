@@ -42,3 +42,6 @@ node_modules/
 
 # DB migration files with seeded secrets — never commit
 supabase-add-coach-settings.sql
+
+# Local data exports — never commit (may contain client data)
+data_*.json
