@@ -682,8 +682,10 @@ export default async function handler(req, res) {
       if (!diagId)    return res.status(400).json({ error: 'diagnostic_id required' });
       if (!briefStr)  return res.status(400).json({ error: 'brief_json required' });
 
+      // Strip markdown code fences the model sometimes adds (```json … ```)
+      const cleanBrief1 = briefStr.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
       let parsed;
-      try { parsed = JSON.parse(briefStr); }
+      try { parsed = JSON.parse(cleanBrief1); }
       catch (_) { return res.status(400).json({ error: 'brief_json is not valid JSON — copy the full output from AI Studio' }); }
 
       // Fetch the current array, append the new summary, then write back.
@@ -716,8 +718,10 @@ export default async function handler(req, res) {
       if (!diagId)    return res.status(400).json({ error: 'diagnostic_id required' });
       if (!briefStr)  return res.status(400).json({ error: 'brief_json required' });
 
+      // Strip markdown code fences the model sometimes adds (```json … ```)
+      const cleanBrief2 = briefStr.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
       let parsed;
-      try { parsed = JSON.parse(briefStr); }
+      try { parsed = JSON.parse(cleanBrief2); }
       catch (_) { return res.status(400).json({ error: 'brief_json is not valid JSON — copy the full output from AI Studio' }); }
 
       const r = await sb(
