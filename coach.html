@@ -8303,7 +8303,7 @@ function _renderEmailDraftsUI(el, data) {
   const badge = document.getElementById('tab-email-badge');
   if (badge) badge.style.display = (!approved && drafts.length > 0) ? 'inline' : 'none';
 
-  const seqLabel = { E1:'Leader — Pre-Debrief', E1b:'Leader — Post-Debrief', E2:'Sponsor — Pre-Debrief', E3:'Sponsor — Post-Debrief (Day +1)', E4:'Sponsor — Day +3 (Sprint Offer)', E5:'Sponsor — Day +5 (Reminder)', E6:'Sponsor — Day +7 (Last Day)', E7:'Sponsor — Day +10 (Follow-up)' };
+  const seqLabel = { E1:'Leader — Pre-Debrief', E1b:'Leader — Post-Debrief', E2:'Sponsor — Pre-Debrief', E3:'Sponsor — Post-Debrief (Day +1)', E4:'Sponsor — Day +3 (Sprint Offer)', E5:'Sponsor — Day +5 (Reminder)', E6:'Sponsor — Day +7 (Last Day)', E7:'Sponsor — Day +10 (Follow-up)', N1:'Nurture — Day +7', N2:'Nurture — Day +14', N3:'Nurture — Day +21', N4:'Nurture — Day +30', N5:'Nurture — Day +42' };
   const statusColor = { draft:'#6b7280', scheduled:'#2563eb', sent:'#16a34a', cancelled:'#dc2626' };
 
   var html = '<div style="padding:20px 4px 4px;">';
@@ -8347,6 +8347,7 @@ function _renderEmailDraftsUI(el, data) {
     // Group by sequence
     const leaderDrafts = drafts.filter(function(d) { return d.sequence === 'leader'; });
     const sponsorDrafts = drafts.filter(function(d) { return d.sequence === 'sponsor'; });
+    const nurtureDrafts = drafts.filter(function(d) { return d.sequence === 'nurture'; });
 
     if (leaderDrafts.length) {
       html += '<div style="font-size:12px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Leader Emails</div>';
@@ -8355,6 +8356,11 @@ function _renderEmailDraftsUI(el, data) {
     if (sponsorDrafts.length) {
       html += '<div style="font-size:12px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 8px;">Sponsor Emails</div>';
       sponsorDrafts.forEach(function(d) { html += _renderDraftCard(d, seqLabel, statusColor, approved); });
+    }
+    if (nurtureDrafts.length) {
+      html += '<div style="font-size:12px;font-weight:700;color:#b45309;text-transform:uppercase;letter-spacing:.5px;margin:16px 0 8px;">Coaching Conversion — Nurture</div>';
+      html += '<div style="font-size:11.5px;color:var(--d-mid);margin-bottom:10px;background:#fffbeb;border:1px solid #fde68a;padding:6px 10px;border-radius:6px;">5-touch sequence to convert this diagnostic-only leader into a coaching client. Review and approve each email before it sends.</div>';
+      nurtureDrafts.forEach(function(d) { html += _renderDraftCard(d, seqLabel, statusColor, approved); });
     }
   }
 

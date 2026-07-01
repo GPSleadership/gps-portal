@@ -3909,6 +3909,16 @@ async function handleGenerateEmailDrafts(req, res) {
     const diag = diagR.ok ? ((await diagR.json())[0] || null) : null;
     if (!diag) return res.status(404).json({ error: 'Diagnostic not found' });
 
+    // Determine if this client is diagnostic-only (not already in coaching).
+    // If so, we append the 5-touch nurture sequence (N1-N5) to convert them.
+    var isCoachingClient = false;
+    if (diag.client_id) {
+      const clr = await sb(`/rest/v1/clients?id=eq.${encodeURIComponent(diag.client_id)}&select=in_coaching_program,coaching_sessions_enabled,is_active_coaching,engagement_type&limit=1`);
+      const cl = (clr.ok ? await clr.json() : [])[0];
+      isCoachingClient = !!(cl && (cl.in_coaching_program || cl.coaching_sessions_enabled || cl.is_active_coaching || cl.engagement_type === 'diagnostic_plus_coaching'));
+    }
+    var addNurture = !isCoachingClient; // add N1-N5 conversion sequence for diagnostic-only leaders
+
     // ── 2. Load TP3 scores ───────────────────────────────────────────────────
     const scoresR = await sb(`/rest/v1/diagnostic_report_drafts?diagnostic_id=eq.${encodeURIComponent(diagnostic_id)}&select=scores_json&order=generated_at.desc&limit=1`);
     const scores = scoresR.ok ? (((await scoresR.json())[0] || {}).scores_json || {}) : {};
@@ -3960,7 +3970,7 @@ async function handleGenerateEmailDrafts(req, res) {
     }
 
     // ── 4. Build Claude prompt ───────────────────────────────────────────────
-    var emailCount = sponsor ? 8 : 2;
+    var emailCount = sponsor ? 8 : (addNurture ? 7 : 2);
     var spName = sponsor ? (sponsor.sponsor_name || 'the sponsor') : '';
     var backedLine = backedRecs.length
       ? ('The sponsor has already committed to these recommendations: ' + backedRecs.join(', ') + '.')
@@ -4018,6 +4028,29 @@ async function handleGenerateEmailDrafts(req, res) {
         + 'E7 (TO SPONSOR: ' + spName + ', sent 10 days after debrief):\n'
         + 'Subject: something like "The window has closed -- but there is still a path."\n'
         + 'The sprint window has passed. If they still want to move forward, the door is open. No pressure, keep it honest. Link: ' + drUrl + '. Under 150 words.'
+      ) : '')
+
+      // N1-N5: coaching conversion nurture sequence (diagnostic-only clients only)
+      + (addNurture ? (
+        '\n\nN1 (TO LEADER: ' + (diag.client_name || 'the leader') + ', sent 7 days after the debrief):\n'
+        + 'Subject: something like "One week out." or "The one thing worth focusing on right now."\n'
+        + 'Most leaders try to act on everything from a diagnostic at once and end up changing nothing. Write a short, direct note that names the single most important focus area based on the TP3 data and report themes provided. Frame it as a 7-day experiment, not a permanent behavior change. No pressure. Close with a light, non-pushy mention that there is a structured 90-day path available if they want to go deeper. Under 200 words.\n\n'
+
+        + 'N2 (TO LEADER: ' + (diag.client_name || 'the leader') + ', sent 14 days after the debrief):\n'
+        + 'Subject: something like "What I see in leaders at this stage." or "A pattern worth naming."\n'
+        + 'Write an honest, useful note about what typically happens to leaders after a diagnostic -- most get useful data, some act on it, few sustain it without structure. Share a pattern Alex has observed (anonymized, no real names) that is relevant to this leader\'s TP3 data. The point: the gap between insight and execution is the real problem, and structure is what closes it. Close with a soft question that invites a reply -- something like "How is [focus area] going so far?" Under 225 words.\n\n'
+
+        + 'N3 (TO LEADER: ' + (diag.client_name || 'the leader') + ', sent 21 days after the debrief):\n'
+        + 'Subject: something like "What the next 90 days could actually look like."\n'
+        + 'Be specific about what the 90-day executive sprint involves. Demystify it -- what does Alex look at, how often do they meet, what does the leader leave with at the end. Informational tone, not a sales pitch. The goal is to make the path concrete so it does not feel abstract or overwhelming. Close by asking if a 20-minute call to see if it is a fit would be useful. Under 225 words.\n\n'
+
+        + 'N4 (TO LEADER: ' + (diag.client_name || 'the leader') + ', sent 30 days after the debrief):\n'
+        + 'Subject: something like "A specific offer." or "If you want to move on this."\n'
+        + 'This is the direct offer. Be clear: here is what it is and here is the next step. Do NOT mention pricing. Acknowledge that they may be busy and this may not be the right moment -- but if there is ever a right moment for this work, it is while the diagnostic is still fresh. Close with a single, low-friction ask: reply yes or reply no. Under 200 words.\n\n'
+
+        + 'N5 (TO LEADER: ' + (diag.client_name || 'the leader') + ', sent 42 days after the debrief):\n'
+        + 'Subject: something like "Before I close your file." or "Last note."\n'
+        + 'Very short. Alex is wrapping up this engagement and will not send more emails. One last note in case the timing has changed. No pressure. If they want to talk, they know where to find him. Under 100 words.'
       ) : '');
 
     var seqUser = [
@@ -4049,6 +4082,12 @@ async function handleGenerateEmailDrafts(req, res) {
       'E5':  { days:  5, hour: 14 },
       'E6':  { days:  7, hour: 14 },
       'E7':  { days: 10, hour: 14 },
+      // Nurture sequence: diagnostic-only leaders (not in coaching)
+      'N1':  { days:  7, hour: 14 },
+      'N2':  { days: 14, hour: 14 },
+      'N3':  { days: 21, hour: 14 },
+      'N4':  { days: 30, hour: 14 },
+      'N5':  { days: 42, hour: 14 },
     };
 
     // ── 6. Delete existing drafts ────────────────────────────────────────────
@@ -4056,15 +4095,17 @@ async function handleGenerateEmailDrafts(req, res) {
 
     // ── 7. Build and insert new rows ─────────────────────────────────────────
     var now = new Date().toISOString();
+    var NURTURE_KEYS = ['N1', 'N2', 'N3', 'N4', 'N5'];
     var rows = parsed.emails.map(function(e) {
       var key = String(e.email_key || '').trim().toUpperCase().replace('1B', '1b').replace(/^E1B$/, 'E1b');
-      var isLeader = ['E1', 'E1b'].includes(key);
+      var isNurture = NURTURE_KEYS.includes(key);
+      var isLeader = ['E1', 'E1b'].includes(key) || isNurture;
       var off = OFFSETS[key];
       var scheduledFor = (off && diag.debrief_date) ? addDaysToDate(diag.debrief_date, off.days, off.hour) : null;
       return {
         diagnostic_id: diagnostic_id,
         email_key: key,
-        sequence: isLeader ? 'leader' : 'sponsor',
+        sequence: isNurture ? 'nurture' : (isLeader ? 'leader' : 'sponsor'),
         subject: String(e.subject || ''),
         body: String(e.body_text || e.body || ''),
         to_name:  isLeader ? (diag.client_name || '') : (sponsor ? (sponsor.sponsor_name || '') : ''),
