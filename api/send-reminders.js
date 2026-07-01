@@ -15,6 +15,9 @@ const SUPABASE_URL  = process.env.SUPABASE_URL  || 'https://pbnkefuqpoztcxfagiod
 const SUPABASE_KEY  = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_ANON;
 if (!SUPABASE_KEY) throw new Error('send-reminders.js: missing SUPABASE_SECRET_KEY — refusing to run cron with no service key');
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const TWILIO_SID     = process.env.TWILIO_ACCOUNT_SID;
+const TWILIO_TOKEN   = process.env.TWILIO_AUTH_TOKEN;
+const TWILIO_FROM    = process.env.TWILIO_PHONE_NUMBER; // e.g. +18005551234
 
 // Record a successful cron run so detect_breakages can flag this job if it goes silent.
 async function recordHeartbeat(name, status = 'ok', detail = null) {
@@ -139,6 +142,32 @@ async function logEmail({ clientId, recipientEmail, recipientName, emailType, su
   } catch (_) {
     // Logging failure should never break the main send flow
   }
+}
+
+// ── Twilio SMS helpers ────────────────────────────────────────────────────────
+// Normalises a stored phone number to E.164 (+1XXXXXXXXXX for US numbers).
+function toE164(raw) {
+  const digits = String(raw || '').replace(/\D/g, '');
+  if (!digits) return null;
+  if (digits.length === 10) return '+1' + digits;
+  if (digits.length === 11 && digits[0] === '1') return '+' + digits;
+  return null; // non-US or malformed — skip
+}
+
+async function sendSms(toRaw, body) {
+  if (!TWILIO_SID || !TWILIO_TOKEN || !TWILIO_FROM) return false;
+  const to = toE164(toRaw);
+  if (!to) return false;
+  try {
+    const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Messages.json`;
+    const auth = Buffer.from(`${TWILIO_SID}:${TWILIO_TOKEN}`).toString('base64');
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ To: to, From: TWILIO_FROM, Body: body }).toString(),
+    });
+    return r.ok;
+  } catch (_) { return false; }
 }
 
 export default async function handler(req, res) {
@@ -286,9 +315,108 @@ export default async function handler(req, res) {
     }
   }
 
-  // ─── FETCH ALL ACTIVE CLIENTS WITH A PLAN ──────────────────────────────────
+  // ─── THURSDAY FOLLOW-UP: email anyone who still hasn't submitted mid-week ───
+  // Runs every Thursday at noon ET (vercel.json: "0 17 * * 4").
+  // Logic mirrors the Monday handler — same eligibility, same week calculation —
+  // but email-only (no SMS) and uses a distinct template key + email type.
+  if (action === 'checkin-thursday') {
+    try {
+      const thuClientsRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/clients?is_active=eq.true&is_archived=eq.false&plan_start_date=not.is.null&email=not.is.null&select=id,name,email,token,plan_start_date`,
+        { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+      );
+      const thuClients = thuClientsRes.ok ? await thuClientsRes.json() : [];
+      if (!Array.isArray(thuClients) || thuClients.length === 0) {
+        await recordHeartbeat('checkin-thursday', 'ok', 'no active clients');
+        return res.status(200).json({ message: 'No active clients.', sent: 0 });
+      }
+
+      const thuCheckinsRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/checkins?select=client_id,week_number`,
+        { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+      );
+      const thuCheckins = thuCheckinsRes.ok ? await thuCheckinsRes.json() : [];
+      const thuSubmitted = new Set((thuCheckins || []).map(c => `${c.client_id}-${c.week_number}`));
+
+      const thuToday = new Date();
+      let thuSent = 0;
+      const thuErrors = [];
+
+      for (const client of thuClients) {
+        const startDate  = parseLocalDate(client.plan_start_date);
+        const daysDiff   = Math.floor((thuToday - startDate) / (1000 * 60 * 60 * 24));
+        const currentWeek = Math.min(Math.max(Math.ceil((daysDiff + 1) / 7), 1), 12);
+        if (currentWeek < 1 || currentWeek > 12) continue;
+        if (thuSubmitted.has(`${client.id}-${currentWeek}`)) continue; // already done
+
+        const firstName  = (client.name || '').split(' ')[0] || 'there';
+        const portalLink = `${PORTAL_BASE}?token=${client.token}`;
+        const _tpl = await getApprovedTemplate('reminder_weekly_checkin_thursday');
+        const _vars = { first_name: firstName, week: currentWeek };
+        const subject = (_tpl && _tpl.subject)
+          ? fillTemplate(_tpl.subject, _vars)
+          : `Still time — Week ${currentWeek} check-in, ${firstName}`;
+        const bodyProse = (_tpl && _tpl.body_text)
+          ? tplProse(fillTemplate(_tpl.body_text, _vars))
+          : tplProse([
+              `Hi ${firstName},`,
+              `Quick note — your Week ${currentWeek} check-in is still open. If you get to it today it counts.`,
+              `60–90 seconds. Log your metric, note your win or stall, set your action for next week.`,
+            ].join('\n\n'));
+
+        const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
+          <div style="background:#004369;padding:20px 28px;border-radius:8px 8px 0 0;">
+            <div style="color:#E5DDC8;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">GPS Leadership Solutions</div>
+            <div style="color:#ffffff;font-size:20px;font-weight:700;">Week ${currentWeek} — Still Open</div>
+          </div>
+          <div style="padding:28px;background:#ffffff;border-radius:0 0 8px 8px;border:1px solid #e5e7eb;border-top:none;">
+            ${bodyProse}
+            <div style="margin:28px 0 0;text-align:center;">
+              <a href="${portalLink}" style="background:#004369;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;display:inline-block;letter-spacing:0.3px;">
+                Complete My Week ${currentWeek} Check-In →
+              </a>
+            </div>
+          </div>
+        </div>`;
+
+        try {
+          const r = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              from: `Alex Tremble – GPS Leadership <${RESEND_FROM}>`,
+              to: [client.email],
+              subject,
+              html,
+              text: String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
+              reply_to: 'alex@gpsleadership.org',
+            }),
+          });
+          const result = await r.json();
+          if (!r.ok) {
+            thuErrors.push({ client: client.name, error: result });
+            await logEmail({ clientId: client.id, recipientEmail: client.email, recipientName: client.name, emailType: 'reminder_thursday', subject, status: 'error', errorDetails: result });
+          } else {
+            thuSent++;
+            await logEmail({ clientId: client.id, recipientEmail: client.email, recipientName: client.name, emailType: 'reminder_thursday', subject, status: 'sent', resendId: result.id });
+          }
+        } catch (err) {
+          thuErrors.push({ client: client.name, error: err.message });
+          await logEmail({ clientId: client.id, recipientEmail: client.email, recipientName: client.name, emailType: 'reminder_thursday', subject, status: 'error', errorDetails: err.message });
+        }
+      }
+
+      await recordHeartbeat('checkin-thursday', 'ok', `sent: ${thuSent}, errors: ${thuErrors.length}`);
+      return res.status(200).json({ sent: thuSent, errors: thuErrors });
+    } catch (err) {
+      await recordHeartbeat('checkin-thursday', 'error', err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ─── FETCH ALL ACTIVE CLIENTS WITH A PLAN (Monday SMS + email handler) ─────
   const clientsRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/clients?is_active=eq.true&is_archived=eq.false&plan_start_date=not.is.null&email=not.is.null&select=id,name,email,token,plan_start_date`,
+    `${SUPABASE_URL}/rest/v1/clients?is_active=eq.true&is_archived=eq.false&plan_start_date=not.is.null&email=not.is.null&select=id,name,email,token,plan_start_date,phone`,
     { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
   );
   const clients = await clientsRes.json();
@@ -419,59 +547,61 @@ export default async function handler(req, res) {
       </div>
     `;
 
-    try {
-      const emailRes = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${RESEND_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from:    `Alex Tremble – GPS Leadership <${RESEND_FROM}>`,
-          to:      [client.email],
-          subject,
-          html,
-          text:    String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
-          reply_to: 'alex@gpsleadership.org',
-        }),
-      });
-
-      const result = await emailRes.json();
-      if (!emailRes.ok) {
-        errors.push({ client: client.name, email: client.email, error: result });
-        await logEmail({
-          clientId: client.id,
-          recipientEmail: client.email,
-          recipientName: client.name,
-          emailType: 'reminder',
-          subject,
-          status: 'error',
-          errorDetails: result,
-        });
-      } else {
-        sent++;
-        sentList.push({ name: client.name, email: client.email, week: currentWeek });
-        await logEmail({
-          clientId: client.id,
-          recipientEmail: client.email,
-          recipientName: client.name,
-          emailType: 'reminder',
-          subject,
-          status: 'sent',
-          resendId: result.id,
-        });
+    // ── SMS if phone on file, email otherwise ──────────────────────────────
+    if (client.phone && toE164(client.phone) && TWILIO_SID) {
+      // Short, tap-friendly message with direct portal link (< 160 chars typical)
+      const smsBody = `Hi ${firstName}, your Week ${currentWeek} check-in is ready — takes 90 sec. ${portalLink}`;
+      try {
+        const smsSent = await sendSms(client.phone, smsBody);
+        if (smsSent) {
+          sent++;
+          sentList.push({ name: client.name, phone: client.phone, week: currentWeek, channel: 'sms' });
+          await logEmail({ clientId: client.id, recipientEmail: client.email, recipientName: client.name, emailType: 'reminder_sms', subject: 'SMS', status: 'sent' });
+        } else {
+          // SMS failed silently — fall through to email
+          throw new Error('Twilio returned non-2xx');
+        }
+      } catch (_smsErr) {
+        // SMS failed — send email as fallback so client never misses a reminder
+        try {
+          const emailRes = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ from: `Alex Tremble – GPS Leadership <${RESEND_FROM}>`, to: [client.email], subject, html, text: String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(), reply_to: 'alex@gpsleadership.org' }),
+          });
+          const result = await emailRes.json();
+          if (emailRes.ok) { sent++; sentList.push({ name: client.name, email: client.email, week: currentWeek, channel: 'email_sms_fallback' }); await logEmail({ clientId: client.id, recipientEmail: client.email, recipientName: client.name, emailType: 'reminder', subject, status: 'sent', resendId: result.id }); }
+          else { errors.push({ client: client.name, error: result }); await logEmail({ clientId: client.id, recipientEmail: client.email, recipientName: client.name, emailType: 'reminder', subject, status: 'error', errorDetails: result }); }
+        } catch (fallbackErr) { errors.push({ client: client.name, error: fallbackErr.message }); }
       }
-    } catch (err) {
-      errors.push({ client: client.name, email: client.email, error: err.message });
-      await logEmail({
-        clientId: client.id,
-        recipientEmail: client.email,
-        recipientName: client.name,
-        emailType: 'reminder',
-        subject,
-        status: 'error',
-        errorDetails: err.message,
-      });
+    } else {
+      // No phone — send email
+      try {
+        const emailRes = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from:    `Alex Tremble – GPS Leadership <${RESEND_FROM}>`,
+            to:      [client.email],
+            subject,
+            html,
+            text:    String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
+            reply_to: 'alex@gpsleadership.org',
+          }),
+        });
+        const result = await emailRes.json();
+        if (!emailRes.ok) {
+          errors.push({ client: client.name, email: client.email, error: result });
+          await logEmail({ clientId: client.id, recipientEmail: client.email, recipientName: client.name, emailType: 'reminder', subject, status: 'error', errorDetails: result });
+        } else {
+          sent++;
+          sentList.push({ name: client.name, email: client.email, week: currentWeek, channel: 'email' });
+          await logEmail({ clientId: client.id, recipientEmail: client.email, recipientName: client.name, emailType: 'reminder', subject, status: 'sent', resendId: result.id });
+        }
+      } catch (err) {
+        errors.push({ client: client.name, email: client.email, error: err.message });
+        await logEmail({ clientId: client.id, recipientEmail: client.email, recipientName: client.name, emailType: 'reminder', subject, status: 'error', errorDetails: err.message });
+      }
     }
   }
 

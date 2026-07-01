@@ -87,6 +87,10 @@
       "schedule": "0 12 * * 1-5"
     },
     {
+      "path": "/api/send-reminders?action=checkin-thursday",
+      "schedule": "0 17 * * 4"
+    },
+    {
       "path": "/api/ops-monitor",
       "schedule": "0 */6 * * *"
     },
