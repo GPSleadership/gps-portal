@@ -803,6 +803,10 @@ async function handleSendScheduled(req, res) {
         await sendEmailDraft(draft);
         log.processed.push({ id: draft.id, email_key: draft.email_key, to: draft.to_email });
       } catch (draftErr) {
+        console.error('[send-scheduled] draft failed:', draft.id, draft.email_key, draftErr.message);
+        // Mark cancelled so the cron doesn't retry every 15 min. Coach can use "Send Now" to retry.
+        await sb('/rest/v1/email_drafts?id=eq.' + encodeURIComponent(draft.id),
+          'PATCH', { status: 'cancelled', updated_at: new Date().toISOString() }, { Prefer: 'return=minimal' });
         log.errors.push({ id: draft.id, email_key: draft.email_key, error: draftErr.message });
       }
     }
@@ -4396,7 +4400,8 @@ async function handleSendEmailDraftNow(req, res) {
   if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
   if (!draft_id) return res.status(400).json({ error: 'draft_id required' });
   try {
-    const r = await sb('/rest/v1/email_drafts?id=eq.' + encodeURIComponent(draft_id) + '&status=in.(draft,scheduled)&select=id,email_key,subject,body,to_name,to_email&limit=1');
+    // Also accept 'cancelled' so the coach can retry a failed draft via "Send Now"
+    const r = await sb('/rest/v1/email_drafts?id=eq.' + encodeURIComponent(draft_id) + '&status=in.(draft,scheduled,cancelled)&select=id,email_key,subject,body,to_name,to_email&limit=1');
     const rows = r.ok ? await r.json() : [];
     const draft = Array.isArray(rows) ? rows[0] : null;
     if (!draft) return res.status(404).json({ error: 'Draft not found or already sent/cancelled.' });
