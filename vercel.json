@@ -83,6 +83,10 @@
       "schedule": "30 13 * * *"
     },
     {
+      "path": "/api/send-reminders?action=msg-overdue",
+      "schedule": "0 12 * * 1-5"
+    },
+    {
       "path": "/api/ops-monitor",
       "schedule": "0 */6 * * *"
     },

@@ -4163,32 +4163,48 @@ function showGroup(group){ showSection(GROUP_DEFAULT[group] || 'dashboard'); }
 
 // ── Client Messages (Contact Your Coach — coach side) ───────────────────────
 var _coachInbox = [], _coachConvOpen = null;
-function msgTypeLabel(t){ return ({quick_question:'Quick question',prep_for_session:'Session prep',progress_update:'Update',win:'Win',logistics:'Logistics'})[t] || 'Message'; }
+function msgTypeLabel(t){ return ({quick_question:'Quick question',prep_for_session:'Session prep',progress_update:'Update',win:'Win',logistics:'Logistics',reschedule:'Reschedule session'})[t] || 'Message'; }
 function msgStatusLabel(s){ return ({open:'Open',waiting_on_client:'Waiting on client',closed:'Closed'})[s] || s; }
 function msgFmtTime(iso){ if(!iso) return ''; try { return new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); } catch(_) { return ''; } }
 async function refreshMsgBadge(){
   try { var r = await coachData({ action:'coach-msg-inbox' }); _coachInbox = r.conversations || []; updateMsgBadge(); renderTodayMessageFlags(); } catch(_){ /* badge is best-effort */ }
 }
 // Today view: surface conversations awaiting a reply (load-bearing for the
-// one-business-day promise). Overdue first. Empty -> the container stays blank.
+// one-business-day promise). Overdue first, red-card treatment. Empty -> stays blank.
 function renderTodayMessageFlags(){
   var host = document.getElementById('todayMsgFlags'); if(!host) return;
   var pending = _coachInbox.filter(function(c){ return c.needs_reply; })
     .sort(function(a,b){ return (b.overdue_days||0) - (a.overdue_days||0); });
   if(!pending.length){ host.innerHTML = ''; return; }
+  var hasOverdue = pending.some(function(c){ return c.overdue; });
   var rows = pending.map(function(c){
-    var badge = c.overdue
-      ? '<span style="background:#C0392B;color:#fff;border-radius:5px;padding:1px 8px;font-size:11px;font-weight:700;">Overdue '+c.overdue_days+'d</span>'
-      : '<span style="background:#E9A23B;color:#3a2a00;border-radius:5px;padding:1px 8px;font-size:11px;font-weight:700;">Needs reply</span>';
-    return '<div class="dflag '+(c.overdue?'dflag-amber':'dflag-gray')+'">'
+    if(c.overdue){
+      var days = c.overdue_days || 1;
+      return '<div class="dflag" style="background:#FEF2F2;border:2px solid #C0392B;border-left:5px solid #C0392B;">'
+        + '<div style="font-size:22px;flex-shrink:0;margin-top:-2px;">⚠️</div>'
+        + '<div style="flex:1;">'
+        + '<div style="font-size:10px;font-weight:800;color:#C0392B;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">Reply overdue — '+days+' business day'+(days!==1?'s':'')+' past due</div>'
+        + '<div style="font-size:13px;font-weight:700;color:#1a1a1a;">'+esc(c.client_name)+' is waiting on your reply</div>'
+        + '<div style="font-size:12px;color:#666;margin-top:3px;">'+(c.last_preview?esc(c.last_preview):'New message')+'</div>'
+        + '<div style="margin-top:10px;"><button class="dbtn dbtn-sm" style="background:#C0392B;color:#fff;border:none;" onclick="showSection(\'messages\');openCoachConversation(\''+c.id+'\')">Reply now →</button></div>'
+        + '</div>'
+        + '<div style="flex-shrink:0;align-self:flex-start;"><span style="background:#C0392B;color:#fff;border-radius:5px;padding:2px 10px;font-size:11px;font-weight:800;">OVERDUE '+days+'d</span></div>'
+        + '</div>';
+    }
+    return '<div class="dflag dflag-gray">'
       + '<div style="font-size:22px;flex-shrink:0;margin-top:-2px;">💬</div>'
-      + '<div style="flex:1;"><div style="font-size:13px;font-weight:700;color:'+(c.overdue?'var(--d-amber)':'var(--d-dark)')+';">'+esc(c.client_name)+' is waiting on your reply</div>'
+      + '<div style="flex:1;"><div style="font-size:13px;font-weight:700;color:var(--d-dark);">'+esc(c.client_name)+' is waiting on your reply</div>'
       + '<div style="font-size:12px;color:var(--d-mid);margin-top:3px;">'+(c.last_preview?esc(c.last_preview):'New message')+'</div>'
       + '<div style="margin-top:10px;"><button class="dbtn dbtn-outline dbtn-sm" onclick="showSection(\'messages\');openCoachConversation(\''+c.id+'\')">Open &amp; reply →</button></div></div>'
-      + '<div style="flex-shrink:0;align-self:flex-start;">'+badge+'</div></div>';
+      + '<div style="flex-shrink:0;align-self:flex-start;"><span style="background:#E9A23B;color:#3a2a00;border-radius:5px;padding:1px 8px;font-size:11px;font-weight:700;">Needs reply</span></div>'
+      + '</div>';
   }).join('');
-  host.innerHTML = '<div class="card" style="margin-bottom:20px;">'
-    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;"><div class="card-title">Client Messages</div>'
+  var cardBorder = hasOverdue ? 'border:2px solid #C0392B;' : '';
+  var titleHtml = hasOverdue
+    ? '<span style="color:#C0392B;font-weight:800;">⚠️ Client Messages</span>'
+    : 'Client Messages';
+  host.innerHTML = '<div class="card" style="margin-bottom:20px;'+cardBorder+'">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;"><div class="card-title">'+titleHtml+'</div>'
     + '<span style="font-size:12px;color:var(--d-mid);">'+pending.length+' awaiting reply</span></div>'+rows+'</div>';
 }
 async function loadCoachInbox(){

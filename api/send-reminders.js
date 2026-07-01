@@ -93,6 +93,18 @@ function verifyCoachSession(tok) {
   return p;
 }
 
+// ── Count weekday-only business days since a UTC timestamp ─────────────────
+function businessDaysSince(fromIso) {
+  if (!fromIso) return 0;
+  const from = new Date(fromIso);
+  if (isNaN(from)) return 0;
+  const cur = new Date(from); cur.setHours(0, 0, 0, 0);
+  const end = new Date();     end.setHours(0, 0, 0, 0);
+  let count = 0;
+  while (cur < end) { cur.setDate(cur.getDate() + 1); const d = cur.getDay(); if (d !== 0 && d !== 6) count++; }
+  return count;
+}
+
 // ── Date helper: parse "YYYY-MM-DD" as LOCAL midnight, not UTC ──────────────
 // new Date("2026-03-16") parses as UTC → shows as Mar 15 in US timezones.
 // This helper avoids that off-by-one error.
@@ -145,6 +157,133 @@ export default async function handler(req, res) {
 
   if (!isVercelCron && !hasSecret && !isManualTrigger) {
     return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const action = (req.query && req.query.action) || '';
+
+  // ─── ACTION: msg-overdue — daily M–F escalation for unreplied client messages
+  // Fires at 0 12 * * 1-5 (noon UTC = 8am ET). Finds every open conversation
+  // where the last message is from a client and >= 1 business day has passed
+  // without a coach reply, then sends a red escalation email to alex.
+  if (action === 'msg-overdue') {
+    try {
+      const COACH_EMAIL = 'alex@gpsleadership.org';
+
+      // 1. Fetch all non-closed conversations
+      const convRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/coach_conversations?status=neq.closed&select=id,client_id,last_message_at`,
+        { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+      );
+      const convs = convRes.ok ? await convRes.json() : [];
+
+      if (!Array.isArray(convs) || convs.length === 0) {
+        await recordHeartbeat('msg-overdue', 'ok', 'no open conversations');
+        return res.status(200).json({ overdue: 0 });
+      }
+
+      const convIds = convs.map(c => c.id);
+
+      // 2. Bulk-fetch messages for those conversations (sorted desc — first row per conv = last message)
+      const msgsRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/coach_messages?conversation_id=in.(${convIds.join(',')})&select=conversation_id,sender_role,message_text,created_at&order=created_at.desc&limit=1000`,
+        { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+      );
+      const msgs = msgsRes.ok ? await msgsRes.json() : [];
+
+      // Keep only the last message per conversation (msgs already desc)
+      const lastMsg = {};
+      for (const m of (Array.isArray(msgs) ? msgs : [])) {
+        if (!lastMsg[m.conversation_id]) lastMsg[m.conversation_id] = m;
+      }
+
+      // 3. Fetch client names
+      const clientIds = [...new Set(convs.map(c => c.client_id).filter(Boolean))];
+      const clientMap = {};
+      if (clientIds.length) {
+        const clRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/clients?id=in.(${clientIds.join(',')})&select=id,name`,
+          { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+        );
+        const clRows = clRes.ok ? await clRes.json() : [];
+        for (const cl of (Array.isArray(clRows) ? clRows : [])) clientMap[cl.id] = cl.name;
+      }
+
+      // 4. Filter: last message from client AND >= 1 business day without reply
+      const overdue = convs
+        .filter(c => {
+          const last = lastMsg[c.id];
+          return last && last.sender_role === 'client' && businessDaysSince(last.created_at) >= 1;
+        })
+        .map(c => {
+          const last = lastMsg[c.id];
+          const days = businessDaysSince(last.created_at);
+          const preview = (last.message_text || '').replace(/\s+/g, ' ').trim().slice(0, 130);
+          return { id: c.id, clientName: clientMap[c.client_id] || 'Unknown client', days, preview };
+        })
+        .sort((a, b) => b.days - a.days);
+
+      if (overdue.length === 0) {
+        await recordHeartbeat('msg-overdue', 'ok', 'no overdue messages');
+        return res.status(200).json({ overdue: 0 });
+      }
+
+      // 5. Send consolidated escalation email to coach
+      const subject = overdue.length === 1
+        ? `⚠️ OVERDUE (${overdue[0].days}d): ${overdue[0].clientName} is still waiting on your reply`
+        : `⚠️ OVERDUE: ${overdue.length} clients waiting on your reply`;
+
+      const tableRows = overdue.map(o =>
+        `<tr>`
+        + `<td style="padding:10px 14px;border-bottom:1px solid #f0d0d0;font-weight:700;color:#1a1a1a;font-size:14px;">${o.clientName}</td>`
+        + `<td style="padding:10px 14px;border-bottom:1px solid #f0d0d0;text-align:center;"><span style="background:#C0392B;color:#fff;border-radius:5px;padding:2px 10px;font-size:12px;font-weight:700;">${o.days} day${o.days !== 1 ? 's' : ''}</span></td>`
+        + `<td style="padding:10px 14px;border-bottom:1px solid #f0d0d0;font-size:13px;color:#555;">${o.preview ? o.preview.replace(/</g, '&lt;').replace(/>/g, '&gt;') + (o.preview.length >= 130 ? '…' : '') : '<em>No preview</em>'}</td>`
+        + `</tr>`
+      ).join('');
+
+      const html = `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#1a1a1a;">
+        <div style="background:#C0392B;padding:18px 24px;border-radius:8px 8px 0 0;">
+          <div style="color:#ffdddd;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">GPS Leadership — Coach Alert</div>
+          <div style="color:#fff;font-size:20px;font-weight:700;">⚠️ Overdue Client Repl${overdue.length > 1 ? 'ies' : 'y'}</div>
+        </div>
+        <div style="background:#fff;padding:24px;border-radius:0 0 8px 8px;border:2px solid #C0392B;border-top:none;">
+          <p style="margin:0 0 16px;font-size:15px;">The following client${overdue.length > 1 ? 's are' : ' is'} waiting on a reply for <strong>more than 1 business day</strong>. They sent you a message and haven't heard back.</p>
+          <table style="width:100%;border-collapse:collapse;margin-bottom:24px;border-radius:6px;overflow:hidden;border:1px solid #f0d0d0;">
+            <thead><tr style="background:#C0392B;">
+              <th style="padding:10px 14px;text-align:left;color:#fff;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;">Client</th>
+              <th style="padding:10px 14px;text-align:center;color:#fff;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;">Days Overdue</th>
+              <th style="padding:10px 14px;text-align:left;color:#fff;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;">Last Message</th>
+            </tr></thead>
+            <tbody style="background:#FEF2F2;">${tableRows}</tbody>
+          </table>
+          <div style="text-align:center;">
+            <a href="https://portal.gpsleadership.org/coach" style="background:#C0392B;color:#fff;text-decoration:none;padding:13px 28px;border-radius:8px;font-size:15px;font-weight:700;display:inline-block;">Open Coach Dashboard &amp; Reply →</a>
+          </div>
+          <p style="margin:24px 0 0;font-size:12px;color:#999;border-top:1px solid #eee;padding-top:16px;">This alert fires every weekday when a client message goes unanswered for more than 1 business day.</p>
+        </div>
+      </div>`;
+
+      if (RESEND_API_KEY) {
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from:  `GPS Leadership Portal <${RESEND_FROM}>`,
+            to:    [COACH_EMAIL],
+            subject,
+            html,
+            text: overdue.map(o => `${o.clientName} — ${o.days} day(s) overdue: ${o.preview}`).join('\n')
+                  + '\n\nReply at: https://portal.gpsleadership.org/coach',
+          }),
+        });
+      }
+
+      await recordHeartbeat('msg-overdue', 'ok', `${overdue.length} overdue: ${overdue.map(o => o.clientName).join(', ')}`);
+      return res.status(200).json({ overdue: overdue.length, clients: overdue.map(o => o.clientName) });
+
+    } catch (err) {
+      await recordHeartbeat('msg-overdue', 'error', err.message);
+      return res.status(500).json({ error: err.message });
+    }
   }
 
   // ─── FETCH ALL ACTIVE CLIENTS WITH A PLAN ──────────────────────────────────
