@@ -465,8 +465,13 @@ export default async function handler(req, res) {
     }
 
     // ── team: the full, scoped Decision Room payload ──────────────────────────
+    // When called without a team_id (e.g. on initial page load), defaults to the
+    // first active team and includes a 'teams' list in the response so the caller
+    // can populate the team selector without a separate list-teams round-trip.
     if (body.action === 'team') {
-      const teamId = body.team_id || teamRows[0] && teamRows[0].id;
+      const teamId = body.team_id || (teamRows[0] && teamRows[0].id);
+      const teamsForPicker = teamRows.map(t => ({ id: t.id, name: t.name, client_org_name: t.client_org_name, team_type: t.team_type }));
+      if (!teamId) return res.status(200).json({ ok: true, sponsor: { name: sponsor.name }, teams: teamsForPicker });
       const link = links.find(l => l.team_id === teamId);
       const team = teamRows.find(t => t.id === teamId);
       if (!link || !team) return res.status(403).json({ error: 'Not authorized for this team' });
@@ -512,6 +517,7 @@ export default async function handler(req, res) {
       if (owed.length) {
         return res.status(200).json({
           ok: true, gated: true,
+          teams: teamsForPicker,
           team: { id: team.id, name: team.name, client_org_name: team.client_org_name, org_logo_url: orgLogo },
           owed: owed.map(o => ({ role: o.member, checkpoint: o.checkpoint,
             // deep-link to the EXISTING survey with the supervisor's existing token
@@ -570,6 +576,7 @@ export default async function handler(req, res) {
 
       return res.status(200).json({
         ok: true,
+        teams: teamsForPicker,
         sponsor: { name: sponsor.name },
         coach_preview: isCoachPreview || undefined,
         confidentiality: isCoachPreview ? 'standard' : link.confidentiality_mode,

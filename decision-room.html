@@ -201,14 +201,28 @@ function api(action, extra){
 
 function init(){
   if(!TOKEN){ document.getElementById('view').innerHTML='<div class="card"><div class="empty">This link is missing its access token. Please use the link from your invitation email.</div></div>'; return; }
-  api('list-teams').then(function(res){
+  // Show skeleton immediately — single API call returns both the team list and
+  // the first team payload, cutting two sequential round-trips down to one.
+  document.getElementById('view').innerHTML='<div class="skeleton-wrap"><div class="skeleton-card"><div class="skeleton-line sk-title"></div><div class="skeleton-line sk-p sk-short"></div><div class="skeleton-line sk-p"></div></div><div class="skeleton-card"><div class="skeleton-line sk-title" style="width:30%"></div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:8px;"><div class="skeleton-line" style="height:70px;border-radius:8px;"></div><div class="skeleton-line" style="height:70px;border-radius:8px;"></div><div class="skeleton-line" style="height:70px;border-radius:8px;"></div></div></div></div>';
+  api('team').then(function(res){
     document.getElementById('headerWho').textContent = res.sponsor ? res.sponsor.name : '';
     var teams = res.teams||[];
     if(!teams.length){ document.getElementById('view').innerHTML='<div class="card"><div class="empty">No teams are shared with you yet.</div></div>'; return; }
     var sel=document.getElementById('teamSelect');
     sel.innerHTML = teams.map(function(t){ return '<option value="'+t.id+'">'+esc(t.client_org_name||t.name)+' -- '+esc(t.name)+'</option>'; }).join('');
     document.getElementById('teamBar').style.display = teams.length>1 ? 'flex' : 'none';
-    loadTeam(teams[0].id);
+    // First team data is in the response — render directly without a second round-trip.
+    CURRENT_TEAM = (res.team && res.team.id) || teams[0].id;
+    setHeaderOrgLogo(res.team);
+    if(res.gated){ renderGate(res); return; }
+    DATA = res;
+    window.REC_COMMITMENTS = res.rec_commitments || {};
+    window._hasCommitted = Object.values(window.REC_COMMITMENTS).some(function(v){ return v==='commit'; });
+    var t=res.team;
+    document.getElementById('teamMeta').textContent = (t.team_type||'')+' team · Sponsor: '+(t.primary_sponsor||'');
+    renderTeam();
+    updateRecSummaryBar();
+    window.scrollTo(0,0);
   }).catch(showError);
 }
 function showError(err){ document.getElementById('view').innerHTML='<div class="card"><div class="empty">'+esc(err.message||'Could not load. Please try your link again.')+'</div></div>'; }
