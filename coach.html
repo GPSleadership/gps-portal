@@ -8177,6 +8177,7 @@ function renderSurveyTab() {
 
 // ── Tab: Questions ────────────────────────────────────────────────────────────
 const DIAG_GLOBAL_QUESTIONS = [
+  // ── SECTION A: TRUST ─────────────────────────────────────────────────────────
   {code:'A1',sec:'A',label:'Trust',text:'[Name] follows through on commitments and does what they say they will do.'},
   {code:'A2',sec:'A',label:'Trust',text:'[Name] communicates decisions and direction clearly — people know what to expect.'},
   {code:'A3',sec:'A',label:'Trust',text:'[Name] addresses conflict and difficult conversations directly rather than avoiding them.'},
@@ -8184,21 +8185,44 @@ const DIAG_GLOBAL_QUESTIONS = [
   {code:'A5',sec:'A',label:'Trust',text:'[Name] builds trust and collaboration across teams and functions, not just within their own.'},
   {code:'A6',sec:'A',label:'Trust',text:'[Name] holds people accountable without creating fear or shutting down communication.'},
   {code:'A7',sec:'A',label:'Trust',text:'[Name] sets clear expectations so people can make decisions without constantly checking in.'},
+  {code:'A8',sec:'A',label:'Trust',text:'What is one thing [Name] could START doing to build even greater trust with their colleagues and team members?',readonly:true},
+  {code:'A9',sec:'A',label:'Trust',text:'What is one thing [Name] could STOP doing to improve their communication or leadership effectiveness?',readonly:true},
+  {code:'A10',sec:'A',label:'Trust',text:'What is one thing [Name] already does that strongly builds trust and should absolutely CONTINUE?',readonly:true},
+  // ── SECTION B: PROACTIVITY ───────────────────────────────────────────────────
   {code:'B1',sec:'B',label:'Proactivity',text:'[Name] anticipates problems and addresses them before they become crises.'},
   {code:'B2',sec:'B',label:'Proactivity',text:'[Name] proactively influences positive change in the organization rather than waiting for direction.'},
   {code:'B3',sec:'B',label:'Proactivity',text:'[Name] inspires others to take initiative and raise the standard — not just follow instructions.'},
   {code:'B4',sec:'B',label:'Proactivity',text:'[Name] takes the initiative to identify and address emerging issues before they are brought to them.'},
   {code:'B5',sec:'B',label:'Proactivity',text:'[Name] encourages their team to bring forward solutions, not just problems.'},
   {code:'B6',sec:'B',label:'Proactivity',text:'[Name] actively invests in their own leadership growth and development.'},
+  {code:'B6b',sec:'B',label:'Proactivity',text:'What, if anything, would make it easier for you and others to take more ownership, so [Name] does not need to step in as often?',readonly:true},
+  {code:'B7',sec:'B',label:'Proactivity',text:'What is one thing you believe [Name] should START doing to elevate their leadership impact?',readonly:true},
+  {code:'B8',sec:'B',label:'Proactivity',text:"What is one thing [Name] could STOP doing that is hindering the team's initiative or overall effectiveness?",readonly:true},
+  {code:'B9',sec:'B',label:'Proactivity',text:'What is one thing [Name] does that consistently increases initiative or ownership on the team and should absolutely CONTINUE?',readonly:true},
+  {code:'B10',sec:'B',label:'Proactivity',text:"(Optional) Any additional comments on [Name]'s ability to anticipate, adapt, and drive change?",readonly:true},
+  // ── SECTION C: PRODUCTIVITY ──────────────────────────────────────────────────
   {code:'C1',sec:'C',label:'Productivity',text:'[Name] creates the conditions for high team productivity — clear priorities, right resources, minimal blockers.'},
   {code:'C2',sec:'C',label:'Productivity',text:'[Name] balances short-term execution demands with longer-term strategic investment.'},
   {code:'C3',sec:'C',label:'Productivity',text:'[Name] leads effectively under pressure without creating chaos or reactive energy in the team.'},
   {code:'C4',sec:'C',label:'Productivity',text:'[Name] prioritizes and focuses the team on the highest-impact work consistently.'},
   {code:'C5',sec:'C',label:'Productivity',text:"[Name]'s team can operate effectively and make good decisions without needing their direct involvement."},
   {code:'C6',sec:'C',label:'Productivity',text:'[Name] runs meetings efficiently — they start on time, stay focused, and end with clear next steps.'},
+  {code:'C7',sec:'C',label:'Productivity',text:"What is one thing [Name] could START doing to improve the team's productivity or execution speed?",readonly:true},
+  {code:'C8',sec:'C',label:'Productivity',text:'What is one thing [Name] should STOP doing because it slows execution or creates unnecessary work?',readonly:true},
+  {code:'C9',sec:'C',label:'Productivity',text:'What is one thing [Name] does that has a significant positive impact on team productivity and should absolutely CONTINUE?',readonly:true},
+  // ── SECTION D: OVERALL IMPACT ────────────────────────────────────────────────
   {code:'D1',sec:'D',label:'Overall Impact',text:"On a scale of 1–10, how would you rate [Name]'s overall impact on the organization?"},
+  {code:'D2',sec:'D',label:'Overall Impact',text:'What are three words or phrases that come to mind when you think about [Name]?',readonly:true},
+  // ── SECTION E: FUTURE SELF (Leader Self-Assessment Only) ─────────────────────
+  {code:'E1',sec:'E',label:'Future Self (Leader Only)',text:'Where do you want your role and this business to be in 3 years? If things go really well, what does "winning" look like — for the business and for your role?',readonly:true,selfOnly:true},
+  {code:'E2',sec:'E',label:'Future Self (Leader Only)',text:'Who do you need to become to lead that future? List your top 3 skills or behaviors you need to upgrade in yourself.',readonly:true,selfOnly:true},
+  {code:'E3',sec:'E',label:'Future Self (Leader Only)',text:'If you had to step away from your role tomorrow, who could step in? If no one is ready yet, say so.',readonly:true,selfOnly:true},
+  {code:'E4',sec:'E',label:'Future Self (Leader Only)',text:'Who is most ready to succeed you, and what would they need in the next 12–18 months to be truly ready?',readonly:true,selfOnly:true},
+  {code:'E5',sec:'E',label:'Future Self (Leader Only)',text:'What are you actually doing to develop those potential successors? Be specific — last 12 months and next 90 days.',readonly:true,selfOnly:true},
+  // ── SECTION F: SUCCESSION (Rater Only) ──────────────────────────────────────
   {code:'F1',sec:'F',label:'Succession',text:'If [Name] had to step away for the next 6–12 months, our team/function would continue to operate effectively.'},
   {code:'F2',sec:'F',label:'Succession',text:'[Name] actively develops people on the team so they can take on bigger responsibilities over the next 1–3 years.'},
+  {code:'F3',sec:'F',label:'Succession',text:'What is one thing [Name] could do over the next 12–18 months to better prepare the team to succeed if they were not in this role?',readonly:true},
 ];
 
 function renderQuestionsTab() {
@@ -8206,6 +8230,7 @@ function renderQuestionsTab() {
   const g1 = DIAG_SEL.custom_g1_question;
   let lastSec = '';
   let html = '';
+  if (!window.DIAG_OPEN_EDITING) window.DIAG_OPEN_EDITING = new Set();
   DIAG_GLOBAL_QUESTIONS.forEach(q => {
     const ov = DIAG_OVERRIDES[q.code];
     const displayText = ov ? ov.text : q.text.replace(/\[Name\]/g, firstName);
@@ -8213,18 +8238,56 @@ function renderQuestionsTab() {
       html += `<div style="font-size:11px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.05em;margin:${lastSec?'20px':0} 0 10px;padding-bottom:6px;border-bottom:1px solid var(--d-border);">Section ${q.sec} — ${q.label}</div>`;
       lastSec = q.sec;
     }
-    html += `
-    <div class="q-edit" id="qedit-${q.code}">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-        <div class="q-edit-code">${q.code}</div>
-        ${ov ? '<span class="override-badge">Overridden</span>' : ''}
-      </div>
-      <textarea id="qtext-${q.code}" style="min-height:58px;font-size:13px;">${displayText}</textarea>
-      <div style="display:flex;gap:8px;margin-top:8px;">
-        <button class="dbtn dbtn-outline dbtn-sm" onclick="saveOverride('${q.code}')">Save Override</button>
-        ${ov ? `<button class="dbtn dbtn-outline dbtn-sm" style="color:var(--d-red2);" onclick="removeOverride('${q.code}')">Restore Default</button>` : ''}
-      </div>
-    </div>`;
+    if (q.readonly) {
+      // Open-ended / self-only questions: locked by default, unlockable to edit/override
+      const typeBadge = q.selfOnly
+        ? '<span style="font-size:10px;font-weight:700;color:#6D28D9;background:#F3F0FF;border:1px solid #A78BFA;padding:2px 8px;border-radius:8px;text-transform:uppercase;letter-spacing:.03em;">Leader Only</span>'
+        : '<span style="font-size:10px;font-weight:700;color:#01949A;background:#F0FDFA;border:1px solid rgba(1,148,154,.35);padding:2px 8px;border-radius:8px;text-transform:uppercase;letter-spacing:.03em;">Open-Ended</span>';
+      const isEditing = window.DIAG_OPEN_EDITING.has(q.code);
+      if (isEditing || ov) {
+        // Unlocked / has override — show editable textarea
+        html += `
+        <div class="q-edit" id="qedit-${q.code}">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+            <div class="q-edit-code">${q.code}</div>
+            ${typeBadge}
+            ${ov ? '<span class="override-badge">Overridden</span>' : ''}
+          </div>
+          <textarea id="qtext-${q.code}" style="min-height:58px;font-size:13px;">${displayText}</textarea>
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+            <button class="dbtn dbtn-outline dbtn-sm" onclick="saveOverride('${q.code}')">Save Override</button>
+            ${ov ? `<button class="dbtn dbtn-outline dbtn-sm" style="color:var(--d-red2);" onclick="removeOverride('${q.code}')">Restore Default</button>` : ''}
+            ${!ov ? `<button class="dbtn dbtn-outline dbtn-sm" style="color:var(--d-mid);" onclick="lockOpenQuestion('${q.code}')">Lock</button>` : ''}
+          </div>
+        </div>`;
+      } else {
+        // Locked — display-only with an Edit button to unlock
+        html += `
+        <div class="q-edit" id="qedit-${q.code}" style="background:#F9FAFB;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+            <div class="q-edit-code">${q.code}</div>
+            ${typeBadge}
+          </div>
+          <div style="font-size:13px;color:var(--d-dark);padding:10px 12px;background:#fff;border:1px solid var(--d-border);border-radius:6px;line-height:1.5;">${displayText}</div>
+          <div style="margin-top:8px;">
+            <button class="dbtn dbtn-outline dbtn-sm" onclick="unlockOpenQuestion('${q.code}')">Edit</button>
+          </div>
+        </div>`;
+      }
+    } else {
+      html += `
+      <div class="q-edit" id="qedit-${q.code}">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <div class="q-edit-code">${q.code}</div>
+          ${ov ? '<span class="override-badge">Overridden</span>' : ''}
+        </div>
+        <textarea id="qtext-${q.code}" style="min-height:58px;font-size:13px;">${displayText}</textarea>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button class="dbtn dbtn-outline dbtn-sm" onclick="saveOverride('${q.code}')">Save Override</button>
+          ${ov ? `<button class="dbtn dbtn-outline dbtn-sm" style="color:var(--d-red2);" onclick="removeOverride('${q.code}')">Restore Default</button>` : ''}
+        </div>
+      </div>`;
+    }
   });
   html += `<div style="font-size:11px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.05em;margin:20px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--d-border);">Section G — Custom Questions</div>`;
   // G1 — AI Vision Alignment question (kept as its own dedicated slot).
@@ -10564,6 +10627,16 @@ async function deleteDiagById(id, name) {
   catch (e) { alert('Could not delete: ' + e.message); return; }
   ALL_DIAGS = ALL_DIAGS.filter(d => d.id !== id);
   renderDiagTable();
+}
+
+function unlockOpenQuestion(code) {
+  if (!window.DIAG_OPEN_EDITING) window.DIAG_OPEN_EDITING = new Set();
+  window.DIAG_OPEN_EDITING.add(code);
+  renderQuestionsTab();
+}
+function lockOpenQuestion(code) {
+  if (window.DIAG_OPEN_EDITING) window.DIAG_OPEN_EDITING.delete(code);
+  renderQuestionsTab();
 }
 
 async function saveOverride(code) {
