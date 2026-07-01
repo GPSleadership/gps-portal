@@ -2050,6 +2050,7 @@ async function loadDashboard() {
   diagBoot(); // loads diagnostic data and renders merged dashboard
   loadClientBuckets(); // member/sponsor sets for the client filters
   loadOrgNames(); // org autocomplete source (clients + organizations + workshops)
+  refreshMsgBadge(); // populate Today "Client Messages" flags on every page load
   restoreLastView(); // return to where the coach was before a refresh
 }
 

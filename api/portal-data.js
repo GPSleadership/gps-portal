@@ -14,6 +14,9 @@
 
 const SUPABASE_URL    = process.env.SUPABASE_URL || 'https://pbnkefuqpoztcxfagiod.supabase.co';
 const SUPABASE_SECRET = process.env.SUPABASE_SECRET_KEY;
+const RESEND_API_KEY  = process.env.RESEND_API_KEY || '';
+const RESEND_FROM     = process.env.RESEND_FROM_EMAIL || 'noreply@portal.gpsleadership.org';
+const COACH_EMAIL     = 'alex@gpsleadership.org';
 
 function sb(path, method = 'GET', body = null, extra = {}) {
   return fetch(SUPABASE_URL + path, {
@@ -256,6 +259,28 @@ export default async function handler(req, res) {
         }, { Prefer: 'return=representation' });
         if (!mr.ok) { const d = await mr.json().catch(() => ({})); return res.status(500).json({ error: 'Could not send message', detail: d }); }
         const saved = await mr.json();
+
+        // ── Notify Alex by email — non-blocking, never breaks the client send ──
+        if (RESEND_API_KEY) {
+          const clientName = client.name || client.email || 'A client';
+          const preview    = text.length > 200 ? text.slice(0, 200) + '…' : text;
+          const typeLabels = { quick_question: 'Quick question', prep_for_session: 'Session prep', progress_update: 'Update', win: 'Win', logistics: 'Logistics', reschedule: 'Reschedule session' };
+          const typeLabel  = typeLabels[msgType] || msgType;
+          fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              from:    `GPS Leadership Portal <${RESEND_FROM}>`,
+              to:      [COACH_EMAIL],
+              subject: `New message from ${clientName} [${typeLabel}]`,
+              html:    `<p><strong>${clientName}</strong> sent you a message in the Executive Impact System:</p>`
+                     + `<blockquote style="border-left:3px solid #004369;margin:12px 0;padding:8px 16px;color:#333;font-size:15px;">${preview.replace(/\n/g,'<br>')}</blockquote>`
+                     + `<p><a href="https://portal.gpsleadership.org/coach" style="background:#004369;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block;">Open &amp; reply →</a></p>`,
+              text:    `${clientName} sent a message [${typeLabel}]:\n\n${text}\n\nReply at: https://portal.gpsleadership.org/coach`,
+            }),
+          }).catch(() => {}); // fire-and-forget
+        }
+
         return res.status(200).json({ ok: true, message: Array.isArray(saved) ? saved[0] : saved });
       }
 
