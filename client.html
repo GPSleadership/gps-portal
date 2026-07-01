@@ -5189,7 +5189,15 @@ function renderPortal(client, checkins) {
     ${renderDesktopActionCard(client, mobileStatus, currentWeek, alreadyCheckedInThisWeek, isEngagementComplete, _dayN, _closeStr)}
     ${renderDiagnosticConversion(client, mobileStatus)}
     ${!isEngagementComplete && !alreadyCheckedInThisWeek ? renderCheckinForm(client, checkins, currentWeek) : ''}
-    ${mobileStatus === 'coaching_client' ? `
+    ${client.first_big_win_flag ? `
+      <div id="bigWinNoticeCard" style="margin-top:16px;background:#fffbea;border:2px solid #e6b800;border-left:5px solid #e6b800;border-radius:10px;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div>
+          <div style="font-size:14px;font-weight:800;color:#7a4f00;">★ Your coach flagged a big win</div>
+          <div style="font-size:13px;color:#6b4c00;margin-top:3px;">You hit a milestone worth capturing. Share what happened while it's fresh.</div>
+        </div>
+        <button onclick="showTestimonialModal('coaching_midpoint')" style="background:#e6b800;color:#3a2a00;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">Share what happened →</button>
+      </div>` : ''}
+    ${mobileStatus === 'coaching_client' && !client.first_big_win_flag ? `
       <div style="margin-top:16px;padding:12px 16px;background:#f0f6f7;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
         <div style="font-size:13px;color:#333;">Had a real win this week? Capture it while it's fresh.</div>
         <button onclick="clientFlagBigWin()" style="background:var(--teal,#01949A);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">★ I had a big win</button>
@@ -6111,6 +6119,8 @@ async function submitTestimonial(source) {
 }
 
 function showTestimonialThanks() {
+  // Hide the persistent Big Win card — they've submitted, no need to keep prompting
+  var bwc = document.getElementById('bigWinNoticeCard'); if (bwc) bwc.style.display = 'none';
   const body = document.getElementById('testimonialBody'); if (!body) return;
   body.innerHTML = `<div style="text-align:center;padding:18px 4px;">
     <div style="font-size:38px;">🙏</div>
