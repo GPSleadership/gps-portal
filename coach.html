@@ -6976,6 +6976,7 @@ function renderDiagHome() {
   loadEmailFailureFlags();
   loadTestimonialApprovalFlags();
   loadAutoEmailFlags();
+  renderTodayMessageFlags(); // re-draw message flags after Today tab is rebuilt
 }
 
 // ── Testimonial flywheel: pending approvals as an Action Required card on Today ──
