@@ -53,7 +53,7 @@ function pickWritable(updates) {
 
 async function findClientByToken(token) {
   if (!token) return null;
-  const r = await sb(`/rest/v1/clients?token=eq.${encodeURIComponent(token)}&is_archived=eq.false&limit=1&select=id,email,name,in_coaching_program,plan_submitted_at,coaching_sessions_enabled,is_active_coaching,engagement_type`);
+  const r = await sb(`/rest/v1/clients?token=eq.${encodeURIComponent(token)}&is_archived=eq.false&limit=1&select=id,email,name,in_coaching_program,plan_submitted_at,coaching_sessions_enabled,is_active_coaching`);
   if (!r.ok) return null;
   const rows = await r.json();
   return Array.isArray(rows) && rows[0] ? rows[0] : null;
@@ -63,10 +63,10 @@ async function findClientByToken(token) {
 // the existing booleans (no separate status column that can drift). Mirrors the
 // gate in get-client.js. Messaging is available only to coaching clients.
 function isCoachingClient(c) {
-  return !!(c && (c.in_coaching_program || c.coaching_sessions_enabled || c.is_active_coaching || c.engagement_type === 'diagnostic_plus_coaching'));
+  return !!(c && (c.in_coaching_program || c.coaching_sessions_enabled || c.is_active_coaching));
 }
 
-const COACH_MSG_TYPES = new Set(['quick_question', 'prep_for_session', 'progress_update', 'win']);
+const COACH_MSG_TYPES = new Set(['quick_question', 'prep_for_session', 'progress_update', 'win', 'logistics', 'reschedule']);
 
 // Confirm a diagnostic belongs to this client before any rater/diagnostic write.
 async function diagnosticOwnedBy(diagnosticId, clientId) {

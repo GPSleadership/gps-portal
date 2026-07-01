@@ -393,10 +393,10 @@ export default async function handler(req, res) {
       if (!targetClient || !text) return res.status(400).json({ error: 'client_id and message_text required' });
       if (text.length > 5000) return res.status(400).json({ error: 'Message is too long (5000 character max).' });
       // Only coaching clients have the in-portal messaging channel — guard server-side.
-      const cgr = await sb(`/rest/v1/clients?id=eq.${encodeURIComponent(targetClient)}&select=in_coaching_program,coaching_sessions_enabled,is_active_coaching,engagement_type&limit=1`);
+      const cgr = await sb(`/rest/v1/clients?id=eq.${encodeURIComponent(targetClient)}&select=in_coaching_program,coaching_sessions_enabled,is_active_coaching&limit=1`);
       const cgRow = (cgr.ok ? await cgr.json() : [])[0];
       if (!cgRow) return res.status(404).json({ error: 'Client not found' });
-      if (!(cgRow.in_coaching_program || cgRow.coaching_sessions_enabled || cgRow.is_active_coaching || cgRow.engagement_type === 'diagnostic_plus_coaching')) {
+      if (!(cgRow.in_coaching_program || cgRow.coaching_sessions_enabled || cgRow.is_active_coaching)) {
         return res.status(400).json({ error: 'That client is not a coaching client and cannot receive portal messages. Email them directly instead.' });
       }
       const now = new Date().toISOString();
