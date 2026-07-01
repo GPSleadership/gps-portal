@@ -1,5 +1,5 @@
 # GPS Leadership Portal — Complete State Document
-**Last updated:** June 24, 2026 — git HEAD `8fbc0ac`  
+**Last updated:** June 28, 2026 — git HEAD `b232da2`  
 **Purpose:** This document is the authoritative reference for everything built in the GPS Leadership portal. Before making ANY changes to the portal, read this document in full. Do not rebuild, replace, or modify anything described here unless explicitly instructed by Alex Tremble.
 
 ---
@@ -536,6 +536,45 @@ The Report tab (`renderReportTab()` in coach.html) contains two cards:
 
 ---
 
+## 18. Sponsor Decision Room — Rec Commitments Feature (June 28, 2026 — LIVE on main, commit `b232da2`)
+
+Sponsors (e.g., Peter, Sergio's hiring manager) can now signal which recommendations they back directly from their Decision Room page. Decisions persist to the DB and surface in coach.html before Alex's next call.
+
+### DB change
+```sql
+ALTER TABLE sponsor_teams ADD COLUMN IF NOT EXISTS rec_commitments JSONB NOT NULL DEFAULT '{}'::jsonb;
+```
+Applied directly to prod via Supabase MCP. No migration file in repo (low priority — column exists).
+
+### API change — `api/sponsor-data.js`
+New action `saveRecCommitment` (before the catch-all 400):
+- Validates: token→teamIds scope, decision allowlist `['commit','pass',null]`, rec_key UUID format
+- Spreads `link.rec_commitments` to avoid cache mutation, PATCHes `sponsor_teams` via service key
+- Returns `{ ok: true, rec_commitments: current }`
+
+Also: `select=id,short_title,...` added to recs query so `r.id` (UUID) is available as the stable rec key. `rec_commitments: link.rec_commitments || {}` added to team response object.
+
+### decision-room.html changes
+- `renderRecs` / `card(r)` — each rec card now has "Back this →" / "Pass" / "Clear" buttons
+- `window.REC_COMMITMENTS` — client-side mirror, initialized from `DATA.rec_commitments` on load
+- `window._hasCommitted` — boolean set true on first "Back this" click; initialized from DB on load
+- `setRecCommitment(recKey, decision, evt)` — optimistic update with `_priorDec` revert on failure; includes `token:TOKEN` in fetch body
+- `updateRecCardButtons(recKey)` — updates visual state in-place after save
+- `updateRecSummaryBar()` — tallies committed/passed/remaining, shows/hides summary bar above cards; calls `window._updateSticky()` on each change
+- Sticky sprint bar — now shows immediately on `window._hasCommitted` (not just at 400px scroll); label updates to "You are in on N — here is the Sprint that delivers them"
+- `renderSprintCta()` non-compact — `<details open>` so "What 90 days buys you" is visible by default
+- Orientation text above rec cards tells Peter what the buttons do before he sees them
+- First sentence of each rec description shown outside `<details>` so Peter can commit/pass without expanding every card
+- Premature "Discuss these options" CTA removed from inside renderRecs
+
+### coach.html changes
+- `drSponsorsPanel` now accepts `recs` as 6th arg; builds `recById` map; shows commitment summary per sponsor link (teal box: green dots for committed, grey strikethrough for passed)
+
+### Key gotcha for future sessions
+`rec_key` is the UUID from `r.id`. If a new rec is added to the DB without an `id` being returned by the API, the fallback is `r.short_title` — but the UUID validation in `saveRecCommitment` will reject it. Always ensure `id` is in the recs select query.
+
+---
+
 ## 14. Pending Items (in order)
 
 1. Test multi-behavior and multi-metric Form B with a new client
@@ -558,6 +597,11 @@ The Report tab (`renderReportTab()` in coach.html) contains two cards:
 18. ✅ Portal welcome email (`portal_welcome` type in api/notify.js) — sent to coaching client when debrief marked complete
 19. ✅ Coaching portal button on diagnostic-leader.html — shows after debrief_complete and plan_active when coaching_portal_url is set
 20. ✅ Migration v25 — `coaching_portal_url` on diagnostics; set by coach portal, read by leader portal
+21. **NEXT:** Add `report_release_at` date picker to coach.html diagnostic card (task was in-progress — the DB column exists, the API gate exists, just need the coach UI to set it)
+22. **NEXT:** Set Sergio's `report_release_at` once #21 is done, then sweep + commit
+23. **NEXT:** Browser smoke-test Peter's Decision Room with his real token — verify commit/pass buttons save and the coach card in coach.html shows his decisions
+24. **DEFERRED:** Add "Not ready? Talk to Alex first →" secondary link in Sprint CTA on decision-room.html — needs Alex's booking/calendar URL
+25. **FUTURE (after Sergio plan approved):** Add sponsor monitoring panel to Decision Room — stakeholder check-in scores at baseline/d30/d90, coaching session attendance, weekly plan submissions (data already in `m.scoreboard` and `m.engagement` from sponsor-data.js)
 
 ---
 

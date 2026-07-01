@@ -286,9 +286,119 @@ export default async function handler(req, res) {
     }
   }
 
-  // ─── FETCH ALL ACTIVE CLIENTS WITH A PLAN ──────────────────────────────────
+  // ─── FOLLOW-UP REMINDER: email anyone who still hasn't submitted mid-week ────
+  // Previously Thursday-only via cron; now config-driven (followup_day_of_week /
+  // followup_hour_utc). Fires when action='checkin-thursday' (legacy) OR when the
+  // hourly cron hits the configured follow-up window.
+  if (isFollowupWindow || action === 'checkin-thursday') {
+    try {
+      const thuClientsRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/clients?is_active=eq.true&is_archived=eq.false&plan_start_date=not.is.null&email=not.is.null&select=id,name,email,token,plan_start_date`,
+        { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+      );
+      const thuClients = thuClientsRes.ok ? await thuClientsRes.json() : [];
+      if (!Array.isArray(thuClients) || thuClients.length === 0) {
+        await recordHeartbeat('checkin-thursday', 'ok', 'no active clients');
+        return res.status(200).json({ message: 'No active clients.', sent: 0 });
+      }
+
+      const thuCheckinsRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/checkins?select=client_id,week_number`,
+        { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+      );
+      const thuCheckins = thuCheckinsRes.ok ? await thuCheckinsRes.json() : [];
+      const thuSubmitted = new Set((thuCheckins || []).map(c => `${c.client_id}-${c.week_number}`));
+
+      const thuToday = new Date();
+      let thuSent = 0;
+      const thuErrors = [];
+
+      for (const client of thuClients) {
+        const startDate  = parseLocalDate(client.plan_start_date);
+        const daysDiff   = Math.floor((thuToday - startDate) / (1000 * 60 * 60 * 24));
+        const currentWeek = Math.min(Math.max(Math.ceil((daysDiff + 1) / 7), 1), 12);
+        if (currentWeek < 1 || currentWeek > 12) continue;
+        if (thuSubmitted.has(`${client.id}-${currentWeek}`)) continue; // already done
+
+        const firstName  = (client.name || '').split(' ')[0] || 'there';
+        const portalLink = `${PORTAL_BASE}?token=${client.token}`;
+        const _tpl = await getApprovedTemplate('reminder_weekly_checkin_thursday');
+        const _vars = { first_name: firstName, week: currentWeek };
+        const subject = (_tpl && _tpl.subject)
+          ? fillTemplate(_tpl.subject, _vars)
+          : `Still time — Week ${currentWeek} check-in, ${firstName}`;
+        const bodyProse = (_tpl && _tpl.body_text)
+          ? tplProse(fillTemplate(_tpl.body_text, _vars))
+          : tplProse([
+              `Hi ${firstName},`,
+              `Quick note — your Week ${currentWeek} check-in is still open. If you get to it today it counts.`,
+              `60–90 seconds. Log your metric, note your win or stall, set your action for next week.`,
+            ].join('\n\n'));
+
+        const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
+          <div style="background:#004369;padding:20px 28px;border-radius:8px 8px 0 0;">
+            <div style="color:#E5DDC8;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">GPS Leadership Solutions</div>
+            <div style="color:#ffffff;font-size:20px;font-weight:700;">Week ${currentWeek} — Still Open</div>
+          </div>
+          <div style="padding:28px;background:#ffffff;border-radius:0 0 8px 8px;border:1px solid #e5e7eb;border-top:none;">
+            ${bodyProse}
+            <div style="margin:28px 0 0;text-align:center;">
+              <a href="${portalLink}" style="background:#004369;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;display:inline-block;letter-spacing:0.3px;">
+                Complete My Week ${currentWeek} Check-In →
+              </a>
+            </div>
+          </div>
+        </div>`;
+
+        try {
+          const r = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              from: `Alex Tremble – GPS Leadership <${RESEND_FROM}>`,
+              to: [client.email],
+              subject,
+              html,
+              text: String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
+              reply_to: 'alex@gpsleadership.org',
+            }),
+          });
+          const result = await r.json();
+          if (!r.ok) {
+            thuErrors.push({ client: client.name, error: result });
+            await logEmail({ clientId: client.id, recipientEmail: client.email, recipientName: client.name, emailType: 'reminder_thursday', subject, status: 'error', errorDetails: result });
+          } else {
+            thuSent++;
+            await logEmail({ clientId: client.id, recipientEmail: client.email, recipientName: client.name, emailType: 'reminder_thursday', subject, status: 'sent', resendId: result.id });
+          }
+        } catch (err) {
+          thuErrors.push({ client: client.name, error: err.message });
+          await logEmail({ clientId: client.id, recipientEmail: client.email, recipientName: client.name, emailType: 'reminder_thursday', subject, status: 'error', errorDetails: err.message });
+        }
+      }
+
+      await recordHeartbeat('checkin-thursday', 'ok', `sent: ${thuSent}, errors: ${thuErrors.length}`);
+      return res.status(200).json({ sent: thuSent, errors: thuErrors });
+    } catch (err) {
+      await recordHeartbeat('checkin-thursday', 'error', err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ─── SMS + EMAIL REMINDERS (config-driven, previously Monday-only) ──────────
+  // Gate: runs when the global SMS window matches (config day+hour) OR when it's
+  // the configured reminder hour on any day — per-client checkin_day filtering below
+  // determines which clients actually get a reminder on non-global days.
+  // action='checkin-sms' bypasses the gate for manual/legacy triggers.
+  const isReminderHour = cfg.sms_enabled && hourUtc === cfg.sms_hour_utc;
+
+  if (!isSmsWindow && !isReminderHour && action !== 'checkin-sms') {
+    return res.status(200).json({ message: 'No matching reminder window for this hour.', skipped: true });
+  }
+
+  // ─── FETCH ALL ACTIVE CLIENTS WITH A PLAN (SMS + email handler) ──────────
   const clientsRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/clients?is_active=eq.true&is_archived=eq.false&plan_start_date=not.is.null&email=not.is.null&select=id,name,email,token,plan_start_date`,
+    `${SUPABASE_URL}/rest/v1/clients?is_active=eq.true&is_archived=eq.false&plan_start_date=not.is.null&email=not.is.null&select=id,name,email,token,plan_start_date,phone,checkin_day,at_risk`,
     { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
   );
   const clients = await clientsRes.json();
@@ -326,6 +436,21 @@ export default async function handler(req, res) {
     // Only remind if they haven't submitted this week's check-in
     if (submitted.has(`${client.id}-${currentWeek}`)) {
       skipped.push({ name: client.name, reason: `Already submitted week ${currentWeek}` });
+      return false;
+    }
+
+    // Per-client day check: if the client committed to a specific checkin_day, only
+    // remind on that day. Clients without a checkin_day fall back to the global window.
+    if (client.checkin_day) {
+      const DAY_MAP = { sunday:0, monday:1, tuesday:2, wednesday:3, thursday:4, friday:5, saturday:6 };
+      const clientDayNum = DAY_MAP[client.checkin_day.toLowerCase()];
+      if (clientDayNum === undefined || dayUtc !== clientDayNum) {
+        skipped.push({ name: client.name, reason: 'Not their checkin_day (' + client.checkin_day + ')' });
+        return false;
+      }
+    } else if (!isSmsWindow) {
+      // No committed day and not the global SMS window — skip this client
+      skipped.push({ name: client.name, reason: 'No checkin_day set; not global SMS window' });
       return false;
     }
 
@@ -473,6 +598,57 @@ export default async function handler(req, res) {
         errorDetails: err.message,
       });
     }
+  }
+
+  // ─── AT-RISK DETECTION ────────────────────────────────────────────────────
+  // Flag clients who missed 2+ consecutive weeks. The at_risk flag auto-clears
+  // server-side in portal-data.js submit-checkin when they submit a check-in.
+  // Runs on every reminder pass so the flag is set even for non-reminder-day clients.
+  try {
+    const nowDetect = new Date();
+    for (const client of clients) {
+      if (client.at_risk) continue; // already flagged — don't spam Alex
+      const sd = parseLocalDate(client.plan_start_date);
+      const dd = Math.floor((nowDetect - sd) / (1000 * 60 * 60 * 24));
+      const cw = Math.min(Math.max(Math.ceil((dd + 1) / 7), 1), 12);
+      if (cw < 3) continue; // need at least week 3 to have missed 2 consecutive weeks
+      const missedCurrent  = !submitted.has(`${client.id}-${cw}`);
+      const missedPrevious = !submitted.has(`${client.id}-${cw - 1}`);
+      if (!missedCurrent || !missedPrevious) continue;
+
+      // Mark at-risk in DB
+      await fetch(
+        `${SUPABASE_URL}/rest/v1/clients?id=eq.${client.id}`,
+        {
+          method: 'PATCH',
+          headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+          body: JSON.stringify({ at_risk: true }),
+        }
+      );
+
+      // Alert Alex
+      const alertSubject = 'At-risk: ' + client.name + ' missed week ' + (cw - 1) + ' and ' + cw;
+      const alertHtml = '<div style="font-family:Arial,sans-serif;max-width:600px;color:#1a1a1a;">'
+        + '<div style="background:#DB1F48;padding:16px 24px;border-radius:8px 8px 0 0;">'
+        + '<div style="color:#fff;font-size:18px;font-weight:700;">At-Risk Alert</div></div>'
+        + '<div style="background:#fff;padding:24px;border:1px solid #d0d0d0;border-top:none;border-radius:0 0 8px 8px;">'
+        + '<p><strong>' + client.name + '</strong> missed check-ins for Week ' + (cw - 1) + ' and Week ' + cw + ' of their 90-day engagement.</p>'
+        + '<p>Consider reaching out directly. This flag clears automatically when they submit a check-in.</p>'
+        + '</div></div>';
+      await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: `GPS Leadership System <${RESEND_FROM}>`,
+          to: ['alex@gpsleadership.org'],
+          subject: alertSubject,
+          html: alertHtml,
+          text: client.name + ' missed week ' + (cw - 1) + ' and week ' + cw + '. Consider reaching out.',
+        }),
+      });
+    }
+  } catch (atRiskErr) {
+    console.error('[send-reminders] at-risk detection failed:', atRiskErr.message);
   }
 
   // ─── SEND SCHEDULED EMAIL DRAFTS ──────────────────────────────────────────

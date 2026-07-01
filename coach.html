@@ -9361,10 +9361,18 @@ function renderPlanPrefillEditor(){
     +ppArea('30-day milestone','pp-goal30',s.goal30,'30-day milestone')
     +ppArea('Behavior 1 (primary)','pp-beh1',s.behavior1,'specific, observable behavior')
     +ppArea('Behavior 2 (optional)','pp-beh2',s.behavior2,'optional second behavior')
+    +'<div style="border:1px solid #dce5e7;border-radius:10px;padding:12px 14px;margin:8px 0;">'
+    +'<div style="font-weight:800;color:#004369;font-size:12px;margin-bottom:10px;">Metric 1 — Self-Tracked</div>'
+    +'<div style="display:flex;gap:8px;margin-bottom:4px;">'
+    +'<div style="flex:1;"><label for="pp-m1type" style="display:block;font-weight:700;color:#004369;font-size:12px;margin-bottom:4px;">Type</label><select id="pp-m1type" style="width:100%;border:1px solid #d3dde3;border-radius:8px;padding:8px 10px;font-size:12.5px;font-family:inherit;box-sizing:border-box;background:#fff;"><option value="number"'+(m1.type==='number'||!m1.type?' selected':'')+'>Number / count</option><option value="percentage"'+(m1.type==='percentage'?' selected':'')+'>Percentage (%)</option><option value="ratio"'+(m1.type==='ratio'?' selected':'')+'>Ratio (X out of Y)</option></select></div>'
+    +'<div style="flex:1;">'+ppField('Unit (%, count, /week…)','pp-m1unit',m1.unit||'','%')+'</div>'
+    +'</div>'
+    +ppArea('Metric statement (full sentence)','pp-m1stmt',m1.statement||'','e.g. Increase on-time delivery from 72% to 90% by Day 90')
     +'<div style="display:flex;gap:10px;flex-wrap:wrap;">'
-    +'<div style="flex:2;min-width:160px;">'+ppField('Metric 1 name','pp-m1n',m1.name,'self-tracked metric')+'</div>'
+    +'<div style="flex:2;min-width:160px;">'+ppField('Short metric name','pp-m1n',m1.name||'','on-time delivery rate')+'</div>'
     +'<div style="flex:1;min-width:90px;">'+ppField('Baseline','pp-m1b',m1.baseline,'#')+'</div>'
-    +'<div style="flex:1;min-width:90px;">'+ppField('Target','pp-m1t',m1.target,'#')+'</div>'
+    +'<div style="flex:1;min-width:90px;">'+ppField('Target (Day 90)','pp-m1t',m1.target,'#')+'</div>'
+    +'</div>'
     +'</div>'
     +ppArea('Metric 2 — stakeholder-rated behavior (1-5)','pp-m2q',m2.question,'a behavior stakeholders rate 1-5')
     +'<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;position:sticky;bottom:-1px;background:#fff;padding:10px 0;border-top:1px solid #eef1f2;">'
@@ -9394,7 +9402,7 @@ async function savePlanPrefill(e){
       goal30: ppVal('pp-goal30'),
       behavior1: ppVal('pp-beh1'),
       behavior2: ppVal('pp-beh2'),
-      metric1:{ name: ppVal('pp-m1n'), baseline: ppNum('pp-m1b'), target: ppNum('pp-m1t') },
+      metric1:{ name: ppVal('pp-m1n'), statement: ppVal('pp-m1stmt'), type: ((document.getElementById('pp-m1type')||{}).value)||'number', unit: ppVal('pp-m1unit'), baseline: ppNum('pp-m1b'), target: ppNum('pp-m1t') },
       metric2:{ question: ppVal('pp-m2q'), targetAvg: (prev.suggested&&prev.suggested.metric2&&prev.suggested.metric2.targetAvg!=null)?prev.suggested.metric2.targetAvg:4.0 },
       stakeholders: (prev.suggested&&prev.suggested.stakeholders)||[]
     },

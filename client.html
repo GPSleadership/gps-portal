@@ -3730,10 +3730,12 @@ function initWizard(client) {
     behavior2: wizIsEdit ? (client.behavior_2 || '') : (p?.suggested?.behavior2 || ''),
     metric1: {
       name:       wizIsEdit ? (client.metric_1_name || client.metric_name || '') : (p?.suggested?.metric1?.name || ''),
+      statement:  wizIsEdit ? (client.metric_1_statement || '') : (p?.suggested?.metric1?.statement || ''),
+      unit:       wizIsEdit ? (client.metric_1_unit || '') : (p?.suggested?.metric1?.unit || ''),
       baseline:   wizIsEdit ? (client.metric_1_baseline ?? client.metric_baseline ?? '') : (p?.suggested?.metric1?.baseline ?? ''),
       target:     wizIsEdit ? (client.metric_1_target  ?? client.metric_target  ?? '') : (p?.suggested?.metric1?.target  ?? ''),
-      type:       wizIsEdit ? (client.metric_1_type || 'number') : 'number',
-      ratioDenom: wizIsEdit ? (client.metric_1_ratio_denom ?? '') : '',
+      type:       wizIsEdit ? (client.metric_1_type || 'number') : (p?.suggested?.metric1?.type || 'number'),
+      ratioDenom: wizIsEdit ? (client.metric_1_ratio_denom ?? '') : (p?.suggested?.metric1?.ratioDenom ?? ''),
     },
     metric2: {
       question:  wizIsEdit ? (client.metric_2_question  || '') : (p?.suggested?.metric2?.question  || ''),
@@ -4163,6 +4165,11 @@ function wizS3() {
           Use this when success is a percentage — e.g., "8 out of 10 commitments completed." You'll track numerator and denominator each week. The chart will show your completion rate over time.
         </div>
       </div>
+      <div class="form-group" style="margin-bottom:10px;">
+        <label>Unit <span style="font-weight:400;color:var(--gray-500);">(optional — shown in your weekly check-in)</span></label>
+        <div class="hint">How you measure it: %, count, calls/week, dispatches, etc.</div>
+        <input type="text" id="wizM1Unit" value="${wizEsc(m1.unit || '')}" placeholder="e.g. %, count, calls/week" style="max-width:220px;" />
+      </div>
       <div class="form-group">
         <label>What you\'re tracking <span style="color:var(--red)">*</span></label>
         <div class="hint" id="wizM1NameHint">${m1.type==='ratio'?'e.g. "Commitments I completed vs. total commitments made this week"':'Phrase it as "# of times I did [behavior] this week."'}</div>
@@ -4474,7 +4481,9 @@ function wizValidate(step) {
     if (!m2q)                { wizShowError('Please enter the stakeholder survey question for Metric 2.'); return false; }
     if (isNaN(m2a)||m2a<1||m2a>5) { wizShowError('Metric 2 target must be between 1 and 5.'); return false; }
     wizPlan.goal30  = g30;
-    wizPlan.metric1 = { name:m1n, baseline:m1b, target:m1t, type:m1type, ratioDenom: m1type==='ratio' ? m1denom : null };
+    const m1unitEl = document.getElementById('wizM1Unit');
+    const m1unit   = m1unitEl ? m1unitEl.value.trim() : (wizPlan.metric1.unit || '');
+    wizPlan.metric1 = { name:m1n, statement: wizPlan.metric1.statement || '', unit: m1unit, baseline:m1b, target:m1t, type:m1type, ratioDenom: m1type==='ratio' ? m1denom : null };
     wizPlan.metric2 = { question:m2q, targetAvg:m2a };
     return true;
   }
@@ -4624,6 +4633,8 @@ async function wizLockIn() {
     ...(p.observableMeasure ? { observable_measure: p.observableMeasure } : {}),  // what stakeholders rate (AI-prefilled; coach can edit). Omit when empty so re-editing never wipes a coach-set value.
 
     metric_1_name:        p.metric1.name,
+    metric_1_statement:   p.metric1.statement || null,
+    metric_1_unit:        p.metric1.unit || null,
     metric_1_baseline:    p.metric1.baseline,
     metric_1_target:      p.metric1.target,
     metric_1_type:        p.metric1.type || 'number',
@@ -5304,6 +5315,10 @@ function renderPortal(client, checkins) {
     initRatioPreview();
     loadDraftIntoForm(client.id, currentWeek);
   }
+  // Feature 3: show commitment modal on first portal visit (commitment_accepted_at is null)
+  if (!client.commitment_accepted_at && !alreadyCheckedInThisWeek && !isEngagementComplete) {
+    setTimeout(function() { showCommitmentModal(client); }, 700);
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -5434,6 +5449,65 @@ async function submitCloseout(clientId) {
   }
 }
 
+// ── Barrier chip selection (Feature 2) ────────────────────────────────────
+function selectBarrierChip(el) {
+  var chips = document.querySelectorAll('#barrierChips button');
+  chips.forEach(function(b) {
+    b.style.background = '#fff';
+    b.style.borderColor = 'var(--gray-300)';
+    b.style.color = 'var(--gray-700)';
+  });
+  el.style.background = 'var(--navy)';
+  el.style.borderColor = 'var(--navy)';
+  el.style.color = '#fff';
+  var val = el.dataset.val;
+  if (val === 'Other') {
+    document.getElementById('barrierOtherGroup').style.display = 'block';
+    document.getElementById('completionBarrier').value = '';
+  } else {
+    var og = document.getElementById('barrierOtherGroup');
+    if (og) og.style.display = 'none';
+    document.getElementById('completionBarrier').value = val;
+  }
+}
+
+// ── Commitment modal (Feature 3) ──────────────────────────────────────────
+function showCommitmentModal(client) {
+  var existing = document.getElementById('commitmentModal');
+  if (existing) existing.remove();
+  var days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  var dayOpts = days.map(function(d) { return '<option value="'+d.toLowerCase()+'">'+d+'</option>'; }).join('');
+  var ov = document.createElement('div');
+  ov.id = 'commitmentModal';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:24px;';
+  ov.innerHTML = '<div style="background:#fff;border-radius:16px;max-width:480px;width:100%;padding:28px 28px 24px;box-shadow:0 20px 60px rgba(0,0,0,.25);">'
+    +'<div style="font-family:Montserrat,sans-serif;font-size:20px;font-weight:800;color:#004369;margin-bottom:10px;">One thing before you start.</div>'
+    +'<div style="font-size:13.5px;color:#5a6b76;line-height:1.65;margin-bottom:18px;">The leaders who see the biggest results in this program do one thing consistently: they check in every single week, regardless of how the week went. No week is too bad to check in on. That is the commitment.</div>'
+    +'<div style="font-size:13px;font-weight:700;color:#004369;margin-bottom:8px;">Which day will you commit to checking in each week?</div>'
+    +'<select id="commitDaySelect" style="width:100%;padding:10px 14px;border:1.5px solid #d3dde3;border-radius:10px;font-size:14px;font-family:inherit;margin-bottom:20px;background:#fff;">'
+    +dayOpts+'</select>'
+    +'<button id="commitAcceptBtn" onclick="acceptCommitment()" style="width:100%;background:#004369;color:#fff;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:800;font-family:inherit;cursor:pointer;letter-spacing:0.3px;">I commit to this process</button>'
+    +'<div style="text-align:center;margin-top:10px;"><button onclick="document.getElementById(\'commitmentModal\').remove()" style="background:none;border:none;color:#9aa7ad;font-size:12px;cursor:pointer;font-family:inherit;">Remind me next time</button></div>'
+    +'</div>';
+  document.body.appendChild(ov);
+}
+
+async function acceptCommitment() {
+  var btn = document.getElementById('commitAcceptBtn');
+  var dayEl = document.getElementById('commitDaySelect');
+  if (!dayEl) return;
+  var day = dayEl.value;
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    await portalData('update-client', { updates: { commitment_accepted_at: new Date().toISOString(), checkin_day: day } });
+    var modal = document.getElementById('commitmentModal');
+    if (modal) modal.remove();
+  } catch (err) {
+    if (btn) { btn.disabled = false; btn.textContent = 'I commit to this process'; }
+    console.error('[commitment] save failed:', err.message || err);
+  }
+}
+
 function renderCheckinForm(client, checkins, currentWeek) {
   const lastCheckin = checkins.length > 0 ? checkins[checkins.length - 1] : null;
   const priorAction = lastCheckin ? lastCheckin.planned_action : null;
@@ -5453,6 +5527,7 @@ function renderCheckinForm(client, checkins, currentWeek) {
       <button type="button" class="checkin-back-btn" onclick="closeMobileCheckin()">&larr; Back to My Plan</button>
       <div class="card-title">Week ${currentWeek} Check-In</div>
       <div class="card-subtitle">Under 3 minutes. Fill this out before or right after your coaching call.</div>
+      ${(client.current_checkin_streak || 0) >= 2 ? `<div style="display:inline-flex;align-items:center;gap:6px;background:#f0faf5;border:1.5px solid #b2e6d0;border-radius:99px;padding:5px 13px;font-size:12px;font-weight:700;color:#087443;margin-bottom:12px;">&#x1F525; ${client.current_checkin_streak}-week streak — keep it going</div>` : ''}
 
       <div class="week-strip">
         <div class="week-number">${currentWeek}</div>
@@ -5506,8 +5581,19 @@ function renderCheckinForm(client, checkins, currentWeek) {
       </div>
       <div class="form-group" id="barrierGroup" style="display:none;">
         <label>What got in the way? <span style="color:var(--red)">*</span></label>
-        <div class="hint">1–2 sentences. This helps us troubleshoot the system, not judge you.</div>
-        <textarea id="completionBarrier" placeholder="Be brief — what specifically got in the way?"></textarea>
+        <div class="hint">Pick the closest match, or choose Other to write it in.</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;" id="barrierChips">
+          <button type="button" onclick="selectBarrierChip(this)" data-val="Time ran out" style="padding:7px 14px;border-radius:99px;border:1.5px solid var(--gray-300);background:#fff;color:var(--gray-700);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Time ran out</button>
+          <button type="button" onclick="selectBarrierChip(this)" data-val="Unexpected priority" style="padding:7px 14px;border-radius:99px;border:1.5px solid var(--gray-300);background:#fff;color:var(--gray-700);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Unexpected priority</button>
+          <button type="button" onclick="selectBarrierChip(this)" data-val="Not sure where to start" style="padding:7px 14px;border-radius:99px;border:1.5px solid var(--gray-300);background:#fff;color:var(--gray-700);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Not sure where to start</button>
+          <button type="button" onclick="selectBarrierChip(this)" data-val="Lost momentum" style="padding:7px 14px;border-radius:99px;border:1.5px solid var(--gray-300);background:#fff;color:var(--gray-700);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Lost momentum</button>
+          <button type="button" onclick="selectBarrierChip(this)" data-val="Needed more clarity" style="padding:7px 14px;border-radius:99px;border:1.5px solid var(--gray-300);background:#fff;color:var(--gray-700);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Needed more clarity</button>
+          <button type="button" onclick="selectBarrierChip(this)" data-val="Other" style="padding:7px 14px;border-radius:99px;border:1.5px solid var(--gray-300);background:#fff;color:var(--gray-700);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Other</button>
+        </div>
+        <div id="barrierOtherGroup" style="display:none;margin-top:8px;">
+          <textarea id="barrierOtherText" rows="2" placeholder="What specifically got in the way?" oninput="document.getElementById('completionBarrier').value=this.value;"></textarea>
+        </div>
+        <textarea id="completionBarrier" style="display:none;" placeholder="Be brief — what specifically got in the way?"></textarea>
       </div>` : ''}
 
       <!-- METRIC INPUTS (1 required, 2-3 if defined) -->
@@ -5518,14 +5604,14 @@ function renderCheckinForm(client, checkins, currentWeek) {
         <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
           <input type="number" id="currentMetricNum" placeholder="Completed" min="0" step="any" style="width:120px;" />
           <span style="font-size:16px;font-weight:700;color:var(--gray-500);">out of</span>
-          <input type="number" id="currentMetricDenom" placeholder="Total" min="1" step="any" style="width:120px;" />
+          <input type="number" id="currentMetricDenom" placeholder="${client.metric_1_ratio_denom || 'Total'}" min="1" step="any" style="width:120px;" />
         </div>
         <div id="ratioPreview" style="font-size:12px;color:var(--teal);font-weight:700;margin-top:6px;min-height:16px;"></div>
       </div>` : `
       <div class="form-group">
-        <label>${client.metric_1_name || client.metric_name || 'Metric 1'} <span style="color:var(--red)">*</span></label>
-        <div class="hint">Current value this week</div>
-        <input type="number" id="currentMetric" placeholder="Enter current value" step="any" />
+        <label>${client.metric_1_name || client.metric_name || 'Metric 1'}${client.metric_1_unit ? ' (' + client.metric_1_unit + ')' : ''} <span style="color:var(--red)">*</span></label>
+        <div class="hint">${client.metric_1_type === 'percentage' ? 'What percentage did you achieve this week?' : 'What was your count this week?'}${client.metric_1_unit ? ' Enter in ' + client.metric_1_unit + '.' : ''}</div>
+        <input type="number" id="currentMetric" placeholder="${client.metric_1_type === 'percentage' ? 'e.g. 85' : 'Enter current value'}" step="any" />
       </div>`}
       ${(client.metric_2_name) ? `
       <div class="form-group">

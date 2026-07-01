@@ -36,7 +36,8 @@ function sb(path, method = 'GET', body = null, extra = {}) {
 const CLIENT_WRITABLE = new Set([
   'tp3_pillar', 'goal_description', 'goal_30_day', 'goal_statement',
   'behavior_1', 'behavior_2', 'start_behavior',
-  'metric_1_name', 'metric_1_baseline', 'metric_1_target', 'metric_1_type', 'metric_1_ratio_denom',
+  'metric_1_name', 'metric_1_statement', 'metric_1_unit',
+  'metric_1_baseline', 'metric_1_target', 'metric_1_type', 'metric_1_ratio_denom',
   'metric_2_name', 'metric_2_baseline', 'metric_2_target', 'metric_2_question', 'metric_2_target_avg',
   'metric_3_name', 'metric_3_baseline', 'metric_3_target',
   'metric_name', 'metric_baseline', 'metric_target', 'metric_current',
@@ -47,6 +48,8 @@ const CLIENT_WRITABLE = new Set([
   // Client-editable profile fields (own profile screen — no role/access escalation).
   // 'organization' is canonical; 'org' kept writable only for backward-compat.
   'title', 'organization', 'org', 'phone', 'sms_opt_in',
+  // Commitment + streak (client-settable on acceptance / check-in day choice)
+  'checkin_day', 'commitment_accepted_at', 'current_checkin_streak',
 ]);
 function pickWritable(updates) {
   const out = {};
@@ -128,6 +131,26 @@ export default async function handler(req, res) {
         }
         if (typeof c.metric_value === 'number' && !Number.isNaN(c.metric_value)) {
           await sb(`/rest/v1/clients?id=eq.${clientId}`, 'PATCH', { metric_current: c.metric_value }, { Prefer: 'return=minimal' });
+        }
+        // Recompute streak: count consecutive weeks (no gap) from the most recent check-in backward.
+        try {
+          const sr = await sb(`/rest/v1/checkins?client_id=eq.${clientId}&select=week_number&order=week_number.desc`);
+          if (sr.ok) {
+            const weeks = (await sr.json()).map(row => row.week_number);
+            let streak = 0;
+            if (weeks.length > 0) {
+              streak = 1;
+              for (let i = 1; i < weeks.length; i++) {
+                if (weeks[i - 1] - weeks[i] === 1) { streak++; } else { break; }
+              }
+            }
+            const clientPatch = { current_checkin_streak: streak };
+            // Mark at_risk false on a successful check-in (they came back).
+            clientPatch.at_risk = false;
+            await sb(`/rest/v1/clients?id=eq.${clientId}`, 'PATCH', clientPatch, { Prefer: 'return=minimal' });
+          }
+        } catch (streakErr) {
+          console.error('[submit-checkin] streak update failed:', streakErr.message);
         }
         return res.status(200).json({ ok: true });
       }
