@@ -2310,7 +2310,7 @@
     <img id="orgLogoImg" src="" alt="" style="display:none;max-height:34px;max-width:120px;object-fit:contain;border-radius:3px;background:rgba(255,255,255,0.95);padding:3px 6px;" />
   </div>
   <div class="gps-header-right">
-    <span class="gps-header-portal-label">Executive Impact Portal</span>
+    <span class="gps-header-portal-label">Executive Impact System</span>
     <div class="user-menu" id="userMenuWrap">
       <button class="user-menu-trigger" id="gpsHeaderUser" onclick="toggleUserMenu(event)" aria-haspopup="true" aria-expanded="false"> · Welcome <span class="um-caret">▾</span></button>
       <div class="user-menu-dropdown" id="userMenuDropdown" role="menu">
@@ -2521,12 +2521,16 @@
     <div style="margin-top:14px;background:#fff;border:1px solid #e2e2e2;border-radius:12px;padding:14px;">
       <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
         <label style="font-size:13px;color:#555;">Type</label>
-        <select id="coachMsgType" style="flex:0 0 auto;padding:7px 10px;border:1px solid #ccc;border-radius:6px;font-size:13px;">
+        <select id="coachMsgType" onchange="onCoachMsgTypeChange()" style="flex:0 0 auto;padding:7px 10px;border:1px solid #ccc;border-radius:6px;font-size:13px;">
           <option value="quick_question">Quick question</option>
           <option value="prep_for_session">Session prep</option>
           <option value="progress_update">Update</option>
           <option value="win">Win</option>
+          <option value="reschedule">Reschedule session</option>
         </select>
+      </div>
+      <div id="coachRescheduleHint" style="display:none;margin-bottom:10px;font-size:13px;color:#555;background:#f5f5f5;border-radius:8px;padding:10px 12px;">
+        Use the message below to request a reschedule — or reply to your session confirmation email for the fastest response.
       </div>
       <textarea id="coachMsgText" rows="3" placeholder="Write your message…" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #ccc;border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;"></textarea>
       <div style="display:flex;justify-content:flex-end;margin-top:10px;">
@@ -2657,7 +2661,12 @@ let currentClient    = null; // set when portal loads — used by submitFormA
 // CONTACT YOUR COACH — client-side messaging thread
 // ─────────────────────────────────────────────
 function coachMsgTypeLabel(t) {
-  return ({ quick_question: 'Quick question', prep_for_session: 'Session prep', progress_update: 'Update', win: 'Win', logistics: 'Logistics' })[t] || 'Message';
+  return ({ quick_question: 'Quick question', prep_for_session: 'Session prep', progress_update: 'Update', win: 'Win', logistics: 'Logistics', reschedule: 'Reschedule session' })[t] || 'Message';
+}
+function onCoachMsgTypeChange() {
+  var hint = document.getElementById('coachRescheduleHint');
+  var sel = document.getElementById('coachMsgType');
+  if (hint) hint.style.display = (sel && sel.value === 'reschedule') ? 'block' : 'none';
 }
 function coachFmtTime(iso) {
   if (!iso) return '';
@@ -4007,7 +4016,7 @@ function wizS0() {
     </div>
     ${wizIsTrial ? `<div class="card" style="border-left:4px solid #01949A;">
       <div style="font-size:13px;line-height:1.65;color:#1a1a1a;">
-        <strong>What this is:</strong> your temporary access to the GPS Executive Leadership Impact Portal — the same space we use with the senior leaders we coach.<br><br>
+        <strong>What this is:</strong> your temporary access to the GPS Executive Impact System — the same space we use with the senior leaders we coach.<br><br>
         <strong>What you'll do:</strong> pick the <em>one</em> thing you most want to improve, set a way to measure it, and track real progress. Setup takes about 10–15 minutes; after that it's about 5 minutes a week.<br><br>
         <strong>The deal:</strong> access is yours for 90 days — log in and complete at least one weekly check-in within your first 10 days to keep it. Growth only happens when you take action.
       </div>
@@ -7660,7 +7669,7 @@ function copyHistItem(i, btn) {
 }
 
 // ── Ask Alex: email an answer (client's own mail app, or Gmail) ──────────────
-const QA_EMAIL_FOOTER = '\n\n----\nGenerated in "Ask Alex", Executive Impact Portal by GPS Leadership Solutions\n© 2026 GPS Leadership Solutions. All rights reserved. | gpsleadership.org';
+const QA_EMAIL_FOOTER = '\n\n----\nGenerated in "Ask Alex", Executive Impact System by GPS Leadership Solutions\n© 2026 GPS Leadership Solutions. All rights reserved. | gpsleadership.org';
 
 // Stored responses are the model's raw JSON. Convert to readable plain text
 // for the history panel and email bodies.
@@ -9120,7 +9129,7 @@ function showAccessEndedScreen(expiryStr) {
     <div id="accessEndedScreen">
       <div class="access-ended-title">Your portal access has ended</div>
       <div class="access-ended-body">
-        Your 90-day complimentary access to the GPS Executive Leadership Portal has ended.<br><br>
+        Your 90-day complimentary access to the GPS Executive Impact System has ended.<br><br>
         If you'd like ongoing access to these tools and support applying them with your executive team,
         the path forward is an executive coaching relationship. Use the link below to schedule a
         30-minute Executive Coaching Alignment Call. We'll review your current leadership operating
