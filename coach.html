@@ -8597,6 +8597,8 @@ function _renderDraftCard(d, seqLabel, statusColor, approved) {
   } else if (d.status === 'scheduled') {
     html += '<button class="dbtn dbtn-sm dbtn-outline" onclick="event.stopPropagation();event.preventDefault();_holdEmailDraft(\'' + d.id + '\')" style="font-size:11px;padding:3px 10px;border-radius:5px;cursor:pointer;white-space:nowrap;">Hold</button>';
     html += '<button class="dbtn dbtn-sm" onclick="event.stopPropagation();event.preventDefault();_sendEmailDraftNow(\'' + d.id + '\')" style="font-size:11px;background:#004369;color:#fff;border:none;padding:3px 10px;border-radius:5px;cursor:pointer;white-space:nowrap;">Send Now</button>';
+  } else if (d.status === 'cancelled') {
+    html += '<button class="dbtn dbtn-sm" onclick="event.stopPropagation();event.preventDefault();_sendEmailDraftNow(\'' + d.id + '\')" style="font-size:11px;background:#dc2626;color:#fff;border:none;padding:3px 10px;border-radius:5px;cursor:pointer;white-space:nowrap;">Retry Send</button>';
   }
 
   html += '</div></summary>';
@@ -8623,6 +8625,9 @@ function _renderDraftCard(d, seqLabel, statusColor, approved) {
   } else {
     html += '<div style="font-size:12px;font-weight:700;color:var(--d-dark);margin-bottom:4px;">Subject: ' + esc(d.subject || '') + '</div>';
     html += '<div style="font-size:13px;color:var(--d-dark);white-space:pre-wrap;background:#f8f9fb;padding:10px;border-radius:6px;border:1px solid var(--d-border);">' + esc(d.body || '') + '</div>';
+    if (d.status === 'cancelled') {
+      html += '<div style="margin-top:10px;"><button class="dbtn dbtn-sm" onclick="_sendEmailDraftNow(\'' + d.id + '\')" style="font-size:12px;background:#dc2626;color:#fff;border:none;padding:4px 12px;border-radius:5px;cursor:pointer;">Retry Send</button><span style="font-size:12px;color:var(--d-mid);margin-left:10px;">Send failed previously — click to retry.</span></div>';
+    }
   }
 
   html += '</div></details></div>';
