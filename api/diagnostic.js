@@ -1364,7 +1364,7 @@ function buildRaterGroupData(responses, allRaters) {
   // rows) or open (text rows) per diagnostics.custom_gX_type — a response row
   // only ever carries one of the two, so dual membership is safe.
   const RATED  = ['A1','A2','A3','A4','A5','A6','A7','B1','B2','B3','B4','B5','B6','C1','C2','C3','C4','C5','C6','D1','F1','F2','G1','G2','G3'];
-  const OPEN   = ['A8','A9','A10','B7','B8','B9','B10','C7','C8','C9','D2','F3','G2','G3'];
+  const OPEN   = ['A8','A9','A10','B6b','B7','B8','B9','B10','C7','C8','C9','D2','F3','G2','G3'];
   const GKEYS  = ['direct_report','peer','supervisor','internal_partner'];
 
   // Normalize DB relationship values to GKEYS — DB may store title-case ("Peer", "Direct Report")
