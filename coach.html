@@ -1792,6 +1792,7 @@ function clearSession() {
   localStorage.removeItem(SESSION_EXP_KEY);
 }
 // Token sent with future service-key dashboard endpoints (Authorization: Bearer)
+function gpsRemove(id){var o=document.getElementById(id);if(o&&o.remove)o.remove();}
 function getCoachSessionToken() {
   return localStorage.getItem(SESSION_TOKEN_KEY) || '';
 }
@@ -4327,13 +4328,13 @@ function openNewClientMessage(preselectId){
   ov.onclick = function(e){ if (e.target===ov) ov.remove(); };
   ov.innerHTML = '<div style="background:#fff;border-radius:12px;max-width:560px;width:100%;padding:22px 24px;box-shadow:0 10px 40px rgba(0,0,0,.2);">'
     + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><div style="font-family:Montserrat,sans-serif;font-size:17px;font-weight:800;color:#004369;">New message to a client</div>'
-    + '<button onclick="document.getElementById(\'nm-overlay\').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#888;line-height:1;">&times;</button></div>'
+    + '<button onclick="gpsRemove(\'nm-overlay\')" style="background:none;border:none;font-size:22px;cursor:pointer;color:#888;line-height:1;">&times;</button></div>'
     + '<label style="display:block;font-size:12px;font-weight:700;color:#5a6b76;margin-bottom:4px;">Client</label>'
     + '<select id="nm-client" style="width:100%;padding:8px 10px;border:1px solid #d3dde3;border-radius:8px;font-size:13px;margin-bottom:12px;box-sizing:border-box;background:#fff;">'+opts+'</select>'
     + '<label style="display:block;font-size:12px;font-weight:700;color:#5a6b76;margin-bottom:4px;">Message</label>'
     + '<textarea id="nm-text" rows="5" placeholder="Write your message…" style="width:100%;padding:10px 12px;border:1px solid #d3dde3;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;"></textarea>'
     + '<div style="font-size:11.5px;color:#8a98a0;margin-top:6px;">They will see it in their portal under Contact Your Coach, and get an email notification.</div>'
-    + '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;"><button class="dbtn dbtn-outline" onclick="document.getElementById(\'nm-overlay\').remove()">Cancel</button>'
+    + '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;"><button class="dbtn dbtn-outline" onclick="gpsRemove(\'nm-overlay\')">Cancel</button>'
     + '<button class="dbtn dbtn-primary" id="nm-send" onclick="sendNewClientMessage()">Send message</button></div></div>';
   document.body.appendChild(ov);
 }
@@ -4776,7 +4777,7 @@ function ciShowRenewals(kind){
       + '<td style="padding:8px;font-size:11px;color:#8a99a0;">'+esc(it.reason||'')+'</td></tr>';
   }).join('') : '<tr><td colspan="5" style="padding:14px;color:#9aa7ad;font-size:13px;">None right now.</td></tr>';
   ov.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:640px;width:100%;max-height:85vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);">'
-    + '<div style="background:#04243a;color:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;"><div><div style="font-weight:800;font-family:Montserrat,sans-serif;">'+title+'</div><div style="font-size:12px;color:#9fc0d0;margin-top:3px;">'+esc(sub)+'</div></div><button onclick="document.getElementById(\'ciRenewalsOverlay\').remove()" style="background:none;border:none;color:#fff;font-size:24px;cursor:pointer;line-height:1;">&times;</button></div>'
+    + '<div style="background:#04243a;color:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;"><div><div style="font-weight:800;font-family:Montserrat,sans-serif;">'+title+'</div><div style="font-size:12px;color:#9fc0d0;margin-top:3px;">'+esc(sub)+'</div></div><button onclick="gpsRemove(\'ciRenewalsOverlay\')" style="background:none;border:none;color:#fff;font-size:24px;cursor:pointer;line-height:1;">&times;</button></div>'
     + '<div style="padding:14px 18px;"><table style="width:100%;border-collapse:collapse;"><thead><tr style="text-align:left;">'
     + '<th style="padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#8a99a0;">Client</th>'
     + '<th style="padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#8a99a0;">Org</th>'
@@ -6659,7 +6660,7 @@ function notifOpenSnooze(k) {
   picker.style.cssText = 'position:absolute;right:0;top:28px;background:#fff;border:1px solid var(--d-border);border-radius:8px;padding:6px;z-index:200;min-width:130px;box-shadow:0 4px 16px rgba(0,0,0,.12);';
   picker.innerHTML = '<div style="font-size:11px;color:var(--d-mid);padding:3px 6px 6px;font-weight:600;border-bottom:1px solid #eee;margin-bottom:4px;">Snooze for…</div>'
     + [3,7,14].map(function(d){
-        return '<div onclick="event.stopPropagation();notifSnooze(\'' + k + '\',' + d + ');document.getElementById(\'notifPicker_' + k + '\').remove();" style="padding:6px 8px;border-radius:4px;cursor:pointer;font-size:12px;color:var(--d-dark);" onmouseover="this.style.background=\'#f4f6f8\'" onmouseout="this.style.background=\'\'">'+d+' days</div>';
+        return '<div onclick="event.stopPropagation();notifSnooze(\'' + k + '\',' + d + ');gpsRemove(\'notifPicker_' + k + '\');" style="padding:6px 8px;border-radius:4px;cursor:pointer;font-size:12px;color:var(--d-dark);" onmouseover="this.style.background=\'#f4f6f8\'" onmouseout="this.style.background=\'\'">'+d+' days</div>';
       }).join('');
   anchor.appendChild(picker);
   setTimeout(function() {
@@ -9048,7 +9049,7 @@ async function previewResultsPage(){
   ov.innerHTML=`<div style="background:#F4F6F8;border-radius:12px;max-width:920px;width:100%;padding:18px 18px 26px;box-shadow:0 10px 40px rgba(0,0,0,.2);">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:6px;">
       <div style="font-family:Montserrat,sans-serif;font-size:17px;font-weight:800;color:#004369;">Client results page — private preview</div>
-      <button onclick="document.getElementById('crs-overlay').remove()" style="background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#888;">&times;</button>
+      <button onclick="gpsRemove('crs-overlay')" style="background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#888;">&times;</button>
     </div>
     <div style="background:#fff8e1;border:1px solid #ffd76a;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#7a5b00;"><strong>Only you can see this.</strong> Exactly what ${esc(d.client_name||'the leader')} will see on their results page once released. They have no access yet. Use “Edit results-page words” to set the headline, the honest read, and the two quotes.</div>
     ${pageHtml}
@@ -9144,7 +9145,7 @@ function openResultsNarrativeEditor(){
   ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:600px;width:100%;padding:22px 24px;box-shadow:0 10px 40px rgba(0,0,0,.2);">'
     +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:4px;">'
     +'<div style="font-family:Montserrat,sans-serif;font-size:17px;font-weight:800;color:#004369;">Results-page words &mdash; '+esc(d.client_name||'')+'</div>'
-    +'<button onclick="document.getElementById(\'rn-overlay\').remove()" style="background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#888;">&times;</button>'
+    +'<button onclick="gpsRemove(\'rn-overlay\')" style="background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#888;">&times;</button>'
     +'</div>'
     +'<div style="font-size:12px;color:#5a6b76;margin-bottom:6px;">All fields are pre-filled with the auto-generated wording. Edit anything that needs a personal touch &mdash; or leave as-is. Saves immediately to the leader page.</div>'
     +fld('rn-headline','Headline (one line)',_v(n.headline,''),'e.g. Solid with your team; a trust problem with your boss.')
@@ -9157,7 +9158,7 @@ function openResultsNarrativeEditor(){
     +fld('rn-sup','Supervisor quote',_v(n.supervisor_quote,''),'A short real quote from the supervisor open-ended responses.',3)
     +fld('rn-team','Team quote',_v(n.team_quote,''),'A short real quote from a direct report.',3)
     +'<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;">'
-    +'<button class="dbtn dbtn-outline" onclick="document.getElementById(\'rn-overlay\').remove()">Cancel</button>'
+    +'<button class="dbtn dbtn-outline" onclick="gpsRemove(\'rn-overlay\')">Cancel</button>'
     +'<button class="dbtn dbtn-primary" id="rn-save" onclick="saveResultsNarrative(event)">Save words</button>'
     +'</div>'
     +'</div>';
@@ -9229,7 +9230,7 @@ function renderReportDocEditor(){
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px;">'
     +'<div><div style="font-family:Montserrat,sans-serif;font-size:17px;font-weight:800;color:#004369;">Structured report — '+esc(d.client_name||'')+'</div>'
     +'<div style="font-size:12px;color:#5a6b76;margin-top:2px;max-width:560px;">Edit each section, or Generate a draft from the diagnostic data in your voice. The client results snapshot and the 90-day plan prefill draw from this. The sponsor sees their own Decision Room page, not these sections.</div></div>'
-    +'<button onclick="document.getElementById(\'rd-overlay\').remove()" style="background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#888;">&times;</button></div>'
+    +'<button onclick="gpsRemove(\'rd-overlay\')" style="background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#888;">&times;</button></div>'
     +'<div style="border:1px solid #e6ebf0;border-radius:9px;padding:12px 14px;margin:6px 0 4px;background:#f7fafc;">'
     +'<label style="display:flex;align-items:flex-start;gap:7px;font-weight:800;color:#004369;font-size:12.5px;cursor:pointer;"><input type="checkbox" id="rd-sponsor-focus" '+(REPORT_SPONSOR_FOCUS?'checked ':'')+'onchange="rdToggleSponsorFocus()" style="margin-top:2px;"><span>Sponsor is looking for a specific outcome</span></label>'
     +'<div style="font-size:11px;color:#9aa7ad;margin:3px 0 0 23px;line-height:1.4;">Check when a sponsor needs this person developed toward a result — a new role, the right-person-for-the-job call, or a business target. Leave unchecked for pure self-development (the business outcome stays hidden everywhere).</div>'
@@ -9245,7 +9246,7 @@ function renderReportDocEditor(){
     +'</div>'
     +rows
     +'<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;position:sticky;bottom:-1px;background:#fff;padding:10px 0;border-top:1px solid #eef1f2;">'
-    +'<button class="dbtn dbtn-outline" onclick="document.getElementById(\'rd-overlay\').remove()">Close</button>'
+    +'<button class="dbtn dbtn-outline" onclick="gpsRemove(\'rd-overlay\')">Close</button>'
     +'<button class="dbtn dbtn-primary" id="rd-save" onclick="saveReportDoc(event)">Save all sections</button></div>';
 }
 function rdToggleSponsorFocus(){
@@ -9350,7 +9351,7 @@ function renderPlanPrefillEditor(){
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px;">'
     +'<div><div style="font-family:Montserrat,sans-serif;font-size:17px;font-weight:800;color:#004369;">90-day plan draft — '+esc(d.client_name||'')+'</div>'
     +'<div style="font-size:12px;color:#5a6b76;margin-top:2px;max-width:560px;">Generate a recommended plan from the diagnostic + report, edit it, then save. The client opens their plan already filled in with these values and can still edit every field. Only applies until the client submits their plan.</div></div>'
-    +'<button onclick="document.getElementById(\'pp-overlay\').remove()" style="background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#888;">&times;</button></div>'
+    +'<button onclick="gpsRemove(\'pp-overlay\')" style="background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#888;">&times;</button></div>'
     +'<div style="margin:6px 0 12px;"><button class="dbtn dbtn-outline" id="pp-gen" onclick="generatePlanPrefillDraft(event)">⚙ Generate draft from diagnostic</button></div>'
     +ppField('Key theme','pp-theme',PLAN_PREFILL.key_theme,'central development theme')
     +'<div style="margin:8px 0;"><label for="pp-pillar" style="display:block;font-weight:700;color:#004369;font-size:12px;margin-bottom:4px;">Recommended focus pillar <span style="font-weight:600;color:#9aa7ad;">(auto-recommended; change if needed)</span></label>'
@@ -9368,7 +9369,7 @@ function renderPlanPrefillEditor(){
     +'</div>'
     +ppArea('Metric 2 — stakeholder-rated behavior (1-5)','pp-m2q',m2.question,'a behavior stakeholders rate 1-5')
     +'<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;position:sticky;bottom:-1px;background:#fff;padding:10px 0;border-top:1px solid #eef1f2;">'
-    +'<button class="dbtn dbtn-outline" onclick="document.getElementById(\'pp-overlay\').remove()">Close</button>'
+    +'<button class="dbtn dbtn-outline" onclick="gpsRemove(\'pp-overlay\')">Close</button>'
     +'<button class="dbtn dbtn-primary" id="pp-save" onclick="savePlanPrefill(event)">Save &amp; prefill client</button></div>';
 }
 async function generatePlanPrefillDraft(e){
