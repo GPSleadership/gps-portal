@@ -433,16 +433,20 @@ export default async function handler(req, res) {
         // relevant link is not configured yet, so nothing renders half-built.
         const cfgRes = await sb(`/rest/v1/renewal_config?id=eq.1&select=*&limit=1`);
         const cfg = (cfgRes.ok ? (await cfgRes.json())[0] : null) || {};
-        const cRes = await sb(`/rest/v1/clients?id=eq.${encodeURIComponent(clientId)}&select=is_coaching_client,plan_start_date,payer_type,subscription_status&limit=1`);
+        const cRes = await sb(`/rest/v1/clients?id=eq.${encodeURIComponent(clientId)}&select=in_coaching_program,coaching_sessions_enabled,is_active_coaching,plan_start_date,payer_type,subscription_status&limit=1`);
         const client = cRes.ok ? (await cRes.json())[0] : null;
         if (!client) return res.status(200).json({ ok: true, show: false });
+        // Canonical "active coaching client" test — matches isCoaching() at L69,
+        // get-client.js:404, coach.html. Replaces the phantom is_coaching_client
+        // column (P0-2, 2026-07-01 audit) that 400'd and hid every offer.
+        const isCoachingClient = !!(client.in_coaching_program || client.coaching_sessions_enabled || client.is_active_coaching);
         const payer_type = client.payer_type || 'leader_pays';
         const today = new Date(); today.setHours(0, 0, 0, 0);
         const addDays = function (d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
         const ymd = function (d) { return d.toISOString().slice(0, 10); };
 
         // Touchpoint B — continuation, for active coaching clients in/near sprint end.
-        if (client.is_coaching_client) {
+        if (isCoachingClient) {
           const spRes = await sb(`/rest/v1/sprints?client_id=eq.${encodeURIComponent(clientId)}&select=start_date,end_date,sprint_number,status&order=sprint_number.desc&limit=1`);
           const sp = spRes.ok ? (await spRes.json())[0] : null;
           const start = (sp && sp.start_date) ? new Date(sp.start_date) : (client.plan_start_date ? new Date(client.plan_start_date) : null);

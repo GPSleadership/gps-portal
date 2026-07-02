@@ -1,9 +1,76 @@
 # GPS Portal — Master Build List (prioritized, de-duplicated)
 
-**Compiled:** June 24, 2026
-**Sources reconciled:** `GPS-PORTAL-ROADMAP.md` (dated May 2026), `GPS_PORTAL_BACKLOG.md` (dated June 5, 2026), and the `cio_findings` ledger in Supabase (open items as of today). Duplicates across sources have been merged; items that have shipped since those lists were written are moved to Section 4 so they can be crossed off.
+**Compiled:** June 24, 2026 · **Last updated:** July 1, 2026 (full six-lens audit merged — see new top section)
+**Sources reconciled:** `GPS-PORTAL-ROADMAP.md` (dated May 2026), `GPS_PORTAL_BACKLOG.md` (dated June 5, 2026), the `cio_findings` ledger in Supabase, and the **July 1, 2026 full audit** (`EIS_Master_Audit_and_Plan_2026-07-01.md` + appendices: app, security, ux-mobile, frontier, opportunities, premortem). Duplicates across sources have been merged; items shipped since these lists were written are in Section 4.
 
-Priority key: **P1** = do soon / time-sensitive · **P2** = high value, schedule it · **P3** = later / nice-to-have. Effort is a rough t-shirt size.
+Priority key: **P0** = live exposure / live revenue loss, fix now · **P1** = do soon / time-sensitive · **P2** = high value, schedule it · **P3** = later / nice-to-have. Effort is a rough t-shirt size.
+
+---
+
+## 🚨 TOP PRIORITY — July 1, 2026 Full Audit (do first, in this order)
+
+Full detail and evidence in **`EIS_Master_Audit_and_Plan_2026-07-01.md`**. Every P0 was independently verified against the live site, the repo, or the database. **Ship all through `gps-portal-safe-build` — never push straight to `main`.**
+
+### P0 — Fix now (live exposure or live revenue loss)
+
+| # | Item | Effort | Status | Evidence |
+|---|------|--------|--------|----------|
+| **P0-1** | **Personal financial data public** — `gps-executive-console.html` served with bank balances, card last-4s/APRs, payroll, client deals in static HTML; login is a JS overlay only. Add to `.vercelignore` + redeploy today; then re-home behind `/api/console-data` auth. Rotate anything referenced. | S | 🔧 building | Verified: file tracked, only `-deploy` variant ignored |
+| **P0-2** | **Renewal/upsell offer silently dead** — `portal-data.js:436/445` queries phantom `clients.is_coaching_client` → 400 → `show:false` for every client. Sergio's $10K credit window is open **through July 7** and showing nothing. Fix: use canonical `in_coaching_program \|\| coaching_sessions_enabled \|\| is_active_coaching`; add `renewal-options` to synthetic-check. | S | 🔧 building | Verified: 400 in live logs; Sergio `debrief_complete` 6/30, credit URL configured |
+| **P0-3** | **Seven public zip blobs** (`zi5BMnX1`…`ziw7HK1Q`) leak full portal + api source, DB schema snapshot, Ask-Alex system prompt. `git rm` all seven + redeploy; rotate captured secrets. | S | 🔧 building | Verified: 7 blobs tracked & served |
+| **P0-4** | **Unauthenticated privileged actions** in `api/diagnostic.js` (`send-invites` L661, `generate-question` L1049, `generate-g2-question` L1145, `finalize-report` L2024, `import-survey-data` L3620) — service-key writes/email/Anthropic spend with only a method check; IDs interpolated without `encodeURIComponent`. Add `verifyCoachSession` + encode all IDs. | M | ⏳ queued | Verified: code read |
+
+### P0.5 — Structural prevention (stops the next P0)
+
+- **Deploy is a denylist → every new file is public by default.** How BOTH P0-1 and P0-3 escaped. Move to an allowlist deploy (explicit `public/` set) **or** add a pre-push check that flags any newly tracked non-HTML/JS file. Highest-leverage prevention in the audit. — M
+
+### P1 — This week
+
+- **Coach dashboard crash still live** — `Cannot read properties of null (reading 'remove')`, 8 hits July 1; guard the inline `getElementById(...).remove()` handlers in `coach.html` (4330, 4779, 9051, …). — S — *Verified (client_errors)*
+- **Re-skin the three assessment pages** (`feedback.html`, `survey.html`, `diagnostic-survey.html`) to the real GPS palette (`#004369` / teal `#01949A` / red `#DB1F48`), add the logo, strip all emoji. First thing a stakeholder sees; currently looks like a cheaper, different company. Cheapest trust win in the system. — S–M
+- **Fix wizard step-count contradiction** — top bar "STEP 1 OF 8" vs inner "Step N of 7" (`client.html` step badges + `wizSteps` render). — S
+- **Restore mobile wizard step context** — at ≤480px all step labels hide (`client.html:417`); keep one persistent "Step N of 7 · <label>" line. — S
+- **`business_outcome_goal` leaks to client browser** (UI-only gate) — return an explicit column allowlist from `get-client.js:463`. — S
+
+### P1/P2 — Reliability batch (next 30 days) — extends the June 24 Reliability path
+
+- **Email failure handling** — failed Resend drafts stay `scheduled`, retry every 15 min forever, no cap/alert. Stamp `last_error`/`attempts`, alert after N, pin FROM domain. — M
+- **Cron heartbeats for the 3 silent jobs** — `diag-send-scheduled`, `survey-send-scheduled`, `workshop-reminders` (send-scheduled delivers sponsor sequences + invites). — S
+- **Add `renewal-options` (+ one write-free action per feature) to `synthetic-check`** — the money path had no monitor. — S
+- **P2 severity routing** — detector files everything P2 but the daily brief only surfaces P0/P1, so real issues never reach Alex. — S
+
+### Conversion (Decision Room) — next 30 days
+
+- **Sample-diagnostic proof at the sticky CTA** (`decision-room.html:170`) — currently a hard conversion fail; highest-converting lever. Add "See a sample readout →" thumbnail. — S
+- **Strengthen CTA copy** ("pick a start date; we'll send your prep brief"); protect the sticky label at 390px. — S
+
+### Engagement loop — this quarter (highest-ROI *feature* work; feature-rich but engagement-poor: 32 clients, 12 check-ins ever)
+
+- **One-tap email check-in** — "On track / Partial / Off track" buttons inside the Monday reminder via a tokenized endpoint. Likely the single biggest completion lever. — M — *NEW*
+- **Personalized AI nudge in the reminder** — 2 lines in Alex's voice referencing the client's own behavior + last check-in, generated in `send-reminders.js`. — M — *NEW*
+- **Resurface last week's commitment** — show `planned_action` atop Form A with Done/Not-done (currently write-only). — S — *NEW*
+- **Recurring stakeholder pulse** — 2-question mini-survey to 3–5 stakeholders every few weeks; trend-lined; reuses feedback plumbing; arms renewals. — M — *NEW*
+- **Tool of the Week** in the reminder email (35 tools, 3 opens ever). — S — *NEW*
+- **Post-check-in renewal/referral moment** — ask after a delivered win, never during setup. — S — *NEW*
+
+### Security hardening (extends the June 24 Security path)
+
+- **Revoke blanket anon/authenticated DML** on the 43 public tables (table-by-table + smoke test) so RLS deny-all isn't the *only* backstop. — M
+- Rotate + hash `control_password`; drop dead anon `createClient` blocks from HTML; export & drop the two `backup_*` PII schemas; stop serving stray root `.js`; tighten `/api/*` CORS to portal origin; retire plaintext-password fallbacks. — S each
+
+### Mobile polish (client core already mobile-hardened + PWA shipped)
+
+- Set wizard button heights on their own class; bump coach buttons 42→44px; **pilot web push** (the one capability the PWA lacks). — S / Test-tier
+
+### Growth (business, not portal) — frontier scan
+
+- **Succession-Readiness reframe of the 14-Day Diagnostic** (zero new build; pitch to member programs like HDA Truck Pride). — S
+- **Owner-Dependence Index** — free benchmarked 10-Q wedge on the existing survey engine; feeds the diagnostic pipeline. — M
+- **"Lead Through the Wait" positioning** — rewrite diagnostic marketing in the distributors' uncertainty language. — S
+
+### Doc hygiene
+
+- `GPS-PORTAL-ROADMAP.md` still lists **PWA as "planned"** — it's shipped. Prune roadmap/backlog so this list stays the single source of truth.
 
 ---
 

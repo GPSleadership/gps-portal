@@ -29,11 +29,23 @@ client-PRE-WIZARD-BACKUP-2026-06-01.html
 onboarding-sandbox.html
 workshop-sandbox.html
 diagnostic-coach.html
+gps-executive-console.html
 gps-executive-console-deploy.html
 gps-ea-console.html
 control.html
 _SANDBOX_new-features.html
 ops-console-deploy/
+
+# ── Stray extensionless zip blobs (P0-3, 2026-07-01 audit) — leak full
+# source/schema/prompts; the *.md/*.sql rules don't reach inside a zip.
+# Listed here for immediate deploy-safety; also git rm'd from the repo.
+zi5BMnX1
+zi9SwTvy
+ziRezBZW
+ziS1Y6yw
+ziS3AIaJ
+ziepZ4pD
+ziw7HK1Q
 
 # NOTE: coach-emergency.html, diagnostic-sandbox.html, and workshop-poc.html
 # have intentional route rewrites in vercel.json and are LEFT deployed.
