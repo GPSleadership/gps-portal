@@ -136,23 +136,21 @@ fi
 echo ""
 echo "▸ Known syntax hazards"
 
-declare -A HAZARD_BASELINE=( ["coach.html"]=0 ["client.html"]=0 )
+# bash 3.2 compatible (macOS default has no associative arrays). Baseline is 0 for both.
 HAZARD_FOUND=0
 
-for f in "${!HAZARD_BASELINE[@]}"; do
+for f in coach.html client.html; do
   if [ ! -f "$f" ]; then
     continue
   fi
-  BASELINE=${HAZARD_BASELINE[$f]}
   COUNT=$(python3 -c "
 with open('$f', 'r', encoding='utf-8') as fh:
     content = fh.read()
 print(content.count(chr(92) + chr(96)))
 " 2>/dev/null)
 
-  NEW=$(( COUNT - BASELINE ))
-  if [ "$NEW" -gt "0" ]; then
-    echo "  ✗ $f: $NEW new escaped backtick(s) found (${COUNT} total, ${BASELINE} known-safe) — likely JS syntax error"
+  if [ "${COUNT:-0}" -gt "0" ]; then
+    echo "  ✗ $f: ${COUNT} escaped backtick(s) found — likely JS syntax error"
     echo "    Search for \\\\\` in the file to locate them"
     ERRORS=$((ERRORS + 1))
     HAZARD_FOUND=1

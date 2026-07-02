@@ -3617,7 +3617,7 @@ async function loadClient() {
         var _emailCi = new URLSearchParams(location.search).get('checkin');
         if (_emailCi && ['on_track', 'partial', 'off_track'].indexOf(_emailCi) !== -1) {
           window._emailCheckinStatus = _emailCi;
-          setTimeout(function () { try { openMobileCheckin(); } catch (_) {} }, 200);
+          setTimeout(function () { try { applyEmailCheckin(_emailCi); } catch (_) {} }, 250);
         }
       } catch (_) {}
       renderRenewalOffer();
@@ -5046,6 +5046,38 @@ function openMobileCheckin() {
 function closeMobileCheckin() {
   document.body.classList.remove('checkin-focus');
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// Stage 2 of the email check-in hybrid: when the leader arrives via an email status
+// button (?checkin=on_track|partial|off_track), open the check-in, acknowledge the tap,
+// and pre-fill the matching "did you follow through?" answer so the form is already in
+// motion. Fully guarded — it only ever helps; it never blocks or breaks the check-in.
+function applyEmailCheckin(status) {
+  try { openMobileCheckin(); } catch (_) {}
+  var card = document.getElementById('checkinCard');
+  if (!card) return;
+  var labels = { on_track: 'On track', partial: 'Partial', off_track: 'Off track' };
+  if (!document.getElementById('emailCheckinBanner')) {
+    var b = document.createElement('div');
+    b.id = 'emailCheckinBanner';
+    b.style.cssText = 'background:#eaf2f6;border-left:4px solid #01949A;border-radius:0 6px 6px 0;padding:10px 14px;margin:0 0 16px;font-size:13px;color:#004369;';
+    b.innerHTML = 'You tapped <strong>' + (labels[status] || '') + '</strong> from your email — take a minute to log it below.';
+    var sub = card.querySelector('.card-subtitle');
+    if (sub && sub.parentNode) sub.parentNode.insertBefore(b, sub.nextSibling);
+    else card.insertBefore(b, card.firstChild);
+  }
+  var map = { on_track: 'Yes', partial: 'Partially', off_track: 'No' };
+  var want = map[status];
+  var grp = document.getElementById('completionGroup');
+  if (grp && want) {
+    var lbls = grp.querySelectorAll('label');
+    for (var i = 0; i < lbls.length; i++) {
+      var inp = lbls[i].querySelector('input');
+      if (inp && inp.value === want) { try { selectRadio('completionGroup', lbls[i]); } catch (_) {} inp.checked = true; }
+    }
+    var barrier = document.getElementById('barrierGroup');
+    if (barrier) barrier.style.display = (want === 'Yes') ? 'none' : '';
+  }
 }
 
 // Collapsible plan card (mobile): toggle the .expanded state + button label.
