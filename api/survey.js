@@ -827,8 +827,10 @@ async function handleSubmit(req, res) {
 
     // Auto-taper: if the behavior has scored 4+/5 across raters on two consecutive
     // pulses, cancel the remaining scheduled pulses (measurement retires once the
-    // behavior is embedded). Fire-and-forget so it never delays the response.
-    maybeAutoTaper(client_id, tokenRecord.sprint_number || 1).catch(() => {});
+    // behavior is embedded). AWAITED (not fire-and-forget) so it reliably completes
+    // before the serverless function can freeze after the response is sent.
+    // maybeAutoTaper has its own internal try/catch, so it can never fail a submit.
+    await maybeAutoTaper(client_id, tokenRecord.sprint_number || 1);
 
     return res.status(200).json({ success: true });
 
