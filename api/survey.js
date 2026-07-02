@@ -88,11 +88,12 @@ export default async function handler(req, res) {
     case 'get':    return handleGet(req, res);
     case 'send':   return handleSend(req, res);
     case 'schedule-send':  return handleScheduleSend(req, res);
+    case 'schedule-pulses': return handleSchedulePulses(req, res);
     case 'send-scheduled': return handleSendScheduled(req, res);
     case 'resend': return handleResend(req, res);
     case 'submit': return handleSubmit(req, res);
     default:
-      return res.status(400).json({ error: `Unknown action: "${action}". Valid: get, send, schedule-send, send-scheduled, resend, submit` });
+      return res.status(400).json({ error: `Unknown action: "${action}". Valid: get, send, schedule-send, schedule-pulses, send-scheduled, resend, submit` });
   }
 }
 
@@ -132,13 +133,20 @@ function buildSendSubjectLine(clientName, checkpoint) {
   const first = clientName.split(' ')[0];
   if (checkpoint === 'baseline') return `${first} would value your candid feedback`;
   if (checkpoint === 'day30')   return `Quick mid-point check-in for ${first}`;
+  if (checkpoint === 'day45')   return `A quick pulse on ${first}'s progress`;
   return `Final 90-day feedback for ${first}`;
 }
 
-function buildSendEmailHtml(stakeholderName, clientName, checkpoint, priorityBehavior, surveyLink) {
+function buildSendEmailHtml(stakeholderName, clientName, checkpoint, priorityBehavior, surveyLink, progressNote) {
   const clientFirst = clientName.split(' ')[0];
   const p   = t => `<p style="color:#1B2A4A;font-size:15px;line-height:1.75;margin:0 0 14px;">${t}</p>`;
   const li  = t => `<li style="color:#1B2A4A;font-size:15px;line-height:1.75;margin-bottom:8px;">${t}</li>`;
+
+  // Peak-end "here's the change" block — shows the stakeholder how far the leader
+  // has already moved, so a repeat pulse feels like progress, not another cold ask.
+  const progressBlock = progressNote
+    ? `<div style="background:#EAF3F1;border-left:3px solid #0F6E56;padding:11px 16px;margin:14px 0;border-radius:0 6px 6px 0;font-size:14px;color:#0F3D30;line-height:1.65;">${progressNote}</div>`
+    : '';
 
   const behaviorBlock = `
     <div style="background:#F5F6F8;border-left:3px solid #C9A84C;padding:11px 16px;margin:14px 0;border-radius:0 6px 6px 0;font-size:14px;color:#1B2A4A;font-style:italic;line-height:1.65;">
@@ -191,15 +199,28 @@ function buildSendEmailHtml(stakeholderName, clientName, checkpoint, priorityBeh
       ${p(`You previously shared baseline feedback as one of their key stakeholders.`)}
       ${p(`We're now at the midpoint and would value a quick update from you. Please complete this very short check-in (1 question):`)}
       ${ctaBtn}
+      ${progressBlock}
       ${p(`You'll be asked to rate, on a 1–5 scale, how consistently ${clientFirst} has demonstrated the behavior above over the last 2 weeks, plus an optional comment field.`)}
       ${p(`Your numeric rating will be visible to both ${clientFirst} and their coach. For any written comments, you can again choose whether they are shared with both or only with the coach.`)}
       ${p(`${clientFirst} and their coach are copied here so everyone knows this request was sent. Your responses are still used for development, not formal evaluation.`)}
       ${p(`Thank you again for your support and candor.`)}`;
+  } else if (checkpoint === 'day45') {
+    body = `
+      ${p(`Hi ${stakeholderName},`)}
+      ${p(`${clientFirst} is partway through a 90-day leadership sprint focused on:`)}
+      ${behaviorBlock}
+      ${progressBlock}
+      ${p(`We'd value another quick read from you. Please complete this short check-in (1 question):`)}
+      ${ctaBtn}
+      ${p(`You'll be asked to rate, on a 1–5 scale, how consistently ${clientFirst} has demonstrated the behavior above over the last 2 weeks, plus an optional comment.`)}
+      ${p(`Your numeric rating is visible to both ${clientFirst} and their coach. Written comments follow the visibility setting you choose. This is for development, not evaluation.`)}
+      ${p(`Thank you for staying involved — your steady input is what makes the change stick.`)}`;
   } else {
     body = `
       ${p(`Hi ${stakeholderName},`)}
       ${p(`You've been part of ${clientFirst}'s 90-day leadership sprint focused on:`)}
       ${behaviorBlock}
+      ${progressBlock}
       ${p(`We're now at the final checkpoint. To help ${clientFirst} see what has actually changed from your perspective, please complete this brief survey:`)}
       ${ctaBtn}
       ${p(`You'll be asked to:`)}
@@ -272,6 +293,124 @@ async function logEmail({ client_id, recipient_email, recipient_name, email_type
   } catch (_) {}
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// ACTION: schedule-pulses (coach session auth) — set a client's stakeholder-pulse
+// cadence tier and (re)schedule the sprint's pulses into survey_schedules.
+// Body: { client_id, tier: 'aggressive'|'light'|'off', session | password }
+// Pulses are anchored to plan_start_date (fallback: today), at internal day
+// 21/45/80, shifted to weekdays only. Idempotent. 'off' cancels all pending pulses.
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleSchedulePulses(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  try {
+    const { client_id, tier, password } = req.body || {};
+    if (!client_id) return res.status(400).json({ error: 'client_id is required' });
+
+    const authOk = !!verifyCoachSession(req.body?.session) || await verifyPassword(password);
+    if (!authOk) return res.status(401).json({ error: 'Not authorized' });
+
+    const cRes = await sbFetch(`/rest/v1/clients?id=eq.${client_id}&select=id,name,plan_start_date,current_sprint_number,pulse_cadence_tier`);
+    if (!cRes.ok) return res.status(500).json({ error: 'Failed to load client' });
+    const rows = await cRes.json();
+    if (!rows || rows.length === 0) return res.status(404).json({ error: 'Client not found' });
+    const client = rows[0];
+
+    const { schedulePulses, normalizeTier } = require('./pulse-schedule');
+    const useTier = normalizeTier(tier != null ? tier : client.pulse_cadence_tier);
+
+    // Persist the tier; a fresh coach-set cadence clears any prior auto-taper so
+    // the taper window can start over (e.g. restarting an aggressive sprint).
+    await sbFetch(`/rest/v1/clients?id=eq.${client_id}`, 'PATCH',
+      { pulse_cadence_tier: useTier, pulse_tapered_at: null },
+      { Prefer: 'return=minimal' });
+
+    const anchor = client.plan_start_date || new Date().toISOString().split('T')[0];
+    const result = await schedulePulses({
+      client_id,
+      tier: useTier,
+      anchorDate: anchor,
+      currentSprint: client.current_sprint_number || 1
+    });
+
+    return res.status(200).json({ ok: true, anchor, ...result });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+// Auto-taper evaluator. Cancels remaining scheduled pulses for a client's current
+// sprint once the target behavior has scored an average of 4+/5 across raters on
+// two consecutive MEASURED pulses. A pulse counts as "measured" once at least
+// half of the active stakeholders (min 2) have responded, so a single early 5
+// can't trip it. Sets clients.pulse_tapered_at so the coach UI can show why the
+// cadence stopped early. Safe to call on every submit (idempotent, guarded).
+async function maybeAutoTaper(client_id, sprintNumber) {
+  try {
+    const cRes = await sbFetch(`/rest/v1/clients?id=eq.${client_id}&select=id,pulse_tapered_at`);
+    if (!cRes.ok) return;
+    const crows = await cRes.json();
+    if (!crows || !crows.length) return;
+    if (crows[0].pulse_tapered_at) return; // already tapered
+
+    const shRes = await sbFetch(`/rest/v1/stakeholders?client_id=eq.${client_id}&is_active=eq.true&select=id`);
+    const activeCount = shRes.ok ? (await shRes.json()).length : 0;
+    if (activeCount < 2) return; // not enough raters to judge "across raters"
+    const quorum = Math.max(2, Math.ceil(activeCount / 2));
+
+    const rRes = await sbFetch(`/rest/v1/survey_responses?client_id=eq.${client_id}&sprint_number=eq.${sprintNumber}&checkpoint=in.(day30,day45,day90)&select=checkpoint,score`);
+    if (!rRes.ok) return;
+    const responses = await rRes.json();
+
+    const order = ['day30', 'day45', 'day90'];
+    const byCp = {};
+    for (const r of (responses || [])) {
+      (byCp[r.checkpoint] = byCp[r.checkpoint] || []).push(Number(r.score));
+    }
+    // Measured pulses in send order, with their average.
+    const measured = order
+      .filter(cp => (byCp[cp] || []).length >= quorum)
+      .map(cp => ({ cp, avg: byCp[cp].reduce((a, b) => a + b, 0) / byCp[cp].length }));
+
+    if (measured.length < 2) return;
+    const lastTwo = measured.slice(-2);
+    if (lastTwo[0].avg >= 4 && lastTwo[1].avg >= 4) {
+      const { cancelRemainingPulses } = require('./pulse-schedule');
+      await cancelRemainingPulses(client_id);
+      await sbFetch(`/rest/v1/clients?id=eq.${client_id}`, 'PATCH',
+        { pulse_tapered_at: new Date().toISOString() },
+        { Prefer: 'return=minimal' });
+    }
+  } catch (_) { /* taper must never break a submit */ }
+}
+
+// Builds the peak-end progress sentence for a pulse email: how the leader's
+// average rating on the target behavior has moved from baseline to the most
+// recent measured pulse. Returns '' for the first pulse or when data is thin.
+async function buildProgressNote(client_id, sprintNumber, checkpoint, clientFirst) {
+  try {
+    if (checkpoint !== 'day45' && checkpoint !== 'day90') return '';
+    const rRes = await sbFetch(`/rest/v1/survey_responses?client_id=eq.${client_id}&sprint_number=eq.${sprintNumber}&select=checkpoint,score`);
+    if (!rRes.ok) return '';
+    const responses = await rRes.json();
+    const avgOf = cp => {
+      const s = (responses || []).filter(r => r.checkpoint === cp).map(r => Number(r.score));
+      return s.length ? s.reduce((a, b) => a + b, 0) / s.length : null;
+    };
+    const baseline = avgOf('baseline');
+    // Most recent prior pulse before the one being sent now.
+    const priorOrder = checkpoint === 'day90' ? ['day45', 'day30'] : ['day30'];
+    let latest = null;
+    for (const cp of priorOrder) { const v = avgOf(cp); if (v != null) { latest = v; break; } }
+    if (baseline == null || latest == null) return '';
+    const b = baseline.toFixed(1), l = latest.toFixed(1);
+    if (latest > baseline) {
+      return `Since the baseline, stakeholder ratings of ${clientFirst} on this behavior have risen from ${b} to ${l} (1–5 scale). Your read below helps confirm whether that change is holding.`;
+    }
+    return `Stakeholder ratings of ${clientFirst} on this behavior are currently averaging ${l} of 5 (baseline was ${b}). Your candid read below matters most where progress is still in motion.`;
+  } catch (_) { return ''; }
+}
+
 async function handleSend(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -279,7 +418,7 @@ async function handleSend(req, res) {
     const { client_id, checkpoint = 'baseline', password } = req.body;
     if (!client_id) return res.status(400).json({ error: 'client_id is required' });
 
-    const validCheckpoints = ['baseline', 'day30', 'day90'];
+    const validCheckpoints = ['baseline', 'day30', 'day45', 'day90'];
     if (!validCheckpoints.includes(checkpoint)) {
       return res.status(400).json({ error: 'checkpoint must be baseline, day30, or day90' });
     }
@@ -313,6 +452,10 @@ async function performSend(client_id, checkpoint) {
 
   const clientFirstName = (client.name || '').split(' ')[0];
   const sprintNumber    = client.current_sprint_number || 1;
+
+  // Peak-end: for the 2nd/3rd pulses, show stakeholders how far the leader has
+  // already moved since baseline (computed once, reused for the whole batch).
+  const progressNote = await buildProgressNote(client_id, sprintNumber, checkpoint, clientFirstName);
 
   const stakeholderRes = await sbFetch(`/rest/v1/stakeholders?client_id=eq.${client_id}&is_active=eq.true&select=*`);
   if (!stakeholderRes.ok) return { ok:false, status:500, error:'Failed to load stakeholders' };
@@ -353,7 +496,7 @@ async function performSend(client_id, checkpoint) {
     // CC per the configurable global toggles + this client's project CCs.
     const ccAddresses = buildCcList(ccCfg, client.email, client.project_cc_emails);
     const _bl = require('./brand-link');
-    const _html = _bl.autoLinkBrand(buildSendEmailHtml(stakeholder.name, client.name, checkpoint, priorityBehavior, surveyLink), _bl.gpsDiagnosticLink(client));
+    const _html = _bl.autoLinkBrand(buildSendEmailHtml(stakeholder.name, client.name, checkpoint, priorityBehavior, surveyLink, progressNote), _bl.gpsDiagnosticLink(client));
     const emailRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
@@ -392,7 +535,7 @@ async function handleScheduleSend(req, res) {
   try {
     const { client_id, checkpoint = 'baseline', scheduled_at, password } = req.body || {};
     if (!client_id) return res.status(400).json({ error: 'client_id is required' });
-    const validCheckpoints = ['baseline', 'day30', 'day90'];
+    const validCheckpoints = ['baseline', 'day30', 'day45', 'day90'];
     if (!validCheckpoints.includes(checkpoint)) return res.status(400).json({ error: 'invalid checkpoint' });
     const authOk = !!verifyCoachSession(req.body.session) || await verifyPassword(password);
     if (!authOk) return res.status(401).json({ error: 'Not authorized' });
@@ -664,6 +807,7 @@ async function handleSubmit(req, res) {
 
     const insertRes = await sbFetch('/rest/v1/survey_responses', 'POST', {
       client_id, stakeholder_id, token_id: tokenRecord.id, checkpoint, score, scale: 5,
+      sprint_number: tokenRecord.sprint_number || 1,
       open_response: open_response || null,
       comments:      comments      || null,
       comments_visible_to_client: comments_visible_to_client !== false
@@ -680,6 +824,11 @@ async function handleSubmit(req, res) {
     );
 
     sendResponseNotifications({ client_id, stakeholder_id, checkpoint, score, comments_visible_to_client: comments_visible_to_client !== false, tokenRecord }).catch(() => {});
+
+    // Auto-taper: if the behavior has scored 4+/5 across raters on two consecutive
+    // pulses, cancel the remaining scheduled pulses (measurement retires once the
+    // behavior is embedded). Fire-and-forget so it never delays the response.
+    maybeAutoTaper(client_id, tokenRecord.sprint_number || 1).catch(() => {});
 
     return res.status(200).json({ success: true });
 

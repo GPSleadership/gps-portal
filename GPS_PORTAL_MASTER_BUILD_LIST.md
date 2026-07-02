@@ -49,7 +49,13 @@ Full detail and evidence in **`EIS_Master_Audit_and_Plan_2026-07-01.md`**. Every
 - **One-tap email check-in** — "On track / Partial / Off track" buttons inside the Monday reminder via a tokenized endpoint. Likely the single biggest completion lever. — M — *NEW*
 - **Personalized AI nudge in the reminder** — 2 lines in Alex's voice referencing the client's own behavior + last check-in, generated in `send-reminders.js`. — M — *NEW*
 - **Resurface last week's commitment** — show `planned_action` atop Form A with Done/Not-done (currently write-only). — S — *NEW*
-- **Recurring stakeholder pulse** — 2-question mini-survey to 3–5 stakeholders every few weeks; trend-lined; reuses feedback plumbing; arms renewals. — M — *NEW*
+- **Recurring stakeholder pulse** — 2-question mini-survey to 3–5 stakeholders; trend-lined; reuses feedback plumbing; arms renewals. — M — *NEW*
+  - **Cadence (decided 2026-07-02, w/ council):** Sprint 1 (first 90 days) = **3 pulses**, sent internally at **day 21 / 45 / 80** (outward-facing "30 / 45 / 90" — sent ~1 week early to absorb response lag so reads are in by the 30/90 marks). Reject **weekly** — that was Steven's setup and it burned out his stakeholders (his original doc told him to ask weekly).
+  - **Show progress, not just a data dump:** each pulse (and especially the final one) shows the stakeholder how far the leader has moved — a "here's the change" peak-end, not another cold ask. (Sutherland/Goldsmith.)
+  - **Auto-taper:** when a behavior scores **4+/5 across raters on 2 consecutive pulses**, system suggests easing off / pauses further pulses (measurement retires once the behavior is embedded).
+  - **Post-90 / renewal:** coach picks cadence tier per new goal — **Aggressive** (sprint cadence) / **Light** (45 + 90 only) / **Off** (leader-only). Default Light unless a genuinely new behavior warrants restarting the aggressive window.
+  - **Leave the leader's own weekly check-in unchanged** — weekly is fine for self-discipline; it's stakeholder-facing frequency that must taper.
+  - Schema note: `survey_schedules`, `scheduled_survey_sends`, and `coaching_cadence` already exist — build adds the coach-facing cadence-tier picker + the taper logic.
 - **Tool of the Week** in the reminder email (35 tools, 3 opens ever). — S — *NEW*
 - **Post-check-in renewal/referral moment** — ask after a delivered win, never during setup. — S — *NEW*
 
@@ -67,6 +73,15 @@ Full detail and evidence in **`EIS_Master_Audit_and_Plan_2026-07-01.md`**. Every
 - **Succession-Readiness reframe of the 14-Day Diagnostic** (zero new build; pitch to member programs like HDA Truck Pride). — S
 - **Owner-Dependence Index** — free benchmarked 10-Q wedge on the existing survey engine; feeds the diagnostic pipeline. — M
 - **"Lead Through the Wait" positioning** — rewrite diagnostic marketing in the distributors' uncertainty language. — S
+
+### Brand presence audit & consolidation (business, not portal) — *ADDED 2026-07-02, not started*
+
+**End goal:** a trucking / parts / logistics CEO who Googles "Alex Tremble" lands on a cohesive brand that immediately speaks to *their* world — not a government-leadership legacy. Four workstreams:
+
+1. **alextremble.com redirect + flush.** Verify `alextremble.com` is redirecting to `gpsleadership.org`. If yes, delete all remaining content from `alextremble.com` and request a cache/index refresh in Google Search Console to flush the old pages faster.
+2. **gpsleadership.org About + testimonials refresh.** Rewrite the About page and testimonials to *lead* with trucking, parts & service, and logistics client stories instead of government examples. Pull real client wins from the current ops-heavy book of business (anonymize per brand rules unless cleared).
+3. **Podcast SEO & positioning — *The Executive Appeal*.** Audit the show's SEO/positioning across major directories; make sure the description explicitly names the ICP (ops-heavy, multi-location CEOs) on Spotify, Apple Podcasts, and the RSS feed so ops CEOs find it when searching for leadership content in their space.
+4. **LinkedIn consistency.** Light refresh of the profile headline + Featured section to mirror gpsleadership.org messaging, so all surfaces are consistent.
 
 ### Doc hygiene
 
