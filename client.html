@@ -3611,6 +3611,15 @@ async function loadClient() {
       window._currentClient = client;
 
       renderPortal(client, checkins || []);
+      // Email deep-link: the Monday reminder's status button (?checkin=on_track|partial|off_track)
+      // drops the leader straight into the weekly check-in with the tapped status pre-noted. (2026-07-02)
+      try {
+        var _emailCi = new URLSearchParams(location.search).get('checkin');
+        if (_emailCi && ['on_track', 'partial', 'off_track'].indexOf(_emailCi) !== -1) {
+          window._emailCheckinStatus = _emailCi;
+          setTimeout(function () { try { openMobileCheckin(); } catch (_) {} }, 200);
+        }
+      } catch (_) {}
       renderRenewalOffer();
       renderResultsTab(surveyData || [], checkins || [], client, surveyTokenData || [], selfCheckData || []);
       renderClientStakeholderCard(client.id, stakeholderData || []);

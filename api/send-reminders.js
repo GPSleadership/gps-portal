@@ -396,6 +396,12 @@ export default async function handler(req, res) {
           ${bodyProse}
 
           <div style="margin:28px 0 0;text-align:center;">
+            <p style="font-size:14px;color:#333333;margin:0 0 12px;font-weight:600;">How's this week landing? Tap one to start your check-in:</p>
+            <a href="${portalLink}&checkin=on_track" style="display:inline-block;background:#157347;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:8px;font-size:14px;font-weight:700;margin:4px;">On track</a>
+            <a href="${portalLink}&checkin=partial" style="display:inline-block;background:#8F560F;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:8px;font-size:14px;font-weight:700;margin:4px;">Partial</a>
+            <a href="${portalLink}&checkin=off_track" style="display:inline-block;background:#DC2626;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:8px;font-size:14px;font-weight:700;margin:4px;">Off track</a>
+          </div>
+          <div style="margin:14px 0 0;text-align:center;">
             <a href="${portalLink}"
                style="background:#004369;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;display:inline-block;letter-spacing:0.3px;">
               Complete My Week ${currentWeek} Check-In →
