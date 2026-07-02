@@ -361,8 +361,8 @@ export default async function handler(req, res) {
     const isNewLink = body.type === 'new_portal_link';
 
     subject = isNewLink
-      ? `Your updated Leadership Impact Portal link`
-      : `Welcome to your Leadership Impact Portal`;
+      ? `Your updated Executive Impact System access link`
+      : `Welcome to your Executive Impact System`;
 
     if (isNewLink) {
       html = `
@@ -373,7 +373,7 @@ export default async function handler(req, res) {
           </div>
           <div style="background:#ffffff;padding:28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
             <p>Hi ${firstName},</p>
-            <p>Your Leadership Impact Portal link has been updated. Use the link below going forward — your previous link is no longer active.</p>
+            <p>Your Executive Impact System access link has been updated. Use the link below going forward — your previous link is no longer active.</p>
             <div style="text-align:center;margin:28px 0 0;">
               <a href="${portalURL}" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;">Open My Leadership Portal →</a>
             </div>
@@ -395,12 +395,12 @@ export default async function handler(req, res) {
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
           <div style="background:#004369;padding:20px 28px;border-radius:8px 8px 0 0;">
             <div style="color:#E5DDC8;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">GPS Leadership Solutions</div>
-            <div style="color:#ffffff;font-size:20px;font-weight:700;">Welcome to Your Leadership Impact Portal</div>
+            <div style="color:#ffffff;font-size:20px;font-weight:700;">Welcome to Your Executive Impact System</div>
           </div>
           <div style="background:#ffffff;padding:28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
 
             <p>Hi ${firstName},</p>
-            <p>Welcome to your Leadership Impact Portal.</p>
+            <p>Welcome to your Executive Impact System.</p>
             <p>You're getting access because you're already leading at a high level, and this space is designed to help you turn that into clear goals, concrete behaviors, and visible progress over the next 90 days.</p>
             <p>The portal is meant to be quick and practical: about 10–15 minutes to set up, then 5 minutes a week to keep it moving.</p>
 
@@ -488,11 +488,11 @@ export default async function handler(req, res) {
       ? 'the SES and senior government executives'
       : 'the CEOs and senior leaders in our coaching practice';
 
-    const DEFAULT_SUBJECT = 'A thank-you from today — your temporary access to the GPS Executive Leadership Impact Portal';
+    const DEFAULT_SUBJECT = 'A thank-you from today — your temporary access to the GPS Executive Impact System';
     const DEFAULT_BODY = [
       'Hi {{first_name}},',
       "Thank you for showing up so fully in today's session. You were engaged, and that tells me you're someone who actually wants to grow — not just attend.",
-      'Because of the relationship we have with {{organization}}, I want to extend something we don’t hand out widely: temporary access to our Executive Leadership Impact Portal — the same portal we normally reserve for {{tier_phrase}}.',
+      'Because of the relationship we have with {{organization}}, I want to extend something we don’t hand out widely: temporary access to our Executive Impact System — the same system we normally reserve for {{tier_phrase}}.',
       "You already know I'm focused on action, not theory — so here's the deal:",
       'You get 90 days of access to take the one thing you most want to improve from today and actually move it: pick the goal, set a metric, and track real progress.',
       'But the access is earned. If you don’t log in and complete at least one weekly check-in within your first 10 days, your access closes. Not as a penalty — because growth only happens when you take action, and this is my way of making sure you take the first one.',
@@ -576,7 +576,7 @@ export default async function handler(req, res) {
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
         <div style="background:#004369;padding:18px 28px;border-radius:8px 8px 0 0;">
           <div style="color:#E5DDC8;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">GPS Leadership Solutions</div>
-          <div style="color:#ffffff;font-size:18px;font-weight:700;">Leadership Impact Portal</div>
+          <div style="color:#ffffff;font-size:18px;font-weight:700;">Executive Impact System</div>
         </div>
         <div style="background:#ffffff;padding:28px 28px 32px;border:1px solid #d0d0d0;border-top:none;border-radius:0 0 8px 8px;line-height:1.7;font-size:15px;">
           ${bodyContent}
@@ -603,7 +603,7 @@ export default async function handler(req, res) {
       wrSubject = `${firstName}, your portal is ready — have you had a chance to set up your plan?`;
       wrHtml = wrapEmail(`
         <p>Hi ${firstName},</p>
-        <p>Just checking in — your Leadership Impact Portal is set up and ready, but I don't see your 90-day plan locked in yet.</p>
+        <p>Just checking in — your Executive Impact System is set up and ready, but I don't see your 90-day plan locked in yet.</p>
         <p>It takes about 10–15 minutes to complete. You pick your focus pillar, define your goal, set a metric, and commit to one key behavior. That's the foundation everything else builds on.</p>
         ${portalBtn}
         <p>If you ran into any trouble with the link or aren't sure where to start, reply here and I'll help you get sorted.</p>`);
