@@ -468,9 +468,15 @@ export default async function handler(req, res) {
     delete client.business_outcome_goal;
     delete client.business_outcome_metric;
   }
-  // Internal billing/ops columns the client portal never reads — never send to the browser.
+  // Internal billing / CRM / coach-only columns the client portal never reads —
+  // never send to the browser (verified 0 refs in client.html). (2026-07-02)
   ['coaching_hourly_rate','coaching_months_prepaid','coaching_hours_per_month',
-   'ghl_subscription_id','payer_type','subscription_status']
+   'ghl_subscription_id','payer_type','subscription_status',
+   'notes','total_revenue_to_date','converted_to_retainer','acquisition_source',
+   'first_payment_date','first_engagement_type','gs_grade','sponsor_contact_id',
+   'project_cc_emails','sector_type','next_renewal_at',
+   'trial_nudge_3_sent_at','trial_nudge_8_sent_at','welcome_sent_at','welcome_reminder_step',
+   'invited_at','activated_at']
     .forEach(function (k) { delete client[k]; });
 
   return res.status(200).json(client);
