@@ -1,0 +1,21 @@
+# Auto-generated allowlist of HTML pages intended to be publicly deployed.
+# The pre-push deploy guard (check.sh section 6) blocks any deployed .html NOT listed here.
+# Adding a new public page? Add its path here on purpose — that's the confirmation gate.
+Brave Conversation Blueprint.html
+GPS Under-Pressure Communication Playbook.html
+GPS Under-Pressure Communication Snapshot.html
+client.html
+coach-emergency.html
+coach.html
+decision-room.html
+diagnostic-leader.html
+diagnostic-sandbox.html
+diagnostic-survey.html
+feedback.html
+omb-message-clarity-results.html
+recover.html
+survey.html
+wayside-truck-parts-proposal.html
+workshop-poc.html
+workshop-room.html
+workshop-survey.html

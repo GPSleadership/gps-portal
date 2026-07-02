@@ -22,6 +22,7 @@ check.sh
 deploy.sh
 smoke-test.sh
 install-hooks.sh
+deploy-allowed-pages.txt
 
 # ── Backup / demo / dev pages with NO route rewrite (pure exposure) ──
 client-DEMO.html

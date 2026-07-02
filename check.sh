@@ -250,6 +250,61 @@ else
   echo "  ✓ No untracked portal files"
 fi
 
+# ── 6. Deploy exposure guard (prevents public-by-default files) ────────────────
+# Root cause of the 2026-07 console + zip-blob exposures: the deploy is a denylist,
+# so any new tracked file is public by default. This blocks a push when a file that
+# WOULD deploy is (a) extensionless (blob), (b) an HTML page not on the allowlist,
+# or (c) contains a hardcoded API secret (re_/sk-ant-/sk-). Anon/publishable keys are
+# intentionally NOT flagged (they're safe to be public).
+echo ""
+echo "▸ Deploy exposure guard"
+python3 - <<'PYEOF'
+import subprocess, os, re, fnmatch, sys
+errs = []
+tracked = subprocess.check_output(['git','ls-files']).decode().splitlines()
+pats = []
+if os.path.exists('.vercelignore'):
+    for l in open('.vercelignore'):
+        l = l.strip()
+        if l and not l.startswith('#'): pats.append(l)
+def ignored(f):
+    for p in pats:
+        pp = p.rstrip('/')
+        if fnmatch.fnmatch(f, p) or fnmatch.fnmatch(os.path.basename(f), p) or f == pp or f.startswith(pp + '/'):
+            return True
+    return False
+deployed = [f for f in tracked if not ignored(f)]
+# a) extensionless files (the zip-blob class)
+for f in deployed:
+    if '.' not in os.path.basename(f):
+        errs.append(f"extensionless file would deploy publicly: {f}  → add to .vercelignore or delete")
+# b) HTML pages not on the allowlist (the finance-console class)
+allow = set()
+if os.path.exists('deploy-allowed-pages.txt'):
+    for l in open('deploy-allowed-pages.txt'):
+        l = l.strip()
+        if l and not l.startswith('#'): allow.add(l)
+for f in deployed:
+    if f.lower().endswith('.html') and f not in allow:
+        errs.append(f"HTML would deploy publicly but isn't in deploy-allowed-pages.txt: {f}  → add it there if it's meant to be public, else .vercelignore it")
+# c) hardcoded API secrets in the deploy set (NOT anon/publishable keys)
+secret = re.compile(r'(re_[A-Za-z0-9]{18,}|sk-ant-[A-Za-z0-9\-]{18,}|sk-[A-Za-z0-9]{24,})')
+for f in deployed:
+    try:
+        if os.path.getsize(f) > 2_000_000: continue
+        m = secret.search(open(f, encoding='utf-8', errors='ignore').read())
+        if m: errs.append(f"possible hardcoded API secret in deployed file {f}: '{m.group(0)[:8]}…'  → move to an env var")
+    except Exception:
+        pass
+if errs:
+    for e in errs: print("  ✗ " + e)
+    sys.exit(1)
+print("  ✓ No extensionless blobs, unlisted pages, or hardcoded secrets in the deploy set")
+PYEOF
+if [ $? -ne 0 ]; then
+  ERRORS=$((ERRORS + 1))
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
