@@ -18,6 +18,16 @@ const CRON_SECRET     = process.env.CRON_SECRET || '';
 const FROM_EMAIL      = process.env.RESEND_FROM_EMAIL || 'noreply@portal.gpsleadership.org';
 const FROM_NAME       = 'Alex Tremble | GPS Leadership Solutions';
 const ALEX_EMAIL      = 'alex@gpsleadership.org';
+// Cron heartbeat — lets detect_breakages() flag this job if it goes silent. (2026-07-02)
+async function recordHeartbeat(name, status = 'ok', detail = null) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/cron_heartbeats?on_conflict=cron_name`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}`, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ cron_name: name, last_run_at: new Date().toISOString(), last_status: status, last_detail: detail, updated_at: new Date().toISOString() }),
+    });
+  } catch (_) { /* best-effort */ }
+}
 // Deliverability: text/plain part alongside HTML (improves inbox placement).
 function htmlToText(html) {
   return String(html || '')
@@ -443,8 +453,10 @@ async function handleSendScheduled(req, res) {
         log.errors.push({ id: s.id, error: err.message });
       }
     }
+    await recordHeartbeat('survey-send-scheduled', log.errors.length ? 'error' : 'ok', `processed ${log.processed.length}, errors ${log.errors.length}`);
     return res.status(200).json({ ok: true, due: due.length, ...log });
   } catch (err) {
+    await recordHeartbeat('survey-send-scheduled', 'error', String(err.message || err).slice(0, 200));
     return res.status(500).json({ error: err.message });
   }
 }

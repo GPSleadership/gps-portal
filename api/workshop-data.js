@@ -365,6 +365,14 @@ export default async function handler(req, res) {
       const isManual = req.method === 'POST' && !!verifyCoachSession(body.session);
       if (!isCron && !isManual) return res.status(401).json({ error: 'Unauthorized' });
       const out = await runReminders();
+      // Cron heartbeat — lets detect_breakages() flag this job if it goes silent. (2026-07-02)
+      try {
+        await fetch(`${SUPABASE_URL}/rest/v1/cron_heartbeats?on_conflict=cron_name`, {
+          method: 'POST',
+          headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}`, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
+          body: JSON.stringify({ cron_name: 'workshop-reminders', last_run_at: new Date().toISOString(), last_status: 'ok', last_detail: JSON.stringify(out).slice(0, 200), updated_at: new Date().toISOString() }),
+        });
+      } catch (_) { /* heartbeat best-effort */ }
       return res.status(200).json({ ok: true, ...out });
     }
 

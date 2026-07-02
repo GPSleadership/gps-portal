@@ -809,9 +809,11 @@ async function handleSendScheduled(req, res) {
       }
     }
 
+    await recordHeartbeat('diag-send-scheduled', log.errors.length ? 'error' : 'ok', `processed ${log.processed.length}, errors ${log.errors.length}`);
     return res.status(200).json({ ok: true, due: due.length, ...log });
   } catch (err) {
     console.error('[diagnostic/send-scheduled] error:', err);
+    await recordHeartbeat('diag-send-scheduled', 'error', String(err.message || err).slice(0, 200));
     return res.status(500).json({ error: err.message });
   }
 }

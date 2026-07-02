@@ -66,6 +66,10 @@ export default async function handler(req, res) {
   results.push(await check('results-data', () => post('results-data')));
   // 3) Diagnostic data path
   results.push(await check('diag-get', () => post('diag-get')));
+  // 4) Renewal/upsell money path — the endpoint that P0-2 silently broke. It now
+  //    surfaces a DB failure (502) instead of swallowing it into show:false, so this
+  //    check fails loudly if that class of bug ever returns. (2026-07-02)
+  results.push(await check('renewal-options', () => post('renewal-options')));
 
   const failed = results.filter(r => !r.ok);
   const ok = failed.length === 0;

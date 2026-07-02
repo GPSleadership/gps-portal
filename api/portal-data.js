@@ -434,7 +434,11 @@ export default async function handler(req, res) {
         const cfgRes = await sb(`/rest/v1/renewal_config?id=eq.1&select=*&limit=1`);
         const cfg = (cfgRes.ok ? (await cfgRes.json())[0] : null) || {};
         const cRes = await sb(`/rest/v1/clients?id=eq.${encodeURIComponent(clientId)}&select=in_coaching_program,coaching_sessions_enabled,is_active_coaching,plan_start_date,payer_type,subscription_status&limit=1`);
-        const client = cRes.ok ? (await cRes.json())[0] : null;
+        // Do NOT swallow a DB failure into show:false — that's exactly how the phantom-column
+        // bug (P0-2) hid the whole offer path. A real query failure returns an error so the
+        // synthetic monitor catches it; only a genuine "no such client" falls through. (2026-07-02)
+        if (!cRes.ok) { const d = await cRes.text().catch(() => ''); return res.status(502).json({ ok: false, error: 'renewal client lookup failed', detail: String(d).slice(0, 200) }); }
+        const client = (await cRes.json())[0] || null;
         if (!client) return res.status(200).json({ ok: true, show: false });
         // Canonical "active coaching client" test — matches isCoaching() at L69,
         // get-client.js:404, coach.html. Replaces the phantom is_coaching_client
