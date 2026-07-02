@@ -42,3 +42,8 @@ node_modules/
 
 # DB migration files with seeded secrets — never commit
 supabase-add-coach-settings.sql
+
+# ── Local-only finance/exec console (personal financial data — keep on this device,
+#    never track in git, never deploy). Already .vercelignore'd; this keeps it out of the repo too. ──
+gps-executive-console.html
+gps-executive-console-deploy.html
