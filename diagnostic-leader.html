@@ -1038,13 +1038,28 @@ async function addRater() {
   renderPendingRaters();
 }
 
-// Download a ready-to-fill rater list template (.csv — opens in Excel/Sheets).
-function downloadRaterTemplate(){
-  const csv = 'Name,Email,Relationship\nJane Doe,jane@example.com,Direct Report\nSam Lee,sam@example.com,Peer\n';
-  const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = 'GPS_Rater_List_Template.csv';
-  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+// Download a ready-to-fill rater list template (.xlsx — opens in Excel/Sheets).
+async function downloadRaterTemplate(){
+  const rows = [
+    ['Name','Email','Relationship'],
+    ['Jane Doe','jane@example.com','Direct Report'],
+    ['Sam Lee','sam@example.com','Peer']
+  ];
+  try {
+    const X = await loadSheetJS();
+    const ws = X.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch:22 }, { wch:28 }, { wch:22 }];
+    const wb = X.utils.book_new();
+    X.utils.book_append_sheet(wb, ws, 'Rater List');
+    X.writeFile(wb, 'GPS_Rater_List_Template.xlsx');
+  } catch (e) {
+    // Fallback to CSV if the spreadsheet library cannot load
+    const csv = rows.map(r => r.join(',')).join('\n') + '\n';
+    const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'GPS_Rater_List_Template.csv';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 }
 
 // Hand the rater list to the GPS team to upload (opens a pre-filled email).
