@@ -8787,7 +8787,7 @@ async function confirmSendInvites() {
   try {
     const resp = await fetch('/api/diagnostic?action=send-invites', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ diagnostic_id: DIAG_SEL.id }),
+      body: JSON.stringify({ diagnostic_id: DIAG_SEL.id, session: getCoachSessionToken() }),
     });
     if (!resp.ok) throw new Error(await resp.text());
     const data = await resp.json().catch(() => ({}));
@@ -8967,7 +8967,7 @@ async function generateG1() {
   try {
     const resp = await fetch('/api/diagnostic?action=generate-question', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ diagnostic_id: DIAG_SEL.id }),
+      body: JSON.stringify({ diagnostic_id: DIAG_SEL.id, session: getCoachSessionToken() }),
     });
     if (!resp.ok) {
       const errData = await resp.json().catch(() => ({}));
@@ -9577,7 +9577,7 @@ async function confirmAndFinalize() {
     const r = await fetch('/api/diagnostic?action=finalize-report', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ diagnostic_id: d.id }),
+      body: JSON.stringify({ diagnostic_id: d.id, session: getCoachSessionToken() }),
     });
     const data = await r.json();
     if (!r.ok) {

@@ -660,9 +660,11 @@ async function sendInvitesForDiagnostic(diagnostic_id) {
 
 async function handleSendInvites(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!verifyCoachSession(req.body?.session)) return res.status(401).json({ error: 'Unauthorized' }); // P0-4 2026-07-01
 
   const { diagnostic_id } = req.body || {};
   if (!diagnostic_id) return res.status(400).json({ error: 'diagnostic_id is required' });
+  if (!/^[0-9a-fA-F-]{36}$/.test(diagnostic_id)) return res.status(400).json({ error: 'Invalid diagnostic_id' }); // P0-4
 
   try {
     const r = await sendInvitesForDiagnostic(diagnostic_id);
@@ -1048,10 +1050,12 @@ Alex demonstrates the leadership behaviors required to transition the business f
 
 async function handleGenerateQuestion(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!verifyCoachSession(req.body?.session)) return res.status(401).json({ error: 'Unauthorized' }); // P0-4 2026-07-01
   if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured' });
 
   const { diagnostic_id } = req.body || {};
   if (!diagnostic_id) return res.status(400).json({ error: 'diagnostic_id is required' });
+  if (!/^[0-9a-fA-F-]{36}$/.test(diagnostic_id)) return res.status(400).json({ error: 'Invalid diagnostic_id' }); // P0-4
 
   try {
     const diagRes = await sb(
@@ -1144,10 +1148,12 @@ Marcus creates the conditions for the team to make decisions without escalating 
 
 async function handleGenerateG2Question(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!verifyCoachSession(req.body?.session)) return res.status(401).json({ error: 'Unauthorized' }); // P0-4 2026-07-01
   if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured' });
 
   const { diagnostic_id } = req.body || {};
   if (!diagnostic_id) return res.status(400).json({ error: 'diagnostic_id is required' });
+  if (!/^[0-9a-fA-F-]{36}$/.test(diagnostic_id)) return res.status(400).json({ error: 'Invalid diagnostic_id' }); // P0-4
 
   try {
     const diagRes = await sb(
@@ -2023,9 +2029,11 @@ function buildReportReadyEmail({ clientName, leaderTitle, leaderOrg, portalUrl, 
 
 async function handleFinalizeReport(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!verifyCoachSession(req.body?.session)) return res.status(401).json({ error: 'Unauthorized' }); // P0-4 2026-07-01
 
   const { diagnostic_id } = req.body || {};
   if (!diagnostic_id) return res.status(400).json({ error: 'diagnostic_id required' });
+  if (!/^[0-9a-fA-F-]{36}$/.test(diagnostic_id)) return res.status(400).json({ error: 'Invalid diagnostic_id' }); // P0-4
 
   try {
     // 1. Fetch the diagnostic
@@ -3619,8 +3627,10 @@ function buildTeamReportPrompt({ org_name, team_name, prepared_for_name, prepare
 // ── Import survey data (test/manual data entry) ──────────────────────────────
 async function handleImportSurveyData(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!verifyCoachSession(req.body?.session)) return res.status(401).json({ error: 'Unauthorized' }); // P0-4 2026-07-01
   const { diagnostic_id, raters } = req.body || {};
   if (!diagnostic_id) return res.status(400).json({ error: 'diagnostic_id required' });
+  if (!/^[0-9a-fA-F-]{36}$/.test(diagnostic_id)) return res.status(400).json({ error: 'Invalid diagnostic_id' }); // P0-4
   if (!Array.isArray(raters) || raters.length === 0) return res.status(400).json({ error: 'raters array required' });
   if (raters.length > 25) return res.status(400).json({ error: 'Max 25 raters per import' });
 
