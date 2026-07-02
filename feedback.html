@@ -11,14 +11,13 @@
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
   /* Brand tokens — GPS Leadership (matches core portal). navy #004369, teal #01949A, red #DB1F48. */
-  :root{ --navy:#004369; --accent:#01949A; --red:#DB1F48; --amber:#C6892A; --text:#1a1a1a; --mid:#666; --border:#d8d8d8; --bg:#f4f6f9; }
+  :root{ --navy:#004369; --accent:#01949A; --red:#DB1F48; --amber:#8F560F; --text:#1a1a1a; --mid:#5F5E5A; --border:#d8d8d8; --bg:#f4f6f9; }
   *{box-sizing:border-box;}
   body{margin:0;font-family:'Open Sans',Arial,sans-serif;background:var(--bg);color:var(--text);}
   .wrap{max-width:620px;margin:0 auto;padding:0 16px 40px;}
   .head{background:var(--navy);padding:20px 28px;border-bottom:4px solid var(--accent);}
-  .head .lock{display:flex;align-items:center;gap:11px;}
-  .head .plate{background:#fff;color:var(--navy);font-family:'Montserrat',sans-serif;font-weight:800;font-size:16px;letter-spacing:1px;padding:5px 9px;border-radius:6px;line-height:1;}
-  .head .k{color:var(--accent);font-size:11px;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;}
+  .head .logoplate{display:inline-block;background:#fff;border-radius:8px;padding:8px 12px;}
+  .head .logoplate img{height:42px;width:auto;display:block;}
   .head .t{color:#fff;font-size:21px;font-weight:700;margin-top:8px;font-family:'Montserrat',sans-serif;}
   .card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:24px;margin-top:22px;box-shadow:0 2px 14px rgba(0,0,0,.05);}
   label{display:block;font-size:13px;font-weight:700;color:var(--navy);margin:16px 0 6px;}
@@ -38,7 +37,7 @@
 </style>
 </head>
 <body>
-<div class="head"><div class="wrap" style="padding-top:0;padding-bottom:0;"><div class="lock"><span class="plate">GPS</span><span class="k">Leadership Solutions</span></div><div class="t">Share Your Input</div></div></div>
+<div class="head"><div class="wrap" style="padding-top:0;padding-bottom:0;"><div class="logoplate"><img src="/icons/gps-logo-horizontal.png" alt="GPS Leadership Solutions" /></div><div class="t">Share Your Input</div></div></div>
 <div class="wrap">
   <div id="view" class="card"><div class="muted">Loading…</div></div>
 </div>

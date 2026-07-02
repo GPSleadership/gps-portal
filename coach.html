@@ -47,6 +47,8 @@
     }
     .header-left { display: flex; align-items: center; gap: 14px; }
     .header-logo-text { font-family: 'Montserrat', sans-serif; font-size: 22px; font-weight: 800; color: var(--sand); letter-spacing: 1px; }
+    .header-logo-img { height: 46px; width: auto; background: #fff; padding: 6px 12px; border-radius: 6px; display: block; }
+    @media (max-width: 768px) { .header-logo-img { height: 38px; padding: 5px 10px; } }
     .header-title-block { }
     .header-title { color: rgba(255,255,255,0.75); font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; }
     .header-sub   { color: var(--white); font-family: 'Montserrat', sans-serif; font-size: 15px; font-weight: 700; }
@@ -685,9 +687,8 @@
 <div class="top-bar"></div>
 <header class="header">
   <div class="header-left">
-    <div class="header-logo-text">GPS</div>
+    <img class="header-logo-img" src="/icons/gps-logo-horizontal.png" alt="GPS Leadership Solutions" />
     <div class="header-title-block">
-      <div class="header-title">Leadership Solutions</div>
       <div class="header-sub">Coach Dashboard</div>
     </div>
   </div>
