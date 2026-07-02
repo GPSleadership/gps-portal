@@ -460,5 +460,18 @@ export default async function handler(req, res) {
     }
   } catch (_) { /* optional */ }
 
+  // ── Confidentiality / least-exposure before returning to the browser (2026-07-02) ──
+  // The sponsor's private outcome framing is shown to the leader ONLY when the sponsor
+  // opted to reveal it (sponsor_outcome_focus) — see the exact UI gate in client.html.
+  // Otherwise omit it server-side so it can't be read from the raw payload (was UI-hidden only).
+  if (!client.sponsor_outcome_focus) {
+    delete client.business_outcome_goal;
+    delete client.business_outcome_metric;
+  }
+  // Internal billing/ops columns the client portal never reads — never send to the browser.
+  ['coaching_hourly_rate','coaching_months_prepaid','coaching_hours_per_month',
+   'ghl_subscription_id','payer_type','subscription_status']
+    .forEach(function (k) { delete client[k]; });
+
   return res.status(200).json(client);
 }
