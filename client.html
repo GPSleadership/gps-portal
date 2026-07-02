@@ -3755,7 +3755,7 @@ function initWizard(client) {
   document.getElementById('mainContent').innerHTML = `
     <div style="max-width:680px;margin:24px auto 80px;">
       <div class="wiz-progress-wrap" id="wizProgressWrap">
-        <div class="wiz-progress-label">Plan Setup — Step <span id="wizStepNum">1</span> of 8</div>
+        <div class="wiz-progress-label" id="wizProgressLabel">Plan Setup — Welcome</div>
         <div class="wiz-steps" id="wizSteps"></div>
       </div>
       <div id="wizStepBody"></div>
@@ -3776,12 +3776,15 @@ function wizRender() {
 }
 
 function wizRenderProgress() {
-  document.getElementById('wizStepNum').textContent = wizStep + 1;
+  // Welcome (id 0) is an intro, not a numbered step; the 7 real steps number 1–7
+  // to match the inner step badges ("Step N of 7") and the body copy. (P1 2026-07-01)
+  document.getElementById('wizProgressLabel').textContent =
+    wizStep === 0 ? 'Plan Setup — Welcome' : ('Plan Setup — Step ' + wizStep + ' of 7');
   document.getElementById('wizSteps').innerHTML = WIZ_STEPS.map(s => {
     let cls = 'wiz-step';
     if (s.id < wizStep) cls += ' done';
     else if (s.id === wizStep) cls += ' current';
-    const icon = s.id < wizStep ? '✓' : s.id + 1;
+    const icon = s.id < wizStep ? '✓' : (s.id === 0 ? '•' : s.id);
     return `<div class="${cls}"><div class="wiz-dot">${icon}</div><div class="wiz-step-label">${s.label}</div></div>`;
   }).join('');
 }
