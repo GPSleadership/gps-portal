@@ -306,7 +306,7 @@ export default async function handler(req, res) {
           const notifyRes = await fetch(NOTIFY_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+            body: JSON.stringify({cron_secret: process.env.CRON_SECRET, 
               type: emailType,
               clientEmail: c.email,
               clientName:  c.name || '',
@@ -370,7 +370,7 @@ export default async function handler(req, res) {
           const notifyRes = await fetch(NOTIFY_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+            body: JSON.stringify({cron_secret: process.env.CRON_SECRET, 
               type:        wrType,
               clientEmail: c.email,
               clientName:  c.name || '',

@@ -23,7 +23,7 @@ export default async function handler(req, res) {
     if (!client_id) return res.status(400).json({ error: 'client_id is required' });
 
     // Auth: coach session (preferred) or legacy password (transition fallback)
-    const authOk = !!verifyCoachSession(req.body.session) || await verifyPassword(password);
+    const authOk = !!verifyCoachSession(req.body.session);
     if (!authOk) return res.status(401).json({ error: 'Not authorized' });
 
     // ── Load current client ───────────────────────────────────────────────────

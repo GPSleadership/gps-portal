@@ -36,7 +36,7 @@ module.exports = async (req, res) => {
       await fetch(base + '/api/notify', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ type: 'new_portal_link', clientEmail: email, clientName: c.name, portalURL, clientId: c.id }),
+        body:    JSON.stringify({cron_secret: process.env.CRON_SECRET,  type: 'new_portal_link', clientEmail: email, clientName: c.name, portalURL, clientId: c.id }),
       });
     }
   } catch (_) { /* swallow — the response must never differ based on outcome */ }

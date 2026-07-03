@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 // GPS Leadership — Email Notification Function
 // Deployed as a Vercel Serverless Function
 // Fires when a client submits a plan (Form B) or check-in (Form A)
@@ -8,6 +9,22 @@ const RESEND_FROM    = process.env.RESEND_FROM_EMAIL || 'noreply@portal.gpsleade
 const COACH_EMAIL    = 'alex@gpsleadership.org';
 const SUPABASE_URL    = process.env.SUPABASE_URL || 'https://pbnkefuqpoztcxfagiod.supabase.co';
 const SUPABASE_SECRET = process.env.SUPABASE_SECRET_KEY;
+const COACH_SESSION_SECRET = process.env.COACH_SESSION_SECRET || '';
+const CRON_SECRET          = process.env.CRON_SECRET || '';
+
+// Verify a coach session token (HMAC) — mirrors api/diagnostic.js.
+function verifyCoachSession(tok) {
+  if (!tok || !COACH_SESSION_SECRET) return null;
+  const parts = String(tok).split('.');
+  if (parts.length !== 2) return null;
+  const expected = Buffer.from(crypto.createHmac('sha256', COACH_SESSION_SECRET).update(parts[0]).digest())
+    .toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const a = Buffer.from(parts[1]), b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  let p; try { p = JSON.parse(Buffer.from(parts[0].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString()); } catch { return null; }
+  if (!p || p.role !== 'coach' || typeof p.exp !== 'number' || p.exp < Date.now()) return null;
+  return p;
+}
 
 // ── P1 #6: every send is recorded in email_log (sent or error) so failures
 //    surface in the coach dashboard instead of vanishing into function logs. ──
@@ -62,6 +79,18 @@ export default async function handler(req, res) {
   const body = req.body;
   if (!body || !body.type) {
     return res.status(400).json({ error: 'Missing type' });
+  }
+
+  // ── Auth (open-relay fix 2026-07-03): gate coach- and cron-triggered types.
+  //    Client-triggered types (plan_submitted, checkin_submitted, week9_client,
+  //    password_change_request) send to a fixed/re-validated recipient and are
+  //    handled in the client-token pass; intentionally left open here. ──
+  const GATED_TYPES = new Set(['new_portal_link','welcome_email','workshop_welcome','portal_welcome','results_ready','test_reminder']);
+  const isGated = GATED_TYPES.has(body.type) || /^welcome_reminder_/.test(body.type) || /^continuation_/.test(body.type);
+  if (isGated) {
+    const authed = !!verifyCoachSession(body.session)
+      || (CRON_SECRET && (body.cron_secret === CRON_SECRET || req.headers['x-cron-secret'] === CRON_SECRET));
+    if (!authed) return res.status(401).json({ error: 'Unauthorized' });
   }
 
   let subject, html;

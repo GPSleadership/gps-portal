@@ -284,7 +284,7 @@ async function handleSend(req, res) {
       return res.status(400).json({ error: 'checkpoint must be baseline, day30, or day90' });
     }
 
-    const authOk = !!verifyCoachSession(req.body.session) || await verifyPassword(password);
+    const authOk = !!verifyCoachSession(req.body.session);
     if (!authOk) return res.status(401).json({ error: 'Not authorized' });
 
     const r = await performSend(client_id, checkpoint);
@@ -394,7 +394,7 @@ async function handleScheduleSend(req, res) {
     if (!client_id) return res.status(400).json({ error: 'client_id is required' });
     const validCheckpoints = ['baseline', 'day30', 'day90'];
     if (!validCheckpoints.includes(checkpoint)) return res.status(400).json({ error: 'invalid checkpoint' });
-    const authOk = !!verifyCoachSession(req.body.session) || await verifyPassword(password);
+    const authOk = !!verifyCoachSession(req.body.session);
     if (!authOk) return res.status(401).json({ error: 'Not authorized' });
 
     // Replace semantics: clear any existing pending schedule first.
@@ -476,7 +476,7 @@ async function handleResend(req, res) {
     const { client_id, stakeholder_id, checkpoint = 'baseline', password } = req.body || {};
     if (!client_id || !stakeholder_id) return res.status(400).json({ error: 'client_id and stakeholder_id are required' });
 
-    const authOk = !!verifyCoachSession(req.body.session) || await verifyPassword(password);
+    const authOk = !!verifyCoachSession(req.body.session);
     if (!authOk) return res.status(401).json({ error: 'Not authorized' });
 
     // Load client
