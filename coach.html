@@ -1262,7 +1262,8 @@ I'm taking part in a leadership assessment run by GPS Leadership Solutions. Thei
               style="padding:7px 12px;border:1.5px solid var(--d-border);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;min-width:180px;outline:none;"
               onfocus="this.style.borderColor='var(--d-blue)'" onblur="this.style.borderColor='var(--d-border)'" />
             <div style="display:flex;gap:4px;">
-              <button class="diag-filter-btn active" id="dfilter-all"      onclick="setDiagFilter('all',this)">All</button>
+              <button class="diag-filter-btn active" id="dfilter-inprogress" onclick="setDiagFilter('inprogress',this)">In Progress</button>
+              <button class="diag-filter-btn"        id="dfilter-all"      onclick="setDiagFilter('all',this)">All</button>
               <button class="diag-filter-btn"        id="dfilter-active"  onclick="setDiagFilter('active',this)">Active</button>
               <button class="diag-filter-btn"        id="dfilter-setup"   onclick="setDiagFilter('setup',this)">Setup</button>
               <button class="diag-filter-btn"        id="dfilter-closed"  onclick="setDiagFilter('closed',this)">Report Ready</button>
@@ -6432,7 +6433,7 @@ async function saveClientInfo(clientId) {
 
 // ── State ────────────────────────────────────────────────────────────────────
 let ALL_DIAGS     = [];
-let _diagFilter   = 'all';
+let _diagFilter   = 'inprogress';
 let _diagSort     = { col: 'created_at', dir: 'desc' };
 let DIAG_SEL           = null;
 let DIAG_RATERS        = [];
@@ -7239,8 +7240,8 @@ function renderDiagTable() {
   if (!el) return;
 
   const SETUP_STATUSES  = ['intake_complete','self_assessment_pending','self_assessment_complete'];
-  const CLOSED_STATUSES = ['survey_closed'];
-  const DONE_STATUSES   = ['report_draft','report_final','plan_active'];
+  const CLOSED_STATUSES = ['survey_closed','report_draft','report_final'];
+  const DONE_STATUSES   = ['debrief_complete','plan_active'];
 
   const search = (document.getElementById('diag-search')?.value || '').toLowerCase().trim();
 
@@ -7256,6 +7257,7 @@ function renderDiagTable() {
     if (_diagFilter === 'setup')   return SETUP_STATUSES.includes(d.status);
     if (_diagFilter === 'closed')  return CLOSED_STATUSES.includes(d.status);
     if (_diagFilter === 'done')    return DONE_STATUSES.includes(d.status);
+    if (_diagFilter === 'inprogress') return !DONE_STATUSES.includes(d.status);
     return true;
   });
 
