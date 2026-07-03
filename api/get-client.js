@@ -460,6 +460,28 @@ export default async function handler(req, res) {
     }
   } catch (_) { /* optional */ }
 
+  // ── Coaching session momentum (roadmap #3) — leader-safe framing ONLY ──
+  // The leader never sees the raw count, sessions remaining, or the renewal signal
+  // (those are coach/sponsor-side). When the coach has opted the leader in, we send a
+  // "how far in + phase + encouragement" object; the raw columns are stripped below.
+  if (client.show_sessions_to_leader && Number(client.coaching_sessions_total) > 0) {
+    const _total = Number(client.coaching_sessions_total);
+    const _done  = Number(client.coaching_sessions_completed) || 0;
+    const _frac  = _total > 0 ? _done / _total : 0;
+    let _phase, _message;
+    if (_frac < 0.34) {
+      _phase = 'early';
+      _message = "You're early in your 90-day sprint — this is where the momentum gets built.";
+    } else if (_frac < 0.67) {
+      _phase = 'mid';
+      _message = "You're well into your sprint. Keep the reps consistent — this is where the change starts to show.";
+    } else {
+      _phase = 'consolidation';
+      _message = "You're in the final stretch. Now it's about locking in the change so it holds after the sprint ends.";
+    }
+    client.session_momentum = { sessions_in: _done, phase: _phase, message: _message };
+  }
+
   // ── Confidentiality / least-exposure before returning to the browser (2026-07-02) ──
   // The sponsor's private outcome framing is shown to the leader ONLY when the sponsor
   // opted to reveal it (sponsor_outcome_focus) — see the exact UI gate in client.html.
@@ -476,7 +498,8 @@ export default async function handler(req, res) {
    'first_payment_date','first_engagement_type','gs_grade','sponsor_contact_id',
    'project_cc_emails','sector_type','next_renewal_at',
    'trial_nudge_3_sent_at','trial_nudge_8_sent_at','welcome_sent_at','welcome_reminder_step',
-   'invited_at','activated_at']
+   'invited_at','activated_at',
+   'coaching_sessions_total','coaching_sessions_completed','show_sessions_to_leader','welcome_variant']
     .forEach(function (k) { delete client[k]; });
 
   return res.status(200).json(client);

@@ -5253,6 +5253,14 @@ function renderPortal(client, checkins) {
         </div>
       </div>` : ''}
 
+    <!-- COACHING MOMENTUM (leader-safe; no counts or renewal CTA) -->
+    ${client.session_momentum ? `
+    <div class="card" style="margin-top:24px;border-left:4px solid var(--teal);">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--teal);margin-bottom:6px;">Your Coaching Momentum</div>
+      <div style="font-size:18px;font-weight:800;color:var(--navy);font-family:'Montserrat',sans-serif;margin-bottom:5px;">${client.session_momentum.sessions_in} session${client.session_momentum.sessions_in === 1 ? '' : 's'} in</div>
+      <div style="font-size:14px;color:#4B5563;line-height:1.6;">${escD(client.session_momentum.message)}</div>
+    </div>` : ''}
+
     <!-- PLAN SUMMARY -->
     <div class="card plan-card" style="margin-top:${alreadyCheckedInThisWeek && !isEngagementComplete ? '0' : '24px'};">
       <div class="card-title">${displayName}'s Plan</div>

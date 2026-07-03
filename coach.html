@@ -2656,12 +2656,41 @@ function renderProfileSection(section, client, checkins) {
         <button onclick="switchProfileNav('diagnostics')" style="font-size:12px;padding:6px 14px;background:var(--teal);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700;">Start diagnostic →</button>
       </div>`;
 
+    // Coaching sessions — read-only glance on Summary. The controls (set total,
+    // log a session, edit, leader-visibility) live in the Admin & Links section.
+    const _isCoaching = client.in_coaching_program || client.is_active_coaching || client.coaching_sessions_enabled;
+    const _csTotal = client.coaching_sessions_total;
+    const _csDone  = client.coaching_sessions_completed || 0;
+    let coachingSessionsCard = '';
+    if (_isCoaching && _csTotal != null) {
+      const _rem  = Math.max(0, _csTotal - _csDone);
+      const _pct  = _csTotal > 0 ? Math.min(100, Math.round((_csDone / _csTotal) * 100)) : 0;
+      const _frac = _csTotal > 0 ? _csDone / _csTotal : 0;
+      const _phase = _frac < 0.34 ? 'Early' : _frac < 0.67 ? 'Midpoint' : 'Final stretch';
+      const _renewalBanner = (_rem <= 2) ? `
+        <div style="margin-top:12px;padding:10px 14px;background:#FDECEF;border-left:3px solid var(--red);border-radius:0 6px 6px 0;font-size:13px;color:#8A1230;line-height:1.5;">
+          <strong>Renewal window.</strong> ${_rem === 0 ? 'All sessions used.' : (_rem + ' session' + (_rem === 1 ? '' : 's') + ' left.')} Raise renewal on your next call — after a delivered win, not during setup.
+        </div>` : '';
+      coachingSessionsCard = `
+      <div style="background:white;border-radius:8px;padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.06);margin-bottom:18px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);margin-bottom:10px;">Coaching Sessions</div>
+        <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:6px;">
+          <div style="font-size:22px;font-weight:800;color:var(--navy);font-family:'Montserrat',sans-serif;">${_csDone} <span style="font-size:15px;color:var(--gray-600);font-weight:600;">of ${_csTotal}</span></div>
+          <div style="font-size:12px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;">${_phase}</div>
+          <div style="margin-left:auto;font-size:12px;color:var(--gray-600);">${_rem} remaining</div>
+        </div>
+        <div style="height:8px;background:var(--gray-200);border-radius:5px;overflow:hidden;"><div style="height:100%;width:${_pct}%;background:var(--teal);"></div></div>
+        ${_renewalBanner}
+      </div>`;
+    }
+
     el.innerHTML = `
       <div class="profile-section-title">Summary</div>
       ${headerCard}
       ${snapshotCard}
       ${planHeadline}
       ${metricCard}
+      ${coachingSessionsCard}
       ${stakeholderPulse}
       ${diagCard}
     `;
@@ -2810,6 +2839,25 @@ function renderProfileSection(section, client, checkins) {
           </button>
         </div>
       </div>
+      ${(client.in_coaching_program || client.is_active_coaching || client.coaching_sessions_enabled) ? `
+      <div class="detail-section" style="margin-top:20px;">
+        <h4>Coaching Sessions</h4>
+        ${client.coaching_sessions_total == null ? `
+        <p style="font-size:12px;color:var(--gray-600);margin-bottom:10px;">Set how many sessions this client paid for. The countdown bar shows on their Summary; the renewal window flags near the end.</p>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="cs-total-${client.id}" type="number" min="1" placeholder="e.g. 6" style="width:90px;padding:7px 10px;border:1px solid var(--gray-300);border-radius:6px;font-size:13px;">
+          <button onclick="saveSessionTotal('${client.id}')" style="font-size:12px;background:var(--teal);color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-weight:700;font-family:'Montserrat',sans-serif;">Save</button>
+        </div>` : `
+        <p style="font-size:12px;color:var(--gray-600);margin-bottom:10px;"><strong style="color:var(--navy);">${client.coaching_sessions_completed || 0} of ${client.coaching_sessions_total}</strong> sessions logged · ${Math.max(0, client.coaching_sessions_total - (client.coaching_sessions_completed || 0))} remaining.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+          <button onclick="logCoachingSession('${client.id}')" ${(client.coaching_sessions_completed || 0) >= client.coaching_sessions_total ? 'disabled' : ''} style="font-size:12px;background:${(client.coaching_sessions_completed || 0) >= client.coaching_sessions_total ? 'var(--gray-300)' : 'var(--navy)'};color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:${(client.coaching_sessions_completed || 0) >= client.coaching_sessions_total ? 'not-allowed' : 'pointer'};font-weight:700;font-family:'Montserrat',sans-serif;">+ Log a session</button>
+          <button onclick="editSessionTotal('${client.id}')" style="font-size:12px;background:none;border:1px solid var(--gray-300);color:var(--gray-600);border-radius:6px;padding:8px 14px;cursor:pointer;font-weight:700;">Edit total</button>
+        </div>
+        <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:13px;color:var(--navy);line-height:1.5;">
+          <input type="checkbox" ${client.show_sessions_to_leader ? 'checked' : ''} onchange="toggleShowSessionsToLeader('${client.id}', this.checked)" style="width:16px;height:16px;margin-top:1px;accent-color:var(--navy);">
+          <span>Show a momentum view to the leader<br><span style="font-size:12px;color:var(--gray-600);">They see phase + encouragement only — never the raw count, sessions remaining, or a renewal prompt.</span></span>
+        </label>`}
+      </div>` : ''}
       <div class="detail-section" style="margin-top:20px;">
         <h4>Client Portal Link</h4>
         <div class="client-url-box" id="portalUrlBox-${client.id}">
@@ -6030,6 +6078,51 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
   `;
   loadObservableMeasure(clientId);
   loadStakeholderSchedule(clientId);
+}
+
+// ── Coaching session countdown (roadmap #3) ─────────────────────────────────
+async function saveSessionTotal(clientId){
+  const inp = document.getElementById('cs-total-' + clientId);
+  const v = inp ? parseInt(inp.value, 10) : NaN;
+  if (!v || v < 1) { alert('Enter the number of sessions the client paid for.'); return; }
+  try {
+    await cdUpdate('clients', { coaching_sessions_total: v }, { eq: { id: clientId } });
+    allClients = allClients.map(c => c.id === clientId ? { ...c, coaching_sessions_total: v } : c);
+    if (typeof toast === 'function') toast('Session count set to ' + v);
+    switchProfileNav(document.querySelector('.profile-nav-item.active')?.id?.replace('profNav-','') || 'summary');
+  } catch (e) { alert('Could not save: ' + e.message); }
+}
+async function logCoachingSession(clientId){
+  const c = allClients.find(x => x.id === clientId); if (!c) return;
+  const total = c.coaching_sessions_total || 0;
+  const done = c.coaching_sessions_completed || 0;
+  if (done >= total) { alert('All paid sessions are already logged. Use "Edit total" to add more.'); return; }
+  if (!confirm('Log a completed coaching session? This will be ' + (done + 1) + ' of ' + total + '.')) return;
+  const nd = done + 1;
+  try {
+    await cdUpdate('clients', { coaching_sessions_completed: nd }, { eq: { id: clientId } });
+    allClients = allClients.map(x => x.id === clientId ? { ...x, coaching_sessions_completed: nd } : x);
+    if (typeof toast === 'function') toast('Session logged — ' + nd + ' of ' + total);
+    switchProfileNav(document.querySelector('.profile-nav-item.active')?.id?.replace('profNav-','') || 'summary');
+  } catch (e) { alert('Could not log session: ' + e.message); }
+}
+async function editSessionTotal(clientId){
+  const c = allClients.find(x => x.id === clientId); if (!c) return;
+  const v = prompt('Total sessions the client paid for:', (c.coaching_sessions_total != null ? c.coaching_sessions_total : ''));
+  if (v == null) return;
+  const n = parseInt(v, 10); if (!n || n < 1) { alert('Enter a positive number.'); return; }
+  try {
+    await cdUpdate('clients', { coaching_sessions_total: n }, { eq: { id: clientId } });
+    allClients = allClients.map(x => x.id === clientId ? { ...x, coaching_sessions_total: n } : x);
+    switchProfileNav(document.querySelector('.profile-nav-item.active')?.id?.replace('profNav-','') || 'summary');
+  } catch (e) { alert('Could not update: ' + e.message); }
+}
+async function toggleShowSessionsToLeader(clientId, on){
+  try {
+    await cdUpdate('clients', { show_sessions_to_leader: on }, { eq: { id: clientId } });
+    allClients = allClients.map(x => x.id === clientId ? { ...x, show_sessions_to_leader: on } : x);
+    if (typeof toast === 'function') toast(on ? 'Leader will see a momentum view' : 'Hidden from the leader');
+  } catch (e) { alert('Could not update: ' + e.message); }
 }
 
 // Set a client's stakeholder-pulse cadence tier and (re)schedule this sprint's
