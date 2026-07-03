@@ -37,6 +37,13 @@ control.html
 _SANDBOX_new-features.html
 ops-console-deploy/
 
+# ── Legacy ROOT-LEVEL copies of api functions (2026-07-03 audit) ──
+# Old duplicates of api/notify.js and api/get-client.js at the repo root were
+# being served publicly as static files (exposing server source). Leading slash
+# anchors to root so api/notify.js and api/get-client.js still deploy normally.
+/notify.js
+/get-client.js
+
 # ── Stray extensionless zip blobs (P0-3, 2026-07-01 audit) — leak full
 # source/schema/prompts; the *.md/*.sql rules don't reach inside a zip.
 # Listed here for immediate deploy-safety; also git rm'd from the repo.

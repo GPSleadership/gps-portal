@@ -32,7 +32,7 @@ module.exports = async (req, res) => {
     // Only send for a live account that actually has a token.
     if (c && c.token && !c.is_archived && !c.portal_locked) {
       const base = process.env.PORTAL_BASE_URL || ('https://' + (req.headers.host || 'portal.gpsleadership.org'));
-      const portalURL = base + '?token=' + c.token;
+      const portalURL = base + '/client?token=' + c.token;
       await fetch(base + '/api/notify', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },

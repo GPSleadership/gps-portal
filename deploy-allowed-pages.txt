@@ -2,6 +2,13 @@
 # The pre-push deploy guard (check.sh section 6) blocks any deployed .html NOT listed here.
 # Adding a new public page? Add its path here on purpose — that's the confirmation gate.
 Brave Conversation Blueprint.html
+# Grandfathered 2026-07-03: these 4 were already live but invisible to the guard
+# (non-ASCII filename bug, fixed in check.sh). Listed to keep production unchanged.
+# REVIEW: the Opal Summit one-pager is client-specific — decide if it should stay public.
+CEO Ownership Playbook – Raising the Ownership Bar.html
+Fixing People Problems – Reference Handout.html
+Fixing People Problems – Workshop Framework.html
+GPS TP3 Culture Change – Opal Summit One-Pager.html
 GPS Under-Pressure Communication Playbook.html
 GPS Under-Pressure Communication Snapshot.html
 client.html

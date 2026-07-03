@@ -259,7 +259,9 @@ echo "▸ Deploy exposure guard"
 python3 - <<'PYEOF'
 import subprocess, os, re, fnmatch, sys
 errs = []
-tracked = subprocess.check_output(['git','ls-files']).decode().splitlines()
+# -c core.quotePath=false: without it, git octal-quotes non-ASCII filenames (en dashes
+# etc.), the quoted form fails the .html endswith test, and those pages bypass the guard.
+tracked = subprocess.check_output(['git','-c','core.quotePath=false','ls-files']).decode().splitlines()
 pats = []
 if os.path.exists('.vercelignore'):
     for l in open('.vercelignore'):

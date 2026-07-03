@@ -160,7 +160,8 @@ export default async function handler(req, res) {
         sponsorOk = up.ok;
       }
       // Only surface a follow-along link if the sponsor row is actually persisted.
-      sponsorFollowLink = sponsorOk ? `${SITE_URL}/sponsor?token=${token}` : null;
+      // Sponsor follow-along page is the Decision Room (no /sponsor route exists).
+      sponsorFollowLink = sponsorOk ? `${SITE_URL}/decision-room?token=${token}` : null;
     }
 
     // ── 5. Stamp the activation guard (welcome_sent_at + variant) ───────────────
@@ -174,7 +175,7 @@ export default async function handler(req, res) {
 
     // If linked to a diagnostic, save the coaching portal URL so the leader page
     // can show the "Go to your coaching portal" button (matches markDebriefComplete).
-    const portalURL = `${SITE_URL}?token=${client.token}`;
+    const portalURL = `${SITE_URL}/client?token=${client.token}`;
     if (diagnostic_id) {
       await sbFetch(`/rest/v1/diagnostics?id=eq.${encodeURIComponent(diagnostic_id)}`, 'PATCH',
         { coaching_portal_url: portalURL }, { Prefer: 'return=minimal' });
