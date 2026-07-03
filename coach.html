@@ -16,6 +16,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="/results-visual.js"></script>
+<script src="/diagnostic-questions.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     :root {
@@ -8008,47 +8009,33 @@ function renderSurveyTab() {
 }
 
 // ── Tab: Questions ────────────────────────────────────────────────────────────
-const DIAG_GLOBAL_QUESTIONS = [
-  {code:'A1',sec:'A',label:'Trust',text:'[Name] follows through on commitments and does what they say they will do.'},
-  {code:'A2',sec:'A',label:'Trust',text:'[Name] communicates decisions and direction clearly — people know what to expect.'},
-  {code:'A3',sec:'A',label:'Trust',text:'[Name] addresses conflict and difficult conversations directly rather than avoiding them.'},
-  {code:'A4',sec:'A',label:'Trust',text:'[Name] invests time in developing the people on their team.'},
-  {code:'A5',sec:'A',label:'Trust',text:'[Name] builds trust and collaboration across teams and functions, not just within their own.'},
-  {code:'A6',sec:'A',label:'Trust',text:'[Name] holds people accountable without creating fear or shutting down communication.'},
-  {code:'A7',sec:'A',label:'Trust',text:'[Name] sets clear expectations so people can make decisions without constantly checking in.'},
-  {code:'B1',sec:'B',label:'Proactivity',text:'[Name] anticipates problems and addresses them before they become crises.'},
-  {code:'B2',sec:'B',label:'Proactivity',text:'[Name] proactively influences positive change in the organization rather than waiting for direction.'},
-  {code:'B3',sec:'B',label:'Proactivity',text:'[Name] inspires others to take initiative and raise the standard — not just follow instructions.'},
-  {code:'B4',sec:'B',label:'Proactivity',text:'[Name] takes the initiative to identify and address emerging issues before they are brought to them.'},
-  {code:'B5',sec:'B',label:'Proactivity',text:'[Name] encourages their team to bring forward solutions, not just problems.'},
-  {code:'B6',sec:'B',label:'Proactivity',text:'[Name] actively invests in their own leadership growth and development.'},
-  {code:'C1',sec:'C',label:'Productivity',text:'[Name] creates the conditions for high team productivity — clear priorities, right resources, minimal blockers.'},
-  {code:'C2',sec:'C',label:'Productivity',text:'[Name] balances short-term execution demands with longer-term strategic investment.'},
-  {code:'C3',sec:'C',label:'Productivity',text:'[Name] leads effectively under pressure without creating chaos or reactive energy in the team.'},
-  {code:'C4',sec:'C',label:'Productivity',text:'[Name] prioritizes and focuses the team on the highest-impact work consistently.'},
-  {code:'C5',sec:'C',label:'Productivity',text:"[Name]'s team can operate effectively and make good decisions without needing their direct involvement."},
-  {code:'C6',sec:'C',label:'Productivity',text:'[Name] runs meetings efficiently — they start on time, stay focused, and end with clear next steps.'},
-  {code:'D1',sec:'D',label:'Overall Impact',text:"On a scale of 1–10, how would you rate [Name]'s overall impact on the organization?"},
-  {code:'F1',sec:'F',label:'Succession',text:'If [Name] had to step away for the next 6–12 months, our team/function would continue to operate effectively.'},
-  {code:'F2',sec:'F',label:'Succession',text:'[Name] actively develops people on the team so they can take on bigger responsibilities over the next 1–3 years.'},
-];
+const DIAG_GLOBAL_QUESTIONS = (window.QUESTION_BANK || [])
+  .filter(function(q){ return !q.selfOnly && q.sec !== 'G'; })
+  .map(function(q){
+    return {
+      code: q.code,
+      sec: q.sec,
+      type: q.type,
+      label: (window.SECTION_META && SECTION_META[q.sec]) ? SECTION_META[q.sec].label : q.sec,
+      text: String(q.text_rater || '').replace(/\[First Name\]/g, '[Name]')
+    };
+  });
 
 function renderQuestionsTab() {
   const firstName = DIAG_SEL.client_name.split(' ')[0];
   const g1 = DIAG_SEL.custom_g1_question;
   let lastSec = '';
   let html = '';
-  DIAG_GLOBAL_QUESTIONS.forEach(q => {
+  const _rated = DIAG_GLOBAL_QUESTIONS.filter(function(q){ return q.type === 'rated_5' || q.type === 'rated_10'; });
+  const _open  = DIAG_GLOBAL_QUESTIONS.filter(function(q){ return q.type === 'open' || q.type === 'open_long'; });
+  const _qCard = function(q, isOpen){
     const ov = DIAG_OVERRIDES[q.code];
     const displayText = ov ? ov.text : q.text.replace(/\[Name\]/g, firstName);
-    if (q.sec !== lastSec) {
-      html += `<div style="font-size:11px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.05em;margin:${lastSec?'20px':0} 0 10px;padding-bottom:6px;border-bottom:1px solid var(--d-border);">Section ${q.sec} — ${q.label}</div>`;
-      lastSec = q.sec;
-    }
-    html += `
+    return `
     <div class="q-edit" id="qedit-${q.code}">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
         <div class="q-edit-code">${q.code}</div>
+        ${isOpen ? '<span style="font-size:10px;font-weight:700;color:#0F766E;background:#ECFDF5;border:1px solid #5EEAD4;padding:1px 8px;border-radius:8px;text-transform:uppercase;letter-spacing:.03em;">Written answer</span>' : ''}
         ${ov ? '<span class="override-badge">Overridden</span>' : ''}
       </div>
       <textarea id="qtext-${q.code}" style="min-height:58px;font-size:13px;">${displayText}</textarea>
@@ -8057,7 +8044,19 @@ function renderQuestionsTab() {
         ${ov ? `<button class="dbtn dbtn-outline dbtn-sm" style="color:var(--d-red2);" onclick="removeOverride('${q.code}')">Restore Default</button>` : ''}
       </div>
     </div>`;
+  };
+  _rated.forEach(function(q){
+    if (q.sec !== lastSec) {
+      html += `<div style="font-size:11px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.05em;margin:${lastSec?'20px':0} 0 10px;padding-bottom:6px;border-bottom:1px solid var(--d-border);">Section ${q.sec} — ${q.label}</div>`;
+      lastSec = q.sec;
+    }
+    html += _qCard(q, false);
   });
+  if (_open.length) {
+    html += `<div style="font-size:11px;font-weight:700;color:#0F766E;text-transform:uppercase;letter-spacing:.05em;margin:24px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--d-border);">Open-Ended (Written Answer)</div>`;
+    html += `<div style="font-size:12px;color:var(--d-mid);margin:0 0 10px;">Raters answer these in writing. They are part of every standard and pro survey and flow into the report — edit the wording the same way as the rated questions.</div>`;
+    _open.forEach(function(q){ html += _qCard(q, true); });
+  }
   html += `<div style="font-size:11px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.05em;margin:20px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--d-border);">Section G — Custom Questions</div>`;
   // G1 — AI Vision Alignment question (kept as its own dedicated slot).
   html += `<div class="q-edit" style="border-color:#A78BFA;margin-bottom:12px;">
