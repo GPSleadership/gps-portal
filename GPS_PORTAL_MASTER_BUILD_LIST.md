@@ -1,7 +1,22 @@
 # GPS Portal — Master Build List (prioritized, de-duplicated)
 
-**Compiled:** June 24, 2026 · **Last updated:** July 1, 2026 (full six-lens audit merged — see new top section)
-**Sources reconciled:** `GPS-PORTAL-ROADMAP.md` (dated May 2026), `GPS_PORTAL_BACKLOG.md` (dated June 5, 2026), the `cio_findings` ledger in Supabase, and the **July 1, 2026 full audit** (`EIS_Master_Audit_and_Plan_2026-07-01.md` + appendices: app, security, ux-mobile, frontier, opportunities, premortem). Duplicates across sources have been merged; items shipped since these lists were written are in Section 4.
+**Compiled:** June 24, 2026 · **Last updated:** July 3, 2026
+**Sources reconciled:** `GPS-PORTAL-ROADMAP.md` (dated May 2026), `GPS_PORTAL_BACKLOG.md` (dated June 5, 2026), the `cio_findings` ledger in Supabase, and the **July 1, 2026 full audit** (`EIS_Master_Audit_and_Plan_2026-07-01.md` + appendices). Duplicates across sources have been merged.
+
+---
+
+## 📌 GOVERNANCE — Single Source of Truth
+
+**This file is the one backlog.** All other lists (Supabase `council.portal_roadmap`, `GPS-PORTAL-ROADMAP.md`, `GPS_PORTAL_BACKLOG.md`, session task lists) are deprecated. Do not add portal build items anywhere else.
+
+**Rules:**
+1. New build idea → add it here before starting work (pick the right priority section).
+2. End of every session → update status of items worked on (mark ✅ Done with date).
+3. `cio_findings` in Supabase stays as a **findings audit ledger** (evidence trail), not an action backlog. The prioritized action list lives here.
+4. `council.portal_roadmap` (4 items) → archived; superseded by this doc.
+5. This file should live in the `gps-portal` repo at `docs/MASTER_BUILD_LIST.md` so it's version-controlled alongside the code. **Next commit: move it there.**
+
+---
 
 Priority key: **P0** = live exposure / live revenue loss, fix now · **P1** = do soon / time-sensitive · **P2** = high value, schedule it · **P3** = later / nice-to-have. Effort is a rough t-shirt size.
 
@@ -67,6 +82,26 @@ Full detail and evidence in **`EIS_Master_Audit_and_Plan_2026-07-01.md`**. Every
 - **Succession-Readiness reframe of the 14-Day Diagnostic** (zero new build; pitch to member programs like HDA Truck Pride). — S
 - **Owner-Dependence Index** — free benchmarked 10-Q wedge on the existing survey engine; feeds the diagnostic pipeline. — M
 - **"Lead Through the Wait" positioning** — rewrite diagnostic marketing in the distributors' uncertainty language. — S
+
+### Brand presence audit & consolidation (business, not portal) — *ADDED 2026-07-02, not started*
+
+**End goal:** a trucking / parts / logistics CEO who Googles "Alex Tremble" lands on a cohesive brand that immediately speaks to *their* world — not a government-leadership legacy. Four workstreams:
+
+1. **alextremble.com redirect + flush.** Verify `alextremble.com` is redirecting to `gpsleadership.org`. If yes, delete all remaining content from `alextremble.com` and request a cache/index refresh in Google Search Console to flush the old pages faster.
+2. **gpsleadership.org About + testimonials refresh.** Rewrite the About page and testimonials to *lead* with trucking, parts & service, and logistics client stories instead of government examples. Pull real client wins from the current ops-heavy book of business (anonymize per brand rules unless cleared).
+3. **Podcast SEO & positioning — *The Executive Appeal*.** Audit the show's SEO/positioning across major directories; make sure the description explicitly names the ICP (ops-heavy, multi-location CEOs) on Spotify, Apple Podcasts, and the RSS feed so ops CEOs find it when searching for leadership content in their space.
+4. **LinkedIn consistency.** Light refresh of the profile headline + Featured section to mirror gpsleadership.org messaging, so all surfaces are consistent.
+
+### Goal + Vision anchoring for Ask Alex (Executive Impact System) — *ADDED 2026-07-02, not started*
+
+Full verbatim spec in Supabase `portal_context.backlog_goal_vision_anchoring`. Four features, safe-build, mobile-first, do **not** gate access:
+
+1. **Goal + Vision display block** atop the diagnostic / Ask Alex area — the 90-day goal (`clients.goal_statement`) shown **read-only** with a lock and "Set with your coach" + a "Request a change" link; the vision shown as one line with a pencil that opens the guided editor. Two lines, not a form.
+2. **Ask Alex anchoring** — inject goal, vision (verbatim), priority behaviors, and TP3 focus into the system prompt. Open each answer by naming the goal/vision in the leader's own words ("because you told me this matters," never "based on your inputs"); close with one concrete next step tied to the goal + this week's check-in.
+3. **Guided, specificity-forced vision capture** used in **both** the diagnostic self-assessment and the editable vision field — 3 micro-prompts, weak-vs-strong example, synthesize to one line, then an **AI specificity gate** (future state of team/org + observable outcome + more than a noun); after 2 failed revisions, accept but flag for coach review.
+4. **Goal lock + change-request flow** — leader can never edit `goal_statement`; "Request a change" notifies the coach (sponsor-visible for sponsored engagements); coach edits in the plan wizard; log who/when.
+
+Schema: reuse `diagnostics.self_three_year_vision`; add `clients.vision_statement`, `vision_last_edited_at`, `vision_flagged_for_review`, `goal_change_requested_at`; `goal_statement` editable by coach/admin only. **Do not** let the leader edit the goal; **do not** accept a one-word/credential-only vision.
 
 ### Doc hygiene
 
@@ -158,12 +193,72 @@ The roadmap/backlog predate a lot of work. These appear done — verify and remo
 
 ---
 
-## Section 4 — Ops / non-code (Alex actions)
+## Section 4 — Pending (added this session, not yet built)
+
+### Active / In Progress
+| Item | Priority | Effort | Notes |
+|------|----------|--------|-------|
+| **Diagnostic nurture engine** — 5-touch email sequence for diagnostic-only leaders (no sprint purchased); auto-triggered on `report_final` status | P1 | M | Keeps pipeline warm; drives sprint conversions |
+| **Renewal automation** — approaching end-of-engagement email sequence (week 10+) | P1 | M | Retention + expansion play |
+
+### Security hardening batch (approved, not yet built)
+| Item | Priority | Effort | Notes |
+|------|----------|--------|-------|
+| HTTP security headers in `vercel.json` (CSP, X-Frame-Options, HSTS, etc.) | P1 | S | Standard hardening |
+| Rate limiting on Anthropic-calling endpoints (Ask Alex, run-prompt, email gen) | P1 | S | Prevents runaway Anthropic spend |
+| Set hard daily caps + billing alerts in Anthropic and Resend dashboards | P1 | S | Alex action (dashboard config) |
+| Server-side input validation sweep — type checks, length limits, sanitization on all write endpoints | P1 | M | Defense-in-depth |
+| Error message audit — ensure no raw Supabase errors, stack traces, or schema details reach the browser | P1 | S | Prevents info leakage |
+| Privacy policy page (GDPR/CCPA minimum) | P2 | S | Legal baseline |
+| Tighten CORS — restrict `/api/*` to `portal.gpsleadership.org` and preview domains only | P1 | S | Reduces attack surface |
+
+### Feature builds (approved, not yet built — on `feature/metric-checkin-v1` branch)
+| Item | Priority | Effort | Notes |
+|------|----------|--------|-------|
+| Wizard structured metric config — coach sets type/baseline/target/unit in coach.html; stored as JSON | P2 | M | Replaces hardcoded metric field |
+| Metric-aware one-tap check-in in client.html — shows current metric, last entry, one-tap on-track buttons | P2 | M | Core engagement feature |
+| Commitment modal + streak in client.html — weekly commitment capture + streak display | P2 | M | Builds habit and ownership |
+
+### Other pending
+| Item | Priority | Effort | Notes |
+|------|----------|--------|-------|
+| Sponsor bulk payment flow — sponsor pays for multiple team members transitioning to coaching | P2 | M | Needed before JMAA engagement |
+
+---
+
+## Section 5 — Shipped since July 1, 2026
+
+All items below were built, tested, and pushed to `main` after the July 1 audit.
+
+| Item | Shipped | Notes |
+|------|---------|-------|
+| Rename "Executive Impact Portal" → "Executive Impact System" everywhere (HTML, API, emails) | July 2026 | Brand consistency fix |
+| Reschedule message type — new `message_type` enum value, dropdown option in client.html, Resend notification | July 2026 | Client communication feature |
+| Client message → Resend email to Alex on every message | July 2026 | Ensures no message goes unseen |
+| `refreshMsgBadge()` called on `loadDashboard()` — Today flags load on page open | July 2026 | Bug fix |
+| `msg-overdue` cron + `businessDaysSince` + upgraded Today card visuals | July 2026 | Coach accountability feature |
+| AI reply draft feature — `coach-msg-draft` action, Regenerate button, auto-dismiss on typing | July 2026 | Coach productivity |
+| Inbox coaching v2 — Cmd+Enter send, check-in staleness nudge, security cleanup (`data_*.json` removed) | July 2026 | Branch `feature/inbox-coaching-v2` |
+| Reminders runtime config — `reminder_config` table (migration v79), coach UI subtab, hourly cron | July 2026 | Replaces hardcoded reminder logic |
+| Smart reminders — personalized to `checkin_day`, skips weekends | July 2026 | Engagement improvement |
+| Coach prompts + AI Studio tab — `coach_prompts` table (migration), prompt library, run interface | July 2026 | Coach productivity |
+| Auto-inject client context into prompt runs + `max_output_tokens` control | July 2026 | AI Studio improvement |
+| Today page dismiss/snooze on all notification flag cards | July 2026 | UX improvement |
+| Wizard reset + Plan Review reset buttons in coach.html diagnostic card | July 2026 | Ops / client management |
+| Diagnostic credit window: 30 → 7 days everywhere | July 2026 | Business rule correction |
+| Parallelize `sponsor-data.js` — `Promise.all` member loop + trailing queries | July 2026 | Performance improvement |
+| Decision Room: single API call init (was 2 calls) | July 2026 | Performance improvement |
+| `teams` returned in `team` action of sponsor-data.js | July 2026 | Bug fix |
+| Sergio's wizard state reset to fresh start | July 2026 | Client prep for debrief |
+| Marcus Holt demo diagnostic report (full content + PDF) | July 2026 | Demo / sales asset |
+
+---
+
+## Section 6 — Ops / non-code (Alex actions)
 
 - **Upgrade Supabase free → Pro (~$25/mo)** — for automatic DB backups / point-in-time recovery and to stay under storage/bandwidth ceilings as report PDFs accumulate. Worth doing before a major engagement.
 - **Migration label cleanup** — three different migrations are tagged "v66" (`v66_diagnostic_kickoff_fields`, `v66_survey_schedules`, `v66_structured_report_doc_and_business_outcome`). Renumber the next one to avoid ambiguity.
 - **Env var rotation** — see Section 1, items 1–2.
-
----
-
-*Note: the roadmap and backlog source files are stale. Once you've confirmed Section 3, I can prune those files and keep this master list as the single source of truth.*
+- **Move this file into the gps-portal repo** at `docs/MASTER_BUILD_LIST.md` and commit. Version-controlled alongside the code. Delete the Tool Creation copy once moved.
+- **Archive `GPS-PORTAL-ROADMAP.md` and `GPS_PORTAL_BACKLOG.md`** — superseded by this doc.
+- **Deprecate `council.portal_roadmap`** in Supabase — 4 items, all captured here.
