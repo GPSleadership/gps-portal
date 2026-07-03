@@ -663,7 +663,7 @@ async function handleSubmit(req, res) {
     }
 
     const insertRes = await sbFetch('/rest/v1/survey_responses', 'POST', {
-      client_id, stakeholder_id, token_id: tokenRecord.id, checkpoint, score, scale: 5,
+      client_id: tokenRecord.client_id, stakeholder_id: tokenRecord.stakeholder_id, token_id: tokenRecord.id, checkpoint: tokenRecord.checkpoint, score, scale: 5,
       open_response: open_response || null,
       comments:      comments      || null,
       comments_visible_to_client: comments_visible_to_client !== false
@@ -679,7 +679,7 @@ async function handleSubmit(req, res) {
       { 'Prefer': 'return=minimal' }
     );
 
-    sendResponseNotifications({ client_id, stakeholder_id, checkpoint, score, comments_visible_to_client: comments_visible_to_client !== false, tokenRecord }).catch(() => {});
+    sendResponseNotifications({ client_id: tokenRecord.client_id, stakeholder_id: tokenRecord.stakeholder_id, checkpoint: tokenRecord.checkpoint, score, comments_visible_to_client: comments_visible_to_client !== false, tokenRecord }).catch(() => {});
 
     return res.status(200).json({ success: true });
 

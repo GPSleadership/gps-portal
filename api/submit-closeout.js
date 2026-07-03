@@ -37,7 +37,7 @@ export default async function handler(req, res) {
 
     // ── Verify client token ───────────────────────────────────────────────────
     const clientRes = await sbFetch(
-      `/rest/v1/clients?id=eq.${client_id}&token=eq.${encodeURIComponent(client_token)}&select=id,name,email`
+      `/rest/v1/clients?id=eq.${client_id}&token=eq.${encodeURIComponent(client_token)}&select=id,name,email,in_coaching_program`
     );
     if (!clientRes.ok) return res.status(500).json({ error: 'Failed to verify client' });
     const clients = await clientRes.json();
@@ -59,7 +59,7 @@ export default async function handler(req, res) {
       sprint_number,
       q1_response:          q1_response           || null,
       q2_response:          q2_response           || null,
-      is_coaching_client:   !!is_coaching_client,
+      is_coaching_client:   !!client.in_coaching_program,
       next_sprint_requested: !!next_sprint_requested
     }, { 'Prefer': 'return=minimal' });
 
@@ -79,7 +79,7 @@ export default async function handler(req, res) {
     // ── Notify Alex if next sprint requested ──────────────────────────────────
     if (next_sprint_requested) {
       const subject = `[GPS] ${client.name} has requested a next sprint`;
-      const html    = buildAlexNotificationHtml(client, q1_response, q2_response, is_coaching_client);
+      const html    = buildAlexNotificationHtml(client, q1_response, q2_response, !!client.in_coaching_program);
       await sendEmail(ALEX_EMAIL, subject, html, client_id, client.name, 'closeout_next_sprint_request');
     }
 
