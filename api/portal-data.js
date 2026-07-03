@@ -357,7 +357,7 @@ export default async function handler(req, res) {
       case 'get-my-sponsor': {
         const email = (client.email || '').trim();
         if (!email) return res.status(200).json({ ok: true, sponsor: null });
-        const sp = await sb(`/rest/v1/sponsors?email=ilike.${encodeURIComponent(email)}&select=id,sponsor_token,name&limit=1`);
+        const sp = await sb(`/rest/v1/sponsors?email=ilike.${encodeURIComponent(email.replace(/([\\%_])/g, '\\$1'))}&select=id,sponsor_token,name&limit=1`);
         const sprows = sp.ok ? await sp.json() : [];
         const sponsor = sprows[0];
         if (!sponsor || !sponsor.sponsor_token) return res.status(200).json({ ok: true, sponsor: null });

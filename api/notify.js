@@ -212,7 +212,7 @@ export default async function handler(req, res) {
   else if (body.type === 'password_change_request') {
     const { code } = body;
 
-    subject = `GPS Portal — Your verification code: ${code}`;
+    subject = `GPS — Your verification code: ${code}`;
 
     html = `
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
@@ -398,13 +398,13 @@ export default async function handler(req, res) {
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
           <div style="background:#004369;padding:20px 28px;border-radius:8px 8px 0 0;">
             <div style="color:#E5DDC8;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">GPS Leadership Solutions</div>
-            <div style="color:#ffffff;font-size:20px;font-weight:700;">Your Updated Portal Link</div>
+            <div style="color:#ffffff;font-size:20px;font-weight:700;">Your Updated Access Link</div>
           </div>
           <div style="background:#ffffff;padding:28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
             <p>Hi ${firstName},</p>
             <p>Your Executive Impact System access link has been updated. Use the link below going forward — your previous link is no longer active.</p>
             <div style="text-align:center;margin:28px 0 0;">
-              <a href="${portalURL}" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;">Open My Leadership Portal →</a>
+              <a href="${portalURL}" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;">Access My System →</a>
             </div>
             ${(function(){ try { return require('./brand-link').pasteLink(portalURL, 'center'); } catch (_) { return ''; } })()}
             <ul style="font-size:13px;color:#444;padding-left:20px;margin-top:16px;">
@@ -431,13 +431,13 @@ export default async function handler(req, res) {
             <p>Hi ${firstName},</p>
             <p>Welcome to your Executive Impact System.</p>
             <p>You're getting access because you're already leading at a high level, and this space is designed to help you turn that into clear goals, concrete behaviors, and visible progress over the next 90 days.</p>
-            <p>The portal is meant to be quick and practical: about 10–15 minutes to set up, then 5 minutes a week to keep it moving.</p>
+            <p>Your Executive Impact System is meant to be quick and practical: about 10–15 minutes to set up, then 5 minutes a week to keep it moving.</p>
 
             <div style="margin:28px 0;padding:20px 24px;background:#f5f9f9;border-left:4px solid #01949A;border-radius:0 6px 6px 0;">
-              <div style="font-weight:700;color:#004369;font-size:14px;margin-bottom:12px;">How to access your portal</div>
+              <div style="font-weight:700;color:#004369;font-size:14px;margin-bottom:12px;">How to access your Executive Impact System</div>
               <p style="margin:0 0 16px;font-size:14px;">Your personal access link is below:</p>
               <div style="text-align:center;margin:16px 0 0;">
-                <a href="${portalURL}" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;">Open My Leadership Portal →</a>
+                <a href="${portalURL}" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;">Access My System →</a>
               </div>
               ${(function(){ try { return require('./brand-link').pasteLink(portalURL, 'center'); } catch (_) { return ''; } })()}
               <ul style="font-size:13px;color:#444;padding-left:20px;margin:12px 0 0;">
@@ -450,7 +450,7 @@ export default async function handler(req, res) {
 
             <div style="margin:24px 0;">
               <div style="font-weight:700;color:#004369;font-size:15px;margin-bottom:12px;">Getting started (first 10–15 minutes)</div>
-              <p style="font-size:14px;color:#444;margin:0 0 12px;">The portal will walk you through a simple setup. Here's the path:</p>
+              <p style="font-size:14px;color:#444;margin:0 0 12px;">It will walk you through a simple setup. Here's the path:</p>
               <table style="width:100%;border-collapse:collapse;">
                 <tr><td style="width:28px;vertical-align:top;padding:8px 10px 8px 0;font-weight:800;font-size:15px;color:#004369;">1</td><td style="padding:8px 0;border-bottom:1px solid #eee;vertical-align:top;"><div style="font-weight:700;font-size:14px;">Choose your focus pillar (TP3)</div><div style="font-size:13px;color:#555;margin-top:3px;">Trust, Proactivity, or Productivity — which area do you most want to impact right now?</div></td></tr>
                 <tr><td style="width:28px;vertical-align:top;padding:8px 10px 8px 0;font-weight:800;font-size:15px;color:#004369;">2</td><td style="padding:8px 0;border-bottom:1px solid #eee;vertical-align:top;"><div style="font-weight:700;font-size:14px;">Define your overall goal</div><div style="font-size:13px;color:#555;margin-top:3px;">The bigger outcome you'd like to move toward — even if it takes 6–12+ months.</div></td></tr>
@@ -464,13 +464,13 @@ export default async function handler(req, res) {
 
             <div style="margin:24px 0;padding:16px 20px;background:#f7f4ee;border-radius:8px;">
               <div style="font-weight:700;color:#004369;font-size:14px;margin-bottom:8px;">Weekly rhythm (5 minutes)</div>
-              <p style="font-size:13px;color:#444;margin:0 0 8px;">Block 15 minutes once a week on your calendar — something like "Leadership Impact Review." Open your portal, mark what you did on your key behavior, note any wins or friction, and set your next action. That's it.</p>
+              <p style="font-size:13px;color:#444;margin:0 0 8px;">Block 15 minutes once a week on your calendar — something like "Leadership Impact Review." Open your Executive Impact System, mark what you did on your key behavior, note any wins or friction, and set your next action. That's it.</p>
               <p style="font-size:13px;color:#666;font-style:italic;margin:0;">Consistency beats intensity here.</p>
             </div>
 
             <div style="margin:24px 0;">
               <div style="font-weight:700;color:#004369;font-size:14px;margin-bottom:8px;">Get support with Ask Alex</div>
-              <p style="font-size:13px;color:#444;margin:0 0 8px;">Inside the portal, you can use Ask Alex to get help between sessions — when you hit a barrier on your behavior or metric, need language for a tough conversation, or want ideas on how to remove friction around your goal. The more specific your question, the more practical the guidance you'll get back.</p>
+              <p style="font-size:13px;color:#444;margin:0 0 8px;">Inside your Executive Impact System, you can use Ask Alex to get help between sessions — when you hit a barrier on your behavior or metric, need language for a tough conversation, or want ideas on how to remove friction around your goal. The more specific your question, the more practical the guidance you'll get back.</p>
             </div>
 
             <p style="font-size:14px;color:#444;margin-top:16px;">If you have any trouble with your link or aren't sure what to choose as a first goal, reply to this email or contact <a href="mailto:team@gpsleadership.org" style="color:#004369;">team@gpsleadership.org</a> and we'll help you get started.</p>
@@ -543,7 +543,7 @@ export default async function handler(req, res) {
       }
     } catch (_) { /* fall back to built-in copy */ }
 
-    const ctaBtn = `<div style="text-align:center;margin:28px 0;"><a href="${portalURL}" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;">Open My Portal →</a></div>`
+    const ctaBtn = `<div style="text-align:center;margin:28px 0;"><a href="${portalURL}" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;">Access My System →</a></div>`
       + `<p style="text-align:center;font-size:13px;color:#555;margin:0 0 8px;">If the button doesn't open (some workplace email systems block links), copy and paste this into your browser:<br><span style="color:#004369;word-break:break-all;">${portalURL}</span></p>`;
     const fill = (s) => (s || '')
       .replace(/\{\{\s*first_name\s*\}\}/gi, firstName)
@@ -564,7 +564,7 @@ export default async function handler(req, res) {
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
         <div style="background:#004369;padding:20px 28px;border-radius:8px 8px 0 0;">
           <div style="color:#E5DDC8;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">GPS Leadership Solutions</div>
-          <div style="color:#ffffff;font-size:20px;font-weight:700;">Your Temporary Portal Access</div>
+          <div style="color:#ffffff;font-size:20px;font-weight:700;">Your Temporary Access</div>
         </div>
         <div style="background:#ffffff;padding:28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
           ${bodyHtml}
@@ -574,7 +574,7 @@ export default async function handler(req, res) {
             <p style="margin:4px 0;font-size:13px;"><a href="https://www.GPSLeadership.org" style="color:#004369;text-decoration:none;">www.GPSLeadership.org</a></p>
           </div>
           <div style="margin-top:20px;padding-top:16px;border-top:1px solid #eee;font-size:11px;color:#999;">
-            You're receiving this because you attended a GPS Leadership workshop and were granted temporary portal access. Questions? Reply to this email or reach out to <a href="mailto:team@gpsleadership.org" style="color:#999;">team@gpsleadership.org</a>.
+            You're receiving this because you attended a GPS Leadership workshop and were granted temporary access. Questions? Reply to this email or reach out to <a href="mailto:team@gpsleadership.org" style="color:#999;">team@gpsleadership.org</a>.
           </div>
         </div>
       </div>`;
@@ -622,14 +622,14 @@ export default async function handler(req, res) {
 
     const portalBtn = portalURL ? `
       <div style="margin:24px 0 0;">
-        <a href="${portalURL}" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:13px 28px;border-radius:8px;font-size:15px;font-weight:700;">Open My Leadership Portal →</a>
+        <a href="${portalURL}" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:13px 28px;border-radius:8px;font-size:15px;font-weight:700;">Access My System →</a>
       </div>
       ${(function(){ try { return require('./brand-link').pasteLink(portalURL); } catch (_) { return ''; } })()}` : '';
 
     let wrSubject, wrHtml;
 
     if (body.type === 'welcome_reminder_1') {
-      wrSubject = `${firstName}, your portal is ready — have you had a chance to set up your plan?`;
+      wrSubject = `${firstName}, your access is ready — have you had a chance to set up your plan?`;
       wrHtml = wrapEmail(`
         <p>Hi ${firstName},</p>
         <p>Just checking in — your Executive Impact System is set up and ready, but I don't see your 90-day plan locked in yet.</p>
@@ -641,17 +641,17 @@ export default async function handler(req, res) {
       wrSubject = `Still haven't seen your plan, ${firstName}`;
       wrHtml = wrapEmail(`
         <p>Hi ${firstName},</p>
-        <p>Your portal is active, but your 90-day plan hasn't been submitted yet.</p>
-        <p>Without it, the weekly check-ins, progress tracking, and Ask Alex won't have anything to work from. The plan is what makes the rest of the portal useful.</p>
+        <p>Your access is active, but your 90-day plan hasn't been submitted yet.</p>
+        <p>Without it, the weekly check-ins, progress tracking, and Ask Alex won't have anything to work from. The plan is what makes the rest of the system useful.</p>
         <p>It takes 10 minutes. Here's your link:</p>
         ${portalBtn}
         <p>If the timing isn't right or something's changed since we talked, just reply and let me know.</p>`);
     }
     else if (body.type === 'welcome_reminder_3') {
-      wrSubject = `Last note — I'm going to close out your portal access, ${firstName}`;
+      wrSubject = `Last note — I'm going to close out your access, ${firstName}`;
       wrHtml = wrapEmail(`
         <p>Hi ${firstName},</p>
-        <p>This is my last note on this. Your portal has been open for a week and your plan hasn't been set up.</p>
+        <p>This is my last note on this. Your access has been open for a week and your plan hasn't been set up.</p>
         <p>I'm going to close out your access for now. If you want to revisit this when the timing is better, reach out to <a href="mailto:team@gpsleadership.org" style="color:#004369;">team@gpsleadership.org</a> and we'll get you back in.</p>
         <p>If you do want to get started right now, here's your link — it's still active today:</p>
         ${portalBtn}
@@ -705,7 +705,7 @@ export default async function handler(req, res) {
       </div>`;
 
     if (body.type === 'continuation_day1am') {
-      seqSubject = 'Your portal access pauses tomorrow';
+      seqSubject = 'Your access pauses tomorrow';
       seqHtml = wrapEmail(`<p>Your access to the GPS leadership portal for this engagement wraps tomorrow. If you want to keep going together – with extended access and a structured 90‑day implementation plan – schedule a short call today:</p>${callBtn}<p>After this window, any new work goes through the standard discovery process.</p>`);
     }
     else if (body.type === 'continuation_day1pm') {
@@ -718,10 +718,10 @@ export default async function handler(req, res) {
     }
     else if (body.type === 'continuation_day3') {
       seqSubject = 'Example of how leaders use this work';
-      seqHtml = wrapEmail(`<p>Most of the CEOs who get the most from this work use it to drive one concrete outcome in the next quarter (e.g., fixing delegation in their top team, or cleaning up meeting cadence).</p><p>If you want help translating what you've seen in the portal into a 90‑day execution plan for your business, book a call here:</p>${callBtn}<p>We'll map the outcomes, the behaviors, and decide if ongoing support is a fit.</p>`);
+      seqHtml = wrapEmail(`<p>Most of the CEOs who get the most from this work use it to drive one concrete outcome in the next quarter (e.g., fixing delegation in their top team, or cleaning up meeting cadence).</p><p>If you want help translating what you've seen in your Executive Impact System into a 90‑day execution plan for your business, book a call here:</p>${callBtn}<p>We'll map the outcomes, the behaviors, and decide if ongoing support is a fit.</p>`);
     }
     else if (body.type === 'continuation_day5') {
-      seqSubject = 'Quick question about the portal';
+      seqSubject = 'Quick question about your Executive Impact System';
       seqHtml = wrapEmail(`<p>Over the last few weeks you've had access to the GPS leadership portal and tools. What, if anything, has already shifted for you or your team?</p><p>If you'd like to explore a focused 90‑day plan and what ongoing support could look like, you can grab a 15–30 minute working session with me here:</p>${callBtn}<p>No pressure, just a chance to see if it makes sense.</p>`);
     }
     else {
