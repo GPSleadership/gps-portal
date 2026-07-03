@@ -28,7 +28,7 @@ export default async function handler(req, res) {
 
     // ── Load current client ───────────────────────────────────────────────────
     const clientRes = await sbFetch(
-      `/rest/v1/clients?id=eq.${client_id}&select=id,name,current_sprint_number,closeout_submitted_at`
+      `/rest/v1/clients?id=eq.${client_id}&select=id,name,current_sprint_number,closeout_submitted_at,pulse_cadence_tier`
     );
     if (!clientRes.ok) return res.status(500).json({ error: 'Failed to load client' });
     const clients = await clientRes.json();
@@ -67,10 +67,27 @@ export default async function handler(req, res) {
       'PATCH',
       {
         current_sprint_number:  newSprintNum,
-        closeout_submitted_at:  null  // reset for new sprint
+        closeout_submitted_at:  null,  // reset for new sprint
+        pulse_tapered_at:       null   // fresh taper window for the new sprint
       },
       { 'Prefer': 'return=minimal' }
     );
+
+    // ── Schedule the new sprint's stakeholder pulses per the client's cadence ──
+    // tier (default 'light' on renewal). Anchored to this sprint's start date;
+    // internal day 21/45/80, weekdays only. Best-effort: a scheduling hiccup must
+    // not fail sprint creation (the coach can re-run it from the cadence picker).
+    try {
+      const { schedulePulses, normalizeTier } = require('./pulse-schedule');
+      await schedulePulses({
+        client_id,
+        tier:          normalizeTier(client.pulse_cadence_tier),
+        anchorDate:    sprintStartDate,
+        currentSprint: newSprintNum
+      });
+    } catch (e) {
+      console.error('start-sprint: pulse scheduling failed (non-fatal):', e && e.message);
+    }
 
     // ── Also create sprint 1 record if it didn't exist ────────────────────────
     // (ensures existing clients have a record for sprint 1)
