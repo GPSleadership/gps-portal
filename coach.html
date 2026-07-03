@@ -7401,7 +7401,7 @@ function renderDetailHeader() {
     if (!d.invites_sent_at && d.invites_scheduled_at) {
       actions.push(`<span style="font-size:12px;color:var(--d-blue);font-weight:600;">🕒 Invites scheduled for ${diagFormatDateTime(d.invites_scheduled_at)}</span>`);
     } else if (!diagCustomQsReady(d)) {
-      actions.push(`<span style="font-size:12px;color:var(--d-red2);font-weight:600;">⚠ Add both custom questions (Questions tab) before sending →</span>`);
+      actions.push(`<span style="font-size:12px;color:var(--d-red2);font-weight:600;">⚠ Finish all 3 questions (AI vision + 2 custom) before sending →</span>`);
     } else {
       actions.push(`<button class="dbtn dbtn-green dbtn-sm" onclick="openSendInvitesModal('now')">✉ Send Rater Invites Now →</button> <button class="dbtn dbtn-outline dbtn-sm" onclick="openSendInvitesModal('schedule')">🕒 Schedule Rater Invites</button>`);
     }
@@ -7822,7 +7822,7 @@ function renderRatersTab() {
     <div style="display:flex;gap:6px;flex-wrap:wrap;">${catBadges || '<span style="font-size:12px;color:var(--d-mid);">No raters added yet</span>'}</div>
     <div style="display:flex;gap:8px;">
       ${canSendInvites ? `<button class="dbtn dbtn-green dbtn-sm" onclick="openSendInvitesModal('now')">✉ Send ${nonSelf.length} Invites Now →</button> <button class="dbtn dbtn-outline dbtn-sm" onclick="openSendInvitesModal('schedule')">🕒 Schedule</button>` : ''}
-      ${(!customQsReady && d.status === 'self_assessment_complete' && nonSelf.length >= 3 && !d.invites_sent_at && !invitesScheduled) ? `<span style="font-size:12px;color:var(--d-red2);font-weight:600;">⚠ Add both custom questions on the Questions tab before sending</span>` : ''}
+      ${(!customQsReady && d.status === 'self_assessment_complete' && nonSelf.length >= 3 && !d.invites_sent_at && !invitesScheduled) ? `<span style="font-size:12px;color:var(--d-red2);font-weight:600;">⚠ Finish all 3 questions (AI vision + 2 custom) on the Questions tab before sending</span>` : ''}
       ${invitesScheduled ? `<span style="font-size:12px;color:var(--d-blue);font-weight:600;">🕒 Auto-send scheduled for ${diagFormatDateTime(d.invites_scheduled_at)}</span>
         <button class="dbtn dbtn-outline dbtn-sm" style="color:var(--d-red2);border-color:var(--d-red2);" onclick="cancelScheduledInvites()">Cancel</button>` : ''}
       ${invitesSent ? `<span style="font-size:12px;color:var(--d-green);">✓ Invites sent ${diagFormatDate(d.invites_sent_at)}</span>` : ''}
@@ -8739,9 +8739,10 @@ window.gpsRescanReview = function() {
 // Both custom questions (G2/G3) must be filled before rater invites can be sent.
 function diagCustomQsReady(d) {
   d = d || DIAG_SEL || {};
+  const g1 = (d.custom_g1_question || '').trim();
   const g2 = (d.custom_g2_question || '').trim();
   const g3 = (d.custom_g3_question || '').trim();
-  return !!g2 && !!g3;
+  return !!g1 && !!g2 && !!g3;
 }
 
 function openSendInvitesModal(mode) {
