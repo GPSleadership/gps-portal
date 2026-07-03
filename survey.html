@@ -258,8 +258,7 @@
     <!-- Rating card -->
     <div class="card">
       <div class="question-label">
-        In general, how consistently does <span id="clientFirstRating">they</span>
-        <span class="question-behavior" id="behaviorRatingDisplay">…</span>?
+        In general, how consistently does <span id="clientFirstRating">they</span> demonstrate this behavior?
       </div>
 
       <div class="anchor-row">
@@ -379,7 +378,6 @@ function buildSurvey() {
 
   // Rating question
   document.getElementById('clientFirstRating').textContent   = clientFirst;
-  document.getElementById('behaviorRatingDisplay').textContent = behavior;
 
   // Visibility toggle client name
   document.querySelectorAll('.clientFirstVis').forEach(el => el.textContent = clientFirst);
