@@ -1462,7 +1462,7 @@ I'm taking part in a leadership assessment run by GPS Leadership Solutions. Thei
     </div>
     <div class="diag-modal-footer">
       <button class="dbtn dbtn-outline" onclick="closeDiagModal('send-invites-modal')">Cancel</button>
-      <button class="dbtn dbtn-green" onclick="confirmSendInvites()">Send Invitations</button>
+      <button class="dbtn dbtn-green" id="send-invites-now-btn" onclick="confirmSendInvites()">Send Invitations</button>
     </div>
   </div>
 </div>
@@ -7401,7 +7401,7 @@ function renderDetailHeader() {
     if (!d.invites_sent_at && d.invites_scheduled_at) {
       actions.push(`<span style="font-size:12px;color:var(--d-blue);font-weight:600;">🕒 Invites scheduled for ${diagFormatDateTime(d.invites_scheduled_at)}</span>`);
     } else {
-      actions.push(`<button class="dbtn dbtn-green dbtn-sm" onclick="openSendInvitesModal()">Send Rater Invites →</button>`);
+      actions.push(`<button class="dbtn dbtn-green dbtn-sm" onclick="openSendInvitesModal('now')">✉ Send Rater Invites Now →</button> <button class="dbtn dbtn-outline dbtn-sm" onclick="openSendInvitesModal('schedule')">🕒 Schedule Rater Invites</button>`);
     }
   }
   if (d.status === 'survey_open') {
@@ -7818,7 +7818,7 @@ function renderRatersTab() {
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
     <div style="display:flex;gap:6px;flex-wrap:wrap;">${catBadges || '<span style="font-size:12px;color:var(--d-mid);">No raters added yet</span>'}</div>
     <div style="display:flex;gap:8px;">
-      ${canSendInvites ? `<button class="dbtn dbtn-green dbtn-sm" onclick="openSendInvitesModal()">✉ Send ${nonSelf.length} Invitations →</button>` : ''}
+      ${canSendInvites ? `<button class="dbtn dbtn-green dbtn-sm" onclick="openSendInvitesModal('now')">✉ Send ${nonSelf.length} Invites Now →</button> <button class="dbtn dbtn-outline dbtn-sm" onclick="openSendInvitesModal('schedule')">🕒 Schedule</button>` : ''}
       ${invitesScheduled ? `<span style="font-size:12px;color:var(--d-blue);font-weight:600;">🕒 Auto-send scheduled for ${diagFormatDateTime(d.invites_scheduled_at)}</span>
         <button class="dbtn dbtn-outline dbtn-sm" style="color:var(--d-red2);border-color:var(--d-red2);" onclick="cancelScheduledInvites()">Cancel</button>` : ''}
       ${invitesSent ? `<span style="font-size:12px;color:var(--d-green);">✓ Invites sent ${diagFormatDate(d.invites_sent_at)}</span>` : ''}
@@ -8732,7 +8732,8 @@ window.gpsRescanReview = function() {
   window.gpsOpenRosterReview(ctx, flagged);
 };
 
-function openSendInvitesModal() {
+function openSendInvitesModal(mode) {
+  mode = mode || 'now';
   const toP = r => ({ id: r.id, name: r.name, email: r.email, email_bounced: r.email_bounced });
   window.gpsPresendGate({
     label: (DIAG_SEL && DIAG_SEL.client_name) || 'this leader',
@@ -8749,37 +8750,52 @@ function openSendInvitesModal() {
       DIAG_RATERS = DIAG_RATERS.filter(x => x.id !== id);
       if (typeof renderRatersTab === 'function') renderRatersTab();
     },
-    onProceed: _openSendInvitesConfirm,
+    onProceed: () => _openSendInvitesConfirm(mode),
   });
 }
 
-function _openSendInvitesConfirm() {
+function _openSendInvitesConfirm(mode) {
+  mode = mode || 'now';
   const nonSelf = DIAG_RATERS.filter(r => !r.is_self);
-  const closeDate = new Date();
-  closeDate.setDate(closeDate.getDate() + 7);
+  const closeDate = new Date(); closeDate.setDate(closeDate.getDate() + 7);
   const closeDateStr = closeDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   const pad = n => String(n).padStart(2, '0');
   const fmtLocal = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  const minLocal = fmtLocal(new Date(Date.now() + 5 * 60000));    // earliest: 5 min out
-  const defLocal = fmtLocal(new Date(Date.now() + 60 * 60000));   // default: 1 hour out
-  document.getElementById('send-invites-body').innerHTML = `
-    <p style="font-size:13px;margin-bottom:14px;">You are about to send survey invitations to <strong>${nonSelf.length} raters</strong> for <strong>${DIAG_SEL.client_name}</strong>.</p>
-    <div class="dalert dalert-blue" style="margin-bottom:14px;"><span class="dalert-icon">📅</span>
-      <div>Survey window opens <strong>today</strong> and closes automatically on <strong>${closeDateStr}</strong> (7 days).</div>
-    </div>
-    <div style="max-height:200px;overflow-y:auto;border:1px solid var(--d-border);border-radius:6px;padding:12px;">
+  const minLocal = fmtLocal(new Date(Date.now() + 5 * 60000));
+  const defLocal = fmtLocal(new Date(Date.now() + 60 * 60000));
+  const listHtml = `<div style="max-height:200px;overflow-y:auto;border:1px solid var(--d-border);border-radius:6px;padding:12px;">
       ${nonSelf.map(r => `<div style="font-size:13px;padding:4px 0;">${r.name} — <span style="color:var(--d-mid);">${r.email}</span></div>`).join('')}
-    </div>
-    <p style="font-size:12px;color:var(--d-mid);margin-top:12px;">Each rater receives a unique survey link. Use <strong>Send Invitations</strong> below to send now.</p>
-    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--d-border);">
-      <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:6px;">Or schedule the auto-send</div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <input type="datetime-local" id="invite-schedule-input" value="${defLocal}" min="${minLocal}"
-          style="font-size:13px;padding:6px 9px;border:1px solid var(--d-border);border-radius:6px;">
-        <button class="dbtn dbtn-outline dbtn-sm" onclick="scheduleSendInvites()">Schedule auto-send</button>
-      </div>
-      <div style="font-size:11px;color:var(--d-mid);margin-top:5px;">Invites auto-send within about 15 minutes of the time you pick. Scheduling locks the anonymity setting, the same as sending.</div>
     </div>`;
+  const header = document.querySelector('#send-invites-modal h3');
+  const nowBtn = document.getElementById('send-invites-now-btn');
+  let body;
+  if (mode === 'schedule') {
+    if (header) header.textContent = 'Schedule Rater Invitations';
+    if (nowBtn) nowBtn.style.display = 'none';
+    body = `
+      <p style="font-size:13px;margin-bottom:14px;">Schedule the survey invitations for <strong>${nonSelf.length} raters</strong> to send at a future date and time. The 7-day survey window opens when they send.</p>
+      ${listHtml}
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--d-border);">
+        <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:6px;">Send date &amp; time</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input type="datetime-local" id="invite-schedule-input" value="${defLocal}" min="${minLocal}"
+            style="font-size:13px;padding:6px 9px;border:1px solid var(--d-border);border-radius:6px;">
+          <button class="dbtn dbtn-green dbtn-sm" onclick="scheduleSendInvites()">Schedule auto-send →</button>
+        </div>
+        <div style="font-size:11px;color:var(--d-mid);margin-top:5px;">Invites auto-send within about 15 minutes of the time you pick. Scheduling locks the anonymity setting, the same as sending.</div>
+      </div>`;
+  } else {
+    if (header) header.textContent = 'Send Rater Invitations';
+    if (nowBtn) nowBtn.style.display = '';
+    body = `
+      <p style="font-size:13px;margin-bottom:14px;">You are about to send survey invitations to <strong>${nonSelf.length} raters</strong> for <strong>${DIAG_SEL.client_name}</strong> — <strong>right now</strong>.</p>
+      <div class="dalert dalert-blue" style="margin-bottom:14px;"><span class="dalert-icon">📅</span>
+        <div>Survey window opens <strong>today</strong> and closes automatically on <strong>${closeDateStr}</strong> (7 days).</div>
+      </div>
+      ${listHtml}
+      <p style="font-size:12px;color:var(--d-mid);margin-top:12px;">Each rater receives a unique survey link. Click <strong>Send Invitations</strong> below to send now.</p>`;
+  }
+  document.getElementById('send-invites-body').innerHTML = body;
   openDiagModal('send-invites-modal');
 }
 
