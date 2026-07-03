@@ -142,19 +142,25 @@ export default async function handler(req, res) {
       );
       const sp = spRes.ok ? await spRes.json() : [];
       let token = (sp && sp[0] && sp[0].sponsor_token) || null;
+      let sponsorOk = true;
       if (!sp || sp.length === 0) {
         token = genToken();
-        await sbFetch('/rest/v1/sponsors', 'POST', {
-          name: finalSponsorName, email: finalSponsorEmail,
-          sponsor_token: token, confidentiality_default: 'summary',
+        // confidentiality_default must be 'standard' or 'private' (table CHECK).
+        const ins = await sbFetch('/rest/v1/sponsors', 'POST', {
+          name: finalSponsorName || finalSponsorEmail, email: finalSponsorEmail,
+          sponsor_token: token, confidentiality_default: 'standard',
           active: true, linked_client_id: client_id
         }, { Prefer: 'return=minimal' });
+        sponsorOk = ins.ok;
+        if (!ins.ok) console.error('activate-sprint: sponsor insert failed:', (await ins.text()).slice(0, 200));
       } else if (!token) {
         token = genToken();
-        await sbFetch(`/rest/v1/sponsors?id=eq.${sp[0].id}`, 'PATCH',
+        const up = await sbFetch(`/rest/v1/sponsors?id=eq.${sp[0].id}`, 'PATCH',
           { sponsor_token: token, active: true }, { Prefer: 'return=minimal' });
+        sponsorOk = up.ok;
       }
-      sponsorFollowLink = `${SITE_URL}/sponsor?token=${token}`;
+      // Only surface a follow-along link if the sponsor row is actually persisted.
+      sponsorFollowLink = sponsorOk ? `${SITE_URL}/sponsor?token=${token}` : null;
     }
 
     // ── 5. Stamp the activation guard (welcome_sent_at + variant) ───────────────
