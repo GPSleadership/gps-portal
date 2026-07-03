@@ -2174,7 +2174,7 @@ function renderClients() {
     const diagIds = new Set((typeof ALL_DIAGS !== 'undefined' ? ALL_DIAGS : []).map(d => d.client_id).filter(Boolean));
     filtered = filtered.filter(c => {
       if (wantCoach   && (c.coaching_sessions_enabled || c.in_coaching_program || c.is_active_coaching)) return true;
-      if (wantDiag    && diagIds.has(c.id)) return true;
+      if (wantDiag    && diagIds.has(c.id) && !(c.coaching_sessions_enabled || c.in_coaching_program || c.is_active_coaching)) return true;
       if (wantMember  && MEMBER_CLIENT_IDS.has(c.id)) return true;
       if (wantSponsor && (c.is_sponsor || SPONSOR_EMAILS.has((c.email || '').toLowerCase()))) return true;
       return false;
