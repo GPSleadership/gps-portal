@@ -8258,7 +8258,7 @@ function renderReportTab() {
       <button class="dbtn dbtn-gold" onclick="openReportPreview()">👁 Preview &amp; Finalize Report</button>` : ''}
       ${d.debrief_completed_at && !d.plan_locked_at ? `
       <button class="dbtn dbtn-outline" style="color:#b91c1c;border-color:#b91c1c;" onclick="undoDebriefComplete()">↩ Undo Debrief Complete</button>` : d.debrief_completed_at ? '' : d.report_finalized_at ? `
-      <button class="dbtn dbtn-outline" onclick="markDebriefComplete()">Mark Debrief Complete →</button>` : ''}
+      ${DIAG_SEL.client_id ? `<button class="dbtn dbtn-gold" onclick="openActivateSprintModal()">▶ Activate 90-Day Sprint →</button>` : `<button class="dbtn dbtn-outline" onclick="markDebriefComplete()">Mark Debrief Complete →</button>`}` : ''}
     </div>
     <label style="display:flex;align-items:flex-start;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--d-border);font-size:13px;cursor:pointer;">
       <input type="checkbox" id="plan-sponsor-approval" ${d.plan_requires_sponsor_approval ? 'checked' : ''} onchange="toggleSponsorApproval(this.checked)" style="width:16px;height:16px;margin-top:1px;accent-color:var(--d-blue);">
@@ -9692,6 +9692,100 @@ async function confirmAndFinalize() {
 async function finalizeReport() {
   // Kept for backward compatibility — routes to the gated preview flow
   openReportPreview();
+}
+
+// ── Project #1: Activate 90-Day Sprint ──────────────────────────────────────
+async function openActivateSprintModal(){
+  const d = DIAG_SEL;
+  if(!d || !d.client_id){ alert('Link a coaching client to this diagnostic first.'); return; }
+  const old = document.getElementById('as-overlay'); if(old) old.remove();
+
+  // Prefill sponsor from an existing sponsor row for this client, if any.
+  let sponsorName = '', sponsorEmail = '', sponsored = false;
+  try {
+    const sp = await cdSelect('sponsors', { eq: { linked_client_id: d.client_id }, select: 'name,email', limit: 1 });
+    if (sp && sp[0]) { sponsorName = sp[0].name || ''; sponsorEmail = sp[0].email || ''; sponsored = !!sponsorEmail; }
+  } catch(_){}
+
+  const today = new Date().toISOString().slice(0,10);
+  const end90 = new Date(Date.now()+90*86400000).toISOString().slice(0,10);
+
+  const ov = document.createElement('div'); ov.id='as-overlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:30px 16px;';
+  ov.onclick=function(ev){ if(ev.target===ov) ov.remove(); };
+  ov.innerHTML =
+    '<div style="background:#fff;border-radius:12px;max-width:560px;width:100%;padding:22px 24px;box-shadow:0 10px 40px rgba(0,0,0,.2);">'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:6px;">'
+    +'<div style="font-family:Montserrat,sans-serif;font-size:17px;font-weight:800;color:#004369;">Activate 90-Day Sprint — '+esc(d.client_name||'')+'</div>'
+    +'<button onclick="gpsRemove(\'as-overlay\')" style="background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#888;">&times;</button></div>'
+    +'<div style="font-size:12px;color:#5a6b76;margin-bottom:14px;">Converts the debrief into an active coaching sprint: turns on the weekly check-in, creates Sprint 1, sends the baseline stakeholder survey, schedules the pulse cadence (Aggressive — day 30 / 45 / 90, weekdays), and emails the welcome.</div>'
+    +'<div style="display:flex;gap:12px;flex-wrap:wrap;">'
+    +'<div style="flex:1;min-width:150px;"><label style="display:block;font-weight:700;color:#004369;font-size:12px;margin-bottom:4px;">Sprint start</label><input id="as-start" type="date" value="'+today+'" onchange="asSyncEnd()" style="width:100%;border:1px solid #d3dde3;border-radius:8px;padding:8px 10px;font-size:12.5px;box-sizing:border-box;"></div>'
+    +'<div style="flex:1;min-width:150px;"><label style="display:block;font-weight:700;color:#004369;font-size:12px;margin-bottom:4px;">Sprint end (auto +90d)</label><input id="as-end" type="date" value="'+end90+'" style="width:100%;border:1px solid #d3dde3;border-radius:8px;padding:8px 10px;font-size:12.5px;box-sizing:border-box;"></div>'
+    +'</div>'
+    +'<label style="display:flex;align-items:center;gap:8px;margin:16px 0 0;cursor:pointer;font-size:13px;color:#1B2A4A;"><input type="checkbox" id="as-sponsored" '+(sponsored?'checked':'')+' onchange="asToggleSponsor(this.checked)" style="width:16px;height:16px;accent-color:#004369;">This engagement is sponsored</label>'
+    +'<div id="as-sponsor-fields" style="'+(sponsored?'':'display:none;')+'margin-top:10px;gap:12px;flex-wrap:wrap;display:'+(sponsored?'flex':'none')+';">'
+    +'<div style="flex:1;min-width:150px;"><label style="display:block;font-weight:700;color:#004369;font-size:12px;margin-bottom:4px;">Sponsor name</label><input id="as-sponsor-name" type="text" value="'+esc(sponsorName)+'" placeholder="Full name" style="width:100%;border:1px solid #d3dde3;border-radius:8px;padding:8px 10px;font-size:12.5px;box-sizing:border-box;"></div>'
+    +'<div style="flex:1;min-width:150px;"><label style="display:block;font-weight:700;color:#004369;font-size:12px;margin-bottom:4px;">Sponsor email</label><input id="as-sponsor-email" type="email" value="'+esc(sponsorEmail)+'" placeholder="email@company.com" style="width:100%;border:1px solid #d3dde3;border-radius:8px;padding:8px 10px;font-size:12.5px;box-sizing:border-box;"></div>'
+    +'</div>'
+    +'<div style="font-size:12px;color:#5a6b76;margin-top:8px;">'+"Sponsored: the leader gets the welcome with the sponsor CC'd. Self-sponsored: leader only, with a personal thank-you."+'</div>'
+    +'<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;">'
+    +'<button class="dbtn dbtn-outline" onclick="gpsRemove(\'as-overlay\')">Cancel</button>'
+    +'<button class="dbtn dbtn-primary" id="as-go" onclick="activateSprint(event)">▶ Activate 90-Day Sprint</button></div>'
+    +'</div>';
+  document.body.appendChild(ov);
+}
+function asSyncEnd(){
+  var s=document.getElementById('as-start'); var e=document.getElementById('as-end');
+  if(s&&s.value&&e){ e.value=new Date(new Date(s.value+'T00:00:00Z').getTime()+90*86400000).toISOString().slice(0,10); }
+}
+function asToggleSponsor(on){
+  var f=document.getElementById('as-sponsor-fields'); if(f) f.style.display=on?'flex':'none';
+}
+async function activateSprint(e){
+  const d=DIAG_SEL; const btn=e?e.currentTarget:null;
+  const start=(document.getElementById('as-start')||{}).value||'';
+  const end=(document.getElementById('as-end')||{}).value||'';
+  const sponsored=!!(document.getElementById('as-sponsored')||{}).checked;
+  const sName=((document.getElementById('as-sponsor-name')||{}).value||'').trim();
+  const sEmail=((document.getElementById('as-sponsor-email')||{}).value||'').trim();
+  if(sponsored && !sEmail){ alert('Enter the sponsor email, or uncheck "This engagement is sponsored".'); return; }
+  const label = sponsored ? ("sponsored (welcome CC's "+(sName||sEmail)+")") : "self-sponsored";
+  if(!confirm("Activate the 90-Day Sprint for "+(d.client_name||"this leader")+"?\n\nEngagement: "+label+".\nThis sends the baseline survey and the welcome email now.")) return;
+  if(btn){ btn.disabled=true; btn.textContent='Activating…'; }
+  try{
+    const r=await fetch('/api/activate-sprint',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      session:getCoachSessionToken(), client_id:d.client_id, diagnostic_id:d.id,
+      start_date:start||null, end_date:end||null, sponsored:sponsored, sponsor_name:sName, sponsor_email:sEmail
+    })});
+    const j=await r.json();
+    if(r.status===409){ alert('This client was already activated. To re-send the welcome, use the client page.'); if(btn){ btn.disabled=false; btn.textContent='▶ Activate 90-Day Sprint'; } return; }
+    if(!r.ok||j.error) throw new Error(j.error||('HTTP '+r.status));
+
+    // Send the welcome separately so a failed email can be retried without re-activating.
+    let welcomeOk=false, welcomeErr='';
+    try{
+      const nr=await fetch('/api/notify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        session:getCoachSessionToken(), type:'coaching_activation_welcome',
+        clientId:d.client_id, variant:j.variant,
+        leaderName:j.leader_name, leaderEmail:j.leader_email, portalURL:j.portal_url, goal:j.goal,
+        sponsorName:j.sponsor_name, sponsorEmail:j.sponsor_email
+      })});
+      const nd=await nr.json().catch(function(){return {};});
+      welcomeOk=nr.ok && !nd.error; if(!welcomeOk) welcomeErr=nd.error||('HTTP '+nr.status);
+    }catch(ex){ welcomeErr=ex.message; }
+
+    gpsRemove('as-overlay');
+    if(welcomeOk){
+      if(typeof toast==='function') toast("Sprint activated — welcome sent to "+j.leader_email+(j.variant==="sponsored"?" (sponsor CC'd)":""));
+    } else {
+      alert("Sprint ACTIVATED, but the welcome email FAILED to send to "+j.leader_email+".\n\nSend their portal link manually:\n"+j.portal_url+"\n\n("+welcomeErr+")");
+    }
+    if(typeof refreshSelected==='function') await refreshSelected();
+  }catch(ex){
+    alert('Activation failed: '+ex.message);
+    if(btn){ btn.disabled=false; btn.textContent='▶ Activate 90-Day Sprint'; }
+  }
 }
 
 async function markDebriefComplete() {

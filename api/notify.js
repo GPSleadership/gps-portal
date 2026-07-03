@@ -49,13 +49,16 @@ async function logEmail({ clientId, recipientEmail, recipientName, emailType, su
 }
 
 // Send via Resend AND log the outcome. Returns { ok, result }.
-async function sendAndLog({ from, to, subject, html, emailType, clientId, recipientName }) {
+async function sendAndLog({ from, to, subject, html, emailType, clientId, recipientName, cc, replyTo }) {
   let response, result;
   try {
+    const payload = { from, to, subject, html };
+    if (cc && cc.length) payload.cc = cc;
+    if (replyTo) payload.reply_to = replyTo;
     response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to, subject, html }),
+      body: JSON.stringify(payload),
     });
     result = await response.json();
   } catch (err) {
@@ -97,7 +100,7 @@ export default async function handler(req, res) {
   //    Client-triggered types (plan_submitted, checkin_submitted, week9_client,
   //    password_change_request) send to a fixed/re-validated recipient and are
   //    handled in the client-token pass; intentionally left open here. ──
-  const GATED_TYPES = new Set(['new_portal_link','welcome_email','workshop_welcome','portal_welcome','results_ready','test_reminder']);
+  const GATED_TYPES = new Set(['new_portal_link','welcome_email','workshop_welcome','portal_welcome','coaching_activation_welcome','results_ready','test_reminder']);
   const isGated = GATED_TYPES.has(body.type) || /^welcome_reminder_/.test(body.type) || /^continuation_/.test(body.type);
   if (isGated) {
     const authed = !!verifyCoachSession(body.session)
@@ -835,6 +838,77 @@ export default async function handler(req, res) {
       });
       if (!ok) return res.status(500).json({ error: 'Email send failed', detail: result });
       return res.status(200).json({ success: true, sent_to: clientEmail });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ─── COACHING ACTIVATION WELCOME (Project #1 — sent on "Activate 90-Day Sprint") ─
+  // Replaces the generic portal_welcome on the coaching-activation path. Two variants:
+  //   'sponsored' → TO leader, CC sponsor; sponsor referenced BY NAME with neutral
+  //                 phrasing (never a gendered pronoun) + a confidentiality-safe note.
+  //   'self'      → TO leader only; gratitude framing.
+  else if (body.type === 'coaching_activation_welcome') {
+    const { leaderEmail, leaderName, portalURL, goal } = body;
+    const variant      = body.variant === 'sponsored' ? 'sponsored' : 'self';
+    const sponsorName  = (body.sponsorName  || '').trim();
+    const sponsorEmail = (body.sponsorEmail || '').trim();
+
+    if (!leaderEmail) return res.status(400).json({ error: 'No leader email provided.' });
+
+    const firstName = (leaderName || '').split(' ')[0] || 'there';
+    const FROM = `Alex Tremble – GPS Leadership <${RESEND_FROM}>`;
+    subject = `Your 90-Day Executive Sprint is live, ${firstName}`;
+
+    const focusLine = goal
+      ? `<p>Your focus for the next 90 days: <b>${goal}</b>. Everything in your portal — the weekly check-in, your tools, and Ask Alex — is pointed at that one shift.</p>`
+      : `<p>Everything in your portal — the weekly check-in, your tools, and Ask Alex — is now pointed at your 90-day focus.</p>`;
+
+    // Neutral, name-only sponsor language — works for any sponsor, no pronouns.
+    const sponsorBlock = (variant === 'sponsored' && sponsorName)
+      ? `<div style="margin:20px 0;padding:14px 18px;background:#EAF1F6;border-left:4px solid #004369;border-radius:0 6px 6px 0;font-size:14px;color:#374151;line-height:1.65;">${sponsorName} green-lit this engagement and is in your corner — following your progress at a high level: momentum and stakeholder trend only, never your private reflections or check-in notes.</div>`
+      : '';
+
+    const gratitudeBlock = (variant === 'self')
+      ? `<p>Thank you for trusting me to support you in this. That is not something I take lightly — the next 90 days are about you making decisions differently, and your team noticing.</p>`
+      : '';
+
+    const pasteLink = (function(){ try { return require('./brand-link').pasteLink(portalURL, 'center'); } catch (_) { return ''; } })();
+
+    html = `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
+        <div style="background:#004369;padding:22px 28px;border-radius:8px 8px 0 0;text-align:center;">
+          <div style="color:#01949A;font-size:11px;text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:5px;">GPS Leadership Solutions</div>
+          <div style="color:#ffffff;font-size:20px;font-weight:700;">Your 90-Day Executive Sprint</div>
+        </div>
+        <div style="background:#ffffff;padding:28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
+          <p>${firstName},</p>
+          <p>Your 90-Day Executive Sprint is officially underway. This is where the diagnostic turns into change your team can feel.</p>
+          ${sponsorBlock}
+          ${gratitudeBlock}
+          ${focusLine}
+          <div style="text-align:center;margin:26px 0 8px;">
+            <a href="${portalURL}" style="display:inline-block;background:#01949A;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;">Open your Executive Impact System &rarr;</a>
+          </div>
+          ${pasteLink}
+          <p style="margin-top:20px;">Do this first: log in and confirm your first weekly check-in. It takes three minutes and sets the rhythm for the whole sprint.</p>
+          <div style="margin-top:30px;padding-top:18px;border-top:1px solid #eee;">
+            <p style="margin:0;font-size:14px;">In your corner,</p>
+            <p style="margin:6px 0 0;font-size:14px;font-weight:700;color:#004369;">Alex D. Tremble</p>
+            <p style="margin:3px 0;font-size:13px;color:#555;">CEO &amp; Executive Advisor, GPS Leadership Solutions</p>
+          </div>
+        </div>
+      </div>`;
+
+    const cc = (variant === 'sponsored' && sponsorEmail) ? [sponsorEmail] : undefined;
+    try {
+      const { ok, result } = await sendAndLog({
+        from: FROM, to: [leaderEmail], cc, replyTo: 'team@gpsleadership.org',
+        subject, html, emailType: 'coaching_activation_welcome',
+        clientId: body.clientId, recipientName: leaderName,
+      });
+      if (!ok) return res.status(500).json({ error: 'Email send failed', detail: result });
+      return res.status(200).json({ success: true, sent_to: leaderEmail, variant, cc: cc || [] });
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }
