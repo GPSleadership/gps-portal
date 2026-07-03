@@ -7400,6 +7400,8 @@ function renderDetailHeader() {
   if (d.status === 'self_assessment_complete' && DIAG_RATERS.filter(r=>!r.is_self).length > 0) {
     if (!d.invites_sent_at && d.invites_scheduled_at) {
       actions.push(`<span style="font-size:12px;color:var(--d-blue);font-weight:600;">🕒 Invites scheduled for ${diagFormatDateTime(d.invites_scheduled_at)}</span>`);
+    } else if (!diagCustomQsReady(d)) {
+      actions.push(`<span style="font-size:12px;color:var(--d-red2);font-weight:600;">⚠ Add both custom questions (Questions tab) before sending →</span>`);
     } else {
       actions.push(`<button class="dbtn dbtn-green dbtn-sm" onclick="openSendInvitesModal('now')">✉ Send Rater Invites Now →</button> <button class="dbtn dbtn-outline dbtn-sm" onclick="openSendInvitesModal('schedule')">🕒 Schedule Rater Invites</button>`);
     }
@@ -7712,7 +7714,8 @@ function renderRatersTab() {
   }).join('');
 
   const invitesScheduled  = !d.invites_sent_at && !!d.invites_scheduled_at;
-  const canSendInvites    = d.status === 'self_assessment_complete' && nonSelf.length >= 3 && !d.invites_sent_at && !invitesScheduled;
+  const customQsReady     = diagCustomQsReady(d);
+  const canSendInvites    = d.status === 'self_assessment_complete' && nonSelf.length >= 3 && !d.invites_sent_at && !invitesScheduled && customQsReady;
   const invitesSent       = !!d.invites_sent_at;
   const raterListReady    = !!d.raters_finalized_at && !invitesSent;
   const rc = document.getElementById('raters-content');
@@ -7819,6 +7822,7 @@ function renderRatersTab() {
     <div style="display:flex;gap:6px;flex-wrap:wrap;">${catBadges || '<span style="font-size:12px;color:var(--d-mid);">No raters added yet</span>'}</div>
     <div style="display:flex;gap:8px;">
       ${canSendInvites ? `<button class="dbtn dbtn-green dbtn-sm" onclick="openSendInvitesModal('now')">✉ Send ${nonSelf.length} Invites Now →</button> <button class="dbtn dbtn-outline dbtn-sm" onclick="openSendInvitesModal('schedule')">🕒 Schedule</button>` : ''}
+      ${(!customQsReady && d.status === 'self_assessment_complete' && nonSelf.length >= 3 && !d.invites_sent_at && !invitesScheduled) ? `<span style="font-size:12px;color:var(--d-red2);font-weight:600;">⚠ Add both custom questions on the Questions tab before sending</span>` : ''}
       ${invitesScheduled ? `<span style="font-size:12px;color:var(--d-blue);font-weight:600;">🕒 Auto-send scheduled for ${diagFormatDateTime(d.invites_scheduled_at)}</span>
         <button class="dbtn dbtn-outline dbtn-sm" style="color:var(--d-red2);border-color:var(--d-red2);" onclick="cancelScheduledInvites()">Cancel</button>` : ''}
       ${invitesSent ? `<span style="font-size:12px;color:var(--d-green);">✓ Invites sent ${diagFormatDate(d.invites_sent_at)}</span>` : ''}
@@ -8732,6 +8736,14 @@ window.gpsRescanReview = function() {
   window.gpsOpenRosterReview(ctx, flagged);
 };
 
+// Both custom questions (G2/G3) must be filled before rater invites can be sent.
+function diagCustomQsReady(d) {
+  d = d || DIAG_SEL || {};
+  const g2 = (d.custom_g2_question || '').trim();
+  const g3 = (d.custom_g3_question || '').trim();
+  return !!g2 && !!g3;
+}
+
 function openSendInvitesModal(mode) {
   mode = mode || 'now';
   const toP = r => ({ id: r.id, name: r.name, email: r.email, email_bounced: r.email_bounced });
@@ -8995,7 +9007,17 @@ async function generateG1() {
     await updateDiag({ custom_g1_question: question, custom_g1_generated_at: new Date().toISOString() });
     await refreshSelected();
   } catch(e) {
-    alert('Error generating question: ' + e.message);
+    // The generation often completes server-side even when the browser loses the
+    // response (cold start / dropped connection). Re-check the DB before erroring —
+    // if the question was saved anyway, treat it as success.
+    try {
+      await refreshSelected();
+      if (DIAG_SEL && DIAG_SEL.custom_g1_question) {
+        localStorage.setItem(_g1AttemptsKey(), String(used + 1));
+        return;
+      }
+    } catch (_) {}
+    alert('Error generating question: ' + e.message + '\n\nIf this keeps happening, reload the page — the question may have generated anyway.');
     if (btn) { btn.disabled = false; btn.textContent = DIAG_SEL.custom_g1_question ? `Regenerate (${remaining} left) →` : 'Generate Now →'; }
   }
 }
