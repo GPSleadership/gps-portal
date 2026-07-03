@@ -71,6 +71,18 @@ async function sendAndLog({ from, to, subject, html, emailType, clientId, recipi
   return { ok: response.ok, result };
 }
 
+// Validate a client portal token (for client-triggered email types).
+async function validClientToken(tok) {
+  if (!tok || !SUPABASE_SECRET) return false;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/clients?token=eq.${encodeURIComponent(tok)}&select=id&limit=1`,
+      { headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}` } });
+    if (!r.ok) return false;
+    const rows = await r.json();
+    return Array.isArray(rows) && rows.length > 0;
+  } catch (_) { return false; }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -91,6 +103,13 @@ export default async function handler(req, res) {
     const authed = !!verifyCoachSession(body.session)
       || (CRON_SECRET && (body.cron_secret === CRON_SECRET || req.headers['x-cron-secret'] === CRON_SECRET));
     if (!authed) return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  // Client-triggered types: require a valid client portal token (or coach session).
+  const CLIENT_TYPES = new Set(['plan_submitted','checkin_submitted','week9_client']);
+  if (CLIENT_TYPES.has(body.type)) {
+    const ok = !!verifyCoachSession(body.session) || await validClientToken(body.token);
+    if (!ok) return res.status(401).json({ error: 'Unauthorized' });
   }
 
   let subject, html;

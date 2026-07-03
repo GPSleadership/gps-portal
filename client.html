@@ -4681,7 +4681,7 @@ async function wizLockIn() {
     await fetch(NOTIFY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: JSON.stringify({token: (window.token || token), 
         type:            'plan_submitted',
         clientName:      wizClientName,
         pillar:          p.pillar,
@@ -5886,7 +5886,7 @@ async function submitFormA(clientId, clientName, weekNumber, noCompletion) {
     await fetch(NOTIFY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: JSON.stringify({token: (window.token || token), 
         type: 'checkin_submitted',
         clientName,
         weekNumber,
@@ -5907,7 +5907,7 @@ async function submitFormA(clientId, clientName, weekNumber, noCompletion) {
       await fetch(NOTIFY_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: JSON.stringify({token: (window.token || token), 
           type:          'week9_client',
           clientEmail:   currentClient.email,
           clientName:    currentClient.name,
