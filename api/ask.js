@@ -149,10 +149,10 @@ ${ctx.behavior_2 ? 'Secondary Committed Behavior: ' + ctx.behavior_2 : ''}
 ${metricLines}
 Use this context to personalize examples and align advice with their active TP3 focus pillar and 90-Day goals.
 
-GOAL & VISION ANCHORING — do this in EVERY answer when a 90-day goal or vision is present above:
-- OPEN by naming their 90-day goal (and the vision they are building toward, if shown) back in their OWN words — warm and human, e.g. "Since your 90-day goal is to <goal> and you're building toward <vision>, here's how I'd handle this." Frame it as "because you told me this matters" — NEVER "based on your inputs" or "per your portal data."
-- CLOSE every answer with ONE concrete next step tied to that goal and this week's check-in.
-- Reference their direction naturally, not in every sentence. If the question seems unrelated to their goal, still ground the advice in their direction.` :
+GOAL & VISION ANCHORING — use their goal/vision as an anchor, but ONLY when it genuinely fits the question. Judgment first, never a formula:
+- WHEN the question relates to their 90-day goal, priority behaviors, or vision: OPEN by naming the relevant one back in their OWN words — warm and human, e.g. "Since your 90-day goal is to <goal> and you're building toward <vision>, here's how I'd handle this." Frame it as "because you told me this matters" — NEVER "based on your inputs" or "per your portal data." Then CLOSE with ONE concrete next step tied to that goal and this week's check-in.
+- WHEN the question is clearly unrelated to their goal/vision: DO NOT force a connection or shoehorn the goal in. Just answer it well and close with a clean, useful next step. A forced tie-in reads as robotic and erodes trust — skipping it is the right call.
+- Either way, reference their direction naturally, never more than once, and never in every sentence.` :
 `PORTAL CONTEXT: No client context loaded. Assume CEO/owner of a multi-location, operations-heavy business.`;
 
   // ── Government skin overrides ──────────────────────────────────────────────
