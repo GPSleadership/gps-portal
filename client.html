@@ -5097,22 +5097,24 @@ function renderGoalVisionAnchor(client){
   var vision = (client.vision_statement || '').trim();
   var requested = !!client.goal_change_requested_at;
   if(!goal && !vision){ el.innerHTML=''; return; }
-  var goalLine = goal ? escD(goal) : '<span style="color:#9CA3AF;font-weight:400;">Set with your coach.</span>';
+  var goalLine = goal ? escD(goal) : 'Set with your coach.';
   var goalAction = requested
     ? '<span style="color:#8F560F;">Change requested — your coach will follow up.</span>'
-    : '<a href="javascript:void(0)" onclick="openGoalChangeRequest()" style="color:#6B7280;text-decoration:underline;">Request a change to my goal</a>';
-  var visionLine = vision ? escD(vision) : '<span style="color:#9CA3AF;">Add the future you are building toward.</span>';
+    : '<span onclick="openGoalChangeRequest()" style="color:#9CA3AF;cursor:pointer;"><span style="border-bottom:1px solid #D1D5DB;">Request a change to my goal</span></span>';
+  var visionLine = vision ? escD(vision) : 'Add the future you are building toward';
+  var lock = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;position:relative;top:1px;"><rect x="4.5" y="10.5" width="15" height="10" rx="2"></rect><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"></path></svg>';
   el.innerHTML =
-    '<div style="background:#fff;border:1px solid #E5E7EB;border-radius:12px;padding:16px 18px;margin-bottom:18px;">'
-    + '<div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#01949A;margin-bottom:3px;">Your 90-Day Goal <span title="Set with your coach">&#128274;</span></div>'
-    + '<div style="font-size:15px;color:#004369;font-weight:600;line-height:1.45;">'+ goalLine +'</div>'
-    + '<div style="font-size:12px;margin-top:5px;">'+ goalAction +'</div>'
-    + '<div style="border-top:1px solid #F3F4F6;margin-top:13px;padding-top:13px;display:flex;align-items:flex-start;gap:12px;">'
-    +   '<div style="flex:1;min-width:0;">'
-    +     '<div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#01949A;margin-bottom:3px;">Your Vision</div>'
-    +     '<div style="font-size:15px;color:#1B2A4A;line-height:1.45;">'+ visionLine +'</div>'
-    +   '</div>'
-    +   '<button onclick="openVisionEditor()" style="flex-shrink:0;font-size:12px;background:none;border:1px solid #01949A;color:#0F6E56;border-radius:6px;padding:6px 13px;cursor:pointer;font-weight:700;">'+ (vision ? 'Edit' : 'Add') +'</button>'
+    '<div style="border-left:2px solid #01949A;padding:3px 0 3px 13px;margin-bottom:18px;">'
+    + '<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">'
+    +   '<span style="font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#7C8A94;flex-shrink:0;">Goal</span>'
+    +   lock
+    +   '<span style="font-size:13.5px;color:'+ (goal ? '#1B2A4A' : '#9CA3AF') +';line-height:1.45;font-weight:400;">'+ goalLine +'</span>'
+    + '</div>'
+    + '<div style="font-size:11.5px;margin-top:6px;">'+ goalAction +'</div>'
+    + '<div style="display:flex;align-items:baseline;gap:8px;margin-top:11px;">'
+    +   '<span style="font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#7C8A94;flex-shrink:0;">Vision</span>'
+    +   '<span style="font-size:13.5px;line-height:1.45;flex:1;min-width:0;color:'+ (vision ? '#1B2A4A' : '#9CA3AF') +';">'+ visionLine +'</span>'
+    +   '<span onclick="openVisionEditor()" style="font-size:12px;color:#0F6E56;font-weight:600;flex-shrink:0;cursor:pointer;">'+ (vision ? 'Edit' : 'Add') +' &#8594;</span>'
     + '</div>'
     + '</div>';
 }
