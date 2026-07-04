@@ -189,6 +189,35 @@ const SUCCESSION_COLS = new Set([
   'self_successor_candidates', 'self_successor_development_actions',
 ]);
 
+// AI specificity gate for the leader's three-year vision (Project #2, Phase B).
+// IDENTICAL criteria to portal-data.js visionGate so a vision captured here in the
+// diagnostic passes the same bar the portal enforces later. PASS only if it describes
+// a future STATE (not a credential/title/task), names an observable behavior/outcome,
+// and is more than a bare phrase. Fails OPEN (pass:true) on any missing key or API
+// error so a flaky model never traps the leader mid-assessment.
+async function visionGate(text) {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return { pass: true, nudge: '' };
+  const model = process.env.CLAUDE_FAST || 'claude-haiku-4-5-20251001';
+  const sys = `You gate a leadership "vision" statement for specificity. PASS only if ALL are true: (a) it describes a future STATE of the person's team, organization, or leadership — NOT a personal credential, title, certification, or a single task; (b) it names at least one OBSERVABLE behavior or outcome (what people would do, see, or experience); (c) it is more than a single noun or bare phrase. FAIL examples: "Get PMP certified", "Become VP", "A great team", "Better communication". Respond with ONLY compact JSON: {"pass": true|false, "nudge": "<one warm, specific coaching sentence telling them exactly what observable part to add — only when pass is false>"}.`;
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, max_tokens: 220, system: sys, messages: [{ role: 'user', content: 'Vision to gate:\n"""\n' + text + '\n"""' }] }),
+    });
+    if (!r.ok) return { pass: true, nudge: '' };
+    const j = await r.json();
+    const txt = (j.content && j.content[0] && j.content[0].text) || '';
+    const m = txt.match(/\{[\s\S]*\}/);
+    if (!m) return { pass: true, nudge: '' };
+    const parsed = JSON.parse(m[0]);
+    return { pass: !!parsed.pass, nudge: typeof parsed.nudge === 'string' ? parsed.nudge : '' };
+  } catch (_) {
+    return { pass: true, nudge: '' };
+  }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -428,6 +457,19 @@ export default async function handler(req, res) {
           await maybeSendRaterBrief(rater.diagnostic_id);   // sends only if rater list is also submitted
         }
         return res.status(200).json({ ok: true });
+      }
+
+      // Specificity gate for the leader's three-year vision (E1), run at capture
+      // time so visions enter clean. Scoped to the leader's OWN self-assessment;
+      // rater tokens get a pass (they don't write a vision). Fails open.
+      case 'vision-gate': {
+        const rater = await raterByToken(token);
+        if (!rater) return res.status(401).json({ error: 'Invalid or expired link' });
+        if (!rater.is_self) return res.status(200).json({ ok: true, pass: true, nudge: '' });
+        const raw = String(body.text || '').trim();
+        if (!raw) return res.status(200).json({ ok: true, pass: true, nudge: '' });
+        const g = await visionGate(raw);
+        return res.status(200).json({ ok: true, pass: !!g.pass, nudge: g.nudge || '' });
       }
 
       default:

@@ -615,6 +615,53 @@ function updateProgress() {
 //  SUBMIT
 // ─────────────────────────────────────────────────────────────────────────────
 let _surveySubmitting = false;
+let _visionAttempts   = 0;
+
+// Runs the server specificity gate on E1 (three-year vision) for the leader's own
+// self-assessment. Returns true to let submission proceed, false to hold and let the
+// leader refine. Shows the coaching nudge inline under E1. Bypasses after the second
+// attempt so nobody is trapped; fails open on any error.
+async function gateVisionE1() {
+  const ans  = ANSWERS['E1'];
+  const text = (ans && ans.text) ? ans.text.trim() : '';
+  if (!text) return true;   // empties are handled by validateSection
+
+  const prior = document.getElementById('vision-nudge-E1');
+  if (prior) prior.remove();
+
+  const btn  = document.querySelector('.btn-gold');
+  const orig = btn ? btn.textContent : 'Submit →';
+  if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
+
+  let result = { pass: true, nudge: '' };
+  try { result = await diagPortal('vision-gate', { text }); }
+  catch (_) { result = { pass: true, nudge: '' }; }   // fail open — never trap the leader
+
+  if (btn) { btn.disabled = false; btn.textContent = orig || 'Submit →'; }
+
+  if (result && result.pass) return true;
+
+  _visionAttempts++;
+  if (_visionAttempts >= 2) return true;   // second press goes through with what they have
+
+  const block = document.getElementById('qblock-E1');
+  const nudge = (result && result.nudge)
+    ? result.nudge
+    : 'Add a bit more about the future state of your team — what people would actually be doing or experiencing when you get there.';
+  if (block) {
+    const div = document.createElement('div');
+    div.id = 'vision-nudge-E1';
+    div.className = 'alert alert-blue';
+    div.style.marginTop = '10px';
+    div.innerHTML = '<span class="alert-icon">&#9998;</span><div>' + nudge
+      + '<span style="display:block;margin-top:5px;color:var(--mid);font-size:12px;">Refine it above, or press Submit again to keep what you have.</span></div>';
+    block.appendChild(div);
+    block.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const ta = document.getElementById('ta-E1');
+    if (ta) ta.focus();
+  }
+  return false;
+}
 
 async function submitSurvey() {
   if (!validateSection()) return;
@@ -623,6 +670,14 @@ async function submitSurvey() {
   if (RATER && RATER.completed_at) {
     showState('screen-done-already');
     return;
+  }
+
+  // Vision specificity gate (leader self-assessment only). Runs BEFORE we lock the
+  // submit button so a nudge lets the leader refine E1 in place. Bypasses after the
+  // second attempt so nobody is trapped, and fails open on any server/API error.
+  if (IS_SELF) {
+    const visionOk = await gateVisionE1();
+    if (!visionOk) return;
   }
 
   // Guard: prevent double-click / in-flight duplicate
