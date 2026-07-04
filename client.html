@@ -1130,19 +1130,14 @@
     .qa-intro p { font-size: 14px; color: #333333; line-height: 1.65; max-width: 520px; }
     .qa-intro.hidden, .qa-boundary.hidden, .qa-chips.hidden, .qa-pl.hidden { display: none; }
     .qa-boundary {
-      background: #EEF7F7;
-      border: 1px solid rgba(1,148,154,0.2);
-      border-radius: 8px;
-      padding: 11px 18px;
       font-size: 12.5px;
       color: var(--gray-600);
       line-height: 1.55;
-      margin-bottom: 28px;
-      display: flex;
-      gap: 10px;
-      align-items: flex-start;
+      margin-bottom: 26px;
+      padding-left: 12px;
+      border-left: 2px solid rgba(1,148,154,0.35);
     }
-    .qa-boundary span { color: var(--teal); font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+    .qa-boundary span { display: none; }
     .qa-limit-wall {
       display: none;
       background: #FFFFFF;
@@ -2392,12 +2387,10 @@
     <div id="goalVisionAnchor"></div>
     <div class="qa-intro" id="qa-intro">
       <h2 id="qaIntroHeading">Ask a <span>leadership question.</span></h2>
-      <p id="qaIntroDesc">Quick answers grounded in GPS frameworks — built for CEOs running multi-location, operations-heavy businesses. For the deeper situational work, that's what coaching is for.</p>
-      <p style="margin-top:10px;font-size:13px;color:var(--gray-600);">Not sure who's behind this? <a href="javascript:void(0)" onclick="openCoachModal()" style="color:var(--teal);font-weight:600;text-decoration:underline;">Learn more about Alex →</a></p>
+      <p id="qaIntroDesc">Quick answers grounded in GPS frameworks, built for operations-heavy CEOs. <a href="javascript:void(0)" onclick="openCoachModal()" style="color:var(--teal);font-weight:600;text-decoration:none;border-bottom:1px solid rgba(1,148,154,.35);">Learn more about Alex</a></p>
     </div>
     <div class="qa-boundary" id="qa-boundary">
-      <span>💡</span>
-      <div>This tool answers framework and tool questions. For complex, situational work that needs someone in your corner over time, <strong style="color:var(--navy)">that's coaching</strong>. <a href="mailto:alex@gpsleadership.org" style="color:var(--navy);text-decoration:underline;font-weight:600;">Reach out to Alex directly →</a></div>
+      <div>For the deeper, situational work that needs someone in your corner over time, that's coaching. <a href="mailto:alex@gpsleadership.org" style="color:var(--navy);text-decoration:none;border-bottom:1px solid rgba(0,67,105,.3);font-weight:600;">Reach out to Alex directly</a></div>
     </div>
     <div class="qa-limit-wall" id="qa-lwall">
       <h3>You've reached today's limit.</h3>
@@ -5100,20 +5093,20 @@ function renderGoalVisionAnchor(client){
   var goalLine = goal ? escD(goal) : 'Set with your coach.';
   var goalAction = requested
     ? '<span style="color:#8F560F;">Change requested — your coach will follow up.</span>'
-    : '<span onclick="openGoalChangeRequest()" style="color:#9CA3AF;cursor:pointer;"><span style="border-bottom:1px solid #D1D5DB;">Request a change to my goal</span></span>';
+    : '<span onclick="openGoalChangeRequest()" style="color:#8AA69C;cursor:pointer;"><span style="border-bottom:1px solid #C4D8D2;">Request a change to my goal</span></span>';
   var visionLine = vision ? escD(vision) : 'Add the future you are building toward';
-  var lock = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;position:relative;top:1px;"><rect x="4.5" y="10.5" width="15" height="10" rx="2"></rect><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"></path></svg>';
+  var lock = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8AA69C" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;position:relative;top:1px;"><rect x="4.5" y="10.5" width="15" height="10" rx="2"></rect><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"></path></svg>';
   el.innerHTML =
-    '<div style="border-left:2px solid #01949A;padding:3px 0 3px 13px;margin-bottom:18px;">'
+    '<div style="background:#EAF4F1;border-radius:10px;padding:14px 16px;margin-bottom:18px;">'
     + '<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">'
-    +   '<span style="font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#7C8A94;flex-shrink:0;">Goal</span>'
+    +   '<span style="font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#5C7B72;flex-shrink:0;">Goal</span>'
     +   lock
-    +   '<span style="font-size:13.5px;color:'+ (goal ? '#1B2A4A' : '#9CA3AF') +';line-height:1.45;font-weight:400;">'+ goalLine +'</span>'
+    +   '<span style="font-size:13.5px;color:'+ (goal ? '#1B2A4A' : '#7C8A94') +';line-height:1.45;font-weight:400;">'+ goalLine +'</span>'
     + '</div>'
     + '<div style="font-size:11.5px;margin-top:6px;">'+ goalAction +'</div>'
-    + '<div style="display:flex;align-items:baseline;gap:8px;margin-top:11px;">'
-    +   '<span style="font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#7C8A94;flex-shrink:0;">Vision</span>'
-    +   '<span style="font-size:13.5px;line-height:1.45;flex:1;min-width:0;color:'+ (vision ? '#1B2A4A' : '#9CA3AF') +';">'+ visionLine +'</span>'
+    + '<div style="display:flex;align-items:baseline;gap:8px;margin-top:11px;padding-top:11px;border-top:1px solid #D7E8E2;">'
+    +   '<span style="font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#5C7B72;flex-shrink:0;">Vision</span>'
+    +   '<span style="font-size:13.5px;line-height:1.45;flex:1;min-width:0;color:'+ (vision ? '#1B2A4A' : '#7C8A94') +';">'+ visionLine +'</span>'
     +   '<span onclick="openVisionEditor()" style="font-size:12px;color:#0F6E56;font-weight:600;flex-shrink:0;cursor:pointer;">'+ (vision ? 'Edit' : 'Add') +' &#8594;</span>'
     + '</div>'
     + '</div>';
