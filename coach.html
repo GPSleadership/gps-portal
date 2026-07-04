@@ -2684,8 +2684,16 @@ function renderProfileSection(section, client, checkins) {
       </div>`;
     }
 
+    const goalChangeBadge = client.goal_change_requested_at ? `
+      <div style="background:#FEF6E7;border:1px solid #F5C97B;border-radius:8px;padding:12px 16px;margin-bottom:18px;">
+        <div style="font-size:12px;font-weight:700;color:#8F560F;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">Goal change requested · ${new Date(client.goal_change_requested_at).toLocaleDateString()}</div>
+        ${client.goal_change_note ? `<div style="font-size:13px;color:var(--gray-600);line-height:1.5;margin-bottom:8px;">&ldquo;${esc(client.goal_change_note)}&rdquo;</div>` : ''}
+        <button onclick="resolveGoalChange('${client.id}')" style="font-size:12px;background:var(--navy);color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-weight:700;">Mark resolved</button>
+      </div>` : '';
+
     el.innerHTML = `
       <div class="profile-section-title">Summary</div>
+      ${goalChangeBadge}
       ${headerCard}
       ${snapshotCard}
       ${planHeadline}
@@ -6078,6 +6086,17 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
   `;
   loadObservableMeasure(clientId);
   loadStakeholderSchedule(clientId);
+}
+
+// Project #2, F4: clear a leader's goal-change request once the coach has acted.
+async function resolveGoalChange(clientId){
+  if (!confirm('Mark this goal-change request as resolved? Update the goal in the client\'s plan first if it needs to change.')) return;
+  try {
+    await cdUpdate('clients', { goal_change_requested_at: null, goal_change_note: null }, { eq: { id: clientId } });
+    allClients = allClients.map(c => c.id === clientId ? { ...c, goal_change_requested_at: null, goal_change_note: null } : c);
+    if (typeof toast === 'function') toast('Marked resolved');
+    switchProfileNav(document.querySelector('.profile-nav-item.active')?.id?.replace('profNav-','') || 'summary');
+  } catch (e) { alert('Could not update: ' + e.message); }
 }
 
 // ── Coaching session countdown (roadmap #3) ─────────────────────────────────

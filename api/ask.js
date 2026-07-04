@@ -14,7 +14,7 @@ const CLAUDE_FAST     = process.env.CLAUDE_FAST  || 'claude-haiku-4-5-20251001';
 // Validate a portal token server-side → returns the client row (or null).
 async function getClientByToken(token) {
   if (!token || !SUPABASE_SECRET) return null;
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/clients?token=eq.${encodeURIComponent(token)}&is_archived=eq.false&select=id,ask_alex_enabled,name,title,organization,industry,revenue_band,num_locations,regions_owned,direct_reports_count,tp3_pillar,goal_description,goal_30_day,goal_statement,behavior_1,behavior_2,start_behavior,metric_name,metric_baseline,metric_target,metric_1_name,metric_1_baseline,metric_1_target,metric_2_name,metric_2_baseline,metric_2_target,metric_3_name,metric_3_baseline,metric_3_target&limit=1`,
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/clients?token=eq.${encodeURIComponent(token)}&is_archived=eq.false&select=id,ask_alex_enabled,name,title,organization,industry,revenue_band,num_locations,regions_owned,direct_reports_count,tp3_pillar,goal_description,goal_30_day,goal_statement,behavior_1,behavior_2,start_behavior,metric_name,metric_baseline,metric_target,metric_1_name,metric_1_baseline,metric_1_target,metric_2_name,metric_2_baseline,metric_2_target,metric_3_name,metric_3_baseline,metric_3_target,vision_statement&limit=1`,
     { headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}` } });
   if (!r.ok) return null;
   const rows = await r.json();
@@ -60,6 +60,7 @@ function buildAskContext(c) {
     goal_description:     s(c.goal_description, 600),
     goal_30_day:          s(c.goal_30_day, 600),
     goal_90_day_statement: s(c.goal_statement, 600),
+    vision:               s(c.vision_statement, 600),
     behavior_1:           s(c.behavior_1 || c.start_behavior, 600),
     behavior_2:           s(c.behavior_2, 600),
     metric_1_name:        s(c.metric_1_name || c.metric_name),
@@ -142,10 +143,16 @@ ${ctx.focus_pillar ? 'TP3 Focus Pillar: ' + ctx.focus_pillar : ''}
 ${ctx.goal_description ? '90-Day Goal: ' + ctx.goal_description : ''}
 ${ctx.goal_30_day ? '30-Day Target: ' + ctx.goal_30_day : ''}
 ${ctx.goal_90_day_statement ? '90-Day Statement: ' + ctx.goal_90_day_statement : ''}
+${ctx.vision ? 'Vision (their words, the future they are building toward): ' + ctx.vision : ''}
 ${ctx.behavior_1 ? 'Primary Committed Behavior: ' + ctx.behavior_1 : ''}
 ${ctx.behavior_2 ? 'Secondary Committed Behavior: ' + ctx.behavior_2 : ''}
 ${metricLines}
-Use this context to personalize examples and align advice with their active TP3 focus pillar and 90-Day goals.` :
+Use this context to personalize examples and align advice with their active TP3 focus pillar and 90-Day goals.
+
+GOAL & VISION ANCHORING — do this in EVERY answer when a 90-day goal or vision is present above:
+- OPEN by naming their 90-day goal (and the vision they are building toward, if shown) back in their OWN words — warm and human, e.g. "Since your 90-day goal is to <goal> and you're building toward <vision>, here's how I'd handle this." Frame it as "because you told me this matters" — NEVER "based on your inputs" or "per your portal data."
+- CLOSE every answer with ONE concrete next step tied to that goal and this week's check-in.
+- Reference their direction naturally, not in every sentence. If the question seems unrelated to their goal, still ground the advice in their direction.` :
 `PORTAL CONTEXT: No client context loaded. Assume CEO/owner of a multi-location, operations-heavy business.`;
 
   // ── Government skin overrides ──────────────────────────────────────────────

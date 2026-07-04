@@ -2389,6 +2389,7 @@
 <!-- ── Q&A PANEL ── -->
 <div id="qaPanel">
   <div class="qa-main">
+    <div id="goalVisionAnchor"></div>
     <div class="qa-intro" id="qa-intro">
       <h2 id="qaIntroHeading">Ask a <span>leadership question.</span></h2>
       <p id="qaIntroDesc">Quick answers grounded in GPS frameworks — built for CEOs running multi-location, operations-heavy businesses. For the deeper situational work, that's what coaching is for.</p>
@@ -3572,6 +3573,9 @@ async function loadClient() {
       portalContext.plan_start_date      = client.plan_start_date || '';
       portalContext.reward_30_day        = client.reward_30_day || '';
       portalContext.reward_90_day        = client.reward_90_day || '';
+
+      // Project #2: Goal + Vision anchor block atop Ask Alex.
+      try { renderGoalVisionAnchor(client); } catch (_) {}
 
       // Always show tab nav once plan is submitted
       document.getElementById('portalTabNav').style.display = 'flex';
@@ -5081,6 +5085,140 @@ function applyEmailCheckin(status) {
 }
 
 // Collapsible plan card (mobile): toggle the .expanded state + button label.
+// ── Project #2: Goal + Vision anchoring ─────────────────────────────────────
+var GV_CLIENT = null;
+var gvVisionAttempts = 0;
+
+function renderGoalVisionAnchor(client){
+  GV_CLIENT = client;
+  var el = document.getElementById('goalVisionAnchor');
+  if(!el) return;
+  var goal = (client.goal_statement || '').trim();
+  var vision = (client.vision_statement || '').trim();
+  var requested = !!client.goal_change_requested_at;
+  if(!goal && !vision){ el.innerHTML=''; return; }
+  var goalLine = goal ? escD(goal) : '<span style="color:#9CA3AF;font-weight:400;">Set with your coach.</span>';
+  var goalAction = requested
+    ? '<span style="color:#8F560F;">Change requested — your coach will follow up.</span>'
+    : '<a href="javascript:void(0)" onclick="openGoalChangeRequest()" style="color:#6B7280;text-decoration:underline;">Request a change to my goal</a>';
+  var visionLine = vision ? escD(vision) : '<span style="color:#9CA3AF;">Add the future you are building toward.</span>';
+  el.innerHTML =
+    '<div style="background:#fff;border:1px solid #E5E7EB;border-radius:12px;padding:16px 18px;margin-bottom:18px;">'
+    + '<div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#01949A;margin-bottom:3px;">Your 90-Day Goal <span title="Set with your coach">&#128274;</span></div>'
+    + '<div style="font-size:15px;color:#004369;font-weight:600;line-height:1.45;">'+ goalLine +'</div>'
+    + '<div style="font-size:12px;margin-top:5px;">'+ goalAction +'</div>'
+    + '<div style="border-top:1px solid #F3F4F6;margin-top:13px;padding-top:13px;display:flex;align-items:flex-start;gap:12px;">'
+    +   '<div style="flex:1;min-width:0;">'
+    +     '<div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#01949A;margin-bottom:3px;">Your Vision</div>'
+    +     '<div style="font-size:15px;color:#1B2A4A;line-height:1.45;">'+ visionLine +'</div>'
+    +   '</div>'
+    +   '<button onclick="openVisionEditor()" style="flex-shrink:0;font-size:12px;background:none;border:1px solid #01949A;color:#0F6E56;border-radius:6px;padding:6px 13px;cursor:pointer;font-weight:700;">'+ (vision ? 'Edit' : 'Add') +'</button>'
+    + '</div>'
+    + '</div>';
+}
+
+function gvPrompt(id, q){
+  return '<label style="display:block;font-size:12.5px;font-weight:600;color:#1B2A4A;margin:10px 0 4px;">'+ q +'</label>'
+    + '<input id="'+id+'" type="text" style="width:100%;border:1px solid #D1D5DB;border-radius:7px;padding:7px 10px;font-size:13px;font-family:inherit;box-sizing:border-box;">';
+}
+
+function openVisionEditor(){
+  var vision = ((GV_CLIENT && GV_CLIENT.vision_statement) || '').trim();
+  gvVisionAttempts = 0;
+  var old = document.getElementById('gv-vision-overlay'); if(old) old.remove();
+  var ov = document.createElement('div'); ov.id='gv-vision-overlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10000;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 14px;';
+  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  ov.innerHTML =
+    '<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;padding:22px 22px 20px;box-shadow:0 12px 44px rgba(0,0,0,.25);">'
+    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">'
+    +   '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:18px;color:#004369;">Your Vision</div>'
+    +   '<button onclick="document.getElementById(\'gv-vision-overlay\').remove()" style="background:none;border:none;font-size:22px;line-height:1;color:#888;cursor:pointer;">&times;</button>'
+    + '</div>'
+    + '<p style="font-size:13px;color:#4B5563;line-height:1.6;margin:6px 0 12px;">Your vision is the future state of your team or organization — not a personal credential, title, or task.</p>'
+    + '<div style="background:#F5F6F8;border-radius:10px;padding:12px 14px;margin-bottom:6px;font-size:13px;color:#374151;line-height:1.6;">'
+    +   '<div style="margin-bottom:6px;"><strong>Weak:</strong> "Get PMP certified." <span style="color:#9CA3AF;">(a personal milestone)</span></div>'
+    +   '<div><strong>Strong:</strong> "My leadership team makes and closes decisions without me, and my peers come to me to unblock, not to approve."</div>'
+    + '</div>'
+    + gvPrompt('gv-q1','In 1–3 years, what will your team or organization be doing differently?')
+    + gvPrompt('gv-q2','How will you know it worked — what would you see or hear?')
+    + gvPrompt('gv-q3','What is your role in that future?')
+    + '<label style="display:block;font-size:12px;font-weight:700;color:#004369;margin:14px 0 4px;">Your vision (one line — this is what gets saved)</label>'
+    + '<textarea id="gv-vision-line" rows="2" maxlength="400" placeholder="One sentence describing the future state you are building toward." style="width:100%;border:2px solid #D1D5DB;border-radius:8px;padding:9px 11px;font-size:14px;font-family:inherit;line-height:1.5;box-sizing:border-box;">'+ escD(vision) +'</textarea>'
+    + '<div id="gv-vision-msg" style="font-size:13px;margin-top:10px;min-height:18px;line-height:1.5;"></div>'
+    + '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px;">'
+    +   '<button onclick="document.getElementById(\'gv-vision-overlay\').remove()" style="background:none;border:2px solid #D1D5DB;color:#374151;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;">Cancel</button>'
+    +   '<button id="gv-vision-save" onclick="saveVisionFromEditor()" style="background:#01949A;color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:Montserrat,sans-serif;">Save vision</button>'
+    + '</div>'
+    + '</div>';
+  document.body.appendChild(ov);
+}
+
+async function saveVisionFromEditor(){
+  var line=document.getElementById('gv-vision-line');
+  var msg=document.getElementById('gv-vision-msg');
+  var btn=document.getElementById('gv-vision-save');
+  var v=((line&&line.value)||'').trim();
+  if(!v){ if(msg){ msg.style.color='#DC2626'; msg.textContent='Write your one-line vision first.'; } return; }
+  if(btn){ btn.disabled=true; btn.textContent='Checking…'; }
+  if(msg){ msg.textContent=''; }
+  try{
+    var r=await fetch('/api/portal-data',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'save-vision', token:token, vision:v, attempt:gvVisionAttempts})});
+    var j=await r.json();
+    if(!r.ok||j.error) throw new Error(j.error||('HTTP '+r.status));
+    if(j.saved){
+      if(GV_CLIENT) GV_CLIENT.vision_statement=v;
+      if(typeof portalContext==='object' && portalContext) portalContext.vision=v;
+      renderGoalVisionAnchor(GV_CLIENT);
+      var o=document.getElementById('gv-vision-overlay'); if(o) o.remove();
+    } else {
+      gvVisionAttempts++;
+      if(msg){ msg.style.color='#8F560F'; msg.textContent=j.nudge || 'Add the observable part — what your team would actually do differently, and how you would know.'; }
+      if(btn){ btn.disabled=false; btn.textContent=(gvVisionAttempts>=2?'Save anyway':'Save vision'); }
+    }
+  }catch(e){
+    if(msg){ msg.style.color='#DC2626'; msg.textContent='Could not save: '+e.message; }
+    if(btn){ btn.disabled=false; btn.textContent='Save vision'; }
+  }
+}
+
+function openGoalChangeRequest(){
+  var old=document.getElementById('gv-goal-overlay'); if(old) old.remove();
+  var ov=document.createElement('div'); ov.id='gv-goal-overlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10000;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 14px;';
+  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  ov.innerHTML =
+    '<div style="background:#fff;border-radius:14px;max-width:520px;width:100%;padding:22px;box-shadow:0 12px 44px rgba(0,0,0,.25);">'
+    + '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:18px;color:#004369;margin-bottom:4px;">Request a change to your goal</div>'
+    + '<p style="font-size:13px;color:#4B5563;line-height:1.6;margin:0 0 12px;">Your 90-day goal is set with your coach to protect the commitment. Tell your coach what you would like to change and why — they will follow up.</p>'
+    + '<textarea id="gv-goal-note" rows="4" maxlength="1000" placeholder="What would you like your goal to be, and what changed?" style="width:100%;border:2px solid #D1D5DB;border-radius:8px;padding:9px 11px;font-size:14px;font-family:inherit;line-height:1.5;box-sizing:border-box;"></textarea>'
+    + '<div id="gv-goal-msg" style="font-size:13px;margin-top:10px;min-height:18px;"></div>'
+    + '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px;">'
+    +   '<button onclick="document.getElementById(\'gv-goal-overlay\').remove()" style="background:none;border:2px solid #D1D5DB;color:#374151;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;">Cancel</button>'
+    +   '<button id="gv-goal-send" onclick="submitGoalChangeRequest()" style="background:#004369;color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:Montserrat,sans-serif;">Send to my coach</button>'
+    + '</div>'
+    + '</div>';
+  document.body.appendChild(ov);
+}
+
+async function submitGoalChangeRequest(){
+  var note=((document.getElementById('gv-goal-note')||{}).value||'').trim();
+  var msg=document.getElementById('gv-goal-msg');
+  var btn=document.getElementById('gv-goal-send');
+  if(btn){ btn.disabled=true; btn.textContent='Sending…'; }
+  try{
+    var r=await fetch('/api/portal-data',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'request-goal-change', token:token, note:note})});
+    var j=await r.json();
+    if(!r.ok||j.error) throw new Error(j.error||('HTTP '+r.status));
+    if(GV_CLIENT) GV_CLIENT.goal_change_requested_at=new Date().toISOString();
+    renderGoalVisionAnchor(GV_CLIENT);
+    var o=document.getElementById('gv-goal-overlay'); if(o) o.remove();
+  }catch(e){
+    if(msg){ msg.style.color='#DC2626'; msg.textContent='Could not send: '+e.message; }
+    if(btn){ btn.disabled=false; btn.textContent='Send to my coach'; }
+  }
+}
+
 function togglePlanCard(btn) {
   const card = btn.closest('.plan-card');
   if (!card) return;

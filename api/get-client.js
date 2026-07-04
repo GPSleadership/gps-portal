@@ -388,6 +388,23 @@ export default async function handler(req, res) {
 
   const client = clients[0];
 
+  // Seed the leader's vision from their diagnostic self-assessment on first load
+  // (Project #2, F3). Persist it so Ask Alex and later loads see the same text; the
+  // leader can then refine it through the guided editor. Best-effort, non-blocking.
+  if (!client.vision_statement) {
+    try {
+      const vr = await sbSecret(`/rest/v1/diagnostics?client_id=eq.${encodeURIComponent(client.id)}&self_three_year_vision=not.is.null&order=created_at.desc&limit=1&select=self_three_year_vision`);
+      if (vr.ok) {
+        const vrows = await vr.json();
+        const seed = vrows && vrows[0] && (vrows[0].self_three_year_vision || '').trim();
+        if (seed) {
+          client.vision_statement = seed;
+          sbSecret(`/rest/v1/clients?id=eq.${encodeURIComponent(client.id)}`, 'PATCH', { vision_statement: seed }).catch(function () {});
+        }
+      }
+    } catch (_) { /* optional */ }
+  }
+
   // Org logo (matched by organization name) — shown co-branded in the portal header.
   // Non-blocking: if this errors or the org has no logo, the portal renders without it.
   if (client.organization) {

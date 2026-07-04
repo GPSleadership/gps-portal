@@ -56,7 +56,7 @@ function pickWritable(updates) {
 
 async function findClientByToken(token) {
   if (!token) return null;
-  const r = await sb(`/rest/v1/clients?token=eq.${encodeURIComponent(token)}&is_archived=eq.false&limit=1&select=id,email,name,in_coaching_program,plan_submitted_at,coaching_sessions_enabled,is_active_coaching,first_big_win_flag`);
+  const r = await sb(`/rest/v1/clients?token=eq.${encodeURIComponent(token)}&is_archived=eq.false&limit=1&select=id,email,name,in_coaching_program,plan_submitted_at,allow_plan_edit,coaching_sessions_enabled,is_active_coaching,first_big_win_flag`);
   if (!r.ok) return null;
   const rows = await r.json();
   return Array.isArray(rows) && rows[0] ? rows[0] : null;
@@ -78,6 +78,37 @@ async function diagnosticOwnedBy(diagnosticId, clientId) {
   if (!r.ok) return false;
   const rows = await r.json();
   return Array.isArray(rows) && rows.length > 0;
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+// AI specificity gate for a leader's vision (Project #2, F3). PASS only if it
+// describes a future STATE of the team/org/leadership (not a credential/title/task),
+// names an observable behavior/outcome, and is more than a bare phrase. Fails OPEN
+// (pass:true) on any missing key or API error so a flaky model never traps the leader.
+async function visionGate(text) {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return { pass: true, nudge: '' };
+  const model = process.env.CLAUDE_FAST || 'claude-haiku-4-5-20251001';
+  const sys = `You gate a leadership "vision" statement for specificity. PASS only if ALL are true: (a) it describes a future STATE of the person's team, organization, or leadership — NOT a personal credential, title, certification, or a single task; (b) it names at least one OBSERVABLE behavior or outcome (what people would do, see, or experience); (c) it is more than a single noun or bare phrase. FAIL examples: "Get PMP certified", "Become VP", "A great team", "Better communication". Respond with ONLY compact JSON: {"pass": true|false, "nudge": "<one warm, specific coaching sentence telling them exactly what observable part to add — only when pass is false>"}.`;
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, max_tokens: 220, system: sys, messages: [{ role: 'user', content: 'Vision to gate:\n"""\n' + text + '\n"""' }] }),
+    });
+    if (!r.ok) return { pass: true, nudge: '' };
+    const j = await r.json();
+    const txt = (j.content && j.content[0] && j.content[0].text) || '';
+    const m = txt.match(/\{[\s\S]*\}/);
+    if (!m) return { pass: true, nudge: '' };
+    const parsed = JSON.parse(m[0]);
+    return { pass: !!parsed.pass, nudge: typeof parsed.nudge === 'string' ? parsed.nudge : '' };
+  } catch (_) {
+    return { pass: true, nudge: '' };
+  }
 }
 
 export default async function handler(req, res) {
@@ -135,6 +166,12 @@ export default async function handler(req, res) {
       // ── Client record (plan + profile, allowlisted) ─────────────────────────
       case 'update-client': {
         const updates = pickWritable(body.updates);
+        // The 90-day goal is locked once the plan is submitted (unless the coach
+        // re-opened editing). After that, the leader changes it only via
+        // "Request a change" — never by a direct write (Project #2, F4).
+        if (updates.goal_statement != null && client.plan_submitted_at && !client.allow_plan_edit) {
+          delete updates.goal_statement;
+        }
         if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'No writable fields' });
         // Locking the plan always ends the edit window. allow_plan_edit is intentionally
         // NOT client-writable (no privilege escalation), so the server clears it here when
@@ -143,6 +180,57 @@ export default async function handler(req, res) {
         if (updates.plan_submitted_at) updates.allow_plan_edit = false;
         const r = await sb(`/rest/v1/clients?id=eq.${clientId}`, 'PATCH', updates, { Prefer: 'return=minimal' });
         if (!r.ok) { const detail = await r.json().catch(() => ({})); return res.status(500).json({ error: 'Update failed', detail }); }
+        return res.status(200).json({ ok: true });
+      }
+
+      // ── Vision save (specificity-gated) — Project #2, F3 ────────────────────
+      case 'save-vision': {
+        const raw = (body.vision || '').trim();
+        const attempt = Number(body.attempt) || 0;   // number of PRIOR failed attempts
+        if (!raw) return res.status(400).json({ error: 'Vision is empty' });
+        if (raw.length > 400) return res.status(400).json({ error: 'Keep your vision to one line (400 characters max).' });
+
+        const gate = await visionGate(raw);
+        const forceAccept = attempt >= 2;             // after 2 failed revisions, accept + flag
+
+        if (gate.pass || forceAccept) {
+          const flagged = (!gate.pass && forceAccept);
+          const r = await sb(`/rest/v1/clients?id=eq.${clientId}`, 'PATCH', {
+            vision_statement: raw,
+            vision_last_edited_at: new Date().toISOString(),
+            vision_flagged_for_review: flagged,
+          }, { Prefer: 'return=minimal' });
+          if (!r.ok) return res.status(500).json({ error: 'Could not save your vision' });
+          return res.status(200).json({ ok: true, saved: true, flagged, vision: raw });
+        }
+        return res.status(200).json({ ok: true, saved: false,
+          nudge: gate.nudge || 'That reads more like a milestone than a vision. What will your team actually DO differently, and how would you know? Add the observable part.' });
+      }
+
+      // ── Request a change to the (locked) 90-day goal — Project #2, F4 ────────
+      case 'request-goal-change': {
+        const note = (body.note || '').trim().slice(0, 1000);
+        const r = await sb(`/rest/v1/clients?id=eq.${clientId}`, 'PATCH', {
+          goal_change_requested_at: new Date().toISOString(),
+          goal_change_note: note || null,
+        }, { Prefer: 'return=minimal' });
+        if (!r.ok) return res.status(500).json({ error: 'Could not submit your request' });
+        // Notify the coach (best-effort — the request is recorded regardless).
+        try {
+          if (RESEND_API_KEY) {
+            await fetch('https://api.resend.com/emails', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                from: `GPS Leadership Portal <${RESEND_FROM}>`,
+                to: ['team@gpsleadership.org'],
+                reply_to: client.email || undefined,
+                subject: `Goal-change request — ${client.name || 'a client'}`,
+                html: `<p><strong>${escapeHtml(client.name || 'A client')}</strong> requested a change to their 90-day goal.</p>${note ? '<p style="border-left:3px solid #01949A;padding-left:12px;color:#374151;"><em>' + escapeHtml(note) + '</em></p>' : ''}<p>Review and update it in their plan on the coach dashboard.</p>`,
+              }),
+            });
+          }
+        } catch (_) { /* email is best-effort */ }
         return res.status(200).json({ ok: true });
       }
 
