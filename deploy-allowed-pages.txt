@@ -21,6 +21,7 @@ diagnostic-survey.html
 feedback.html
 omb-message-clarity-results.html
 recover.html
+sponsor.html
 survey.html
 wayside-truck-parts-proposal.html
 workshop-poc.html

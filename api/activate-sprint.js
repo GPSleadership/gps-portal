@@ -160,8 +160,9 @@ export default async function handler(req, res) {
         sponsorOk = up.ok;
       }
       // Only surface a follow-along link if the sponsor row is actually persisted.
-      // Sponsor follow-along page is the Decision Room (no /sponsor route exists).
-      sponsorFollowLink = sponsorOk ? `${SITE_URL}/decision-room?token=${token}` : null;
+      // Single-leader coaching sponsors get the dedicated /sponsor follow-along page
+      // (roadmap #4) — a calm aggregate view with a hard confidentiality wall.
+      sponsorFollowLink = sponsorOk ? `${SITE_URL}/sponsor?token=${token}` : null;
     }
 
     // ── 5. Stamp the activation guard (welcome_sent_at + variant) ───────────────

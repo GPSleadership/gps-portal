@@ -29,6 +29,10 @@
       "destination": "/decision-room.html"
     },
     {
+      "source": "/sponsor",
+      "destination": "/sponsor.html"
+    },
+    {
       "source": "/feedback",
       "destination": "/feedback.html"
     },

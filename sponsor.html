@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>GPS Leadership — Sponsor Progress</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --navy:#004369; --navy-dark:#002D47; --teal:#01949A; --teal-text:#0F6E56;
+    --red:#DB1F48; --red-text:#A3162F; --ink:#22303F; --mid:#5A6773;
+    --line:#E6EBEE; --bg:#f5f5f5; --white:#fff; --sand:#E5DDC8; --light-sand:#F7F4EE;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Open Sans',-apple-system,Segoe UI,sans-serif; background:var(--bg); color:var(--ink); line-height:1.55; -webkit-font-smoothing:antialiased; }
+  h1,h2,h3 { font-family:'Montserrat',sans-serif; }
+  a { color:var(--teal-text); }
+
+  .topaccent { height:4px; background:linear-gradient(to right, var(--navy), var(--teal), var(--red)); }
+  .wrap { max-width:680px; margin:0 auto; padding:26px 20px 64px; }
+
+  .brand { display:flex; align-items:center; gap:10px; margin-bottom:22px; }
+  .brand .badge { background:var(--navy); color:#fff; font-family:'Montserrat'; font-weight:800; font-size:14px; letter-spacing:.5px; padding:6px 11px; border-radius:6px; }
+  .brand .cap { font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:var(--mid); font-weight:600; }
+
+  .eyebrow { font-size:11px; font-weight:700; letter-spacing:.11em; text-transform:uppercase; color:var(--teal-text); }
+  h1.title { font-family:'Montserrat'; font-weight:800; font-size:25px; line-height:1.18; color:var(--navy); margin:7px 0 16px; }
+
+  .card { background:var(--white); border-radius:8px; border-top:4px solid var(--teal); box-shadow:0 1px 3px rgba(0,40,70,.06); padding:20px 22px; margin-bottom:14px; }
+  .card.navy-top { border-top-color:var(--navy); }
+  .card.sand { background:var(--light-sand); border-top-color:var(--sand); }
+  h2.k { font-size:11px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--mid); margin-bottom:14px; }
+
+  /* Verdict */
+  .verdict { display:flex; align-items:flex-start; gap:12px; }
+  .verdict .vd { width:11px; height:11px; border-radius:50%; margin-top:5px; flex-shrink:0; }
+  .verdict .vw { font-family:'Montserrat'; font-weight:800; font-size:19px; color:var(--navy); }
+  .verdict .vs { font-size:13.5px; color:var(--mid); margin-top:3px; }
+
+  /* Pulse — restrained, light */
+  .pulse .top { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+  .pulse .word { font-family:'Montserrat'; font-weight:800; font-size:23px; color:var(--navy); }
+  .pulse .arrow { color:var(--teal-text); font-size:19px; font-weight:700; }
+  .pulse .cap { font-size:12px; color:var(--mid); margin-top:5px; }
+  .chartwrap { margin-top:16px; }
+  .xrow { display:flex; justify-content:space-between; margin-top:7px; }
+  .xrow span { font-size:11px; color:var(--mid); font-weight:600; }
+  .pending { font-size:14px; color:var(--mid); line-height:1.6; }
+
+  .yours { margin-top:16px; padding-top:15px; border-top:1px solid var(--line); }
+  .yours .yl { font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--teal-text); margin-bottom:9px; }
+  .yours .yvals { display:flex; gap:12px; flex-wrap:wrap; }
+  .yours .yv { background:#F4F7F8; border:1px solid var(--line); border-radius:8px; padding:8px 15px; text-align:center; min-width:70px; }
+  .yours .yvl { display:block; font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--mid); }
+  .yours .yvn { display:block; margin-top:3px; font-family:'Montserrat'; font-weight:800; font-size:19px; color:var(--navy); line-height:1.1; }
+  .yours .yvd { font-size:11.5px; font-weight:600; color:var(--mid); }
+  .yours .ycom { margin-top:10px; font-size:13.5px; color:var(--ink); font-style:italic; line-height:1.55; border-left:2px solid var(--line); padding-left:11px; }
+
+  /* Engagement */
+  .chiprow { display:flex; align-items:center; gap:11px; flex-wrap:wrap; }
+  .chip { display:inline-flex; align-items:center; gap:7px; font-size:12.5px; font-weight:700; padding:6px 13px; border-radius:999px; }
+  .chip.ok  { background:#E4F1EC; color:var(--teal-text); }
+  .chip.att { background:#FCE7EB; color:var(--red-text); }
+  .chip .cd { width:8px; height:8px; border-radius:50%; }
+  .chip.ok .cd { background:#3F8F6D; } .chip.att .cd { background:var(--red); }
+  .sess { font-size:13.5px; color:var(--mid); }
+  .sess b { color:var(--navy); font-weight:700; }
+  .consist { margin-top:14px; padding-top:14px; border-top:1px solid var(--line); font-size:13.5px; }
+  .consist .cbadge { font-weight:700; }
+  .consist .cnote { color:var(--mid); }
+
+  /* Focus */
+  .goal { font-size:15.5px; font-weight:600; color:var(--ink); line-height:1.5; }
+  .beh { list-style:none; margin-top:13px; display:flex; flex-direction:column; gap:10px; }
+  .beh li { display:flex; gap:10px; font-size:14px; color:var(--ink); }
+  .beh li .tk { color:var(--teal-text); font-weight:800; flex-shrink:0; }
+
+  /* Coach note */
+  .note .body { font-size:15px; color:var(--ink); line-height:1.66; }
+  .note .sig { margin-top:13px; font-size:12.5px; color:var(--mid); font-weight:600; }
+  .muted-empty { color:var(--mid); font-style:italic; font-size:13.5px; }
+  .help .k { color:var(--teal-text); }
+  .help .body { font-size:14.5px; color:var(--ink); line-height:1.65; }
+
+  .foot { margin-top:20px; padding-top:16px; border-top:1px solid var(--line); font-size:12.5px; color:var(--mid); display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+  .conf { font-size:11.5px; color:#7C8A94; text-align:center; margin-top:22px; line-height:1.6; }
+
+  .previewban { background:#FFF6E6; border:1px solid #E6C36A; color:#7A4A0C; font-size:12.5px; font-weight:600; padding:9px 14px; border-radius:8px; margin-bottom:16px; text-align:center; }
+  .state { text-align:center; padding:64px 20px; color:var(--mid); }
+  .state h2 { font-family:'Montserrat'; font-weight:700; font-size:19px; color:var(--navy); margin-bottom:10px; }
+  .state p { font-size:14px; max-width:400px; margin:0 auto; line-height:1.6; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+  <div class="topaccent" aria-hidden="true"></div>
+  <div class="wrap">
+    <div class="brand"><span class="badge">GPS</span><span class="cap">GPS Leadership Solutions</span></div>
+
+    <div id="loading" class="state"><p>Loading…</p></div>
+
+    <div id="errorState" class="state hidden" role="alert">
+      <h2>This link isn't active</h2>
+      <p>This progress link is invalid or has expired. If you think that's a mistake, reach out to <a href="mailto:alex@gpsleadership.org">alex@gpsleadership.org</a>.</p>
+    </div>
+    <div id="unlinkedState" class="state hidden">
+      <h2>Nothing to show here yet</h2>
+      <p>Your follow-along view isn't set up for a single leader. Reach out to <a href="mailto:alex@gpsleadership.org">alex@gpsleadership.org</a> and we'll point you to the right place.</p>
+    </div>
+
+    <main id="content" class="hidden">
+      <div id="previewBanner" class="previewban hidden">Preview — this is exactly what the sponsor sees.</div>
+
+      <p class="eyebrow">Sponsored by you</p>
+      <h1 class="title" id="hdrTitle">90-Day Progress</h1>
+
+      <!-- Verdict -->
+      <div class="card navy-top">
+        <div class="verdict">
+          <span class="vd" id="verdictDot" aria-hidden="true"></span>
+          <div>
+            <div class="vw" id="verdictWord">On track.</div>
+            <div class="vs" id="verdictSub"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pulse -->
+      <section class="card pulse" aria-labelledby="pulseK">
+        <h2 class="k" id="pulseK">Stakeholder pulse</h2>
+        <div id="pulseReady" class="hidden">
+          <div class="top"><span class="word" id="pulseWord">Steady</span><span class="arrow" id="pulseArrow" aria-hidden="true">→</span></div>
+          <div class="cap">Direction over time — individual responses stay confidential.</div>
+          <div class="chartwrap" id="pulseChart"></div>
+          <div class="xrow" id="pulseX" aria-hidden="true"></div>
+        </div>
+        <p id="pulsePending" class="pending hidden"></p>
+
+        <!-- Your own ratings (only if the sponsor is a matched stakeholder) -->
+        <div class="yours hidden" id="yoursBlock">
+          <div class="yl" id="yoursLabel">Your ratings</div>
+          <div class="yvals" id="yoursVals"></div>
+          <div class="ycom hidden" id="yoursComment"></div>
+        </div>
+      </section>
+
+      <!-- Engagement -->
+      <section class="card" aria-labelledby="engK">
+        <h2 class="k" id="engK">Engagement</h2>
+        <div class="chiprow">
+          <span id="engChip" class="chip ok"><span class="cd" aria-hidden="true"></span><span id="engChipText">On Track</span></span>
+          <span class="sess" id="engSess"></span>
+        </div>
+        <div class="consist hidden" id="consistRow">
+          <span class="cbadge" id="consistBadge"></span>
+          <span class="cnote" id="consistNote"></span>
+        </div>
+      </section>
+
+      <!-- Focus -->
+      <section class="card focus hidden" id="focusCard" aria-labelledby="focusK">
+        <h2 class="k" id="focusK">This sprint's focus</h2>
+        <div class="goal" id="focusGoal"></div>
+        <ul class="beh" id="focusBeh"></ul>
+      </section>
+
+      <!-- Coach note -->
+      <section class="card note navy-top" id="summaryCard" aria-labelledby="noteK">
+        <h2 class="k" id="noteK">From your coach</h2>
+        <div class="body" id="summaryBody"></div>
+        <div class="sig">Alex Tremble · GPS Leadership Solutions</div>
+      </section>
+
+      <!-- How you can help -->
+      <section class="card help sand" id="helpCard" aria-labelledby="helpK">
+        <h2 class="k" id="helpK">How you can help</h2>
+        <div class="body" id="helpBody"></div>
+      </section>
+
+      <div class="foot"><span id="footEnd"></span><span>GPS Leadership Solutions</span></div>
+      <p class="conf">This view shows aggregate progress only. Individual reflections, session notes, and confidential feedback stay between the leader and their coach.</p>
+    </main>
+  </div>
+
+<script>
+(function () {
+  var params = new URLSearchParams(location.search);
+  var token = params.get('token');
+  var coachSession = params.get('cs');
+
+  function show(id) { document.getElementById(id).classList.remove('hidden'); }
+  function hide(id) { document.getElementById(id).classList.add('hidden'); }
+  function esc(s) { var d = document.createElement('div'); d.textContent = (s == null ? '' : String(s)); return d.innerHTML; }
+  function fmtDate(iso) {
+    if (!iso) return null;
+    var d = new Date(iso + (iso.length <= 10 ? 'T12:00:00' : ''));
+    if (isNaN(d.getTime())) return null;
+    return d.toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' });
+  }
+
+  if (!token) { hide('loading'); show('errorState'); return; }
+  var reqBody = { action:'get', token:token };
+  if (coachSession) reqBody.coach_session = coachSession;
+
+  fetch('/api/sponsor', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(reqBody) })
+    .then(function (r) { return r.json().then(function (j) { return { ok:r.ok, j:j }; }); })
+    .then(function (res) {
+      hide('loading');
+      if (!res.ok) { show('errorState'); return; }
+      if (res.j.unlinked) { show('unlinkedState'); return; }
+      render(res.j); show('content');
+    })
+    .catch(function () { hide('loading'); show('errorState'); });
+
+  // Restrained light trend: thin teal line + soft fill on white. role=img with an
+  // aria-label so the trend is described to assistive tech (never color-only).
+  function pulseSvg(points, ariaLabel) {
+    var vals = points.map(function (p) { return Number(p.value); });
+    var w = 600, h = 118, padX = 10, padTop = 24, padBot = 12;
+    var min = 1, max = 5, n = vals.length;
+    var xs = vals.map(function (_, i) { return padX + (n === 1 ? (w-2*padX)/2 : (i*(w-2*padX)/(n-1))); });
+    var ys = vals.map(function (v) { return padTop + (1 - (v-min)/(max-min)) * (h-padTop-padBot); });
+    var line = xs.map(function (x, i) { return (i?'L':'M') + x.toFixed(1) + ' ' + ys[i].toFixed(1); }).join(' ');
+    var area = line + ' L' + xs[n-1].toFixed(1) + ' ' + (h-padBot) + ' L' + xs[0].toFixed(1) + ' ' + (h-padBot) + ' Z';
+    var dots = xs.map(function (x, i) {
+      var last = i === n-1;
+      return '<circle cx="'+x.toFixed(1)+'" cy="'+ys[i].toFixed(1)+'" r="'+(last?5:3.5)+'" fill="'+(last?'#01949A':'#fff')+'" stroke="#01949A" stroke-width="2"/>'
+        + '<text x="'+x.toFixed(1)+'" y="'+(ys[i]-11).toFixed(1)+'" fill="#004369" font-size="13" font-weight="700" font-family="Montserrat,sans-serif" text-anchor="middle">'+vals[i]+'</text>';
+    }).join('');
+    return '<svg viewBox="0 0 '+w+' '+h+'" width="100%" preserveAspectRatio="none" role="img" aria-label="'+esc(ariaLabel)+'" style="display:block;overflow:visible;">'
+      + '<defs><linearGradient id="pg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#01949A" stop-opacity="0.12"/><stop offset="100%" stop-color="#01949A" stop-opacity="0"/></linearGradient></defs>'
+      + '<path d="'+area+'" fill="url(#pg)"/>'
+      + '<path d="'+line+'" fill="none" stroke="#01949A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>'
+      + dots + '</svg>';
+  }
+
+  function render(d) {
+    if (d.coach_preview) show('previewBanner');
+    var first = (d.header && d.header.leader_first_name) || 'Your leader';
+    document.getElementById('hdrTitle').textContent = first + "'s 90-Day Progress";
+
+    var p = d.pulse || { status:'pending' };
+    var eng = d.engagement || {};
+    var needsAttn = (eng.chip === 'needs_attention') || (p.status === 'ready' && p.direction === 'slipping');
+
+    // Verdict
+    document.getElementById('verdictDot').style.background = needsAttn ? '#DB1F48' : '#3F8F6D';
+    document.getElementById('verdictWord').textContent = needsAttn ? 'Needs a look.' : 'On track.';
+    var sub;
+    if (needsAttn) sub = 'One or more signals are worth a closer look — see the pulse and engagement below.';
+    else if (p.status === 'ready' && p.direction === 'improving') sub = 'Stakeholder pulse is improving and ' + first + ' is doing the weekly work.';
+    else if (p.status === 'pending') sub = first + ' is engaged and consistent; the stakeholder pulse is still coming in.';
+    else sub = first + ' is holding steady and staying with the weekly work.';
+    document.getElementById('verdictSub').textContent = sub;
+
+    // Pulse
+    if (p.status === 'ready' && (p.points || []).length) {
+      show('pulseReady');
+      var word = 'Steady', arrow = '→';
+      if (p.direction === 'improving') { word = 'Improving'; arrow = '↗'; }
+      else if (p.direction === 'slipping') { word = 'Slipping'; arrow = '↘'; }
+      document.getElementById('pulseWord').textContent = word;
+      document.getElementById('pulseArrow').textContent = arrow;
+      var aria = 'Stakeholder pulse is ' + word.toLowerCase() + '. ' + p.points.map(function (pt) { return pt.label + ' rated ' + pt.value; }).join(', ') + ' on a 5-point scale.';
+      document.getElementById('pulseChart').innerHTML = pulseSvg(p.points, aria);
+      document.getElementById('pulseX').innerHTML = p.points.map(function (pt) { return '<span>' + esc(pt.label) + '</span>'; }).join('');
+    } else {
+      show('pulsePending');
+      document.getElementById('pulsePending').textContent =
+        'Pulse pending — we report the trend only once enough stakeholders have weighed in, so no single voice can be identified.';
+    }
+
+    // Your ratings (sponsor's own data), if matched
+    var yr = d.your_ratings;
+    if (yr && ((yr.points && yr.points.length) || yr.comment)) {
+      show('yoursBlock');
+      if (yr.relationship) document.getElementById('yoursLabel').textContent = 'Your ratings · ' + yr.relationship;
+      document.getElementById('yoursVals').innerHTML = (yr.points || []).map(function (pt) {
+        return '<div class="yv"><span class="yvl">' + esc(pt.label) + '</span><span class="yvn">' + esc(pt.value) + '<span class="yvd">/5</span></span></div>';
+      }).join('');
+      if (yr.comment) { show('yoursComment'); document.getElementById('yoursComment').textContent = '“' + yr.comment + '”'; }
+    }
+
+    // Engagement
+    var chip = document.getElementById('engChip'), chipTxt = document.getElementById('engChipText');
+    if (eng.chip === 'needs_attention') { chip.className = 'chip att'; chipTxt.textContent = 'Needs Attention'; }
+    else { chip.className = 'chip ok'; chipTxt.textContent = 'On Track'; }
+    var cadence = eng.cadence_note || 'checking in weekly';
+    var sessEl = document.getElementById('engSess');
+    if (eng.sessions_total != null && eng.sessions_total > 0) {
+      var done = (eng.sessions_completed != null) ? eng.sessions_completed : 0;
+      sessEl.innerHTML = '<b>' + esc(done) + ' of ' + esc(eng.sessions_total) + '</b> sessions · ' + esc(cadence);
+    } else { sessEl.textContent = cadence.charAt(0).toUpperCase() + cadence.slice(1); }
+
+    var con = eng.consistency;
+    if (con && con.weeks_elapsed) {
+      show('consistRow');
+      var badge = document.getElementById('consistBadge');
+      badge.textContent = con.label + ' — ';
+      badge.style.color = (con.label === 'Uneven') ? '#8F560F' : '#0F6E56';
+      document.getElementById('consistNote').textContent = 'did the weekly work ' + con.weeks_engaged + ' of ' + con.weeks_elapsed + ' weeks';
+    }
+
+    // Focus
+    if (d.focus && d.focus.goal) {
+      show('focusCard');
+      document.getElementById('focusGoal').textContent = d.focus.goal;
+      document.getElementById('focusBeh').innerHTML = (d.focus.behaviors || []).map(function (b) {
+        return '<li><span class="tk" aria-hidden="true">›</span><span>' + esc(b) + '</span></li>';
+      }).join('');
+    }
+
+    // Coach note
+    var sBody = document.getElementById('summaryBody');
+    if (d.coach_summary) sBody.textContent = d.coach_summary;
+    else sBody.innerHTML = '<span class="muted-empty">Your coach will add a note here after the next session.</span>';
+
+    if (d.sponsor_actions) document.getElementById('helpBody').textContent = d.sponsor_actions;
+    else hide('helpCard');
+
+    var end = fmtDate(d.sprint_end_date);
+    document.getElementById('footEnd').textContent = end ? ('Sprint ends ' + end) : '';
+  }
+})();
+</script>
+</body>
+</html>
