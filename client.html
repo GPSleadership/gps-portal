@@ -8555,6 +8555,45 @@ function qaParseResponse(raw) {
 }
 
 // ─────────────────────────────────────────────
+// Q&A TOOL — "thinking" status while the answer generates
+// Rotates a few calm, progress-style lines so a slow response never looks
+// frozen. Advances through the list and holds on the last one (feels like it's
+// about to land, rather than looping forever).
+// ─────────────────────────────────────────────
+let qaThinkTimer = null;
+const QA_THINK_MSGS = [
+  'Thinking this through…',
+  'Pulling the right framework…',
+  'Working through your situation…',
+  'Shaping a clear next step…'
+];
+function qaStartThinking() {
+  const typing = document.getElementById('qa-typing');
+  if (!typing) return;
+  const label = typing.querySelector('.qa-typing-label');
+  let i = 0;
+  if (label) label.textContent = QA_THINK_MSGS[0];
+  typing.classList.add('v');
+  qaClearThinkTimer();
+  qaThinkTimer = setInterval(function () {
+    i = Math.min(i + 1, QA_THINK_MSGS.length - 1);
+    if (label) label.textContent = QA_THINK_MSGS[i];
+    if (i >= QA_THINK_MSGS.length - 1) qaClearThinkTimer();
+  }, 2200);
+}
+function qaClearThinkTimer() {
+  if (qaThinkTimer) { clearInterval(qaThinkTimer); qaThinkTimer = null; }
+}
+function qaStopThinking() {
+  qaClearThinkTimer();
+  const typing = document.getElementById('qa-typing');
+  if (!typing) return;
+  typing.classList.remove('v');
+  const label = typing.querySelector('.qa-typing-label');
+  if (label) label.textContent = 'Thinking…';
+}
+
+// ─────────────────────────────────────────────
 // Q&A TOOL — SEND
 // ─────────────────────────────────────────────
 async function qaSend() {
@@ -8603,7 +8642,7 @@ async function qaSend() {
   if (qaHistory.length > 8) qaHistory = qaHistory.slice(-8);
   qaIncUsed(); qaUpdateLimit();
   trackActivity(currentClient?.id);
-  typing.classList.add('v'); qaScrollBottom();
+  qaStartThinking(); qaScrollBottom();
 
   try {
     // Uses /api/ask proxy — ANTHROPIC_API_KEY stays server-side
@@ -8624,7 +8663,7 @@ async function qaSend() {
     qaHistory.push({ role: 'assistant', content: raw });
     if (qaHistory.length > 8) qaHistory = qaHistory.slice(-8);
 
-    typing.classList.remove('v');
+    qaStopThinking();
     // Refresh history panel so the new Q&A shows up immediately
     setTimeout(loadAskAlexHistory, 800);
     if (parsed) {
@@ -8634,7 +8673,7 @@ async function qaSend() {
       ec.classList.add('v');
     }
   } catch(err) {
-    typing.classList.remove('v');
+    qaStopThinking();
     ec.textContent = `Something went wrong: ${err.message}. Try again.`;
     ec.classList.add('v');
   }
