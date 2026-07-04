@@ -202,11 +202,36 @@ export default async function handler(req, res) {
     // The ONLY leader fields that may reach a sponsor: identity, the shared plan
     // (goal + priority behaviors), session counts, program end. No reflections,
     // no metrics values, no check-in text.
-    const cRows = await sbGet(`/rest/v1/clients?id=eq.${enc(clientId)}&select=name,goal_statement,goal_description,goal_30_day,behavior_1,behavior_2,coaching_sessions_total,coaching_sessions_completed,coaching_program_end_date&limit=1`);
+    const cRows = await sbGet(`/rest/v1/clients?id=eq.${enc(clientId)}&select=name,organization,org,in_coaching_program,is_active_coaching,coaching_sessions_enabled,goal_statement,goal_description,goal_30_day,behavior_1,behavior_2,coaching_sessions_total,coaching_sessions_completed,coaching_program_end_date&limit=1`);
     const c = cRows[0];
     if (!c) return res.status(404).json({ error: 'Leader not found' });
 
     const firstName = String(c.name || '').trim().split(/\s+/)[0] || 'Your leader';
+
+    // Client org logo (matched by organization name) — shown in the header, same as
+    // the diagnostic and Decision Room pages. Best-effort; never blocks the page.
+    let orgLogo = null;
+    const orgName = c.organization || c.org || null;
+    if (orgName) {
+      try {
+        const olr = await sbGet(`/rest/v1/organizations?name=eq.${enc(orgName)}&select=logo_url&limit=1`);
+        if (olr[0] && olr[0].logo_url) orgLogo = olr[0].logo_url;
+      } catch (_) { /* logo optional */ }
+    }
+
+    // COACHING-ONLY GATE: the follow-along view (pulse, sessions, coach notes) only
+    // makes sense once an active coaching relationship exists. Before that, the same
+    // link shows a calm holding state (and, in Phase 3, the diagnostic timeline +
+    // report at the pre-brief). We never render an empty follow-along.
+    const coachingActive = !!(c.in_coaching_program || c.is_active_coaching || c.coaching_sessions_enabled);
+    if (!coachingActive) {
+      return res.status(200).json({
+        ok: true,
+        not_coaching: true,
+        header: { leader_first_name: firstName, sponsor_name: sponsor.name || null, org_name: orgName || null, org_logo_url: orgLogo || null },
+      });
+    }
+
     const [pulse, rhythm, ownRatings] = await Promise.all([
       buildPulse(clientId), buildCheckinRhythm(clientId), buildSponsorOwnRatings(sponsor, clientId),
     ]);
@@ -241,6 +266,8 @@ export default async function handler(req, res) {
       header: {
         leader_first_name: firstName,
         sponsor_name: sponsor.name || null,
+        org_name: orgName || null,
+        org_logo_url: orgLogo || null,
       },
       pulse,                                   // hero: aggregate direction, min-N suppressed
       your_ratings: ownRatings || undefined,   // sponsor's OWN ratings/comment (their data), if matched

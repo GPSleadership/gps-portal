@@ -2866,6 +2866,7 @@ function renderProfileSection(section, client, checkins) {
           <span>Show a momentum view to the leader<br><span style="font-size:12px;color:var(--gray-600);">They see phase + encouragement only — never the raw count, sessions remaining, or a renewal prompt.</span></span>
         </label>`}
       </div>` : ''}
+      <div class="detail-section" id="sponsorPanel-${client.id}"></div>
       <div class="detail-section" style="margin-top:20px;">
         <h4>Client Portal Link</h4>
         <div class="client-url-box" id="portalUrlBox-${client.id}">
@@ -3053,7 +3054,81 @@ function renderProfileSection(section, client, checkins) {
       loadAskAlexStats(client.id);
       loadAskAlexLog(client.id);
     }
+    loadSponsorPanel(client.id);
   }
+}
+
+// ─────────────────────────────────────────────
+// SPONSOR FOLLOW-ALONG (roadmap #4, Phase 2)
+// ─────────────────────────────────────────────
+function spEsc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+async function loadSponsorPanel(clientId) {
+  const el = document.getElementById('sponsorPanel-' + clientId);
+  if (!el) return;
+  let sponsors = [];
+  try {
+    const r = await fetch('/api/coach-data', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ action:'sponsor-get-for-client', client_id: clientId, session: getCoachSessionToken() }) });
+    const j = await r.json();
+    if (r.ok && Array.isArray(j.sponsors)) sponsors = j.sponsors;
+  } catch (_) { /* leave empty */ }
+
+  if (!sponsors.length) {
+    el.innerHTML = '<h4>Sponsor Follow-Along</h4>'
+      + '<p style="font-size:12px;color:var(--gray-600);">No sponsor is linked to this leader yet. Provision one via the Activate 90-Day Sprint flow (or Add &rarr; Sponsor), and their follow-along page and controls appear here.</p>';
+    return;
+  }
+
+  el.innerHTML = '<h4>Sponsor Follow-Along</h4>' + sponsors.map(function (s) {
+    var link = location.origin + '/sponsor?token=' + encodeURIComponent(s.sponsor_token);
+    var isSummary = (s.confidentiality_mode || 'summary') === 'summary';
+    var updated = s.coach_summary_updated_at ? ('Last updated ' + new Date(s.coach_summary_updated_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})) : 'Not written yet';
+    return ''
+      + '<div style="border:1px solid var(--gray-300);border-radius:8px;padding:14px;margin-bottom:12px;">'
+      +   '<div style="font-size:13px;font-weight:700;color:var(--navy);">' + spEsc(s.name || 'Sponsor') + '</div>'
+      +   '<div style="font-size:11px;color:var(--gray-600);margin-bottom:12px;">' + spEsc(s.email || '') + ' &middot; ' + updated + '</div>'
+      +   '<label style="font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--gray-600);display:block;margin-bottom:4px;">From your coach (summary)</label>'
+      +   '<textarea id="sp-sum-' + s.id + '" rows="4" placeholder="What the sponsor should know after the latest session." style="width:100%;padding:8px 10px;border:1px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:Open Sans,sans-serif;resize:vertical;">' + spEsc(s.coach_summary || '') + '</textarea>'
+      +   '<label style="font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--gray-600);display:block;margin:12px 0 4px;">How you can help (1&ndash;2 sponsor actions)</label>'
+      +   '<textarea id="sp-act-' + s.id + '" rows="3" placeholder="One concrete thing the sponsor can do in their next 1:1." style="width:100%;padding:8px 10px;border:1px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:Open Sans,sans-serif;resize:vertical;">' + spEsc(s.sponsor_actions || '') + '</textarea>'
+      +   '<div style="margin-top:12px;"><label style="font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--gray-600);display:block;margin-bottom:4px;">View mode</label>'
+      +     '<select id="sp-mode-' + s.id + '" style="padding:7px 10px;border:1px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:Open Sans,sans-serif;">'
+      +       '<option value="summary"' + (isSummary ? ' selected' : '') + '>Summary (full follow-along)</option>'
+      +       '<option value="outcomes_only"' + (!isSummary ? ' selected' : '') + '>Outcomes only (trend + notes)</option>'
+      +     '</select></div>'
+      +   '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;">'
+      +     '<button onclick="saveSponsorContent(\'' + s.id + '\')" style="font-size:12px;background:var(--navy);color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-weight:700;font-family:Montserrat,sans-serif;">Save</button>'
+      +     '<button onclick="previewAsSponsor(\'' + s.sponsor_token + '\')" style="font-size:12px;background:none;border:1px solid var(--navy);color:var(--navy);border-radius:6px;padding:8px 16px;cursor:pointer;font-weight:700;">Preview as sponsor &#8599;</button>'
+      +     '<button class="copy-btn" onclick="copyURL(\'' + link + '\', this)">Copy sponsor link</button>'
+      +   '</div>'
+      +   '<div id="sp-msg-' + s.id + '" style="font-size:12px;margin-top:8px;"></div>'
+      + '</div>';
+  }).join('');
+}
+
+async function saveSponsorContent(sponsorId) {
+  const sum = document.getElementById('sp-sum-' + sponsorId);
+  const act = document.getElementById('sp-act-' + sponsorId);
+  const mode = document.getElementById('sp-mode-' + sponsorId);
+  const msg = document.getElementById('sp-msg-' + sponsorId);
+  if (msg) { msg.textContent = 'Saving.'; msg.style.color = 'var(--gray-600)'; }
+  try {
+    const r = await fetch('/api/coach-data', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ action:'sponsor-save-content', sponsor_id: sponsorId, session: getCoachSessionToken(),
+        coach_summary: sum ? sum.value : undefined, sponsor_actions: act ? act.value : undefined,
+        confidentiality_mode: mode ? mode.value : undefined }) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Save failed');
+    if (msg) { msg.textContent = 'Saved.'; msg.style.color = 'var(--teal)'; }
+  } catch (e) {
+    if (msg) { msg.textContent = 'Could not save: ' + e.message; msg.style.color = 'var(--red)'; }
+  }
+}
+
+function previewAsSponsor(token) {
+  var url = location.origin + '/sponsor?token=' + encodeURIComponent(token) + '&cs=' + encodeURIComponent(getCoachSessionToken());
+  window.open(url, '_blank');
 }
 
 // ─────────────────────────────────────────────

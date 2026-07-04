@@ -183,6 +183,36 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
+    // ── Sponsor follow-along page controls (roadmap #4, Phase 2) ────────────
+    // Coach authors the sponsor page's "From your coach" summary + "How you can
+    // help" actions and sets the confidentiality mode. Any valid coach session
+    // (owner or assistant) may author these.
+    if (action === 'sponsor-get-for-client') {
+      const clientId = String(body.client_id || '');
+      if (!clientId) return res.status(400).json({ error: 'client_id required' });
+      const r = await sb(`/rest/v1/sponsors?linked_client_id=eq.${encodeURIComponent(clientId)}&active=eq.true&select=id,name,email,sponsor_token,coach_summary,coach_summary_updated_at,sponsor_actions,confidentiality_mode&order=created_at.asc`);
+      const rows = r.ok ? await r.json() : [];
+      return res.status(200).json({ ok: true, sponsors: rows });
+    }
+    if (action === 'sponsor-save-content') {
+      const sponsorId = String(body.sponsor_id || '');
+      if (!sponsorId) return res.status(400).json({ error: 'sponsor_id required' });
+      const upd = {};
+      if (body.coach_summary !== undefined)  upd.coach_summary  = (body.coach_summary == null)  ? null : String(body.coach_summary).slice(0, 4000);
+      if (body.sponsor_actions !== undefined) upd.sponsor_actions = (body.sponsor_actions == null) ? null : String(body.sponsor_actions).slice(0, 2000);
+      if (body.confidentiality_mode !== undefined) {
+        const m = String(body.confidentiality_mode);
+        if (!['summary', 'outcomes_only'].includes(m)) return res.status(400).json({ error: 'invalid confidentiality_mode' });
+        upd.confidentiality_mode = m;
+      }
+      if ('coach_summary' in upd) upd.coach_summary_updated_at = new Date().toISOString();
+      if (!Object.keys(upd).length) return res.status(400).json({ error: 'nothing to update' });
+      const r = await sb(`/rest/v1/sponsors?id=eq.${encodeURIComponent(sponsorId)}`, 'PATCH', upd, { Prefer: 'return=representation' });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); return res.status(500).json({ error: 'Could not save sponsor content', detail: d }); }
+      const rows = await r.json();
+      return res.status(200).json({ ok: true, sponsor: Array.isArray(rows) ? rows[0] : rows });
+    }
+
     // ── Dedicated: admin_accounts (passwords always hashed) ─────────────────
     if (action === 'admin-list') {
       // Assistants may view the team list (read-only); only owners can modify it.

@@ -25,6 +25,7 @@
   .brand { display:flex; align-items:center; gap:10px; margin-bottom:22px; }
   .brand .badge { background:var(--navy); color:#fff; font-family:'Montserrat'; font-weight:800; font-size:14px; letter-spacing:.5px; padding:6px 11px; border-radius:6px; }
   .brand .cap { font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:var(--mid); font-weight:600; }
+  .brand .orglogo { margin-left:auto; max-height:36px; max-width:140px; object-fit:contain; }
 
   .eyebrow { font-size:11px; font-weight:700; letter-spacing:.11em; text-transform:uppercase; color:var(--teal-text); }
   h1.title { font-family:'Montserrat'; font-weight:800; font-size:25px; line-height:1.18; color:var(--navy); margin:7px 0 16px; }
@@ -98,7 +99,7 @@
 <body>
   <div class="topaccent" aria-hidden="true"></div>
   <div class="wrap">
-    <div class="brand"><span class="badge">GPS</span><span class="cap">GPS Leadership Solutions</span></div>
+    <div class="brand"><span class="badge">GPS</span><span class="cap">GPS Leadership Solutions</span><img id="orgLogo" class="orglogo hidden" alt="" /></div>
 
     <div id="loading" class="state"><p>Loading…</p></div>
 
@@ -109,6 +110,10 @@
     <div id="unlinkedState" class="state hidden">
       <h2>Nothing to show here yet</h2>
       <p>Your follow-along view isn't set up for a single leader. Reach out to <a href="mailto:alex@gpsleadership.org">alex@gpsleadership.org</a> and we'll point you to the right place.</p>
+    </div>
+    <div id="notCoachingState" class="state hidden">
+      <h2>Coaching hasn't started yet</h2>
+      <p><span id="ncName">This leader</span>'s 90-day progress will appear here once their coaching sprint begins. You'll get a note when it does.</p>
     </div>
 
     <main id="content" class="hidden">
@@ -211,6 +216,12 @@
       hide('loading');
       if (!res.ok) { show('errorState'); return; }
       if (res.j.unlinked) { show('unlinkedState'); return; }
+      if (res.j.not_coaching) {
+        var h = res.j.header || {};
+        if (h.leader_first_name) document.getElementById('ncName').textContent = h.leader_first_name;
+        if (h.org_logo_url) { var lg = document.getElementById('orgLogo'); lg.src = h.org_logo_url; lg.alt = (h.org_name ? h.org_name + ' logo' : ''); lg.classList.remove('hidden'); }
+        show('notCoachingState'); return;
+      }
       render(res.j); show('content');
     })
     .catch(function () { hide('loading'); show('errorState'); });
@@ -241,6 +252,13 @@
     if (d.coach_preview) show('previewBanner');
     var first = (d.header && d.header.leader_first_name) || 'Your leader';
     document.getElementById('hdrTitle').textContent = first + "'s 90-Day Progress";
+
+    if (d.header && d.header.org_logo_url) {
+      var lg = document.getElementById('orgLogo');
+      lg.src = d.header.org_logo_url;
+      lg.alt = (d.header.org_name ? d.header.org_name + ' logo' : '');
+      lg.classList.remove('hidden');
+    }
 
     var p = d.pulse || { status:'pending' };
     var eng = d.engagement || {};
