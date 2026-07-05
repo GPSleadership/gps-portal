@@ -377,6 +377,7 @@ function renderTeam(){
 // plans at once; the billing CTA is driven by the org's billing_mode.
 function apprPA(m){ return (m.sponsorReadout && m.sponsorReadout.plan_approval) || m.plan_approval || null; }
 function renderApprovals(members){
+  var C={navy:'#004369',teal:'#01949A',sand:'#FDF6EC',green:'#0F6E56',amber:'#8A560F',amberbar:'#C8962F',red:'#A32D2D',redbg:'#FCEBEB',line:'#E6EBF0',mid:'#5F6B7A',ink:'#1B2A3A'};
   var pending = (members||[]).filter(function(m){ var pa=apprPA(m); return pa && pa.requires && pa.status !== 'approved'; });
   if(!pending.length) return '';
   var billing = DATA.billing || { mode:'both', pay_url:null };
@@ -424,6 +425,7 @@ function apprRecount(){ var els=document.querySelectorAll('.appr-chk'); if(!els.
 function apprToggleAll(){ var chks=document.querySelectorAll('.appr-chk'); var anyOff=Array.prototype.slice.call(chks).some(function(c){return !c.checked;}); chks.forEach(function(c){ c.checked=anyOff; }); apprRecount(); }
 function apprBillMode(){ var r=document.querySelector('input[name=apprBill]:checked'); if(!r) return; var w=document.getElementById('apprNoteWrap'); if(w) w.style.display = (r.value==='contract')?'block':'none'; }
 function approvePlans(){
+  var C={green:'#0F6E56',amber:'#8A560F',mid:'#5F6B7A'};
   var ids=apprCheckedIds();
   var msg=document.getElementById('apprMsg');
   if(!ids.length){ if(msg){msg.style.color=C.amber;msg.textContent='Select at least one leader.';} return; }
