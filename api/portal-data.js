@@ -152,44 +152,18 @@ export default async function handler(req, res) {
       case 'submit-checkin': {
         const c = body.checkin || {};
         c.client_id = clientId;                 // force ownership; ignore any supplied id
-        const r = await sb('/rest/v1/checkins', 'POST', c, { Prefer: 'return=representation' });
+        const r = await sb('/rest/v1/checkins', 'POST', c, { Prefer: 'return=minimal' });
         if (!r.ok) {
           const detail = await r.json().catch(() => ({}));
           return res.status(500).json({ error: 'Error saving check-in', detail });
         }
-        const insertedRows = await r.json().catch(() => []);
-        const newCheckin = Array.isArray(insertedRows) ? insertedRows[0] : insertedRows;
-
         if (typeof c.metric_value === 'number' && !Number.isNaN(c.metric_value)) {
           await sb(`/rest/v1/clients?id=eq.${clientId}`, 'PATCH', { metric_current: c.metric_value }, { Prefer: 'return=minimal' });
         }
-
-        // Auto-advance the coaching session countdown from attendance. The leader's
-        // weekly check-in is the source of truth, so the coach never has to "Log a
-        // session" by hand. IDEMPOTENT per week via checkins.counted_toward_sessions —
-        // re-submitting or editing a week never double-counts. Best-effort: never
-        // blocks the check-in.
-        if (c.attended_coaching === true && newCheckin && newCheckin.id != null && c.week_number != null) {
-          try {
-            const priorRes = await sb(`/rest/v1/checkins?client_id=eq.${clientId}&week_number=eq.${encodeURIComponent(c.week_number)}&counted_toward_sessions=is.true&select=id&limit=1`);
-            const prior = priorRes.ok ? await priorRes.json() : [];
-            if (!prior.length) {   // this week hasn't advanced the count yet
-              const cliRes = await sb(`/rest/v1/clients?id=eq.${clientId}&select=coaching_sessions_total,coaching_sessions_completed,coaching_sessions_enabled&limit=1`);
-              const cli = (cliRes.ok ? await cliRes.json() : [])[0] || {};
-              if (cli.coaching_sessions_enabled || cli.coaching_sessions_total != null) {
-                const total = cli.coaching_sessions_total;
-                const done  = cli.coaching_sessions_completed || 0;
-                if (total == null || done < total) {
-                  await sb(`/rest/v1/clients?id=eq.${clientId}`, 'PATCH', { coaching_sessions_completed: done + 1 }, { Prefer: 'return=minimal' });
-                }
-                // Mark this checkin as the one that counted for its week, so a later
-                // row for the same week can never re-trigger the increment.
-                await sb(`/rest/v1/checkins?id=eq.${encodeURIComponent(newCheckin.id)}`, 'PATCH', { counted_toward_sessions: true }, { Prefer: 'return=minimal' });
-              }
-            }
-          } catch (_) { /* non-fatal — never block the check-in */ }
-        }
-
+        // NOTE: the leader's attended_coaching answer is RECORDED here but does not
+        // decrement the session count — under the coach-confirms model the coach locks
+        // each completed session on the Progress & Check-ins tab (Phase B). The leader's
+        // answer just pre-suggests it there.
         return res.status(200).json({ ok: true });
       }
 

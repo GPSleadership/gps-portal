@@ -2851,16 +2851,24 @@ function renderProfileSection(section, client, checkins) {
       <div class="detail-section" style="margin-top:20px;">
         <h4>Coaching Sessions</h4>
         ${client.coaching_sessions_total == null ? `
-        <p style="font-size:12px;color:var(--gray-600);margin-bottom:10px;">Set how many sessions this client paid for. The countdown bar shows on their Summary; the renewal window flags near the end.</p>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <input id="cs-total-${client.id}" type="number" min="1" placeholder="e.g. 6" style="width:90px;padding:7px 10px;border:1px solid var(--gray-300);border-radius:6px;font-size:13px;">
-          <button onclick="saveSessionTotal('${client.id}')" style="font-size:12px;background:var(--teal);color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-weight:700;font-family:'Montserrat',sans-serif;">Save</button>
+        <p style="font-size:12px;color:var(--gray-600);margin-bottom:10px;">Set the coaching package. Enter the <strong>hours purchased</strong> and the <strong>session length</strong> — we work out the number of sessions and count them down.</p>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input id="ch-hours-${client.id}" type="number" min="0.5" step="0.5" placeholder="Hours (e.g. 5)" style="width:130px;padding:7px 10px;border:1px solid var(--gray-300);border-radius:6px;font-size:13px;">
+          <select id="ch-len-${client.id}" style="padding:7px 10px;border:1px solid var(--gray-300);border-radius:6px;font-size:13px;color:var(--navy);font-family:'Open Sans',sans-serif;">
+            <option value="30">30-min sessions</option>
+            <option value="60" selected>60-min sessions</option>
+          </select>
+          <button onclick="saveCoachingHours('${client.id}')" style="font-size:12px;background:var(--teal);color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-weight:700;font-family:'Montserrat',sans-serif;">Save</button>
         </div>` : `
-        <p style="font-size:12px;color:var(--gray-600);margin-bottom:10px;"><strong style="color:var(--navy);">${client.coaching_sessions_completed || 0} of ${client.coaching_sessions_total}</strong> sessions logged · ${Math.max(0, client.coaching_sessions_total - (client.coaching_sessions_completed || 0))} remaining.<br><span style="color:var(--teal);">Advances automatically when the leader reports attending a coaching call in their weekly check-in.</span></p>
+        <p style="font-size:12px;color:var(--gray-600);margin-bottom:10px;">
+          ${client.coaching_hours_total != null ? `<strong style="color:var(--navy);">${client.coaching_hours_total} hours</strong> · ${client.coaching_session_length_min || 60}-min sessions = <strong style="color:var(--navy);">${client.coaching_sessions_total}</strong> sessions<br>` : ''}
+          <strong style="color:var(--navy);">${client.coaching_sessions_completed || 0} of ${client.coaching_sessions_total}</strong> sessions completed · ${Math.max(0, client.coaching_sessions_total - (client.coaching_sessions_completed || 0))} remaining.
+          ${client.coaching_hours_total == null ? `<br><span style="color:var(--teal);cursor:pointer;text-decoration:underline;" onclick="editCoachingHours('${client.id}')">Set hours + session length →</span>` : ''}
+        </p>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
-          <button onclick="logCoachingSession('${client.id}')" title="Manual fallback — use only for a call that happened without the leader's weekly check-in. Normally the count advances automatically." ${(client.coaching_sessions_completed || 0) >= client.coaching_sessions_total ? 'disabled' : ''} style="font-size:12px;background:${(client.coaching_sessions_completed || 0) >= client.coaching_sessions_total ? 'var(--gray-300)' : 'var(--navy)'};color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:${(client.coaching_sessions_completed || 0) >= client.coaching_sessions_total ? 'not-allowed' : 'pointer'};font-weight:700;font-family:'Montserrat',sans-serif;">+ Log manually</button>
-          <button onclick="decrementCoachingSession('${client.id}')" title="Correct the count down — e.g. the leader reported attending but the call did not happen." ${(client.coaching_sessions_completed || 0) <= 0 ? 'disabled' : ''} style="font-size:12px;background:none;border:1px solid var(--gray-300);color:var(--gray-600);border-radius:6px;padding:8px 14px;cursor:${(client.coaching_sessions_completed || 0) <= 0 ? 'not-allowed' : 'pointer'};font-weight:700;">− Remove one</button>
-          <button onclick="editSessionTotal('${client.id}')" style="font-size:12px;background:none;border:1px solid var(--gray-300);color:var(--gray-600);border-radius:6px;padding:8px 14px;cursor:pointer;font-weight:700;">Edit total</button>
+          <button onclick="logCoachingSession('${client.id}')" title="Manual fallback — normally you mark a session complete on the Progress &amp; Check-ins tab during the meeting." ${(client.coaching_sessions_completed || 0) >= client.coaching_sessions_total ? 'disabled' : ''} style="font-size:12px;background:${(client.coaching_sessions_completed || 0) >= client.coaching_sessions_total ? 'var(--gray-300)' : 'var(--navy)'};color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:${(client.coaching_sessions_completed || 0) >= client.coaching_sessions_total ? 'not-allowed' : 'pointer'};font-weight:700;font-family:'Montserrat',sans-serif;">+ Log manually</button>
+          <button onclick="decrementCoachingSession('${client.id}')" title="Correct the count down." ${(client.coaching_sessions_completed || 0) <= 0 ? 'disabled' : ''} style="font-size:12px;background:none;border:1px solid var(--gray-300);color:var(--gray-600);border-radius:6px;padding:8px 14px;cursor:${(client.coaching_sessions_completed || 0) <= 0 ? 'not-allowed' : 'pointer'};font-weight:700;">− Remove one</button>
+          <button onclick="editCoachingHours('${client.id}')" style="font-size:12px;background:none;border:1px solid var(--gray-300);color:var(--gray-600);border-radius:6px;padding:8px 14px;cursor:pointer;font-weight:700;">Edit hours/length</button>
         </div>
         <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:13px;color:var(--navy);line-height:1.5;">
           <input type="checkbox" ${client.show_sessions_to_leader ? 'checked' : ''} onchange="toggleShowSessionsToLeader('${client.id}', this.checked)" style="width:16px;height:16px;margin-top:1px;accent-color:var(--navy);">
@@ -6214,6 +6222,38 @@ async function decrementCoachingSession(clientId){
     if (typeof toast === 'function') toast('Session removed — ' + nd + ' of ' + total);
     switchProfileNav(document.querySelector('.profile-nav-item.active')?.id?.replace('profNav-','') || 'summary');
   } catch (e) { alert('Could not update: ' + e.message); }
+}
+// Coaching package = HOURS purchased + session length (30/60). Sessions derived.
+async function saveCoachingHours(clientId){
+  const h = parseFloat((document.getElementById('ch-hours-' + clientId) || {}).value);
+  const len = parseInt((document.getElementById('ch-len-' + clientId) || {}).value, 10);
+  if (!h || h <= 0) { alert('Enter the hours purchased.'); return; }
+  if (![30, 60].includes(len)) { alert('Pick a session length.'); return; }
+  const sessions = Math.round(h * 60 / len);
+  try {
+    await cdUpdate('clients', { coaching_hours_total: h, coaching_session_length_min: len, coaching_sessions_total: sessions }, { eq: { id: clientId } });
+    allClients = allClients.map(c => c.id === clientId ? { ...c, coaching_hours_total: h, coaching_session_length_min: len, coaching_sessions_total: sessions } : c);
+    if (typeof toast === 'function') toast(h + ' hours = ' + sessions + ' sessions');
+    switchProfileNav(document.querySelector('.profile-nav-item.active')?.id?.replace('profNav-','') || 'summary');
+  } catch (e) { alert('Could not save: ' + e.message); }
+}
+async function editCoachingHours(clientId){
+  const c = allClients.find(x => x.id === clientId); if (!c) return;
+  const hv = prompt('Hours purchased:', (c.coaching_hours_total != null ? c.coaching_hours_total : ''));
+  if (hv == null) return;
+  const h = parseFloat(hv);
+  if (!h || h <= 0) { alert('Enter a positive number of hours.'); return; }
+  const lv = prompt('Session length in minutes (30 or 60):', (c.coaching_session_length_min || 60));
+  if (lv == null) return;
+  const len = parseInt(lv, 10);
+  if (![30, 60].includes(len)) { alert('Session length must be 30 or 60.'); return; }
+  const sessions = Math.round(h * 60 / len);
+  try {
+    await cdUpdate('clients', { coaching_hours_total: h, coaching_session_length_min: len, coaching_sessions_total: sessions }, { eq: { id: clientId } });
+    allClients = allClients.map(x => x.id === clientId ? { ...x, coaching_hours_total: h, coaching_session_length_min: len, coaching_sessions_total: sessions } : x);
+    if (typeof toast === 'function') toast('Updated — ' + h + ' hours = ' + sessions + ' sessions');
+    switchProfileNav(document.querySelector('.profile-nav-item.active')?.id?.replace('profNav-','') || 'summary');
+  } catch (e) { alert('Could not save: ' + e.message); }
 }
 async function editSessionTotal(clientId){
   const c = allClients.find(x => x.id === clientId); if (!c) return;
