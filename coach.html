@@ -12718,6 +12718,17 @@ async function drSendSponsor(sponsorId){
         '<div><label style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#5a6b76;font-weight:700;display:block;margin-bottom:4px;">Revenue band</label><select id="orgF_size" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;">'+bandOpts+'</select></div>'+
         '<div><label style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#5a6b76;font-weight:700;display:block;margin-bottom:4px;">Logo</label><div id="orgF_logoPrev" style="margin-bottom:8px;">'+(org.logo_url?'<img src="'+esc(org.logo_url)+'" style="max-height:48px;max-width:160px;object-fit:contain;border:1px solid #eee;border-radius:6px;padding:4px;">':'<span style="font-size:12px;color:#94a3b8;">No logo yet</span>')+'</div><input type="file" id="orgF_logoFile" accept="image/png,image/jpeg,image/svg+xml" style="font-size:13px;"><div style="font-size:11px;color:#94a3b8;margin-top:4px;">PNG, JPG, or SVG, up to ~5 MB. Choose a file — it uploads when you save. Leave blank to keep the current logo.</div></div>'+
         '<div><label style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#5a6b76;font-weight:700;display:block;margin-bottom:4px;">Notes</label><textarea id="orgF_notes" rows="3" placeholder="Anything useful for context when writing reports" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;font-family:inherit;">'+esc(org.notes||'')+'</textarea></div>'+
+        (function(){ var bm=(org.billing_mode||'both');
+          function opt(v,l){ return '<option value="'+v+'"'+(bm===v?' selected':'')+'>'+l+'</option>'; }
+          return '<div style="border-top:1px solid #eef1f3;padding-top:12px;"><label style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#5a6b76;font-weight:700;display:block;margin-bottom:4px;">Billing (how a sponsor approving multiple people pays)</label>'+
+            '<select id="orgF_billing" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;">'+
+              opt('both','Both — the sponsor chooses (pay online or request SOW/invoice)')+
+              opt('online','Pay online — show the payment link')+
+              opt('contract','Contract / SOW — invoice via their process (no pay link)')+
+            '</select>'+
+            '<div style="font-size:11px;color:#94a3b8;margin-top:4px;">Government / quasi-gov clients (e.g. JMAA) should be <b>Contract / SOW</b>.</div></div>';
+        })()+
+        fld('Payment link override (optional)','orgF_paylink',org.payment_link_url,'Leave blank to use your default link','url')+
         '<div id="orgF_err" style="color:#dc2626;font-size:12px;"></div>'+
       '</div>'+
       '<div style="padding:14px 22px;border-top:1px solid #e8e8e8;display:flex;justify-content:flex-end;gap:8px;"><button id="orgF_cancel" style="padding:8px 16px;border:1px solid #dbe3e6;background:#fff;border-radius:7px;font-size:13px;cursor:pointer;color:#5a6b76;">Cancel</button><button id="orgF_save" style="padding:8px 18px;border:none;background:#01949A;color:#fff;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;">'+(editing?'Save changes':'Create organization')+'</button></div>'+
@@ -12732,7 +12743,7 @@ async function drSendSponsor(sponsorId){
     document.getElementById('orgF_save').onclick=async function(){
       var name=val('orgF_name'); var errEl=document.getElementById('orgF_err');
       if(!name){ errEl.textContent='Name is required.'; return; }
-      var payload={ name:name, website:val('orgF_website'), industry:val('orgF_industry'), size_band:val('orgF_size'), notes:document.getElementById('orgF_notes').value.trim() };
+      var payload={ name:name, website:val('orgF_website'), industry:val('orgF_industry'), size_band:val('orgF_size'), notes:document.getElementById('orgF_notes').value.trim(), billing_mode:val('orgF_billing')||'both', payment_link_url:val('orgF_paylink')||null };
       this.disabled=true; this.textContent='Saving…';
       try{
         var savedId=orgId;

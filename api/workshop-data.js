@@ -629,6 +629,8 @@ export default async function handler(req, res) {
           tags: Array.isArray(body.tags) ? body.tags : [],
           logo_url: body.logo_url || null, notes: body.notes || null,
           website: body.website || null,
+          billing_mode: ['both','online','contract'].includes(body.billing_mode) ? body.billing_mode : 'both',
+          payment_link_url: body.payment_link_url || null,
           created_at: isoNow(), updated_at: isoNow(),
         }, { Prefer: 'return=representation' });
         const rows = await r.json().catch(() => []);
@@ -648,6 +650,8 @@ export default async function handler(req, res) {
         if (body.logo_url  != null) patch.logo_url  = body.logo_url;
         if (body.notes     != null) patch.notes     = body.notes;
         if (body.website   != null) patch.website   = body.website;
+        if (body.billing_mode != null && ['both','online','contract'].includes(body.billing_mode)) patch.billing_mode = body.billing_mode;
+        if (body.payment_link_url !== undefined) patch.payment_link_url = body.payment_link_url || null;
         await sb(`/rest/v1/organizations?id=eq.${enc(id)}`, 'PATCH', patch, { Prefer: 'return=minimal' });
         return res.status(200).json({ ok: true });
       }

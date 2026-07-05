@@ -482,10 +482,27 @@ export default async function handler(req, res) {
       const isCoachPreview = !!(body.coach_session && verifyCoachSession(body.coach_session));
 
       // Org logo (matched by organization name) — shown in the Decision Room header.
+      // Also read the org's billing mode + optional per-org payment link (Phase 3).
       let orgLogo = null;
+      let orgBillingMode = 'both';
+      let orgPayLink = null;
       if (team.client_org_name) {
-        try { const olr = await sbGet(`/rest/v1/organizations?name=eq.${enc(team.client_org_name)}&select=logo_url&limit=1`); if (olr && olr[0] && olr[0].logo_url) orgLogo = olr[0].logo_url; } catch (_) { /* optional */ }
+        try {
+          const olr = await sbGet(`/rest/v1/organizations?name=eq.${enc(team.client_org_name)}&select=logo_url,billing_mode,payment_link_url&limit=1`);
+          if (olr && olr[0]) {
+            if (olr[0].logo_url) orgLogo = olr[0].logo_url;
+            if (olr[0].billing_mode) orgBillingMode = olr[0].billing_mode;
+            if (olr[0].payment_link_url) orgPayLink = olr[0].payment_link_url;
+          }
+        } catch (_) { /* optional */ }
       }
+      // Effective payment link: per-org override, else the global default.
+      let payUrl = orgPayLink;
+      if (!payUrl && orgBillingMode !== 'contract') {
+        try { const gl = await sbGet(`/rest/v1/renewal_config?id=eq.1&select=sponsor_payment_link_url&limit=1`); if (gl && gl[0] && gl[0].sponsor_payment_link_url) payUrl = gl[0].sponsor_payment_link_url; } catch (_) { /* optional */ }
+      }
+      // Contract-mode orgs never expose a payment link, whatever is configured.
+      if (orgBillingMode === 'contract') payUrl = null;
 
       const isPrivate = !isCoachPreview && link.confidentiality_mode === 'private';
       // 'progress' = staged view: the sponsor sees ONLY where each leader is in the
@@ -597,6 +614,7 @@ export default async function handler(req, res) {
         team_report: teamReport,
         sprint_cta_url: sprintCtaUrl,
         booking_url: bookingUrl,
+        billing: { mode: orgBillingMode, pay_url: payUrl || null },
       });
     }
 
@@ -661,6 +679,76 @@ export default async function handler(req, res) {
         { rec_commitments: current },
         { Prefer: 'return=minimal' });
       return res.status(200).json({ ok: true, rec_commitments: current });
+    }
+
+    // ── Bundled approval of several leaders' plans + billing (Phase 3) ────────
+    // A multi-person sponsor (e.g. Rose / JMAA) approves multiple leaders at once.
+    // Records ONE authorization row (who, which leaders, seat count, billing choice,
+    // PO/SOW note) so the invoice/SOW is never guessed. Contract-mode orgs never
+    // return a pay link; the billing choice is forced to 'contract'.
+    if (body.action === 'approve-plans') {
+      const teamId = body.team_id;
+      const clientIds = Array.isArray(body.client_ids) ? body.client_ids.map(String).filter(Boolean) : [];
+      if (!teamId) return res.status(400).json({ error: 'team_id required' });
+      if (!teamIds.includes(teamId)) return res.status(403).json({ error: 'Not authorized for this team' });
+      if (!clientIds.length) return res.status(400).json({ error: 'Select at least one leader to approve' });
+
+      // Every client must be a member of THIS team (never approve outside scope).
+      const memberRows = await sbGet(`/rest/v1/team_members?team_id=eq.${enc(teamId)}&select=client_id`);
+      const memberSet = new Set((memberRows || []).map(r => r.client_id));
+      for (const cid of clientIds) if (!memberSet.has(cid)) return res.status(403).json({ error: 'Not authorized for one of these leaders' });
+
+      // Resolve the org billing mode for this team.
+      const team = teamRows.find(t => t.id === teamId);
+      let billingMode = 'both';
+      let orgPayLink = null;
+      if (team && team.client_org_name) {
+        const olr = await sbGet(`/rest/v1/organizations?name=eq.${enc(team.client_org_name)}&select=billing_mode,payment_link_url&limit=1`);
+        if (olr && olr[0]) { if (olr[0].billing_mode) billingMode = olr[0].billing_mode; if (olr[0].payment_link_url) orgPayLink = olr[0].payment_link_url; }
+      }
+      // Billing choice: contract-mode forces 'contract'; online forces 'online';
+      // both honors the sponsor's pick (default 'contract' if unspecified — safe).
+      let billingChoice = 'contract';
+      if (billingMode === 'online') billingChoice = 'online';
+      else if (billingMode === 'both') billingChoice = (body.billing_choice === 'online') ? 'online' : 'contract';
+      const billingNote = (typeof body.billing_note === 'string') ? body.billing_note.trim().slice(0, 1000) : null;
+
+      // Approve each leader's latest plan.
+      const approvedNames = [];
+      for (const cid of clientIds) {
+        const dr = await sbGet(`/rest/v1/diagnostics?client_id=eq.${enc(cid)}&is_archived=eq.false&select=id&order=created_at.desc&limit=1`);
+        const diag = dr && dr[0];
+        if (!diag) continue;
+        await sb(`/rest/v1/diagnostics?id=eq.${enc(diag.id)}`, 'PATCH',
+          { plan_sponsor_status: 'approved', plan_sponsor_decided_at: new Date().toISOString(), plan_sponsor_note: null, updated_at: new Date().toISOString() },
+          { Prefer: 'return=minimal' });
+        const cliRow = await sbGet(`/rest/v1/clients?id=eq.${enc(cid)}&select=name&limit=1`);
+        approvedNames.push((cliRow && cliRow[0] && cliRow[0].name) ? cliRow[0].name : 'a leader');
+      }
+
+      // Record the authorization (feeds the invoice / SOW).
+      await sb('/rest/v1/sponsor_authorizations', 'POST', {
+        sponsor_id: sponsor.id, team_id: teamId, leader_client_ids: clientIds,
+        seat_count: clientIds.length, billing_choice: billingChoice, billing_note: billingNote,
+      }, { Prefer: 'return=minimal' }).catch(() => {});
+
+      // Pay link only when the choice is online.
+      let payUrl = null;
+      if (billingChoice === 'online') {
+        payUrl = orgPayLink;
+        if (!payUrl) { try { const gl = await sbGet(`/rest/v1/renewal_config?id=eq.1&select=sponsor_payment_link_url&limit=1`); if (gl && gl[0]) payUrl = gl[0].sponsor_payment_link_url || null; } catch (_) { /* optional */ } }
+      }
+
+      // Notify Alex.
+      const subject = `${sponsor.name} authorized coaching for ${clientIds.length} leader${clientIds.length !== 1 ? 's' : ''}`;
+      const html = `<p><b>${sponsor.name}</b> approved and authorized coaching via the Decision Room.</p>`
+        + `<p><b>Leaders (${clientIds.length}):</b> ${approvedNames.map(n => String(n)).join(', ')}</p>`
+        + `<p><b>Billing:</b> ${billingChoice === 'online' ? 'Pay online' : 'Contract / SOW — send the scope of work'}</p>`
+        + (billingNote ? `<p><b>PO / contracting note:</b> "${billingNote}"</p>` : '')
+        + `<p>Log in to coach.html to review.</p>`;
+      sendCoachAlert(subject, html).catch(() => {});
+
+      return res.status(200).json({ ok: true, approved: clientIds.length, billing_choice: billingChoice, pay_url: payUrl });
     }
 
     return res.status(400).json({ error: 'Unknown action: ' + body.action });
