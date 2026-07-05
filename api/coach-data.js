@@ -213,6 +213,48 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, sponsor: Array.isArray(rows) ? rows[0] : rows });
     }
 
+    // ── Coach marks a coaching session complete from the Progress tab ────────
+    // The coach's click is the lock: it flags the week's check-in row as counted
+    // and advances coaching_sessions_completed. Idempotent per WEEK (a week counts
+    // once even with multiple rows), reversible (un-mark decrements).
+    if (action === 'mark-session-complete') {
+      const checkinId = String(body.checkin_id || '');
+      const complete  = body.complete === true;
+      if (!checkinId) return res.status(400).json({ error: 'checkin_id required' });
+      const cr = await sb(`/rest/v1/checkins?id=eq.${encodeURIComponent(checkinId)}&select=id,client_id,week_number,counted_toward_sessions&limit=1`);
+      const ck = (cr.ok ? await cr.json() : [])[0];
+      if (!ck) return res.status(404).json({ error: 'Check-in not found' });
+      const clientId = ck.client_id;
+
+      // Which rows already count this week (for idempotency + reversal).
+      const wr = await sb(`/rest/v1/checkins?client_id=eq.${encodeURIComponent(clientId)}&week_number=eq.${encodeURIComponent(ck.week_number)}&counted_toward_sessions=is.true&select=id`);
+      const weekCountedRows = wr.ok ? await wr.json() : [];
+
+      const clr = await sb(`/rest/v1/clients?id=eq.${encodeURIComponent(clientId)}&select=coaching_sessions_total,coaching_sessions_completed&limit=1`);
+      const cli = (clr.ok ? await clr.json() : [])[0] || {};
+      const total = cli.coaching_sessions_total;
+      let done = cli.coaching_sessions_completed || 0;
+
+      if (complete) {
+        if (ck.counted_toward_sessions) return res.status(200).json({ ok: true, completed: done });
+        await sb(`/rest/v1/checkins?id=eq.${encodeURIComponent(checkinId)}`, 'PATCH', { counted_toward_sessions: true }, { Prefer: 'return=minimal' });
+        if (weekCountedRows.length === 0 && (total == null || done < total)) {
+          done = done + 1;
+          await sb(`/rest/v1/clients?id=eq.${encodeURIComponent(clientId)}`, 'PATCH', { coaching_sessions_completed: done }, { Prefer: 'return=minimal' });
+        }
+        return res.status(200).json({ ok: true, completed: done });
+      } else {
+        if (!ck.counted_toward_sessions) return res.status(200).json({ ok: true, completed: done });
+        await sb(`/rest/v1/checkins?id=eq.${encodeURIComponent(checkinId)}`, 'PATCH', { counted_toward_sessions: false }, { Prefer: 'return=minimal' });
+        const otherCounted = weekCountedRows.some(r => r.id !== checkinId);
+        if (!otherCounted && done > 0) {
+          done = done - 1;
+          await sb(`/rest/v1/clients?id=eq.${encodeURIComponent(clientId)}`, 'PATCH', { coaching_sessions_completed: done }, { Prefer: 'return=minimal' });
+        }
+        return res.status(200).json({ ok: true, completed: done });
+      }
+    }
+
     // ── Dedicated: admin_accounts (passwords always hashed) ─────────────────
     if (action === 'admin-list') {
       // Assistants may view the team list (read-only); only owners can modify it.

@@ -2349,7 +2349,7 @@ function renderClientCard(client, checkins) {
 
   const historyRows = checkins.length > 0 ? `
     <table class="history-table">
-      <thead><tr><th>Week</th><th>Date</th><th>Metric</th><th>Follow-Through</th><th>Action</th><th>Notes</th></tr></thead>
+      <thead><tr><th>Week</th><th>Date</th><th>Metric</th><th>Follow-Through</th><th>Action</th><th>Notes</th><th>Session</th></tr></thead>
       <tbody>
         ${[...checkins].reverse().map(c => {
           const cc = c.completion_status === 'Yes' ? 'c-yes' : c.completion_status === 'Partially' ? 'c-part' : c.completion_status === 'No' ? 'c-no' : '';
@@ -2361,6 +2361,9 @@ function renderClientCard(client, checkins) {
             <td class="${cc}">${c.completion_status || '—'}</td>
             <td style="white-space:normal;min-width:240px;line-height:1.5;vertical-align:top;">${c.planned_action ? esc(c.planned_action) : '—'}</td>
             <td style="color:var(--gray-600);white-space:normal;min-width:240px;line-height:1.5;vertical-align:top;">${c.notes ? esc(c.notes) : ''}</td>
+            <td style="white-space:nowrap;vertical-align:top;">${c.counted_toward_sessions
+              ? `<button onclick="markSessionComplete('${c.id}', false, this)" style="font-size:11px;background:#E4F1EC;color:#0F6E56;border:1px solid #B9DCCF;border-radius:5px;padding:5px 10px;cursor:pointer;font-weight:700;">✓ Session logged</button>`
+              : `<button onclick="markSessionComplete('${c.id}', true, this)" style="font-size:11px;background:var(--navy);color:#fff;border:none;border-radius:5px;padding:5px 10px;cursor:pointer;font-weight:700;">Mark complete</button>${c.attended_coaching === true ? `<div style="font-size:10px;color:var(--teal);margin-top:4px;">leader: attended ✓</div>` : ''}`}</td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -2492,7 +2495,7 @@ function renderProfileSection(section, client, checkins) {
 
   const historyRows = checkins.length > 0 ? `
     <table class="history-table">
-      <thead><tr><th>Week</th><th>Date</th><th>Metric</th><th>Follow-Through</th><th>Action</th><th>Notes</th></tr></thead>
+      <thead><tr><th>Week</th><th>Date</th><th>Metric</th><th>Follow-Through</th><th>Action</th><th>Notes</th><th>Session</th></tr></thead>
       <tbody>
         ${[...checkins].reverse().map(c => {
           const cc = c.completion_status === 'Yes' ? 'c-yes' : c.completion_status === 'Partially' ? 'c-part' : c.completion_status === 'No' ? 'c-no' : '';
@@ -2504,6 +2507,9 @@ function renderProfileSection(section, client, checkins) {
             <td class="${cc}">${c.completion_status || '—'}</td>
             <td style="white-space:normal;min-width:240px;line-height:1.5;vertical-align:top;">${c.planned_action ? esc(c.planned_action) : '—'}</td>
             <td style="color:var(--gray-600);white-space:normal;min-width:240px;line-height:1.5;vertical-align:top;">${c.notes ? esc(c.notes) : ''}</td>
+            <td style="white-space:nowrap;vertical-align:top;">${c.counted_toward_sessions
+              ? `<button onclick="markSessionComplete('${c.id}', false, this)" style="font-size:11px;background:#E4F1EC;color:#0F6E56;border:1px solid #B9DCCF;border-radius:5px;padding:5px 10px;cursor:pointer;font-weight:700;">✓ Session logged</button>`
+              : `<button onclick="markSessionComplete('${c.id}', true, this)" style="font-size:11px;background:var(--navy);color:#fff;border:none;border-radius:5px;padding:5px 10px;cursor:pointer;font-weight:700;">Mark complete</button>${c.attended_coaching === true ? `<div style="font-size:10px;color:var(--teal);margin-top:4px;">leader: attended ✓</div>` : ''}`}</td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -6249,6 +6255,24 @@ async function editCoachingHours(clientId){
     if (typeof toast === 'function') toast('Updated — ' + h + ' hours = ' + sessions + ' sessions');
     switchProfileNav(document.querySelector('.profile-nav-item.active')?.id?.replace('profNav-','') || 'summary');
   } catch (e) { alert('Could not save: ' + e.message); }
+}
+// Coach confirms a coaching session complete from the Progress tab. The coach's
+// click is the single source of truth for the count — the leader's "attended"
+// answer only pre-suggests it (shown as a hint), never moves the number itself.
+async function markSessionComplete(checkinId, complete, btn){
+  if (btn) btn.disabled = true;
+  try {
+    const r = await fetch('/api/coach-data', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ action:'mark-session-complete', checkin_id: checkinId, complete: complete, session: getCoachSessionToken() }) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Failed');
+    allCheckins = allCheckins.map(x => x.id === checkinId ? { ...x, counted_toward_sessions: complete } : x);
+    if (typeof j.completed === 'number') {
+      allClients = allClients.map(c => c.id === currentProfileClientId ? { ...c, coaching_sessions_completed: j.completed } : c);
+    }
+    switchProfileNav('progress');
+    if (typeof toast === 'function') toast(complete ? 'Session logged' : 'Session removed');
+  } catch (e) { if (btn) btn.disabled = false; alert('Could not update: ' + e.message); }
 }
 async function editSessionTotal(clientId){
   const c = allClients.find(x => x.id === clientId); if (!c) return;
