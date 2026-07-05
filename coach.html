@@ -2753,6 +2753,14 @@ function renderProfileSection(section, client, checkins) {
         <button onclick="markBigWin('${client.id}')" id="bigWinBtn-${client.id}" style="padding:8px 18px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;border:none;background:var(--navy);color:#fff;">★ Mark a big win</button>
         ${client.first_big_win_flag ? `<a href="#" onclick="markBigWin('${client.id}', false);return false;" style="font-size:12px;color:var(--gray-600);margin-left:12px;">Clear flag</a>` : ''}
       </div>
+      <div style="background:white;border-radius:8px;padding:18px 20px;margin-bottom:18px;box-shadow:0 1px 4px rgba(0,0,0,0.06);" id="recs-section-${client.id}">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);">Agreed Recommendations</div>
+          <button onclick="openRecEditor('${client.id}')" style="font-size:11px;background:none;border:1px solid var(--teal);color:var(--teal);border-radius:6px;padding:5px 12px;cursor:pointer;font-weight:700;">+ Add</button>
+        </div>
+        <p style="font-size:12px;color:var(--gray-600);margin-bottom:12px;">The recommendations the sponsor agreed to. Set who owns each one, drop a comment, and mark it complete. <strong>Sponsor-owned</strong> items the sponsor can complete on their own page; <strong>leader/coach-owned</strong> items only you can — that's the ground truth.</p>
+        <div id="recs-content-${client.id}"><div class="spinner" style="width:22px;height:22px;border-width:3px;margin:10px auto;"></div></div>
+      </div>
       ${client.plan_submitted_at ? `
       <div style="background:white;border-radius:8px;padding:18px 20px;margin-bottom:18px;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);margin-bottom:10px;">Metric Progress</div>
@@ -2767,6 +2775,7 @@ function renderProfileSection(section, client, checkins) {
         ${historyRows}
       </div>
     `;
+    loadRecs(client.id);
   } else if (section === 'surveys') {
     el.innerHTML = `
       <div class="profile-section-title">Stakeholders &amp; Surveys</div>
@@ -6273,6 +6282,118 @@ async function markSessionComplete(checkinId, complete, btn){
     switchProfileNav('progress');
     if (typeof toast === 'function') toast(complete ? 'Session logged' : 'Session removed');
   } catch (e) { if (btn) btn.disabled = false; alert('Could not update: ' + e.message); }
+}
+// ── Agreed Recommendations (coach cockpit, Progress tab) ───────────────────
+// The recs the sponsor selected during plan approval. Coach assigns who owns
+// each (the clean gate for who may complete it), comments, and marks complete.
+var REC_CACHE = {};
+async function recAction(payload){
+  const r = await fetch('/api/coach-data', { method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(Object.assign({ session: getCoachSessionToken() }, payload)) });
+  const j = await r.json().catch(()=>({}));
+  if (!r.ok) throw new Error(j.error || 'Request failed');
+  return j;
+}
+async function loadRecs(clientId){
+  const box = document.getElementById('recs-content-' + clientId);
+  if (!box) return;
+  try {
+    const j = await recAction({ action:'recs-for-client', client_id: clientId });
+    REC_CACHE[clientId] = j.recommendations || [];
+    renderRecs(clientId);
+  } catch (e) {
+    box.innerHTML = '<p style="font-size:12px;color:var(--red);">Could not load recommendations: ' + esc(e.message) + '</p>';
+  }
+}
+function recOwnerSelect(rec, clientId){
+  const opts = [['','Unassigned'],['sponsor','Sponsor owns it'],['leader','Leader owns it'],['coach','I own it (coach)']];
+  const cur = rec.responsible_party || '';
+  return '<select onchange="setRecOwner(\'' + rec.id + '\',\'' + clientId + '\',this.value)" style="font-size:12px;padding:5px 8px;border:1px solid var(--gray-300);border-radius:6px;background:#fff;">' +
+    opts.map(function(o){ return '<option value="' + o[0] + '"' + (o[0]===cur?' selected':'') + '>' + o[1] + '</option>'; }).join('') + '</select>';
+}
+function renderRecs(clientId){
+  const box = document.getElementById('recs-content-' + clientId);
+  if (!box) return;
+  const recs = REC_CACHE[clientId] || [];
+  if (!recs.length) {
+    box.innerHTML = '<p style="font-size:12px;color:var(--gray-600);font-style:italic;">No agreed recommendations linked yet. Use “+ Add” to enter one.</p>';
+    return;
+  }
+  box.innerHTML = recs.map(function(rec){
+    const done = !!rec.completed_at;
+    const by = rec.completed_by;
+    const doneLabel = done ? ('✓ Completed' + (by ? ' · ' + esc(by) : '')) : '';
+    const ownerHint = rec.owner ? '<span style="font-size:10px;color:var(--gray-500);">from plan: ' + esc(rec.owner) + '</span>' : '';
+    const tf = rec.timeframe ? '<span style="font-size:11px;background:#EEF3F1;color:var(--navy);border-radius:10px;padding:2px 9px;font-weight:600;">' + esc(rec.timeframe) + '</span>' : '';
+    return '<div style="border:1px solid var(--gray-200);border-radius:8px;padding:12px 14px;margin-bottom:10px;background:' + (done ? '#F4FAF7' : '#fff') + ';">' +
+      '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">' +
+        '<div style="flex:1;"><div style="font-size:13px;font-weight:700;color:var(--navy);' + (done ? 'text-decoration:line-through;opacity:.7;' : '') + '">' + esc(rec.short_title || 'Recommendation') + '</div>' +
+        (rec.description ? '<div style="font-size:12px;color:var(--gray-600);margin-top:3px;">' + esc(rec.description) + '</div>' : '') +
+        '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px;">' + tf + ' ' + ownerHint + '</div></div>' +
+        (done ? '<span style="font-size:11px;font-weight:700;color:#0F6E56;white-space:nowrap;">' + doneLabel + '</span>' : '') +
+      '</div>' +
+      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">' +
+        recOwnerSelect(rec, clientId) +
+        '<button onclick="toggleRecComplete(\'' + rec.id + '\',\'' + clientId + '\',' + (done ? 'false' : 'true') + ')" style="font-size:11px;font-weight:700;border-radius:6px;padding:5px 11px;cursor:pointer;border:none;' + (done ? 'background:#E4F1EC;color:#0F6E56;border:1px solid #B9DCCF;' : 'background:var(--navy);color:#fff;') + '">' + (done ? 'Undo complete' : 'Mark complete') + '</button>' +
+        '<a href="#" onclick="deleteRec(\'' + rec.id + '\',\'' + clientId + '\');return false;" style="font-size:11px;color:var(--gray-500);margin-left:auto;">Remove</a>' +
+      '</div>' +
+      '<div style="margin-top:8px;">' +
+        '<textarea id="recnote-' + rec.id + '" placeholder="Coach comment (the sponsor sees this)…" style="width:100%;box-sizing:border-box;font-size:12px;padding:7px 9px;border:1px solid var(--gray-300);border-radius:6px;resize:vertical;min-height:38px;font-family:inherit;">' + esc(rec.coach_comment || '') + '</textarea>' +
+        '<div style="text-align:right;margin-top:4px;"><button onclick="saveRecComment(\'' + rec.id + '\',\'' + clientId + '\',this)" style="font-size:11px;font-weight:700;background:none;border:1px solid var(--teal);color:var(--teal);border-radius:6px;padding:4px 12px;cursor:pointer;">Save comment</button></div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+async function setRecOwner(recId, clientId, party){
+  try {
+    await recAction({ action:'rec-set-responsible', rec_id: recId, responsible_party: party || null });
+    const recs = REC_CACHE[clientId] || [];
+    const rec = recs.find(function(x){ return x.id === recId; }); if (rec) rec.responsible_party = party || null;
+    renderRecs(clientId);
+    if (typeof toast === 'function') toast(party === 'sponsor' ? 'Sponsor can now complete this one' : 'Owner updated');
+  } catch (e) { alert('Could not update: ' + e.message); }
+}
+async function saveRecComment(recId, clientId, btn){
+  const ta = document.getElementById('recnote-' + recId); if (!ta) return;
+  if (btn) btn.disabled = true;
+  try {
+    await recAction({ action:'rec-comment', rec_id: recId, coach_comment: ta.value });
+    const recs = REC_CACHE[clientId] || [];
+    const rec = recs.find(function(x){ return x.id === recId; }); if (rec) rec.coach_comment = ta.value;
+    if (typeof toast === 'function') toast('Comment saved');
+  } catch (e) { alert('Could not save comment: ' + e.message); }
+  finally { if (btn) btn.disabled = false; }
+}
+async function toggleRecComplete(recId, clientId, complete){
+  try {
+    await recAction({ action:'rec-complete', rec_id: recId, completed: complete });
+    const recs = REC_CACHE[clientId] || [];
+    const rec = recs.find(function(x){ return x.id === recId; });
+    if (rec) { rec.completed_at = complete ? new Date().toISOString() : null; rec.completed_by = complete ? 'coach' : null; }
+    renderRecs(clientId);
+    if (typeof toast === 'function') toast(complete ? 'Marked complete' : 'Marked not done');
+  } catch (e) { alert('Could not update: ' + e.message); }
+}
+async function deleteRec(recId, clientId){
+  if (!confirm('Remove this recommendation from tracking? This does not delete the original plan.')) return;
+  try {
+    await recAction({ action:'rec-delete', rec_id: recId });
+    REC_CACHE[clientId] = (REC_CACHE[clientId] || []).filter(function(x){ return x.id !== recId; });
+    renderRecs(clientId);
+    if (typeof toast === 'function') toast('Removed');
+  } catch (e) { alert('Could not remove: ' + e.message); }
+}
+async function openRecEditor(clientId){
+  const title = prompt('Recommendation (short title):', ''); if (title == null) return;
+  if (!title.trim()) { alert('A short title is required.'); return; }
+  const description = prompt('Detail (optional):', '') || '';
+  const timeframe = prompt('Timeframe (optional, e.g. “30 days”, “Q3”):', '') || '';
+  try {
+    const j = await recAction({ action:'rec-save', rec: { client_id: clientId, short_title: title, description: description, timeframe: timeframe, responsible_party: 'leader' } });
+    REC_CACHE[clientId] = (REC_CACHE[clientId] || []).concat([ j.recommendation ]);
+    renderRecs(clientId);
+    if (typeof toast === 'function') toast('Recommendation added');
+  } catch (e) { alert('Could not add: ' + e.message); }
 }
 async function editSessionTotal(clientId){
   const c = allClients.find(x => x.id === clientId); if (!c) return;

@@ -255,6 +255,87 @@ export default async function handler(req, res) {
       }
     }
 
+    // ── Recommendation tracking (agreed recommendations per engagement) ─────
+    // Coach fully manages recs. Sponsor completes only their OWN (handled in
+    // api/sponsor.js); the coach can complete ANY rec — protects the ground truth.
+    if (action === 'recs-for-client') {
+      const clientId = String(body.client_id || '');
+      if (!clientId) return res.status(400).json({ error: 'client_id required' });
+      const r = await sb(`/rest/v1/recommendations?client_id=eq.${encodeURIComponent(clientId)}&select=id,short_title,description,category,status,owner,responsible_party,timeframe,horizon,coach_comment,completed_at,completed_by,sort_order,created_at&order=sort_order.asc.nullslast,created_at.asc`);
+      const rows = r.ok ? await r.json() : [];
+      return res.status(200).json({ ok: true, recommendations: rows });
+    }
+    if (action === 'rec-save') {
+      const rec = body.rec || {};
+      const clientId = String(rec.client_id || body.client_id || '');
+      const rp = ['sponsor', 'leader', 'coach'].includes(rec.responsible_party) ? rec.responsible_party : 'leader';
+      const title = String(rec.short_title || '').trim();
+      if (!title) return res.status(400).json({ error: 'A short title is required' });
+      if (rec.id) {
+        const upd = {
+          short_title: title.slice(0, 200),
+          description: rec.description != null ? String(rec.description).slice(0, 2000) : null,
+          responsible_party: rp,
+          timeframe: rec.timeframe != null ? String(rec.timeframe).slice(0, 120) : null,
+          category: rec.category != null ? String(rec.category).slice(0, 80) : null,
+        };
+        const r = await sb(`/rest/v1/recommendations?id=eq.${encodeURIComponent(rec.id)}`, 'PATCH', upd, { Prefer: 'return=representation' });
+        if (!r.ok) { const d = await r.json().catch(() => ({})); return res.status(500).json({ error: 'Could not update recommendation', detail: d }); }
+        const rows = await r.json();
+        return res.status(200).json({ ok: true, recommendation: Array.isArray(rows) ? rows[0] : rows });
+      }
+      if (!clientId) return res.status(400).json({ error: 'client_id required' });
+      const payload = {
+        client_id: clientId, short_title: title.slice(0, 200),
+        description: rec.description != null ? String(rec.description).slice(0, 2000) : null,
+        responsible_party: rp,
+        timeframe: rec.timeframe != null ? String(rec.timeframe).slice(0, 120) : null,
+        category: rec.category != null ? String(rec.category).slice(0, 80) : null,
+        status: 'approved', visible_to_client: false,
+      };
+      const r = await sb('/rest/v1/recommendations', 'POST', payload, { Prefer: 'return=representation' });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); return res.status(500).json({ error: 'Could not add recommendation', detail: d }); }
+      const rows = await r.json();
+      return res.status(200).json({ ok: true, recommendation: Array.isArray(rows) ? rows[0] : rows });
+    }
+    if (action === 'rec-comment') {
+      const recId = String(body.rec_id || '');
+      if (!recId) return res.status(400).json({ error: 'rec_id required' });
+      const comment = body.coach_comment != null ? String(body.coach_comment).slice(0, 2000) : null;
+      const r = await sb(`/rest/v1/recommendations?id=eq.${encodeURIComponent(recId)}`, 'PATCH', { coach_comment: comment }, { Prefer: 'return=minimal' });
+      if (!r.ok) return res.status(500).json({ error: 'Could not save comment' });
+      return res.status(200).json({ ok: true });
+    }
+    if (action === 'rec-complete') {
+      // Coach can complete/undo ANY rec (including leader-owned) — the ground truth.
+      const recId = String(body.rec_id || '');
+      if (!recId) return res.status(400).json({ error: 'rec_id required' });
+      const upd = body.completed === true
+        ? { completed_at: new Date().toISOString(), completed_by: 'coach' }
+        : { completed_at: null, completed_by: null };
+      const r = await sb(`/rest/v1/recommendations?id=eq.${encodeURIComponent(recId)}`, 'PATCH', upd, { Prefer: 'return=minimal' });
+      if (!r.ok) return res.status(500).json({ error: 'Could not update recommendation' });
+      return res.status(200).json({ ok: true });
+    }
+    if (action === 'rec-delete') {
+      const recId = String(body.rec_id || '');
+      if (!recId) return res.status(400).json({ error: 'rec_id required' });
+      const r = await sb(`/rest/v1/recommendations?id=eq.${encodeURIComponent(recId)}`, 'DELETE', null, { Prefer: 'return=minimal' });
+      if (!r.ok) return res.status(500).json({ error: 'Could not delete recommendation' });
+      return res.status(200).json({ ok: true });
+    }
+    // Set who owns a rec (responsible_party) — the clean enum that gates who may
+    // complete it. Recs come from the plan-approval flow with a messy free-text
+    // `owner`; the coach assigns the clean owner here. null = coach-only completion.
+    if (action === 'rec-set-responsible') {
+      const recId = String(body.rec_id || '');
+      if (!recId) return res.status(400).json({ error: 'rec_id required' });
+      const rp = ['sponsor', 'leader', 'coach'].includes(body.responsible_party) ? body.responsible_party : null;
+      const r = await sb(`/rest/v1/recommendations?id=eq.${encodeURIComponent(recId)}`, 'PATCH', { responsible_party: rp }, { Prefer: 'return=minimal' });
+      if (!r.ok) return res.status(500).json({ error: 'Could not set who owns this recommendation' });
+      return res.status(200).json({ ok: true, responsible_party: rp });
+    }
+
     // ── Dedicated: admin_accounts (passwords always hashed) ─────────────────
     if (action === 'admin-list') {
       // Assistants may view the team list (read-only); only owners can modify it.

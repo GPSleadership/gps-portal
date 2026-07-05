@@ -86,6 +86,24 @@
   .help .k { color:var(--teal-text); }
   .help .body { font-size:14.5px; color:var(--ink); line-height:1.65; }
 
+  /* Recommendations */
+  .recsIntro { font-size:13.5px; color:var(--mid); line-height:1.6; margin-top:8px; margin-bottom:14px; }
+  .rec { border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:11px; background:#fff; }
+  .rec.done { background:#F4FAF7; border-color:#CDE7DC; }
+  .rec .rtitle { font-size:14.5px; font-weight:700; color:var(--navy); line-height:1.45; }
+  .rec.done .rtitle { text-decoration:line-through; opacity:.72; }
+  .rec .rdesc { font-size:13px; color:var(--mid); line-height:1.55; margin-top:4px; }
+  .rec .rmeta { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:9px; }
+  .rec .rtf { font-size:11.5px; background:#EEF3F1; color:var(--navy); border-radius:11px; padding:3px 11px; font-weight:600; }
+  .rec .rown { font-size:11.5px; color:#7C8A94; font-weight:600; }
+  .rec .rnote { margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); font-size:13.5px; color:var(--ink); line-height:1.6; }
+  .rec .rnote .rnk { font-size:11px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; color:var(--teal-text); display:block; margin-bottom:3px; }
+  .rec .ract { margin-top:12px; }
+  .rec .rbtn { font-size:12.5px; font-weight:700; border-radius:7px; padding:7px 15px; cursor:pointer; border:none; background:var(--navy); color:#fff; }
+  .rec .rbtn.undo { background:#E4F1EC; color:#0F6E56; border:1px solid #B9DCCF; }
+  .rec .rdone { font-size:12.5px; font-weight:700; color:#0F6E56; }
+  .rec .rtrack { font-size:12.5px; color:var(--mid); font-style:italic; }
+
   .foot { margin-top:20px; padding-top:16px; border-top:1px solid var(--line); font-size:12.5px; color:var(--mid); display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; }
   .conf { font-size:11.5px; color:#7C8A94; text-align:center; margin-top:22px; line-height:1.6; }
 
@@ -170,6 +188,13 @@
         <h2 class="k" id="focusK">This sprint's focus</h2>
         <div class="goal" id="focusGoal"></div>
         <ul class="beh" id="focusBeh"></ul>
+      </section>
+
+      <!-- Agreed recommendations -->
+      <section class="card recs hidden" id="recsCard" aria-labelledby="recsK">
+        <h2 class="k" id="recsK">Recommendations you agreed to</h2>
+        <p class="recsIntro" id="recsIntro">The changes we agreed to pursue alongside the coaching. You can mark the ones you own as complete; the rest are tracked by your coach.</p>
+        <div id="recsList"></div>
       </section>
 
       <!-- Coach note -->
@@ -331,6 +356,9 @@
       }).join('');
     }
 
+    // Recommendations you agreed to
+    renderRecsList(d.recommendations || []);
+
     // Coach note
     var sBody = document.getElementById('summaryBody');
     if (d.coach_summary) sBody.textContent = d.coach_summary;
@@ -342,6 +370,65 @@
     var end = fmtDate(d.sprint_end_date);
     document.getElementById('footEnd').textContent = end ? ('Sprint ends ' + end) : '';
   }
+
+  // Render the agreed recommendations. The sponsor can complete items THEY own
+  // (can_sponsor_complete); leader/coach items are the coach's to mark, shown
+  // read-only with a quiet "tracked by your coach" note.
+  function renderRecsList(recs) {
+    if (!recs || !recs.length) return;
+    show('recsCard');
+    document.getElementById('recsList').innerHTML = recs.map(function (r) {
+      var done = !!r.completed;
+      var parts = '<div class="rec' + (done ? ' done' : '') + '" id="rec-' + r.id + '">';
+      parts += '<div class="rtitle">' + esc(r.title || 'Recommendation') + '</div>';
+      if (r.description) parts += '<div class="rdesc">' + esc(r.description) + '</div>';
+      var meta = '';
+      if (r.timeframe) meta += '<span class="rtf">' + esc(r.timeframe) + '</span>';
+      if (r.owner === 'sponsor') meta += '<span class="rown">Yours to complete</span>';
+      else if (r.owner === 'leader') meta += '<span class="rown">On the leader</span>';
+      else if (r.owner === 'coach') meta += '<span class="rown">Coach-led</span>';
+      if (meta) parts += '<div class="rmeta">' + meta + '</div>';
+      if (r.coach_comment) parts += '<div class="rnote"><span class="rnk">Coach note</span>' + esc(r.coach_comment) + '</div>';
+      parts += '<div class="ract">';
+      if (done) {
+        var who = r.completed_by === 'sponsor' ? 'you' : 'your coach';
+        if (r.can_sponsor_complete && r.completed_by === 'sponsor') {
+          parts += '<button class="rbtn undo" onclick="completeSponsorRec(\'' + r.id + '\',false,this)">Undo complete</button>';
+        } else {
+          parts += '<span class="rdone">✓ Completed · marked by ' + who + '</span>';
+        }
+      } else if (r.can_sponsor_complete) {
+        parts += '<button class="rbtn" onclick="completeSponsorRec(\'' + r.id + '\',true,this)">Mark complete</button>';
+      } else {
+        parts += '<span class="rtrack">Tracked by your coach</span>';
+      }
+      parts += '</div></div>';
+      return parts;
+    }).join('');
+  }
+
+  // Sponsor completes/undoes ONE of their own recommendations. The server
+  // re-checks ownership; this only offers the button for sponsor-owned items.
+  window.completeSponsorRec = function (recId, complete, btn) {
+    if (btn) btn.disabled = true;
+    fetch('/api/sponsor', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ action:'complete-rec', token:token, rec_id:recId, completed:complete }) })
+      .then(function (r) { return r.json().then(function (j) { return { ok:r.ok, j:j }; }); })
+      .then(function (res) {
+        if (!res.ok) { if (btn) btn.disabled = false; alert(res.j.error || 'Could not update.'); return; }
+        var card = document.getElementById('rec-' + recId);
+        if (card) {
+          if (complete) {
+            card.classList.add('done');
+            card.querySelector('.ract').innerHTML = '<button class="rbtn undo" onclick="completeSponsorRec(\'' + recId + '\',false,this)">Undo complete</button>';
+          } else {
+            card.classList.remove('done');
+            card.querySelector('.ract').innerHTML = '<button class="rbtn" onclick="completeSponsorRec(\'' + recId + '\',true,this)">Mark complete</button>';
+          }
+        }
+      })
+      .catch(function () { if (btn) btn.disabled = false; alert('Could not update. Please try again.'); });
+  };
 })();
 </script>
 </body>

@@ -169,6 +169,27 @@ async function buildSponsorOwnRatings(sponsor, clientId) {
   return { relationship: stk.relationship || null, points, comment: latestComment };
 }
 
+// The agreed recommendations the sponsor selected during plan approval, tracked
+// through the engagement. Sponsor-safe: these are the coach-authored items the
+// sponsor already chose, plus the coach's comment and completion state. The
+// sponsor may only COMPLETE items where they own the action (responsible_party
+// = 'sponsor'); leader/coach items are the coach's ground truth (read-only here).
+async function buildRecommendations(clientId) {
+  const rows = await sbGet(`/rest/v1/recommendations?client_id=eq.${enc(clientId)}&status=eq.approved&select=id,short_title,description,timeframe,responsible_party,coach_comment,completed_at,completed_by,sort_order,created_at&order=sort_order.asc.nullslast,created_at.asc`);
+  if (!rows || !rows.length) return null;
+  return rows.map(r => ({
+    id: r.id,
+    title: r.short_title || null,
+    description: r.description || null,
+    timeframe: r.timeframe || null,
+    owner: r.responsible_party || null,                 // 'sponsor' | 'leader' | 'coach' | null
+    coach_comment: r.coach_comment || null,
+    completed: !!r.completed_at,
+    completed_by: r.completed_by || null,
+    can_sponsor_complete: r.responsible_party === 'sponsor',
+  }));
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -186,7 +207,7 @@ export default async function handler(req, res) {
     // touch last-used (fire and forget)
     sb(`/rest/v1/sponsors?id=eq.${sponsor.id}`, 'PATCH', { token_last_used_at: new Date().toISOString() }, { Prefer: 'return=minimal' }).catch(() => {});
 
-    if (body.action && body.action !== 'get') {
+    if (body.action && body.action !== 'get' && body.action !== 'complete-rec') {
       return res.status(400).json({ error: 'Unknown action: ' + body.action });
     }
 
@@ -194,6 +215,27 @@ export default async function handler(req, res) {
     // A sponsor with no linked leader is a team/Decision-Room sponsor, not a
     // single-leader coaching sponsor. Signal the page to point them elsewhere.
     if (!clientId) return res.status(200).json({ ok: true, unlinked: true, sponsor: { name: sponsor.name } });
+
+    // ── Sponsor completes ONE of their OWN recommendations ─────────────────
+    // Ground-truth lock: the sponsor may only toggle items they own
+    // (responsible_party = 'sponsor') on their OWN linked leader. Leader- and
+    // coach-owned items are the coach's to mark — never the sponsor's.
+    if (body.action === 'complete-rec') {
+      const recId = String(body.rec_id || '');
+      if (!recId) return res.status(400).json({ error: 'rec_id required' });
+      const recRows = await sbGet(`/rest/v1/recommendations?id=eq.${enc(recId)}&select=id,client_id,responsible_party,status,completed_at&limit=1`);
+      const rec = recRows[0];
+      if (!rec || rec.client_id !== clientId) return res.status(404).json({ error: 'Recommendation not found' });
+      if (rec.responsible_party !== 'sponsor') {
+        return res.status(403).json({ error: "Your coach marks this one complete — it's on the leader's side." });
+      }
+      const done = body.completed === true;
+      const upd = done
+        ? { completed_at: new Date().toISOString(), completed_by: 'sponsor' }
+        : { completed_at: null, completed_by: null };
+      await sb(`/rest/v1/recommendations?id=eq.${enc(recId)}`, 'PATCH', upd, { Prefer: 'return=minimal' });
+      return res.status(200).json({ ok: true, completed: done });
+    }
 
     // Coach preview forces the fully-revealed view; otherwise honor the saved mode.
     const isCoachPreview = !!(body.coach_session && verifyCoachSession(body.coach_session));
@@ -232,8 +274,8 @@ export default async function handler(req, res) {
       });
     }
 
-    const [pulse, rhythm, ownRatings] = await Promise.all([
-      buildPulse(clientId), buildCheckinRhythm(clientId), buildSponsorOwnRatings(sponsor, clientId),
+    const [pulse, rhythm, ownRatings, recommendations] = await Promise.all([
+      buildPulse(clientId), buildCheckinRhythm(clientId), buildSponsorOwnRatings(sponsor, clientId), buildRecommendations(clientId),
     ]);
 
     // Engagement chip — calm default. Needs Attention only on a real negative signal
@@ -280,6 +322,7 @@ export default async function handler(req, res) {
       },
       coach_summary: sponsor.coach_summary || null,     // coach-authored
       sponsor_actions: sponsor.sponsor_actions || null, // coach-authored "how you can help"
+      recommendations: recommendations || undefined,    // agreed recs + status; sponsor completes own only
       sprint_end_date: c.coaching_program_end_date || null,
     };
 
