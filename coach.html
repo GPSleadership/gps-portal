@@ -2859,6 +2859,7 @@ function renderProfileSection(section, client, checkins) {
         <p style="font-size:12px;color:var(--gray-600);margin-bottom:10px;"><strong style="color:var(--navy);">${client.coaching_sessions_completed || 0} of ${client.coaching_sessions_total}</strong> sessions logged · ${Math.max(0, client.coaching_sessions_total - (client.coaching_sessions_completed || 0))} remaining.<br><span style="color:var(--teal);">Advances automatically when the leader reports attending a coaching call in their weekly check-in.</span></p>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
           <button onclick="logCoachingSession('${client.id}')" title="Manual fallback — use only for a call that happened without the leader's weekly check-in. Normally the count advances automatically." ${(client.coaching_sessions_completed || 0) >= client.coaching_sessions_total ? 'disabled' : ''} style="font-size:12px;background:${(client.coaching_sessions_completed || 0) >= client.coaching_sessions_total ? 'var(--gray-300)' : 'var(--navy)'};color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:${(client.coaching_sessions_completed || 0) >= client.coaching_sessions_total ? 'not-allowed' : 'pointer'};font-weight:700;font-family:'Montserrat',sans-serif;">+ Log manually</button>
+          <button onclick="decrementCoachingSession('${client.id}')" title="Correct the count down — e.g. the leader reported attending but the call did not happen." ${(client.coaching_sessions_completed || 0) <= 0 ? 'disabled' : ''} style="font-size:12px;background:none;border:1px solid var(--gray-300);color:var(--gray-600);border-radius:6px;padding:8px 14px;cursor:${(client.coaching_sessions_completed || 0) <= 0 ? 'not-allowed' : 'pointer'};font-weight:700;">− Remove one</button>
           <button onclick="editSessionTotal('${client.id}')" style="font-size:12px;background:none;border:1px solid var(--gray-300);color:var(--gray-600);border-radius:6px;padding:8px 14px;cursor:pointer;font-weight:700;">Edit total</button>
         </div>
         <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:13px;color:var(--navy);line-height:1.5;">
@@ -6199,6 +6200,20 @@ async function logCoachingSession(clientId){
     if (typeof toast === 'function') toast('Session logged — ' + nd + ' of ' + total);
     switchProfileNav(document.querySelector('.profile-nav-item.active')?.id?.replace('profNav-','') || 'summary');
   } catch (e) { alert('Could not log session: ' + e.message); }
+}
+async function decrementCoachingSession(clientId){
+  const c = allClients.find(x => x.id === clientId); if (!c) return;
+  const done = c.coaching_sessions_completed || 0;
+  const total = c.coaching_sessions_total || 0;
+  if (done <= 0) { alert('The count is already at zero.'); return; }
+  if (!confirm('Remove one logged session? This will be ' + (done - 1) + ' of ' + total + '.')) return;
+  const nd = done - 1;
+  try {
+    await cdUpdate('clients', { coaching_sessions_completed: nd }, { eq: { id: clientId } });
+    allClients = allClients.map(x => x.id === clientId ? { ...x, coaching_sessions_completed: nd } : x);
+    if (typeof toast === 'function') toast('Session removed — ' + nd + ' of ' + total);
+    switchProfileNav(document.querySelector('.profile-nav-item.active')?.id?.replace('profNav-','') || 'summary');
+  } catch (e) { alert('Could not update: ' + e.message); }
 }
 async function editSessionTotal(clientId){
   const c = allClients.find(x => x.id === clientId); if (!c) return;
