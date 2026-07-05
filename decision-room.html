@@ -375,13 +375,15 @@ function renderTeam(){
 
 // ── Bundled approvals panel (Phase 3) — multi-leader sponsors approve several
 // plans at once; the billing CTA is driven by the org's billing_mode.
+function apprPA(m){ return (m.sponsorReadout && m.sponsorReadout.plan_approval) || m.plan_approval || null; }
 function renderApprovals(members){
-  var pending = (members||[]).filter(function(m){ return m.plan_approval && m.plan_approval.requires && m.plan_approval.status !== 'approved'; });
+  var pending = (members||[]).filter(function(m){ var pa=apprPA(m); return pa && pa.requires && pa.status !== 'approved'; });
   if(!pending.length) return '';
   var billing = DATA.billing || { mode:'both', pay_url:null };
   var rows = pending.map(function(m){
+    var pa = apprPA(m);
     var full = esc(m.name||'Leader');
-    var statusLbl = m.plan_approval.status==='changes_requested' ? 'Changes requested' : 'Awaiting your review';
+    var statusLbl = pa.status==='changes_requested' ? 'Changes requested' : 'Awaiting your review';
     return '<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid '+C.line+';border-radius:8px;margin-bottom:8px;cursor:pointer;">'
       + '<input type="checkbox" class="appr-chk" value="'+esc(m.client_id)+'" checked onchange="apprRecount()" style="width:17px;height:17px;flex:0 0 auto;">'
       + '<span style="flex:1;"><span style="font-weight:700;color:'+C.navy+';">'+full+'</span>'
