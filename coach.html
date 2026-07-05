@@ -2359,8 +2359,8 @@ function renderClientCard(client, checkins) {
             <td>${d}</td>
             <td style="font-weight:700;">${c.metric_value ?? '—'}</td>
             <td class="${cc}">${c.completion_status || '—'}</td>
-            <td>${c.planned_action ? c.planned_action.substring(0,80) + (c.planned_action.length>80?'…':'') : '—'}</td>
-            <td style="color:var(--gray-600);">${c.notes ? c.notes.substring(0,80) + (c.notes.length>80?'…':'') : ''}</td>
+            <td style="white-space:normal;min-width:240px;line-height:1.5;vertical-align:top;">${c.planned_action ? esc(c.planned_action) : '—'}</td>
+            <td style="color:var(--gray-600);white-space:normal;min-width:240px;line-height:1.5;vertical-align:top;">${c.notes ? esc(c.notes) : ''}</td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -2502,8 +2502,8 @@ function renderProfileSection(section, client, checkins) {
             <td>${d}</td>
             <td style="font-weight:700;">${c.metric_value ?? '—'}</td>
             <td class="${cc}">${c.completion_status || '—'}</td>
-            <td>${c.planned_action ? c.planned_action.substring(0,80) + (c.planned_action.length>80?'…':'') : '—'}</td>
-            <td style="color:var(--gray-600);">${c.notes ? c.notes.substring(0,80) + (c.notes.length>80?'…':'') : ''}</td>
+            <td style="white-space:normal;min-width:240px;line-height:1.5;vertical-align:top;">${c.planned_action ? esc(c.planned_action) : '—'}</td>
+            <td style="color:var(--gray-600);white-space:normal;min-width:240px;line-height:1.5;vertical-align:top;">${c.notes ? esc(c.notes) : ''}</td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -2741,6 +2741,12 @@ function renderProfileSection(section, client, checkins) {
           <span style="font-size:11px;color:var(--gray-600);margin-left:8px;">${checkins.length}/13 submitted</span>
         </div>
       </div>
+      <div style="background:white;border-radius:8px;padding:18px 20px;margin-bottom:18px;box-shadow:0 1px 4px rgba(0,0,0,0.06);" id="bigwin-section-${client.id}">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);margin-bottom:10px;">Client Win</div>
+        <p style="font-size:12px;color:var(--gray-600);margin-bottom:10px;">Mark a big win when this client hits a real milestone — you can mark several. It invites a testimonial in their portal; once they submit one, we stop asking.${client.first_big_win_flag ? '<br><strong style="color:var(--navy);">✓ A win is currently flagged.</strong>' : ''}</p>
+        <button onclick="markBigWin('${client.id}')" id="bigWinBtn-${client.id}" style="padding:8px 18px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;border:none;background:var(--navy);color:#fff;">★ Mark a big win</button>
+        ${client.first_big_win_flag ? `<a href="#" onclick="markBigWin('${client.id}', false);return false;" style="font-size:12px;color:var(--gray-600);margin-left:12px;">Clear flag</a>` : ''}
+      </div>
       ${client.plan_submitted_at ? `
       <div style="background:white;border-radius:8px;padding:18px 20px;margin-bottom:18px;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);margin-bottom:10px;">Metric Progress</div>
@@ -2889,17 +2895,6 @@ function renderProfileSection(section, client, checkins) {
           <button onclick="regenerateToken('${client.id}')" id="regenBtn-${client.id}" style="padding:7px 14px;background:none;border:1px solid #e65100;color:#e65100;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Regenerate Link</button>
         </div>
         <div id="regenMsg-${client.id}" style="margin-top:8px;"></div>
-      </div>
-      <div class="detail-section" id="bigwin-section-${client.id}">
-        <h4>Client Win</h4>
-        <p style="font-size:12px;color:var(--gray-600);margin-bottom:10px;">
-          Mark a big win when this client hits a real milestone — you can mark several over the engagement. It invites a testimonial in their portal; once they submit one, we stop asking.${client.first_big_win_flag ? '<br><strong style="color:var(--navy);">✓ A win is currently flagged.</strong>' : ''}
-        </p>
-        <button onclick="markBigWin('${client.id}')" id="bigWinBtn-${client.id}"
-          style="padding:8px 18px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;border:none;background:var(--navy);color:#fff;">
-          ★ Mark a big win
-        </button>
-        ${client.first_big_win_flag ? `<a href="#" onclick="markBigWin('${client.id}', false);return false;" style="font-size:12px;color:var(--gray-600);margin-left:12px;">Clear flag</a>` : ''}
       </div>
       <div class="detail-section" id="projcc-section-${client.id}">
         <h4>Project CC (this client only)</h4>
