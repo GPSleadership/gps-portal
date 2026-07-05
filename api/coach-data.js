@@ -190,9 +190,58 @@ export default async function handler(req, res) {
     if (action === 'sponsor-get-for-client') {
       const clientId = String(body.client_id || '');
       if (!clientId) return res.status(400).json({ error: 'client_id required' });
-      const r = await sb(`/rest/v1/sponsors?linked_client_id=eq.${encodeURIComponent(clientId)}&active=eq.true&select=id,name,email,sponsor_token,coach_summary,coach_summary_updated_at,sponsor_actions,confidentiality_mode&order=created_at.asc`);
-      const rows = r.ok ? await r.json() : [];
-      return res.status(200).json({ ok: true, sponsors: rows });
+      const sel = 'id,name,email,linked_client_id,sponsor_token,coach_summary,coach_summary_updated_at,sponsor_actions,confidentiality_mode';
+      // Sponsors linked directly (single-leader) OR via the join table (multi-leader).
+      const dr = await sb(`/rest/v1/sponsors?linked_client_id=eq.${encodeURIComponent(clientId)}&active=eq.true&select=${sel}&order=created_at.asc`);
+      const directRows = dr.ok ? await dr.json() : [];
+      const jr = await sb(`/rest/v1/sponsor_leaders?client_id=eq.${encodeURIComponent(clientId)}&select=sponsor_id`);
+      const joinIds = (jr.ok ? await jr.json() : []).map(x => x.sponsor_id);
+      let joinRows = [];
+      if (joinIds.length) {
+        const js = await sb(`/rest/v1/sponsors?id=in.(${joinIds.map(encodeURIComponent).join(',')})&active=eq.true&select=${sel}`);
+        joinRows = js.ok ? await js.json() : [];
+      }
+      const byId = {};
+      directRows.forEach(s => { byId[s.id] = Object.assign({ attached_here: 'primary' }, s); });
+      joinRows.forEach(s => { if (!byId[s.id]) byId[s.id] = Object.assign({ attached_here: 'join' }, s); });
+      const list = Object.values(byId);
+      // How many leaders each sponsor follows (primary link + join rows).
+      for (const s of list) {
+        const cr = await sb(`/rest/v1/sponsor_leaders?sponsor_id=eq.${encodeURIComponent(s.id)}&select=id`);
+        const n = (cr.ok ? await cr.json() : []).length;
+        s.leader_count = (s.linked_client_id ? 1 : 0) + n;
+      }
+      return res.status(200).json({ ok: true, sponsors: list });
+    }
+    // Attach this leader to an existing sponsor (multi-leader). By sponsor_id or
+    // sponsor_email. Creates a sponsor_leaders row; the sponsor's follow-along
+    // roster then includes this leader. Idempotent (unique sponsor+client).
+    if (action === 'sponsor-attach-leader') {
+      const clientId = String(body.client_id || '');
+      if (!clientId) return res.status(400).json({ error: 'client_id required' });
+      let sponsorId = String(body.sponsor_id || '');
+      if (!sponsorId) {
+        const email = String(body.sponsor_email || '').trim().toLowerCase();
+        if (!email) return res.status(400).json({ error: 'sponsor_id or sponsor_email required' });
+        const sr = await sb(`/rest/v1/sponsors?email=eq.${encodeURIComponent(email)}&active=eq.true&select=id&limit=1`);
+        const s = (sr.ok ? await sr.json() : [])[0];
+        if (!s) return res.status(404).json({ error: 'No active sponsor with that email. Create the sponsor first (Add → Sponsor).' });
+        sponsorId = s.id;
+      }
+      const ins = await sb('/rest/v1/sponsor_leaders', 'POST', { sponsor_id: sponsorId, client_id: clientId },
+        { Prefer: 'resolution=ignore-duplicates,return=minimal' });
+      if (!ins.ok) { const d = await ins.json().catch(() => ({})); return res.status(500).json({ error: 'Could not attach leader to sponsor', detail: d }); }
+      return res.status(200).json({ ok: true });
+    }
+    // Detach this leader from a sponsor's join-table roster (does not touch a
+    // sponsor's primary linked_client_id).
+    if (action === 'sponsor-detach-leader') {
+      const clientId = String(body.client_id || '');
+      const sponsorId = String(body.sponsor_id || '');
+      if (!clientId || !sponsorId) return res.status(400).json({ error: 'sponsor_id and client_id required' });
+      const r = await sb(`/rest/v1/sponsor_leaders?sponsor_id=eq.${encodeURIComponent(sponsorId)}&client_id=eq.${encodeURIComponent(clientId)}`, 'DELETE', null, { Prefer: 'return=minimal' });
+      if (!r.ok) return res.status(500).json({ error: 'Could not detach leader' });
+      return res.status(200).json({ ok: true });
     }
     if (action === 'sponsor-save-content') {
       const sponsorId = String(body.sponsor_id || '');

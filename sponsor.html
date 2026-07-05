@@ -112,12 +112,31 @@
   .state h2 { font-family:'Montserrat'; font-weight:700; font-size:19px; color:var(--navy); margin-bottom:10px; }
   .state p { font-size:14px; max-width:400px; margin:0 auto; line-height:1.6; }
   .hidden { display:none !important; }
+
+  /* Roster (multi-leader) */
+  .rosterSub { font-size:14px; color:var(--mid); line-height:1.6; margin-bottom:18px; }
+  .lcard { display:flex; align-items:center; gap:14px; width:100%; text-align:left; background:#fff; border:1px solid var(--line); border-top:3px solid var(--teal); border-radius:12px; padding:16px 18px; margin-bottom:12px; cursor:pointer; transition:box-shadow .15s, transform .05s; font-family:inherit; }
+  .lcard:hover { box-shadow:0 4px 16px rgba(0,67,105,0.10); }
+  .lcard:active { transform:translateY(1px); }
+  .lcard .lav { width:44px; height:44px; border-radius:50%; background:var(--navy); color:#fff; font-family:'Montserrat'; font-weight:700; font-size:16px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .lcard .lmain { flex:1; min-width:0; }
+  .lcard .lname { font-family:'Montserrat'; font-weight:700; font-size:15.5px; color:var(--navy); }
+  .lcard .lorg { font-size:12.5px; color:var(--mid); margin-top:2px; }
+  .lcard .lchip { font-size:11.5px; font-weight:700; border-radius:11px; padding:3px 11px; white-space:nowrap; }
+  .lcard .lchip.ok { background:#E7F3EC; color:#0F6E56; }
+  .lcard .lchip.att { background:#FBEAE6; color:#8F560F; }
+  .lcard .lchip.pre { background:#EEF1F4; color:var(--mid); }
+  .lcard .larrow { font-size:20px; color:var(--teal-text); flex-shrink:0; }
+  .backbar { background:none; border:none; color:var(--teal-text); font-family:'Montserrat'; font-weight:700; font-size:13px; cursor:pointer; padding:0; margin-bottom:14px; }
+  .backbar:hover { text-decoration:underline; }
 </style>
 </head>
 <body>
   <div class="topaccent" aria-hidden="true"></div>
   <div class="wrap">
     <div class="brand"><span class="badge">GPS</span><span class="cap">GPS Leadership Solutions</span><img id="orgLogo" class="orglogo hidden" alt="" /></div>
+
+    <button id="backToRoster" class="backbar hidden" type="button" onclick="window.__loadRoster()">&larr; All leaders</button>
 
     <div id="loading" class="state"><p>Loading…</p></div>
 
@@ -133,6 +152,15 @@
       <h2>Coaching hasn't started yet</h2>
       <p><span id="ncName">This leader</span>'s 90-day progress will appear here once their coaching sprint begins. You'll get a note when it does.</p>
     </div>
+
+    <!-- Roster (multi-leader sponsors) -->
+    <main id="rosterState" class="hidden">
+      <p class="eyebrow">Sponsored by you</p>
+      <h1 class="title" id="rosterTitle">Your leaders</h1>
+      <p class="rosterSub" id="rosterSub">Choose a leader to see their 90-day progress and the recommendations you agreed to.</p>
+      <div id="rosterList"></div>
+      <p class="conf" style="margin-top:20px;">This view shows aggregate progress only. Individual reflections, session notes, and confidential feedback stay between each leader and their coach.</p>
+    </main>
 
     <main id="content" class="hidden">
       <div id="previewBanner" class="previewban hidden">Preview — this is exactly what the sponsor sees.</div>
@@ -232,24 +260,64 @@
   }
 
   if (!token) { hide('loading'); show('errorState'); return; }
-  var reqBody = { action:'get', token:token };
-  if (coachSession) reqBody.coach_session = coachSession;
 
-  fetch('/api/sponsor', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(reqBody) })
-    .then(function (r) { return r.json().then(function (j) { return { ok:r.ok, j:j }; }); })
-    .then(function (res) {
-      hide('loading');
-      if (!res.ok) { show('errorState'); return; }
-      if (res.j.unlinked) { show('unlinkedState'); return; }
-      if (res.j.not_coaching) {
-        var h = res.j.header || {};
-        if (h.leader_first_name) document.getElementById('ncName').textContent = h.leader_first_name;
-        if (h.org_logo_url) { var lg = document.getElementById('orgLogo'); lg.src = h.org_logo_url; lg.alt = (h.org_name ? h.org_name + ' logo' : ''); lg.classList.remove('hidden'); }
-        show('notCoachingState'); return;
-      }
-      render(res.j); show('content');
-    })
-    .catch(function () { hide('loading'); show('errorState'); });
+  var MAINS = ['loading','errorState','unlinkedState','notCoachingState','rosterState','content'];
+  function only(id) { MAINS.forEach(function (m) { document.getElementById(m).classList.add('hidden'); }); if (id) show(id); }
+
+  // Load the sponsor view. leaderId null = default (roster if multi-leader, else
+  // the single leader). A leaderId drills into ONE leader's follow-along.
+  function load(leaderId) {
+    only('loading');
+    document.getElementById('backToRoster').classList.add('hidden');
+    var reqBody = { action:'get', token:token };
+    if (coachSession) reqBody.coach_session = coachSession;
+    if (leaderId) reqBody.leader_id = leaderId;
+    fetch('/api/sponsor', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(reqBody) })
+      .then(function (r) { return r.json().then(function (j) { return { ok:r.ok, j:j }; }); })
+      .then(function (res) {
+        if (!res.ok) { only('errorState'); return; }
+        if (res.j.unlinked) { only('unlinkedState'); return; }
+        if (res.j.roster) { renderRoster(res.j); only('rosterState'); return; }
+        // A drilled-in leader (multi) always gets a way back to the roster.
+        if (res.j.multi) document.getElementById('backToRoster').classList.remove('hidden');
+        if (res.j.not_coaching) {
+          var h = res.j.header || {};
+          if (h.leader_first_name) document.getElementById('ncName').textContent = h.leader_first_name;
+          if (h.org_logo_url) { var lg = document.getElementById('orgLogo'); lg.src = h.org_logo_url; lg.alt = (h.org_name ? h.org_name + ' logo' : ''); lg.classList.remove('hidden'); }
+          only('notCoachingState');
+          if (res.j.multi) document.getElementById('backToRoster').classList.remove('hidden');
+          return;
+        }
+        render(res.j);
+        only('content');
+        if (res.j.multi) document.getElementById('backToRoster').classList.remove('hidden');
+      })
+      .catch(function () { only('errorState'); });
+  }
+  window.__loadRoster = function () { load(null); };
+
+  function renderRoster(d) {
+    var h = d.header || {};
+    document.getElementById('rosterTitle').textContent = h.sponsor_name ? (h.sponsor_name.split(/\s+/)[0] + "'s leaders") : 'Your leaders';
+    var list = document.getElementById('rosterList');
+    var cards = (d.roster || []);
+    if (!cards.length) { list.innerHTML = '<p class="rosterSub">No leaders are linked yet.</p>'; return; }
+    list.innerHTML = cards.map(function (L) {
+      var initials = (L.full_name || L.first_name || '?').split(/\s+/).map(function (w) { return w.charAt(0); }).slice(0,2).join('').toUpperCase();
+      var chipCls = L.not_coaching ? 'pre' : (L.chip === 'needs_attention' ? 'att' : 'ok');
+      var chipTxt = L.not_coaching ? 'Not started' : (L.chip === 'needs_attention' ? 'Needs a look' : 'On track');
+      return '<button class="lcard" onclick="window.__loadLeader(\'' + L.leader_id + '\')">' +
+        '<span class="lav" aria-hidden="true">' + esc(initials) + '</span>' +
+        '<span class="lmain"><span class="lname">' + esc(L.full_name || L.first_name) + '</span>' +
+        (L.org_name ? '<span class="lorg">' + esc(L.org_name) + '</span>' : '') + '</span>' +
+        '<span class="lchip ' + chipCls + '">' + chipTxt + '</span>' +
+        '<span class="larrow" aria-hidden="true">&rsaquo;</span>' +
+      '</button>';
+    }).join('');
+  }
+  window.__loadLeader = function (id) { load(id); };
+
+  load(null);
 
   // Restrained light trend: thin teal line + soft fill on white. role=img with an
   // aria-label so the trend is described to assistive tech (never color-only).
@@ -274,6 +342,10 @@
   }
 
   function render(d) {
+    // Reset optional sections first — so drilling between leaders never leaves a
+    // previous leader's focus, recs, ratings, or pulse showing.
+    ['previewBanner','pulseReady','pulsePending','yoursBlock','yoursComment','consistRow','focusCard','recsCard','helpCard','orgLogo']
+      .forEach(function (id) { hide(id); });
     if (d.coach_preview) show('previewBanner');
     var first = (d.header && d.header.leader_first_name) || 'Your leader';
     document.getElementById('hdrTitle').textContent = first + "'s 90-Day Progress";

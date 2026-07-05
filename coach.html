@@ -3093,9 +3093,21 @@ async function loadSponsorPanel(clientId) {
     if (r.ok && Array.isArray(j.sponsors)) sponsors = j.sponsors;
   } catch (_) { /* leave empty */ }
 
+  var attachBox = ''
+    + '<div style="border:1px dashed var(--gray-300);border-radius:8px;padding:12px 14px;margin-top:4px;background:#FAFBFC;">'
+    +   '<label style="font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--gray-600);display:block;margin-bottom:6px;">Link this leader to another sponsor</label>'
+    +   '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'
+    +     '<input id="sp-attach-' + clientId + '" type="email" placeholder="sponsor@email.com" style="flex:1;min-width:190px;padding:7px 10px;border:1px solid var(--gray-300);border-radius:6px;font-size:13px;">'
+    +     '<button onclick="attachLeaderToSponsor(\'' + clientId + '\')" style="font-size:12px;background:var(--teal);color:#fff;border:none;border-radius:6px;padding:8px 14px;cursor:pointer;font-weight:700;font-family:Montserrat,sans-serif;">Link sponsor</button>'
+    +   '</div>'
+    +   '<p style="font-size:11px;color:var(--gray-600);margin-top:6px;">The sponsor must already exist (Add &rarr; Sponsor). One sponsor can follow several leaders — they\'ll see a roster and drill into each.</p>'
+    +   '<div id="sp-attach-msg-' + clientId + '" style="font-size:12px;margin-top:6px;"></div>'
+    + '</div>';
+
   if (!sponsors.length) {
     el.innerHTML = '<h4>Sponsor Follow-Along</h4>'
-      + '<p style="font-size:12px;color:var(--gray-600);">No sponsor is linked to this leader yet. Provision one via the Activate 90-Day Sprint flow (or Add &rarr; Sponsor), and their follow-along page and controls appear here.</p>';
+      + '<p style="font-size:12px;color:var(--gray-600);margin-bottom:12px;">No sponsor is linked to this leader yet. Provision one via the Activate 90-Day Sprint flow (or Add &rarr; Sponsor), or link an existing sponsor below.</p>'
+      + attachBox;
     return;
   }
 
@@ -3105,8 +3117,12 @@ async function loadSponsorPanel(clientId) {
     var updated = s.coach_summary_updated_at ? ('Last updated ' + new Date(s.coach_summary_updated_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})) : 'Not written yet';
     return ''
       + '<div style="border:1px solid var(--gray-300);border-radius:8px;padding:14px;margin-bottom:12px;">'
-      +   '<div style="font-size:13px;font-weight:700;color:var(--navy);">' + spEsc(s.name || 'Sponsor') + '</div>'
-      +   '<div style="font-size:11px;color:var(--gray-600);margin-bottom:12px;">' + spEsc(s.email || '') + ' &middot; ' + updated + '</div>'
+      +   '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">'
+      +     '<div><div style="font-size:13px;font-weight:700;color:var(--navy);">' + spEsc(s.name || 'Sponsor') + '</div>'
+      +     '<div style="font-size:11px;color:var(--gray-600);margin-bottom:12px;">' + spEsc(s.email || '') + ' &middot; ' + updated + '</div></div>'
+      +     ((s.leader_count && s.leader_count > 1) ? '<span style="font-size:10px;font-weight:700;background:#EEF3F1;color:var(--navy);border-radius:10px;padding:3px 9px;white-space:nowrap;">Follows ' + s.leader_count + ' leaders</span>' : '')
+      +   '</div>'
+      +   (s.attached_here === 'join' ? '<div style="font-size:11px;color:var(--gray-600);margin:-6px 0 10px;">Linked to this leader &middot; <a href="#" onclick="detachLeaderFromSponsor(\'' + s.id + '\',\'' + clientId + '\');return false;" style="color:var(--red);">Unlink</a></div>' : '')
       +   '<label style="font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--gray-600);display:block;margin-bottom:4px;">From your coach (summary)</label>'
       +   '<textarea id="sp-sum-' + s.id + '" rows="4" placeholder="What the sponsor should know after the latest session." style="width:100%;padding:8px 10px;border:1px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:Open Sans,sans-serif;resize:vertical;">' + spEsc(s.coach_summary || '') + '</textarea>'
       +   '<label style="font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--gray-600);display:block;margin:12px 0 4px;">How you can help (1&ndash;2 sponsor actions)</label>'
@@ -3123,7 +3139,34 @@ async function loadSponsorPanel(clientId) {
       +   '</div>'
       +   '<div id="sp-msg-' + s.id + '" style="font-size:12px;margin-top:8px;"></div>'
       + '</div>';
-  }).join('');
+  }).join('') + attachBox;
+}
+
+async function attachLeaderToSponsor(clientId) {
+  const inp = document.getElementById('sp-attach-' + clientId);
+  const msg = document.getElementById('sp-attach-msg-' + clientId);
+  const email = inp ? inp.value.trim() : '';
+  if (!email) { if (msg) { msg.textContent = 'Enter the sponsor\'s email.'; msg.style.color = 'var(--red)'; } return; }
+  if (msg) { msg.textContent = 'Linking…'; msg.style.color = 'var(--gray-600)'; }
+  try {
+    const r = await fetch('/api/coach-data', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ action:'sponsor-attach-leader', client_id: clientId, sponsor_email: email, session: getCoachSessionToken() }) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Could not link');
+    if (msg) { msg.textContent = 'Linked.'; msg.style.color = 'var(--teal)'; }
+    loadSponsorPanel(clientId);
+  } catch (e) { if (msg) { msg.textContent = e.message; msg.style.color = 'var(--red)'; } }
+}
+async function detachLeaderFromSponsor(sponsorId, clientId) {
+  if (!confirm('Unlink this leader from that sponsor? The sponsor will no longer see this leader.')) return;
+  try {
+    const r = await fetch('/api/coach-data', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ action:'sponsor-detach-leader', sponsor_id: sponsorId, client_id: clientId, session: getCoachSessionToken() }) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Could not unlink');
+    if (typeof toast === 'function') toast('Unlinked');
+    loadSponsorPanel(clientId);
+  } catch (e) { alert(e.message); }
 }
 
 async function saveSponsorContent(sponsorId) {
