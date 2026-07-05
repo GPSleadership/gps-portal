@@ -6451,20 +6451,29 @@ function renderHistory(checkins, client) {
       : c.completion_status === 'No' ? 'completion-no' : '';
 
     const date = c.submitted_at ? new Date(c.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
+    const metricCell = (client.metric_1_type === 'ratio' && c.checkin_ratio_num != null && c.checkin_ratio_denom != null) ? `${c.checkin_ratio_num}/${c.checkin_ratio_denom} (${Math.round(c.checkin_ratio_num/c.checkin_ratio_denom*100)}%)` : (c.metric_value ?? '—');
+    const actShort = c.planned_action ? (c.planned_action.length > 55 ? escD(c.planned_action.substring(0, 55)) + '…' : escD(c.planned_action)) : '—';
+    const hasDetail = !!(c.planned_action || c.notes || c.completion_barrier);
+    const detailId = 'ckd-' + c.week_number + '-' + idx;
+    const detailRow = hasDetail ? `<tr class="ck-detail" id="${detailId}" style="display:none;"><td colspan="5" style="background:var(--light-sand,#F7F4EE);padding:14px 16px;">
+        ${c.planned_action ? `<div style="margin-bottom:11px;"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--teal);margin-bottom:3px;">This week's action</div><div style="font-size:13.5px;color:var(--navy);line-height:1.55;">${escD(c.planned_action)}</div></div>` : ''}
+        ${c.notes ? `<div style="margin-bottom:11px;"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--teal);margin-bottom:3px;">Your reflection</div><div style="font-size:13.5px;color:var(--navy);line-height:1.55;white-space:pre-wrap;">${escD(c.notes)}</div></div>` : ''}
+        ${c.completion_barrier ? `<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--teal);margin-bottom:3px;">What got in the way</div><div style="font-size:13.5px;color:var(--navy);line-height:1.55;">${escD(c.completion_barrier)}</div></div>` : ''}
+      </td></tr>` : '';
 
-    return `<tr class="progress-row${idx >= 2 ? ' beyond-recent' : ''}">
+    return `<tr class="progress-row${idx >= 2 ? ' beyond-recent' : ''}"${hasDetail ? ` onclick="toggleCheckinDetail('${detailId}')" style="cursor:pointer;"` : ''}>
       <td style="font-weight:700;color:var(--navy);">Wk ${c.week_number}</td>
       <td>${date}</td>
-      <td style="font-weight:700;">${(client.metric_1_type === 'ratio' && c.checkin_ratio_num != null && c.checkin_ratio_denom != null) ? `${c.checkin_ratio_num}/${c.checkin_ratio_denom} (${Math.round(c.checkin_ratio_num/c.checkin_ratio_denom*100)}%)` : (c.metric_value ?? '—')}</td>
+      <td style="font-weight:700;">${metricCell}</td>
       <td class="${completionClass}">${c.completion_status || '—'}</td>
-      <td style="color:var(--gray-600);font-size:12px;">${c.planned_action ? c.planned_action.substring(0, 60) + (c.planned_action.length > 60 ? '…' : '') : '—'}</td>
-    </tr>`;
+      <td style="color:var(--gray-600);font-size:12px;">${actShort}${hasDetail ? ` <span style="color:var(--teal);font-weight:700;white-space:nowrap;">· details ▾</span>` : ''}</td>
+    </tr>${detailRow}`;
   }).join('');
 
   return `
     <div class="card sand-top progress-card">
       <div class="card-title">My Progress</div>
-      <div class="card-subtitle">${checkins.length} check-in${checkins.length !== 1 ? 's' : ''} completed</div>
+      <div class="card-subtitle">${checkins.length} check-in${checkins.length !== 1 ? 's' : ''} · tap any week to read what you wrote</div>
       <div style="overflow-x:auto;">
         <table class="history-table">
           <thead>
@@ -6490,6 +6499,14 @@ function toggleProgress(link) {
   if (!card) return;
   const showAll = card.classList.toggle('show-all');
   link.textContent = showAll ? 'Show less' : 'View full progress history';
+}
+
+// Expand a check-in row to show the full action, reflection, and barrier the
+// leader wrote that week — so they can read back exactly what they submitted.
+function toggleCheckinDetail(id) {
+  const d = document.getElementById(id);
+  if (!d) return;
+  d.style.display = (d.style.display === 'none' || !d.style.display) ? 'table-row' : 'none';
 }
 
 
