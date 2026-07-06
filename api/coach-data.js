@@ -243,6 +243,39 @@ export default async function handler(req, res) {
       if (!r.ok) return res.status(500).json({ error: 'Could not detach leader' });
       return res.status(200).json({ ok: true });
     }
+    // ── Sponsor authorizations ledger (Phase 3) ─────────────────────────────
+    // Every bundled approval writes a sponsor_authorizations row. This lists them,
+    // enriched with sponsor / org / leader names, so the coach has one place to see
+    // who authorized how many seats, the billing choice, and whether it's been paid.
+    if (action === 'authorizations-list') {
+      const r = await sb('/rest/v1/sponsor_authorizations?select=id,sponsor_id,team_id,leader_client_ids,seat_count,billing_choice,billing_note,paid_at,paid_by,created_at&order=created_at.desc&limit=200');
+      const rows = r.ok ? await r.json() : [];
+      const uniq = (a) => Array.from(new Set(a.filter(Boolean)));
+      const sponsorIds = uniq(rows.map(x => x.sponsor_id));
+      const teamIds = uniq(rows.map(x => x.team_id));
+      const clientIds = uniq(rows.reduce((acc, x) => acc.concat(Array.isArray(x.leader_client_ids) ? x.leader_client_ids : []), []));
+      const sMap = {}, tMap = {}, cMap = {};
+      if (sponsorIds.length) { const sr = await sb(`/rest/v1/sponsors?id=in.(${sponsorIds.map(encodeURIComponent).join(',')})&select=id,name`); (sr.ok ? await sr.json() : []).forEach(s => { sMap[s.id] = s.name; }); }
+      if (teamIds.length) { const tr = await sb(`/rest/v1/teams?id=in.(${teamIds.map(encodeURIComponent).join(',')})&select=id,name,client_org_name`); (tr.ok ? await tr.json() : []).forEach(t => { tMap[t.id] = t.client_org_name || t.name; }); }
+      if (clientIds.length) { const cr = await sb(`/rest/v1/clients?id=in.(${clientIds.map(encodeURIComponent).join(',')})&select=id,name`); (cr.ok ? await cr.json() : []).forEach(c => { cMap[c.id] = c.name; }); }
+      const out = rows.map(x => ({
+        id: x.id, seat_count: x.seat_count, billing_choice: x.billing_choice, billing_note: x.billing_note,
+        paid_at: x.paid_at, created_at: x.created_at,
+        sponsor_name: sMap[x.sponsor_id] || '—',
+        org_name: tMap[x.team_id] || '—',
+        leader_names: (Array.isArray(x.leader_client_ids) ? x.leader_client_ids : []).map(id => cMap[id] || 'Unknown leader'),
+      }));
+      return res.status(200).json({ ok: true, authorizations: out });
+    }
+    if (action === 'authorization-mark-paid') {
+      const authId = String(body.auth_id || '');
+      if (!authId) return res.status(400).json({ error: 'auth_id required' });
+      const paid = body.paid === true;
+      const upd = paid ? { paid_at: new Date().toISOString(), paid_by: 'coach' } : { paid_at: null, paid_by: null };
+      const r = await sb(`/rest/v1/sponsor_authorizations?id=eq.${encodeURIComponent(authId)}`, 'PATCH', upd, { Prefer: 'return=minimal' });
+      if (!r.ok) return res.status(500).json({ error: 'Could not update payment status' });
+      return res.status(200).json({ ok: true, paid });
+    }
     if (action === 'sponsor-save-content') {
       const sponsorId = String(body.sponsor_id || '');
       if (!sponsorId) return res.status(400).json({ error: 'sponsor_id required' });

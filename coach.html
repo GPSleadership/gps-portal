@@ -5108,9 +5108,65 @@ async function renderOrganizations(){
       '<div style="font-family:Montserrat,sans-serif;font-size:18px;font-weight:800;color:#004369;">Organizations</div>'+
       '<button id="orgSectionNew" style="padding:8px 16px;background:#01949A;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;font-family:Montserrat,sans-serif;">+ New organization</button>'+
     '</div>'+
-    '<div id="orgSectionList" style="background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.06);overflow:hidden;"><table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#F7F4EE;text-align:left;color:#5a6b76;font-size:11px;text-transform:uppercase;letter-spacing:.4px;"><th style="padding:10px;">Organization</th><th style="padding:10px;">Industry</th><th style="padding:10px;">Website</th><th style="padding:10px;">Logo</th><th style="padding:10px;"></th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+    '<div id="orgSectionList" style="background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.06);overflow:hidden;"><table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#F7F4EE;text-align:left;color:#5a6b76;font-size:11px;text-transform:uppercase;letter-spacing:.4px;"><th style="padding:10px;">Organization</th><th style="padding:10px;">Industry</th><th style="padding:10px;">Website</th><th style="padding:10px;">Logo</th><th style="padding:10px;"></th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<div id="authLedger" style="margin-top:30px;"><div style="padding:16px;color:#5a6b76;font-size:13px;">Loading authorizations…</div></div>';
   var nb = document.getElementById('orgSectionNew'); if(nb) nb.onclick = function(){ if(window.openOrgModal) openOrgModal(); };
   Array.prototype.forEach.call(host.querySelectorAll('.org-edit-btn'), function(b){ b.onclick = function(){ if(window.openOrgModal) openOrgModal(b.getAttribute('data-id')); }; });
+  loadAuthorizations();
+}
+
+// Sponsor authorizations ledger — who authorized coaching, seat count, billing
+// choice, and manual paid tracking. Payment itself happens outside the system;
+// the coach flips "Mark paid" once the money is confirmed.
+async function loadAuthorizations(){
+  var box = document.getElementById('authLedger'); if(!box) return;
+  var list = [];
+  try {
+    var r = await fetch('/api/coach-data', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ action:'authorizations-list', session: getCoachSessionToken() }) });
+    var j = await r.json();
+    if (r.ok && Array.isArray(j.authorizations)) list = j.authorizations;
+    else if (!r.ok) throw new Error(j.error || 'Failed');
+  } catch(e){ box.innerHTML = '<div style="padding:14px;color:#dc2626;font-size:13px;">Could not load authorizations: '+esc(e.message)+'</div>'; return; }
+
+  var head = '<div style="font-family:Montserrat,sans-serif;font-size:16px;font-weight:800;color:#004369;margin-bottom:4px;">Sponsor Authorizations</div>'+
+    '<div style="font-size:12px;color:#5a6b76;margin-bottom:14px;">Each time a sponsor approves coaching for their people, it lands here. Payment happens on your payment link or via contract/invoice — flip “Mark paid” once you’ve confirmed the money.</div>';
+  if(!list.length){ box.innerHTML = head + '<div style="background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.06);padding:20px;color:#5a6b76;font-size:13px;text-align:center;">No authorizations yet. When a sponsor approves people in their Decision Room, they’ll show up here.</div>'; return; }
+
+  var rows = list.map(function(a){
+    var when = a.created_at ? new Date(a.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—';
+    var leaders = (a.leader_names||[]).map(esc).join(', ') || '—';
+    var bill = a.billing_choice==='online' ? '<span style="color:#0F6E56;font-weight:700;">Pay online</span>' : (a.billing_choice==='contract' ? '<span style="color:#8A560F;font-weight:700;">Contract / SOW</span>' : esc(a.billing_choice||'—'));
+    var note = a.billing_note ? '<div style="font-size:11px;color:#94a3b8;margin-top:2px;">'+esc(a.billing_note)+'</div>' : '';
+    var paid = !!a.paid_at;
+    var statusCell = paid
+      ? '<span style="font-size:12px;font-weight:700;color:#0F6E56;">✓ Paid '+(a.paid_at?new Date(a.paid_at).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'')+'</span>'
+      : '<span style="font-size:12px;font-weight:700;color:#B45309;">Awaiting payment</span>';
+    var btn = paid
+      ? '<button onclick="markAuthPaid(\''+a.id+'\',false)" style="font-size:11px;background:#fff;border:1px solid #dbe3e6;color:#5a6b76;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:600;">Undo</button>'
+      : '<button onclick="markAuthPaid(\''+a.id+'\',true)" style="font-size:11px;background:#01949A;border:none;color:#fff;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:700;">Mark paid</button>';
+    return '<tr style="border-top:1px solid #dbe3e6;">'+
+      '<td style="padding:10px;color:#5a6b76;white-space:nowrap;">'+when+'</td>'+
+      '<td style="padding:10px;"><div style="font-weight:700;color:#004369;">'+esc(a.sponsor_name)+'</div><div style="font-size:11px;color:#5a6b76;">'+esc(a.org_name)+'</div></td>'+
+      '<td style="padding:10px;">'+leaders+'</td>'+
+      '<td style="padding:10px;text-align:center;font-weight:700;color:#004369;">'+esc(String(a.seat_count))+'</td>'+
+      '<td style="padding:10px;">'+bill+note+'</td>'+
+      '<td style="padding:10px;">'+statusCell+'</td>'+
+      '<td style="padding:10px;text-align:right;">'+btn+'</td>'+
+    '</tr>';
+  }).join('');
+  box.innerHTML = head +
+    '<div style="background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.06);overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#F7F4EE;text-align:left;color:#5a6b76;font-size:11px;text-transform:uppercase;letter-spacing:.4px;"><th style="padding:10px;">Date</th><th style="padding:10px;">Sponsor</th><th style="padding:10px;">Leaders authorized</th><th style="padding:10px;text-align:center;">Seats</th><th style="padding:10px;">Billing</th><th style="padding:10px;">Status</th><th style="padding:10px;"></th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+async function markAuthPaid(authId, paid){
+  try {
+    var r = await fetch('/api/coach-data', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ action:'authorization-mark-paid', auth_id: authId, paid: paid, session: getCoachSessionToken() }) });
+    var j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Failed');
+    if (typeof toast === 'function') toast(paid ? 'Marked paid' : 'Marked unpaid');
+    loadAuthorizations();
+  } catch(e){ alert('Could not update: ' + e.message); }
 }
 
 // ── Global search: jump to a client, diagnostic, or team by name/email ──────
