@@ -387,6 +387,10 @@
       .section-nav::-webkit-scrollbar { display: none; }
       .section-tab { white-space: nowrap; flex: 0 0 auto; padding: 10px 14px; }
       table { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      /* Toolbar + filter groups wrap instead of pushing off-screen. */
+      .toolbar-right { flex-wrap: wrap; }
+      .toolbar-title { font-size: 16px; }
+      #clientFilterBar > div { flex-wrap: wrap; }
     }
     html, body { overflow-x: hidden; }
     img { max-width: 100%; }
