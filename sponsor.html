@@ -146,6 +146,14 @@
   .card.hero .verdict .vs { color:#e8f0f5; }
   /* Editorial serif on the headline stat numbers, matching the diagnostic KPI cards. */
   .pulse .word, .yours .yvn { font-family:Georgia,'Times New Roman',serif; }
+
+  /* Committed-actions progress + footer */
+  .recsProg { height:6px; background:#E4ECF0; border-radius:6px; overflow:hidden; margin:2px 0 6px; }
+  .recsProg > span { display:block; height:100%; background:var(--teal); border-radius:6px; transition:width .25s ease; }
+  .recsProgTxt { font-size:12px; font-weight:700; letter-spacing:.02em; color:var(--teal-text); margin-bottom:14px; }
+  .recsFoot { font-size:12.5px; color:var(--mid); margin-top:14px; line-height:1.5; }
+  .rec .ract { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .rec .rdone { font-size:12px; font-weight:700; color:var(--teal-text); }
 </style>
 </head>
 <body>
@@ -234,11 +242,12 @@
         <ul class="beh" id="focusBeh"></ul>
       </section>
 
-      <!-- Agreed recommendations -->
+      <!-- Committed actions -->
       <section class="card recs hidden" id="recsCard" aria-labelledby="recsK">
-        <h2 class="k" id="recsK">Recommendations you agreed to</h2>
-        <p class="recsIntro" id="recsIntro">The changes we agreed to pursue alongside the coaching. You can mark the ones you own as complete; the rest are tracked by your coach.</p>
+        <h2 class="k" id="recsK">Your committed actions</h2>
+        <p class="recsIntro" id="recsIntro">The recommendations you committed to backing. Check each one off as it's done — this tracks your follow-through, just for you.</p>
         <div id="recsList"></div>
+        <p class="recsFoot" id="recsFoot" style="display:none;">Your coach reviews these with you each session. Nothing here is shared as complete until you check it.</p>
       </section>
 
       <!-- Coach note -->
@@ -486,34 +495,40 @@
   function renderRecsList(recs) {
     if (!recs || !recs.length) return;
     show('recsCard');
-    document.getElementById('recsList').innerHTML = recs.map(function (r) {
+    var total = recs.length, doneN = recs.filter(function (x) { return x.completed; }).length;
+    var pct = total ? Math.round(doneN / total * 100) : 0;
+    var head = '<div class="recsProg" aria-hidden="true"><span id="recsProgFill" style="width:' + pct + '%"></span></div>'
+      + '<div class="recsProgTxt" id="recsProgTxt">' + doneN + ' of ' + total + ' committed action' + (total === 1 ? '' : 's') + ' complete</div>';
+    var body = recs.map(function (r) {
       var done = !!r.completed;
       var parts = '<div class="rec' + (done ? ' done' : '') + '" id="rec-' + r.id + '">';
       parts += '<div class="rtitle">' + esc(r.title || 'Recommendation') + '</div>';
       if (r.description) parts += '<div class="rdesc">' + esc(r.description) + '</div>';
-      var meta = '';
-      if (r.timeframe) meta += '<span class="rtf">' + esc(r.timeframe) + '</span>';
-      if (r.owner === 'sponsor') meta += '<span class="rown">Yours to complete</span>';
-      else if (r.owner === 'leader') meta += '<span class="rown">On the leader</span>';
-      else if (r.owner === 'coach') meta += '<span class="rown">Coach-led</span>';
-      if (meta) parts += '<div class="rmeta">' + meta + '</div>';
+      if (r.timeframe) parts += '<div class="rmeta"><span class="rtf">' + esc(r.timeframe) + '</span></div>';
       if (r.coach_comment) parts += '<div class="rnote"><span class="rnk">Coach note</span>' + esc(r.coach_comment) + '</div>';
       parts += '<div class="ract">';
       if (done) {
-        var who = r.completed_by === 'sponsor' ? 'you' : 'your coach';
-        if (r.can_sponsor_complete && r.completed_by === 'sponsor') {
-          parts += '<button class="rbtn undo" onclick="completeSponsorRec(\'' + r.id + '\',false,this)">Undo complete</button>';
-        } else {
-          parts += '<span class="rdone">✓ Completed · marked by ' + who + '</span>';
-        }
-      } else if (r.can_sponsor_complete) {
-        parts += '<button class="rbtn" onclick="completeSponsorRec(\'' + r.id + '\',true,this)">Mark complete</button>';
+        parts += '<button class="rbtn undo" onclick="completeSponsorRec(\'' + r.id + '\',false,this)">Undo</button>';
+        parts += '<span class="rdone">✓ Done</span>';
       } else {
-        parts += '<span class="rtrack">Tracked by your coach</span>';
+        parts += '<button class="rbtn" onclick="completeSponsorRec(\'' + r.id + '\',true,this)">Mark done</button>';
       }
       parts += '</div></div>';
       return parts;
     }).join('');
+    document.getElementById('recsList').innerHTML = head + body;
+    var foot = document.getElementById('recsFoot'); if (foot) foot.style.display = '';
+  }
+
+  // Recompute the "X of Y complete" strip from the current DOM after a toggle.
+  function updateRecsProgress() {
+    var list = document.getElementById('recsList'); if (!list) return;
+    var all = list.querySelectorAll('.rec').length;
+    var doneN = list.querySelectorAll('.rec.done').length;
+    var txt = document.getElementById('recsProgTxt');
+    var fill = document.getElementById('recsProgFill');
+    if (txt) txt.textContent = doneN + ' of ' + all + ' committed action' + (all === 1 ? '' : 's') + ' complete';
+    if (fill) fill.style.width = (all ? Math.round(doneN / all * 100) : 0) + '%';
   }
 
   // Sponsor completes/undoes ONE of their own recommendations. The server
@@ -529,11 +544,12 @@
         if (card) {
           if (complete) {
             card.classList.add('done');
-            card.querySelector('.ract').innerHTML = '<button class="rbtn undo" onclick="completeSponsorRec(\'' + recId + '\',false,this)">Undo complete</button>';
+            card.querySelector('.ract').innerHTML = '<button class="rbtn undo" onclick="completeSponsorRec(\'' + recId + '\',false,this)">Undo</button><span class="rdone">✓ Done</span>';
           } else {
             card.classList.remove('done');
-            card.querySelector('.ract').innerHTML = '<button class="rbtn" onclick="completeSponsorRec(\'' + recId + '\',true,this)">Mark complete</button>';
+            card.querySelector('.ract').innerHTML = '<button class="rbtn" onclick="completeSponsorRec(\'' + recId + '\',true,this)">Mark done</button>';
           }
+          updateRecsProgress();
         }
       })
       .catch(function () { if (btn) btn.disabled = false; alert('Could not update. Please try again.'); });

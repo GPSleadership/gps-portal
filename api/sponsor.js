@@ -169,25 +169,46 @@ async function buildSponsorOwnRatings(sponsor, clientId) {
   return { relationship: stk.relationship || null, points, comment: latestComment };
 }
 
-// The agreed recommendations the sponsor selected during plan approval, tracked
-// through the engagement. Sponsor-safe: these are the coach-authored items the
-// sponsor already chose, plus the coach's comment and completion state. The
-// sponsor may only COMPLETE items where they own the action (responsible_party
-// = 'sponsor'); leader/coach items are the coach's ground truth (read-only here).
-async function buildRecommendations(clientId) {
-  const rows = await sbGet(`/rest/v1/recommendations?client_id=eq.${enc(clientId)}&status=eq.approved&select=id,short_title,description,timeframe,responsible_party,coach_comment,completed_at,completed_by,sort_order,created_at&order=sort_order.asc.nullslast,created_at.asc`);
+// The sponsor's commitment + completion state, read from sponsor_teams (where the
+// Decision Room records rec_commitments = { recId: 'commit'|'pass' } and, now,
+// rec_completions = { recId: { done, at } } for the sponsor's own follow-through).
+// This is what makes the follow-along show ONLY the items the sponsor committed to
+// and lets them check off their own — completion is sponsor-scoped and never
+// touches recommendations.completed_at (the coach's global plan status).
+async function getSponsorRecState(sponsor) {
+  const rows = await sbGet(`/rest/v1/sponsor_teams?sponsor_id=eq.${enc(sponsor.id)}&select=id,rec_commitments,rec_completions`);
+  const committed = new Set();
+  const completed = new Set();
+  const teamOfRec = {};
+  for (const row of (rows || [])) {
+    const rc = (row.rec_commitments && typeof row.rec_commitments === 'object') ? row.rec_commitments : {};
+    for (const rid in rc) { if (rc[rid] === 'commit') { committed.add(rid); if (!teamOfRec[rid]) teamOfRec[rid] = row.id; } }
+    const rk = (row.rec_completions && typeof row.rec_completions === 'object') ? row.rec_completions : {};
+    for (const rid in rk) { const v = rk[rid]; if (v === true || (v && typeof v === 'object' && v.done)) completed.add(rid); }
+  }
+  return { committed, completed, teamOfRec };
+}
+
+// The recommendations the sponsor COMMITTED to (in the Decision Room), tracked
+// through the engagement. Only committed items appear here; passed / uncommitted
+// items are hidden. Every shown item is one the sponsor can mark done for himself.
+async function buildRecommendations(clientId, recState) {
+  const committed = recState && recState.committed;
+  if (!committed || committed.size === 0) return null;   // nothing committed → no card
+  const rows = await sbGet(`/rest/v1/recommendations?client_id=eq.${enc(clientId)}&status=eq.approved&select=id,short_title,description,timeframe,responsible_party,coach_comment,sort_order,created_at&order=sort_order.asc.nullslast,created_at.asc`);
   if (!rows || !rows.length) return null;
-  return rows.map(r => ({
+  const items = rows.filter(r => committed.has(r.id)).map(r => ({
     id: r.id,
     title: r.short_title || null,
     description: r.description || null,
     timeframe: r.timeframe || null,
-    owner: r.responsible_party || null,                 // 'sponsor' | 'leader' | 'coach' | null
+    owner: r.responsible_party || null,
     coach_comment: r.coach_comment || null,
-    completed: !!r.completed_at,
-    completed_by: r.completed_by || null,
-    can_sponsor_complete: r.responsible_party === 'sponsor',
+    completed: recState.completed.has(r.id),
+    completed_by: recState.completed.has(r.id) ? 'sponsor' : null,
+    can_sponsor_complete: true,     // shown only because the sponsor committed to it
   }));
+  return items.length ? items : null;
 }
 
 // The sponsor's FULL authorized leader set: the legacy single link
@@ -261,8 +282,9 @@ async function buildLeaderView(sponsor, clientId, isCoachPreview) {
     };
   }
 
+  const recState = await getSponsorRecState(sponsor);
   const [pulse, rhythm, ownRatings, recommendations] = await Promise.all([
-    buildPulse(clientId), buildCheckinRhythm(clientId), buildSponsorOwnRatings(sponsor, clientId), buildRecommendations(clientId),
+    buildPulse(clientId), buildCheckinRhythm(clientId), buildSponsorOwnRatings(sponsor, clientId), buildRecommendations(clientId, recState),
   ]);
 
   let chip = 'on_track';
@@ -336,23 +358,28 @@ export default async function handler(req, res) {
 
     const isCoachPreview = !!(body.coach_session && verifyCoachSession(body.coach_session));
 
-    // ── Sponsor completes ONE of their OWN recommendations ─────────────────
-    // Ground-truth lock: only items they own (responsible_party = 'sponsor') on a
-    // leader they're authorized to follow. Leader/coach items are the coach's.
+    // ── Sponsor marks ONE of the recommendations they COMMITTED to done ─────
+    // Ground-truth lock: the item must belong to a leader they follow AND be in
+    // this sponsor's committed set. Completion is sponsor-scoped — written to
+    // sponsor_teams.rec_completions, never to the recommendation's global status.
     if (body.action === 'complete-rec') {
       const recId = String(body.rec_id || '');
       if (!recId) return res.status(400).json({ error: 'rec_id required' });
-      const recRows = await sbGet(`/rest/v1/recommendations?id=eq.${enc(recId)}&select=id,client_id,responsible_party,status,completed_at&limit=1`);
+      const recRows = await sbGet(`/rest/v1/recommendations?id=eq.${enc(recId)}&select=id,client_id&limit=1`);
       const rec = recRows[0];
       if (!rec || !leaderIds.includes(rec.client_id)) return res.status(404).json({ error: 'Recommendation not found' });
-      if (rec.responsible_party !== 'sponsor') {
-        return res.status(403).json({ error: "Your coach marks this one complete — it's on the leader's side." });
+      const recState = await getSponsorRecState(sponsor);
+      if (!recState.committed.has(recId)) {
+        return res.status(403).json({ error: 'You can only update a recommendation you committed to.' });
       }
+      const teamId = recState.teamOfRec[recId];
+      if (!teamId) return res.status(409).json({ error: 'No commitment record found for this item.' });
+      const trows = await sbGet(`/rest/v1/sponsor_teams?id=eq.${enc(teamId)}&select=rec_completions&limit=1`);
+      const cur = (trows[0] && trows[0].rec_completions && typeof trows[0].rec_completions === 'object') ? { ...trows[0].rec_completions } : {};
       const done = body.completed === true;
-      const upd = done
-        ? { completed_at: new Date().toISOString(), completed_by: 'sponsor' }
-        : { completed_at: null, completed_by: null };
-      await sb(`/rest/v1/recommendations?id=eq.${enc(recId)}`, 'PATCH', upd, { Prefer: 'return=minimal' });
+      if (done) cur[recId] = { done: true, at: new Date().toISOString() };
+      else delete cur[recId];
+      await sb(`/rest/v1/sponsor_teams?id=eq.${enc(teamId)}`, 'PATCH', { rec_completions: cur }, { Prefer: 'return=minimal' });
       return res.status(200).json({ ok: true, completed: done });
     }
 
