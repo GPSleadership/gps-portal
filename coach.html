@@ -383,9 +383,15 @@
     @media (max-width: 768px) {
       input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
       select, textarea { font-size: 16px !important; }
-      .section-nav { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
-      .section-nav::-webkit-scrollbar { display: none; }
-      .section-tab { white-space: nowrap; flex: 0 0 auto; padding: 10px 14px; }
+      .section-nav { flex-wrap: wrap; }
+      .section-tab { white-space: nowrap; padding: 10px 14px; }
+      /* Global search must stay reachable on a phone: give it its own full-width
+         row below the tabs, and make its results dropdown fill the width (not a
+         fixed 330px anchored right, which pushed it off-screen). */
+      .gs-spacer { display: none; }
+      .gs-wrap { flex: 1 0 100%; margin-top: 8px; }
+      .gs-wrap #globalSearch { width: 100%; min-width: 0 !important; box-sizing: border-box; }
+      #globalSearchResults { left: 0; right: auto; width: 100%; min-width: 0; }
       table { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
       /* Toolbar + filter groups wrap instead of pushing off-screen. */
       .toolbar-right { flex-wrap: wrap; }
@@ -854,8 +860,8 @@
       <div class="section-tab"        id="grp-organizations" onclick="showGroup('organizations')">Organizations</div>
       <div class="section-tab owner-only" id="grp-aistudio"  onclick="showGroup('aistudio')">AI Studio</div>
       <div class="section-tab"        id="grp-settings"  onclick="showGroup('settings')">Settings</div>
-      <div style="flex:1;min-width:12px;"></div>
-      <div style="position:relative;">
+      <div class="gs-spacer" style="flex:1;min-width:12px;"></div>
+      <div class="gs-wrap" style="position:relative;">
         <input id="globalSearch" type="text" placeholder="Search clients, diagnostics, teams…" autocomplete="off"
           oninput="globalSearch(this.value)" onfocus="globalSearch(this.value)"
           onblur="setTimeout(function(){var r=document.getElementById('globalSearchResults');if(r)r.style.display='none';},180)"
@@ -5235,7 +5241,10 @@ async function globalSearch(qraw){
       hits = hits.slice(0, 12);
       if (!hits.length) { box.innerHTML = '<div style="padding:11px 13px;color:#888;font-size:13px;">No matches.</div>'; }
       else box.innerHTML = hits.map(function(h){
-        return '<div class="gs-row" onmousedown="'+h.act.replace(/"/g,'&quot;')+';document.getElementById(\'globalSearch\').value=\'\';this.parentNode.style.display=\'none\';">'
+        // Fire on BOTH mousedown (desktop) and touchstart (mobile). preventDefault on
+        // touch stops the ghost-click/blur cascade that was cancelling taps on phones.
+        var act = h.act.replace(/"/g,'&quot;')+";document.getElementById('globalSearch').value='';this.parentNode.style.display='none';";
+        return '<div class="gs-row" onmousedown="'+act+'" ontouchstart="event.preventDefault();'+act+'">'
           + '<span class="gs-kind">'+h.kind+'</span><b>'+escHtml(h.label||'')+'</b>'
           + (h.sub ? '<span style="color:#888;"> — '+escHtml(h.sub)+'</span>' : '') + '</div>';
       }).join('');
