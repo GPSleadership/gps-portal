@@ -283,8 +283,17 @@ export default async function handler(req, res) {
     if (action === 'email-failures') {
       const hours = Math.min(Math.max(parseInt(body.hours, 10) || 48, 1), 168);
       const since = new Date(Date.now() - hours * 3600 * 1000).toISOString();
-      const r = await sb(`/rest/v1/email_log?status=eq.error&sent_at=gte.${encodeURIComponent(since)}&select=recipient_name,recipient_email,email_type,subject,error_details,sent_at&order=sent_at.desc&limit=200`);
-      const rows = r.ok ? await r.json() : [];
+      const [er, sr] = await Promise.all([
+        sb(`/rest/v1/email_log?status=eq.error&sent_at=gte.${encodeURIComponent(since)}&select=recipient_name,recipient_email,email_type,subject,error_details,sent_at&order=sent_at.desc&limit=300`),
+        sb(`/rest/v1/email_log?status=eq.sent&sent_at=gte.${encodeURIComponent(since)}&select=recipient_email,email_type,sent_at&limit=3000`),
+      ]);
+      const errs = er.ok ? await er.json() : [];
+      const sents = sr.ok ? await sr.json() : [];
+      // A failure is RESOLVED once the same recipient+type was later sent successfully.
+      // Only unresolved failures reach the banner, so it auto-clears after a re-send.
+      const sentMax = {};
+      for (const s of sents) { const k = (s.recipient_email || '') + '|' + (s.email_type || ''); const t = +new Date(s.sent_at); if (!sentMax[k] || t > sentMax[k]) sentMax[k] = t; }
+      const rows = errs.filter(e => { const k = (e.recipient_email || '') + '|' + (e.email_type || ''); return !(sentMax[k] && sentMax[k] > +new Date(e.sent_at)); });
       const quota = rows.filter(x => /quota|429|rate limit/i.test(String(x.error_details || ''))).length;
       return res.status(200).json({
         ok: true, count: rows.length, quota,
