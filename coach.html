@@ -870,6 +870,9 @@
       </div>
     </div>
 
+    <!-- Email send-failure alert (surfaces silently-failed emails, e.g. Resend quota) -->
+    <div id="emailFailureBanner" style="display:none;"></div>
+
     <!-- SUB-TAB BARS (one shows at a time, matching the active group) -->
     <div id="subnav-diagteams" class="section-subnav" style="display:none;">
       <div class="section-subtab active" id="sub-diagnostics"   onclick="showSection('diagnostics')">Leader Diagnostics</div>
@@ -2094,6 +2097,31 @@ async function loadDashboard() {
   loadOrgNames(); // org autocomplete source (clients + organizations + workshops)
   refreshMsgBadge(); // populate Today "Client Messages" flags on every page load
   restoreLastView(); // return to where the coach was before a refresh
+  loadEmailFailures(); // surface any silently-failed emails (e.g. Resend quota)
+}
+
+// Surface recent email send failures so a silent drop (e.g. a Resend quota 429
+// that marked a batch "sent" while some invites never went) is never invisible.
+async function loadEmailFailures() {
+  const el = document.getElementById('emailFailureBanner');
+  if (!el) return;
+  try { if (sessionStorage.getItem('emailFailDismiss') === '1') { el.style.display = 'none'; return; } } catch (e) {}
+  try {
+    const r = await fetch('/api/coach-data', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ action:'email-failures', hours: 48, session: getCoachSessionToken() }) });
+    const j = await r.json();
+    if (!r.ok || !j.count) { el.style.display = 'none'; return; }
+    const reason = j.quota > 0 ? 'daily email quota reached' : 'send errors';
+    const names = (j.failures || []).slice(0, 6).map(function(f){ return esc(f.recipient_name || f.recipient_email || ''); }).filter(Boolean).join(', ');
+    const more = j.count > 6 ? ' +' + (j.count - 6) + ' more' : '';
+    el.innerHTML = '<div style="background:#FCEBEB;border:1px solid #E39; border-left:5px solid #DB1F48;border-radius:8px;padding:12px 16px;margin:0 0 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">'
+      + '<div style="flex:1;min-width:220px;"><b style="color:#A3162F;">&#9888; ' + j.count + ' email' + (j.count !== 1 ? 's' : '') + ' failed to send</b> in the last 48h (' + reason + ').'
+      + (names ? '<div style="font-size:12px;color:#7a2530;margin-top:3px;">Affected: ' + names + more + '</div>' : '')
+      + '<div style="font-size:11px;color:#9a5560;margin-top:3px;">These were logged as errors, not delivered. Re-send from the client or diagnostic once the cause is cleared.</div></div>'
+      + '<button onclick="document.getElementById(\'emailFailureBanner\').style.display=\'none\';try{sessionStorage.setItem(\'emailFailDismiss\',\'1\')}catch(e){}" style="background:none;border:1px solid #C99;color:#A3162F;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">Dismiss</button>'
+      + '</div>';
+    el.style.display = 'block';
+  } catch (e) { el.style.display = 'none'; }
 }
 
 // Restore the last section (and open workshop) after a page refresh, so refreshing

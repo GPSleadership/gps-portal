@@ -276,6 +276,25 @@ export default async function handler(req, res) {
       if (!r.ok) return res.status(500).json({ error: 'Could not update payment status' });
       return res.status(200).json({ ok: true, paid });
     }
+    // ── Email send-failure surfacing ────────────────────────────────────────
+    // Any email that logged status='error' recently (e.g. a Resend quota 429 that
+    // silently dropped invites). Feeds the dashboard alert banner so failed sends
+    // are never invisible again.
+    if (action === 'email-failures') {
+      const hours = Math.min(Math.max(parseInt(body.hours, 10) || 48, 1), 168);
+      const since = new Date(Date.now() - hours * 3600 * 1000).toISOString();
+      const r = await sb(`/rest/v1/email_log?status=eq.error&sent_at=gte.${encodeURIComponent(since)}&select=recipient_name,recipient_email,email_type,subject,error_details,sent_at&order=sent_at.desc&limit=200`);
+      const rows = r.ok ? await r.json() : [];
+      const quota = rows.filter(x => /quota|429|rate limit/i.test(String(x.error_details || ''))).length;
+      return res.status(200).json({
+        ok: true, count: rows.length, quota,
+        failures: rows.slice(0, 25).map(x => ({
+          recipient_name: x.recipient_name, recipient_email: x.recipient_email,
+          email_type: x.email_type, subject: x.subject, sent_at: x.sent_at,
+          reason: /quota|429|rate limit/i.test(String(x.error_details || '')) ? 'Daily email quota reached' : (String(x.error_details || '').slice(0, 80) || 'Send error'),
+        })),
+      });
+    }
     if (action === 'sponsor-save-content') {
       const sponsorId = String(body.sponsor_id || '');
       if (!sponsorId) return res.status(400).json({ error: 'sponsor_id required' });
