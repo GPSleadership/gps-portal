@@ -143,6 +143,13 @@
     .roster-chips { flex-shrink:1; width:100%; justify-content:flex-start; padding-top:2px; }
     .roster-chips .btn-sm { margin-top:4px; }
   }
+  /* Coaching Progress / Diagnostic tab switcher (only shown for coaching sponsors) */
+  .dr-tabs{display:flex;gap:6px;background:#eef2f5;border:1px solid #dde5ea;border-radius:12px;padding:5px;margin:4px 0 18px;}
+  .dr-tab{flex:1;min-height:44px;border:none;background:transparent;color:var(--navy);font:600 15px/1.2 inherit;border-radius:9px;cursor:pointer;padding:10px 12px;transition:background .12s,color .12s,box-shadow .12s;}
+  .dr-tab:hover{background:#e2eaf0;}
+  .dr-tab.active{background:#fff;color:var(--navy);box-shadow:0 1px 3px rgba(0,45,71,.16);}
+  .dr-tab:focus-visible{outline:2px solid var(--teal);outline-offset:2px;}
+  @media(max-width:520px){ .dr-tab{font-size:14px;padding:10px 8px;} }
 </style>
 </head>
 <body>
@@ -159,6 +166,13 @@
   <div class="team-bar" id="teamBar" style="display:none;">
     <select class="team-select" id="teamSelect" onchange="loadTeam(this.value)"></select>
     <span class="team-meta" id="teamMeta"></span>
+  </div>
+  <div id="drTabs" class="dr-tabs" style="display:none;" role="tablist" aria-label="Decision Room views">
+    <button id="drTabProgress" class="dr-tab" type="button" role="tab" aria-selected="false" onclick="showDrTab('progress')">Coaching Progress</button>
+    <button id="drTabPlan" class="dr-tab" type="button" role="tab" aria-selected="false" onclick="showDrTab('plan')">Diagnostic &amp; Plan</button>
+  </div>
+  <div id="drProgressPane" style="display:none;">
+    <iframe id="drProgressFrame" title="Coaching progress" scrolling="no" style="width:100%;border:none;min-height:600px;display:block;"></iframe>
   </div>
   <div id="view"><div class="skeleton-wrap">
     <div class="skeleton-card"><div class="skeleton-line sk-title"></div><div class="skeleton-line sk-p sk-short"></div><div class="skeleton-line sk-p" style="margin-top:16px;"></div><div class="skeleton-line sk-p sk-shorter"></div><div class="skeleton-line sk-p sk-short"></div></div>
@@ -208,6 +222,7 @@ function init(){
   document.getElementById('view').innerHTML='<div class="skeleton-wrap"><div class="skeleton-card"><div class="skeleton-line sk-title"></div><div class="skeleton-line sk-p sk-short"></div><div class="skeleton-line sk-p"></div></div><div class="skeleton-card"><div class="skeleton-line sk-title" style="width:30%"></div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:8px;"><div class="skeleton-line" style="height:70px;border-radius:8px;"></div><div class="skeleton-line" style="height:70px;border-radius:8px;"></div><div class="skeleton-line" style="height:70px;border-radius:8px;"></div></div></div></div>';
   api('team').then(function(res){
     document.getElementById('headerWho').textContent = res.sponsor ? res.sponsor.name : '';
+    probeCoachingProgress();
     var teams = res.teams||[];
     if(!teams.length){ document.getElementById('view').innerHTML='<div class="card"><div class="empty">No teams are shared with you yet.</div></div>'; return; }
     var sel=document.getElementById('teamSelect');
@@ -228,6 +243,63 @@ function init(){
   }).catch(showError);
 }
 function showError(err){ document.getElementById('view').innerHTML='<div class="card"><div class="empty">'+esc(err.message||'Could not load. Please try your link again.')+'</div></div>'; }
+
+/* ───────── Coaching Progress tab ─────────
+   The same sponsor_token that opens this Decision Room also drives the /sponsor
+   follow-along page. If this sponsor is tied to a leader whose coaching is live,
+   we surface that follow-along here as a tab — so the sponsor keeps ONE link and
+   the diagnostic/plan "sales" view moves one tab over. Team-only sponsors (no
+   linked coaching leader) never see the tab; nothing about the page changes. */
+var PROGRESS_READY = false;
+function probeCoachingProgress(){
+  if(!TOKEN) return;
+  var body = { action:'get', token:TOKEN };
+  if(COACH_SESSION) body.coach_session = COACH_SESSION;
+  fetch('/api/sponsor', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(j){
+      // No follow-along to show: not a coaching sponsor, or coaching hasn't begun.
+      if(!j || j.unlinked || j.not_coaching) return;
+      // j.roster (multi-leader) or a full leader payload both mean coaching is live.
+      enableProgressTab();
+    })
+    .catch(function(){ /* leave the Decision Room exactly as-is on any error */ });
+}
+function enableProgressTab(){
+  if(PROGRESS_READY) return; PROGRESS_READY = true;
+  var f = document.getElementById('drProgressFrame');
+  var u = new URL('/sponsor', location.origin);
+  u.searchParams.set('token', TOKEN);
+  u.searchParams.set('embed', '1');
+  if(COACH_SESSION) u.searchParams.set('cs', COACH_SESSION);
+  f.src = u.toString();
+  document.getElementById('drTabs').style.display = 'flex';
+  // Coaching sponsors land on live progress; the diagnostic/plan is one tab over.
+  showDrTab('progress');
+}
+function showDrTab(which){
+  if(!PROGRESS_READY) return;
+  var prog = (which === 'progress');
+  document.getElementById('drProgressPane').style.display = prog ? 'block' : 'none';
+  document.getElementById('view').style.display = prog ? 'none' : 'block';
+  // The team selector belongs to the diagnostic view; hide it while on progress.
+  var tb = document.getElementById('teamBar');
+  var sel = document.getElementById('teamSelect');
+  if(tb) tb.style.display = (!prog && sel && sel.options.length > 1) ? 'flex' : 'none';
+  var bp = document.getElementById('drTabProgress'), bl = document.getElementById('drTabPlan');
+  bp.classList.toggle('active', prog); bp.setAttribute('aria-selected', prog ? 'true' : 'false');
+  bl.classList.toggle('active', !prog); bl.setAttribute('aria-selected', !prog ? 'true' : 'false');
+  if(prog) window.scrollTo(0,0);
+}
+// The embedded /sponsor page reports its content height so the pane grows to fit
+// (one natural page scroll — no nested scrollbar).
+window.addEventListener('message', function(e){
+  var d = e && e.data;
+  if(d && typeof d.__gpsSponsorHeight === 'number'){
+    var f = document.getElementById('drProgressFrame');
+    if(f) f.style.height = Math.max(400, Math.ceil(d.__gpsSponsorHeight)) + 'px';
+  }
+});
 
 function setHeaderOrgLogo(t){
   var el=document.getElementById('headerOrgLogo'); if(!el) return;

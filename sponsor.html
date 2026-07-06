@@ -129,6 +129,10 @@
   .lcard .larrow { font-size:20px; color:var(--teal-text); flex-shrink:0; }
   .backbar { background:none; border:none; color:var(--teal-text); font-family:'Montserrat'; font-weight:700; font-size:13px; cursor:pointer; padding:0; margin-bottom:14px; }
   .backbar:hover { text-decoration:underline; }
+  /* Embedded inside the Decision Room "Coaching Progress" tab: the host page
+     already shows the GPS header, so drop our own chrome and top padding. */
+  body.embed .topaccent, body.embed .brand { display:none; }
+  body.embed .wrap { padding-top:8px; }
 </style>
 </head>
 <body>
@@ -248,6 +252,27 @@
   var params = new URLSearchParams(location.search);
   var token = params.get('token');
   var coachSession = params.get('cs');
+
+  // Embedded mode: rendered inside the Decision Room "Coaching Progress" tab.
+  // Drop our own header chrome (CSS via body.embed) and report content height to
+  // the host so the iframe grows to fit — one natural scroll, no nested scrollbar.
+  var EMBED = params.get('embed') === '1';
+  if (EMBED) {
+    if (document.body) document.body.classList.add('embed');
+    var postHeight = function () {
+      try {
+        var h = Math.max(
+          document.body ? document.body.scrollHeight : 0,
+          document.documentElement ? document.documentElement.scrollHeight : 0
+        );
+        if (window.parent && window.parent !== window) window.parent.postMessage({ __gpsSponsorHeight: h }, '*');
+      } catch (e) { /* cross-origin or detached: nothing to do */ }
+    };
+    window.addEventListener('load', postHeight);
+    window.addEventListener('resize', postHeight);
+    if (window.ResizeObserver && document.body) { try { new ResizeObserver(postHeight).observe(document.body); } catch (e) {} }
+    setTimeout(postHeight, 300); setTimeout(postHeight, 1200);
+  }
 
   function show(id) { document.getElementById(id).classList.remove('hidden'); }
   function hide(id) { document.getElementById(id).classList.add('hidden'); }
