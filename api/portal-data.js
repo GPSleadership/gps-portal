@@ -47,6 +47,8 @@ const CLIENT_WRITABLE = new Set([
   // Client-editable profile fields (own profile screen — no role/access escalation).
   // 'organization' is canonical; 'org' kept writable only for backward-compat.
   'title', 'organization', 'org', 'phone', 'sms_opt_in',
+  // Contact details the client fills in during onboarding (for mailings/records).
+  'date_of_birth', 'mailing_line1', 'mailing_line2', 'mailing_city', 'mailing_state', 'mailing_postal_code',
 ]);
 function pickWritable(updates) {
   const out = {};
