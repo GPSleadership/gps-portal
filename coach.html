@@ -375,6 +375,22 @@
     .section-tab:hover { color: var(--navy); }
     .section-tab.active { color: var(--navy); border-bottom-color: var(--teal); }
 
+    /* ── Mobile hardening (mobile-friendliness pass 1) ──
+       The coach console is desktop-first; make it survivable on a phone. Inputs to
+       16px (no iOS focus-zoom), the section nav scrolls sideways instead of
+       overflowing the screen, dense data tables become horizontally scrollable,
+       and the page itself never scrolls sideways (the cardinal mobile sin). */
+    @media (max-width: 768px) {
+      input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+      select, textarea { font-size: 16px !important; }
+      .section-nav { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+      .section-nav::-webkit-scrollbar { display: none; }
+      .section-tab { white-space: nowrap; flex: 0 0 auto; padding: 10px 14px; }
+      table { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    }
+    html, body { overflow-x: hidden; }
+    img { max-width: 100%; }
+
     /* ── EMAIL LOG ── */
     .email-log-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .email-log-table th { background: var(--navy); color: var(--white); padding: 8px 12px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; font-family: 'Montserrat', sans-serif; }

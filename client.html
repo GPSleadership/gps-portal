@@ -353,6 +353,18 @@
 
     .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 
+    /* ── Mobile hardening (mobile-friendliness pass 1) ──
+       iOS auto-zooms any focused input under 16px — the #1 "amateur" tell on a
+       premium client portal, and pure friction. Bump inputs to 16px on phones,
+       stack two-up rows, and guard against accidental sideways scroll. */
+    @media (max-width: 768px) {
+      input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+      select, textarea { font-size: 16px !important; }
+      .form-row { grid-template-columns: 1fr; }
+    }
+    html, body { overflow-x: hidden; }
+    img { max-width: 100%; }
+
     /* radio group */
     .radio-group { display: flex; gap: 10px; flex-wrap: wrap; }
     .radio-group label {
