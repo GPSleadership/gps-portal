@@ -2034,16 +2034,28 @@ function applyTierPriceLabels() {
 async function loadDashboard() {
   applyTierPriceLabels(); // keep the tier dropdowns in sync with TIER_PRICES
   let clientsRows, checkinsRows;
-  try {
-    [clientsRows, checkinsRows] = await Promise.all([
-      cdSelect('clients',  { order: { col: 'created_at',   asc: false } }),
-      // P1 #12: the dashboard only needs recent check-ins, not all history ever —
-      // this table grows forever and was being pulled in full on every load.
-      cdSelect('checkins', { order: { col: 'submitted_at', asc: false }, limit: 1000 })
-    ]);
-  } catch (e) {
-    if (isSessionError(e)) { showLoginScreen('Your session expired. Please log in again.'); return; }
-    throw e;
+  // P1 #12: the dashboard only needs recent check-ins, not all history ever.
+  // Resilience: a single "Failed to fetch" (cold start / network blip) used to leave
+  // a permanent spinner. Retry a few times, then show a Retry button — never hang.
+  const fetchCore = () => Promise.all([
+    cdSelect('clients',  { order: { col: 'created_at',   asc: false } }),
+    cdSelect('checkins', { order: { col: 'submitted_at', asc: false }, limit: 1000 })
+  ]);
+  let lastErr = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try { [clientsRows, checkinsRows] = await fetchCore(); lastErr = null; break; }
+    catch (e) {
+      if (isSessionError(e)) { showLoginScreen('Your session expired. Please log in again.'); return; }
+      lastErr = e;
+      if (attempt < 3) await new Promise(r => setTimeout(r, 400 * attempt));
+    }
+  }
+  if (lastErr) {
+    const el = document.getElementById('clientList');
+    if (el) el.innerHTML = '<div style="text-align:center;padding:40px 20px;color:#5a6b76;">'
+      + '<div style="font-size:14px;margin-bottom:12px;">Could not load your clients — the connection dropped. Your data is safe.</div>'
+      + '<button onclick="loadDashboard()" style="padding:9px 20px;background:var(--navy);color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;font-family:Montserrat,sans-serif;">Retry</button></div>';
+    return;
   }
 
   allClients  = clientsRows  || [];
