@@ -2126,6 +2126,24 @@
   }
   .profile-field-readonly input,
   .profile-field-readonly select { background: var(--gray-100) !important; color: var(--gray-600) !important; cursor: default; }
+  #profileModal .profile-modal-body input:not([type=checkbox]):not([type=file]),
+  #profileModal .profile-modal-body select { min-height: 42px; padding: 9px 12px; font-size: 14px; }
+  .pm-avatar-row { display:flex; gap:14px; align-items:center; margin-bottom:18px; padding-bottom:18px; border-bottom:1px solid var(--gray-200,#e5e7eb); }
+  .pm-avatar { position:relative; width:60px; height:60px; border-radius:50%; background:var(--navy,#004369); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:22px; font-family:'Montserrat',sans-serif; flex:0 0 auto; }
+  .pm-avatar img { width:100%; height:100%; border-radius:50%; object-fit:cover; }
+  .pm-avatar-cam { position:absolute; bottom:-2px; right:-2px; width:24px; height:24px; border-radius:50%; background:#fff; border:1px solid var(--gray-300,#cbd5e1); color:var(--navy,#004369); font-size:12px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; }
+  .pm-avatar-name { font-weight:700; font-size:14px; color:var(--navy,#004369); font-family:'Montserrat',sans-serif; }
+  .pm-linkbtn { background:none; border:none; color:#0F6E56; font-weight:700; font-size:13px; cursor:pointer; padding:0; margin-right:12px; }
+  .pm-linkbtn-muted { color:var(--gray-600,#5a6b76); }
+  .pm-section-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#0F6E56; margin:18px 0 10px; }
+  .pm-static { font-size:13px; color:var(--gray-700,#334155); background:var(--gray-100,#f1f5f9); border-radius:8px; padding:10px 12px; margin-bottom:14px; line-height:1.5; }
+  .pm-addr-grid { display:grid; grid-template-columns:1.5fr 0.8fr 0.9fr; gap:10px; }
+  .pm-err { font-size:12px; color:#C1123A; margin-top:4px; display:none; }
+  .pm-err.show { display:block; }
+  input.pm-invalid { border-color:#DB1F48 !important; box-shadow:0 0 0 1px #DB1F48 !important; }
+  .profile-modal-footer { position:sticky; bottom:0; background:var(--white,#fff); border-top:1px solid var(--gray-200,#e5e7eb); justify-content:flex-end; }
+  .pm-footer-err { font-size:12px; color:#C1123A; margin-right:auto; align-self:center; }
+  @media (max-width:520px){ #profileModal .form-row { grid-template-columns:1fr; } .pm-addr-grid { grid-template-columns:1fr 1fr; } }
   .sms-opt-row {
     display: flex;
     align-items: flex-start;
@@ -8140,8 +8158,44 @@ function openProfileModal() {
     if (!found) tzSel.selectedIndex = 0;
   }
 
+  // Read-only identity + email as calm static lines (not greyed-out fields)
+  var fullName = (client.name || '').trim() || 'Your name';
+  document.getElementById('pmIdentityStatic').innerHTML = '<strong>' + pmEsc(fullName) + '</strong> &middot; contact Alex to change your name.';
+  document.getElementById('pmEmailStatic').innerHTML = '<strong>' + pmEsc(client.email || '') + '</strong> &middot; contact Alex to change your email.';
+  pmRenderAvatar(client);
+  ['profilePhone', 'profileMailZip'].forEach(pmClearError);
+  document.getElementById('profileFormErr').textContent = '';
+  var sBtn = document.getElementById('profileSaveBtn'); if (sBtn) { sBtn.disabled = false; sBtn.textContent = 'Save changes'; }
+
   document.getElementById('profileSaveMsg').style.display = 'none';
   document.getElementById('profileModal').classList.add('open');
+}
+function pmEsc(s){ var d=document.createElement('div'); d.textContent = (s==null?'':String(s)); return d.innerHTML; }
+function pmInitials(name){ var p=(name||'').trim().split(/\s+/); var a=(p[0]||'').charAt(0); var b=(p.length>1?p[p.length-1].charAt(0):''); return ((a+b)||'?').toUpperCase(); }
+function pmRenderAvatar(client){
+  var img=document.getElementById('pmAvatarImg'), ini=document.getElementById('pmAvatarInitials'),
+      rm=document.getElementById('pmAvatarRemove'), add=document.getElementById('pmAvatarAdd'), nm=document.getElementById('pmAvatarName');
+  ini.textContent = pmInitials(client.name);
+  if (client.avatar_url) { img.src=client.avatar_url; img.style.display='block'; ini.style.display='none'; rm.style.display='inline'; add.textContent='Change photo'; nm.textContent='Profile photo'; }
+  else { img.style.display='none'; img.removeAttribute('src'); ini.style.display='block'; rm.style.display='none'; add.textContent='Add photo'; nm.textContent='Your photo'; }
+}
+function pmClearError(id){ var f=document.getElementById(id); if(f) f.classList.remove('pm-invalid'); var e=document.getElementById('err-'+id); if(e){ e.textContent=''; e.classList.remove('show'); } }
+function pmSetError(id,msg){ var f=document.getElementById(id); if(f) f.classList.add('pm-invalid'); var e=document.getElementById('err-'+id); if(e){ e.textContent=msg; e.classList.add('show'); } }
+async function onAvatarPicked(input){
+  var f = input.files && input.files[0]; if(!f) return;
+  if (f.size > 5*1024*1024){ document.getElementById('profileFormErr').textContent='That image is over 5 MB — pick a smaller one.'; input.value=''; return; }
+  var add=document.getElementById('pmAvatarAdd'); var prev=add.textContent; add.textContent='Uploading…';
+  document.getElementById('profileFormErr').textContent='';
+  try {
+    var dataUrl = await new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){res(r.result);}; r.onerror=rej; r.readAsDataURL(f); });
+    var resp = await portalData('upload-avatar', { image_data_url: dataUrl });
+    if (resp && resp.avatar_url) { window._portalClient.avatar_url = resp.avatar_url; pmRenderAvatar(window._portalClient); }
+  } catch(e){ document.getElementById('profileFormErr').textContent = 'Could not upload the photo. Please try again.'; add.textContent=prev; }
+  finally { input.value=''; }
+}
+async function removeAvatar(){
+  try { await portalData('remove-avatar', {}); window._portalClient.avatar_url=null; pmRenderAvatar(window._portalClient); }
+  catch(e){ document.getElementById('profileFormErr').textContent = 'Could not remove the photo.'; }
 }
 function closeProfileModal() {
   document.getElementById('profileModal').classList.remove('open');
@@ -8169,15 +8223,22 @@ async function saveProfile() {
   const mailing_state      = document.getElementById('profileMailState').value.trim();
   const mailing_postal_code= document.getElementById('profileMailZip').value.trim();
 
-  // Basic phone validation: must be empty or contain only digits, spaces, +, -, ()
-  if (phone && !/^[\d\s+\-().]{7,20}$/.test(phone)) {
-    alert('Please enter a valid mobile phone number, or leave it blank.');
-    btn.disabled = false; btn.textContent = 'Save Changes';
-    return;
+  // Inline validation — highlight the field, don't throw an alert.
+  ['profilePhone', 'profileMailZip'].forEach(pmClearError);
+  const formErr = document.getElementById('profileFormErr');
+  formErr.textContent = '';
+  let ok = true;
+  if (phone && !/^[\d\s+\-().]{7,20}$/.test(phone)) { pmSetError('profilePhone', 'Enter a valid phone, or leave it blank.'); ok = false; }
+  if (mailing_postal_code && !/^[\d\-\s]{3,12}$/.test(mailing_postal_code)) { pmSetError('profileMailZip', 'Enter a valid ZIP.'); ok = false; }
+  if (date_of_birth) {
+    const dob = new Date(date_of_birth);
+    if (isNaN(dob.getTime()) || dob > new Date() || dob.getFullYear() < 1900) { formErr.textContent = 'Check the date of birth.'; ok = false; }
   }
+  if (!ok) { if (!formErr.textContent) formErr.textContent = 'Please fix the highlighted fields.'; return; }
 
   btn.disabled = true;
   btn.textContent = 'Saving…';
+  saveMsg.style.display = 'none';
 
   try {
     // Phase 1: route through the token-scoped endpoint (service role); the anon key
@@ -8213,11 +8274,11 @@ async function saveProfile() {
     saveMsg.style.display = '';
     setTimeout(() => { saveMsg.style.display = 'none'; }, 3000);
   } catch (err) {
-    alert('Could not save your profile. Please try again.');
+    document.getElementById('profileFormErr').textContent = 'Could not save your profile. Please try again.';
     console.error('Profile save error:', err);
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Save Changes';
+    btn.textContent = 'Save changes';
   }
 }
 
@@ -9518,52 +9579,82 @@ By clicking "I Agree and Continue," you confirm that you have read and understoo
 <div id="profileModal" role="dialog" aria-modal="true" aria-labelledby="profileModalTitle" onclick="handleProfileOverlayClick(event)">
   <div class="profile-modal-box">
     <div class="profile-modal-header">
-      <h2 id="profileModalTitle">Your Profile</h2>
+      <h2 id="profileModalTitle">Your profile</h2>
       <button class="profile-modal-close" onclick="closeProfileModal()" aria-label="Close">✕</button>
     </div>
     <div class="profile-modal-body">
 
-      <div class="form-row">
-        <div class="form-group profile-field-readonly">
-          <label>First Name</label>
-          <input type="text" id="profileFirstName" disabled>
+      <div class="pm-avatar-row">
+        <div class="pm-avatar">
+          <span id="pmAvatarInitials">–</span>
+          <img id="pmAvatarImg" alt="Your profile photo" style="display:none;">
+          <button type="button" class="pm-avatar-cam" onclick="document.getElementById('pmAvatarFile').click()" aria-label="Add or change photo">&#9998;</button>
         </div>
-        <div class="form-group profile-field-readonly">
-          <label>Last Name</label>
-          <input type="text" id="profileLastName" disabled>
+        <div>
+          <div class="pm-avatar-name" id="pmAvatarName">Your photo</div>
+          <div>
+            <button type="button" class="pm-linkbtn" id="pmAvatarAdd" onclick="document.getElementById('pmAvatarFile').click()">Add photo</button>
+            <button type="button" class="pm-linkbtn pm-linkbtn-muted" id="pmAvatarRemove" onclick="removeAvatar()" style="display:none;">Remove</button>
+          </div>
+          <div class="hint" style="margin-top:2px;">Optional. JPG, PNG, or WebP, up to 5 MB.</div>
         </div>
+        <input type="file" id="pmAvatarFile" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="onAvatarPicked(this)">
       </div>
-      <div class="hint" style="margin-top:-12px;margin-bottom:16px;">Contact Alex to update your name.</div>
 
+      <div class="pm-section-label">Identity</div>
+      <div class="pm-static" id="pmIdentityStatic"></div>
       <div class="form-group">
-        <label>Preferred Name</label>
-        <input type="text" id="profilePreferredName" placeholder="e.g. Mike" maxlength="60">
+        <label for="profilePreferredName">Preferred name</label>
+        <input type="text" id="profilePreferredName" placeholder="Mike" maxlength="60">
         <div class="hint">How we'll address you throughout the portal. Leave blank to use your first name.</div>
       </div>
-
-      <div class="form-group">
-        <label>Title</label>
-        <input type="text" id="profileTitle" placeholder="e.g. CEO, Senior VP of Operations" maxlength="120">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="profileTitle">Title</label>
+          <input type="text" id="profileTitle" placeholder="Senior VP of Operations" maxlength="120">
+        </div>
+        <div class="form-group">
+          <label for="profileOrg">Organization</label>
+          <input type="text" id="profileOrg" placeholder="Acme Trucking Co." maxlength="120">
+        </div>
       </div>
 
+      <div class="pm-section-label">Contact</div>
+      <div class="pm-static" id="pmEmailStatic"></div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="profilePhone">Mobile phone</label>
+          <input type="tel" id="profilePhone" placeholder="+1 555 123 4567" maxlength="20" oninput="pmClearError('profilePhone')">
+          <div class="pm-err" id="err-profilePhone"></div>
+        </div>
+        <div class="form-group">
+          <label for="profileDob">Date of birth</label>
+          <input type="date" id="profileDob">
+        </div>
+      </div>
       <div class="form-group">
-        <label>Organization</label>
-        <input type="text" id="profileOrg" placeholder="e.g. Acme Trucking Co." maxlength="120">
+        <label for="profileMailLine1">Mailing address</label>
+        <input type="text" id="profileMailLine1" placeholder="Street address" maxlength="160" style="margin-bottom:8px;">
+        <input type="text" id="profileMailLine2" placeholder="Apt, suite, unit" maxlength="160" aria-label="Address line 2">
+      </div>
+      <div class="pm-addr-grid">
+        <div class="form-group">
+          <label for="profileMailCity">City</label>
+          <input type="text" id="profileMailCity" placeholder="City" maxlength="80">
+        </div>
+        <div class="form-group">
+          <label for="profileMailState">State</label>
+          <input type="text" id="profileMailState" placeholder="State" maxlength="40">
+        </div>
+        <div class="form-group">
+          <label for="profileMailZip">ZIP</label>
+          <input type="text" id="profileMailZip" placeholder="ZIP" maxlength="20" oninput="pmClearError('profileMailZip')">
+          <div class="pm-err" id="err-profileMailZip"></div>
+        </div>
       </div>
 
-      <div class="form-group profile-field-readonly">
-        <label>Work Email</label>
-        <input type="text" id="profileEmail" disabled>
-      </div>
-
+      <div class="pm-section-label">Preferences</div>
       <div class="form-group">
-        <label>Mobile Phone <span style="font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></label>
-        <input type="tel" id="profilePhone" placeholder="e.g. +1 555 123 4567" maxlength="20">
-        <div class="hint">Used for optional SMS check-in reminders. U.S. numbers preferred.</div>
-      </div>
-
-      <div class="form-group">
-        <label>SMS Reminders</label>
         <div class="sms-opt-row">
           <input type="checkbox" id="profileSmsOptIn">
           <label class="sms-opt-label" for="profileSmsOptIn">
@@ -9572,9 +9663,8 @@ By clicking "I Agree and Continue," you confirm that you have read and understoo
           </label>
         </div>
       </div>
-
       <div class="form-group">
-        <label>Timezone</label>
+        <label for="profileTimezone">Timezone</label>
         <select id="profileTimezone">
           <option value="America/New_York">Eastern Time (ET)</option>
           <option value="America/Chicago">Central Time (CT)</option>
@@ -9588,41 +9678,15 @@ By clicking "I Agree and Continue," you confirm that you have read and understoo
         <div class="hint">Used to send reminders at the right time for you.</div>
       </div>
 
-      <div style="border-top:1px solid var(--gray-200,#e5e7eb);margin:20px 0 4px;padding-top:16px;">
-        <div style="font-family:'Montserrat',sans-serif;font-size:13px;font-weight:700;color:var(--text,#0f172a);margin-bottom:2px;">Contact &amp; Mailing</div>
-        <div class="hint" style="margin-bottom:12px;">So we can reach you and send you the occasional package or note. Optional, but appreciated.</div>
-      </div>
-
-      <div class="form-group">
-        <label>Date of Birth <span style="font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></label>
-        <input type="date" id="profileDob">
-      </div>
-
-      <div class="form-group">
-        <label>Mailing Address <span style="font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></label>
-        <input type="text" id="profileMailLine1" placeholder="Street address" maxlength="160" style="margin-bottom:8px;">
-        <input type="text" id="profileMailLine2" placeholder="Apt, suite, unit (optional)" maxlength="160">
-      </div>
-
-      <div class="form-group" style="display:flex;gap:10px;flex-wrap:wrap;">
-        <div style="flex:2;min-width:140px;">
-          <label>City</label>
-          <input type="text" id="profileMailCity" placeholder="City" maxlength="80">
-        </div>
-        <div style="flex:1;min-width:80px;">
-          <label>State</label>
-          <input type="text" id="profileMailState" placeholder="State" maxlength="40">
-        </div>
-        <div style="flex:1;min-width:90px;">
-          <label>ZIP</label>
-          <input type="text" id="profileMailZip" placeholder="ZIP" maxlength="20">
-        </div>
-      </div>
+      <input type="hidden" id="profileFirstName">
+      <input type="hidden" id="profileLastName">
+      <input type="hidden" id="profileEmail">
 
     </div>
     <div class="profile-modal-footer">
-      <button class="btn-primary" onclick="saveProfile()" id="profileSaveBtn">Save Changes</button>
-      <span class="profile-modal-save-msg" id="profileSaveMsg" style="display:none;">✓ Saved</span>
+      <span class="pm-footer-err" id="profileFormErr"></span>
+      <span class="profile-modal-save-msg" id="profileSaveMsg" style="display:none;">&#10003; Saved</span>
+      <button class="btn-primary" onclick="saveProfile()" id="profileSaveBtn">Save changes</button>
     </div>
   </div>
 </div>

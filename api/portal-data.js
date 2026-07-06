@@ -189,6 +189,32 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true });
       }
 
+      // ── Profile avatar (client uploads their own photo) ─────────────────────
+      // base64 data URL → public org-assets bucket → avatar_url. Server-set only,
+      // scoped to THIS client. Mirrors the coach org-logo uploader.
+      case 'upload-avatar': {
+        const m = String(body.image_data_url || '').match(/^data:(image\/(png|jpeg|jpg|webp));base64,(.+)$/);
+        if (!m) return res.status(400).json({ error: 'Use a PNG, JPG, or WebP image.' });
+        const mime = m[1];
+        const buf = Buffer.from(m[3], 'base64');
+        if (buf.length > 5 * 1024 * 1024) return res.status(400).json({ error: 'Image is over 5 MB — pick a smaller one.' });
+        const ext = mime.includes('png') ? 'png' : mime.includes('webp') ? 'webp' : 'jpg';
+        const path = `client-avatars/${clientId}.${ext}`;
+        const up = await fetch(`${SUPABASE_URL}/storage/v1/object/org-assets/${path}`, {
+          method: 'POST',
+          headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}`, 'Content-Type': mime, 'x-upsert': 'true' },
+          body: buf,
+        });
+        if (!up.ok) { const e = await up.text().catch(() => ''); return res.status(500).json({ error: 'Photo upload failed', detail: e }); }
+        const url = `${SUPABASE_URL}/storage/v1/object/public/org-assets/${path}?v=${Date.now()}`;
+        await sb(`/rest/v1/clients?id=eq.${clientId}`, 'PATCH', { avatar_url: url }, { Prefer: 'return=minimal' });
+        return res.status(200).json({ ok: true, avatar_url: url });
+      }
+      case 'remove-avatar': {
+        await sb(`/rest/v1/clients?id=eq.${clientId}`, 'PATCH', { avatar_url: null }, { Prefer: 'return=minimal' });
+        return res.status(200).json({ ok: true });
+      }
+
       // ── Vision save (specificity-gated) — Project #2, F3 ────────────────────
       case 'save-vision': {
         const raw = (body.vision || '').trim();
