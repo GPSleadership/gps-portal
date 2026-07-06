@@ -10,7 +10,15 @@
  */
 (function () {
   var params = new URLSearchParams(location.search);
-  if (params.get('__mp') === '1') return;                 // inner iframe: no toggle
+  if (params.get('__mp') === '1') {
+    // Inner framed instance: no toggle, and hide the scrollbar so the desktop's
+    // ~15px scrollbar doesn't eat the last character of full-width content —
+    // real phones use overlay scrollbars, so this makes the preview faithful.
+    var mps = document.createElement('style');
+    mps.textContent = 'html{scrollbar-width:none;-ms-overflow-style:none;} ::-webkit-scrollbar{width:0!important;height:0!important;}';
+    (document.head || document.documentElement).appendChild(mps);
+    return;
+  }
   try {
     if (params.get('dev') === '1') localStorage.setItem('gps_dev_preview', '1');
     if (params.get('dev') === '0') localStorage.removeItem('gps_dev_preview');

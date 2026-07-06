@@ -364,6 +364,22 @@
     }
     html, body { overflow-x: hidden; }
     img { max-width: 100%; }
+    /* Long unbroken words (URLs, IDs) never force the card wider than the screen. */
+    .card, .plan-item .value, .qa-card { overflow-wrap: anywhere; }
+    /* Check-in history: on phones the 5-column table becomes clean stacked cards
+       (each week a labeled block) instead of a cramped, cut-off grid. */
+    @media (max-width: 600px) {
+      .history-table, .history-table tbody { display: block; width: 100%; }
+      .history-table thead { display: none; }
+      .history-table tr.progress-row { display: block; border: 1px solid var(--gray-300); border-radius: 8px; margin-bottom: 10px; padding: 6px 12px; }
+      .history-table tr.progress-row td { display: flex; justify-content: space-between; gap: 14px; border: none; padding: 5px 0; background: none !important; text-align: right; }
+      .history-table tr.progress-row td::before { content: attr(data-label); font-weight: 700; color: var(--gray-600); font-size: 11px; text-transform: uppercase; letter-spacing: .3px; text-align: left; flex: 0 0 auto; }
+      .history-table tr.progress-row td:last-child { display: block; text-align: left; margin-top: 4px; }
+      .history-table tr.progress-row td:last-child::before { display: block; margin-bottom: 3px; }
+      .history-table tr.ck-detail, .history-table tr.ck-detail td { display: block; }
+      .progress-card.show-all .history-table tr.progress-row.beyond-recent { display: block; }
+      .progress-card > div[style*="overflow-x"] { overflow-x: visible; }
+    }
 
     /* radio group */
     .radio-group { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -6476,11 +6492,11 @@ function renderHistory(checkins, client) {
       </td></tr>` : '';
 
     return `<tr class="progress-row${idx >= 2 ? ' beyond-recent' : ''}"${hasDetail ? ` onclick="toggleCheckinDetail('${detailId}')" style="cursor:pointer;"` : ''}>
-      <td style="font-weight:700;color:var(--navy);">Wk ${c.week_number}</td>
-      <td>${date}</td>
-      <td style="font-weight:700;">${metricCell}</td>
-      <td class="${completionClass}">${c.completion_status || '—'}</td>
-      <td style="color:var(--gray-600);font-size:12px;">${actShort}${hasDetail ? ` <span style="color:var(--teal);font-weight:700;white-space:nowrap;">· details ▾</span>` : ''}</td>
+      <td data-label="Week" style="font-weight:700;color:var(--navy);">Wk ${c.week_number}</td>
+      <td data-label="Date">${date}</td>
+      <td data-label="${client.metric_name ? escD(client.metric_name.substring(0,18)) : 'Metric'}" style="font-weight:700;">${metricCell}</td>
+      <td data-label="Follow-through" class="${completionClass}">${c.completion_status || '—'}</td>
+      <td data-label="This week's action" style="color:var(--gray-600);font-size:12px;">${actShort}${hasDetail ? ` <span style="color:var(--teal);font-weight:700;white-space:nowrap;">· details ▾</span>` : ''}</td>
     </tr>${detailRow}`;
   }).join('');
 
@@ -6520,7 +6536,9 @@ function toggleProgress(link) {
 function toggleCheckinDetail(id) {
   const d = document.getElementById(id);
   if (!d) return;
-  d.style.display = (d.style.display === 'none' || !d.style.display) ? 'table-row' : 'none';
+  // Use '' (not 'table-row') so the stylesheet controls it — on mobile the detail
+  // row is display:block (stacked), on desktop it falls back to the default table-row.
+  d.style.display = (d.style.display === 'none' || !d.style.display) ? '' : 'none';
 }
 
 
