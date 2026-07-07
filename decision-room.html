@@ -150,6 +150,13 @@
   .dr-tab.active{background:#fff;color:var(--navy);box-shadow:0 1px 3px rgba(0,45,71,.16);}
   .dr-tab:focus-visible{outline:2px solid var(--teal);outline-offset:2px;}
   @media(max-width:520px){ .dr-tab{font-size:14px;padding:10px 8px;} }
+  /* Mobile: never let a wide table drag the page sideways — each table scrolls
+     inside its own card instead (same pattern as the client portal). */
+  @media (max-width:700px){
+    html, body { overflow-x:hidden; }
+    .wrap { overflow-x:hidden; }
+    table, .sh-table { display:block; width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  }
 </style>
 </head>
 <body>
