@@ -6028,7 +6028,7 @@ function showCelebration(phase, m, sponsored) {
   }
   var metricLine = 'Target: ' + goal + ' &nbsp;·&nbsp; You logged: <span style="color:#002a42;font-weight:600;">' + metric + '</span>' + (onTime ? '' : ' on day ' + (m.day_n != null ? m.day_n : ''));
   var sponsorLine = sponsored ? '<div style="font-size:13px;color:#5a6b76;margin:-6px 0 16px;">Worth making sure your sponsor sees this one.</div>' : '';
-  var shareBtn = sponsored ? '<button onclick="dismissCelebration(' + phase + ')" style="background:#fff;color:#004369;border:1px solid #004369;font-size:13px;font-weight:600;padding:11px;border-radius:8px;cursor:pointer;">Share this with your sponsor</button>' : '';
+  var shareBtn = sponsored ? '<button id="celShareBtn" onclick="shareCelebration(' + phase + ',this)" style="background:#fff;color:#004369;border:1px solid #004369;font-size:13px;font-weight:600;padding:11px;border-radius:8px;cursor:pointer;">Share this with your sponsor</button>' : '';
 
   var ov = document.createElement('div');
   ov.id = 'celebrationOverlay';
@@ -6055,6 +6055,20 @@ function dismissCelebration(phase) {
   var ov = document.getElementById('celebrationOverlay');
   if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
   try { portalData('celebration-seen', { phase: phase }).catch(function () {}); } catch (_) {}
+}
+
+// "Share with your sponsor" — emails each linked sponsor a note + a link to their
+// progress page (server-side), CC's the leader, and marks the modal seen.
+function shareCelebration(phase, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  portalData('share-celebration', { phase: phase })
+    .then(function (r) {
+      if (btn) { btn.textContent = (r && r.sent > 0) ? 'Sent to your sponsor ✓' : 'No sponsor on file'; }
+    })
+    .catch(function () {
+      if (btn) { btn.disabled = false; btn.textContent = 'Share this with your sponsor'; }
+      alert('Could not send just now. Please try again.');
+    });
 }
 
 // ── Blocking milestone reminder modal (T-5 / day-of) ────────────────────────
@@ -6375,13 +6389,13 @@ async function loadCheckinAiRead() {
 // TESTIMONIAL FLYWHEEL — client capture
 // ─────────────────────────────────────────────
 // Prompt copy lives here — edit freely. Engineered to pull a concrete, usable quote
-// (behavior change → outcome → the line another CEO needs to hear) instead of vague praise.
+// (behavior change → outcome → the line another executive leader needs to hear) instead of vague praise.
 const TQ = {
   headline: 'You hit a real milestone. Mind capturing it while it’s fresh?',
   sub: 'Three short questions. Two minutes. It helps Alex — and the next leader deciding whether to start.',
   q1: 'What can you do now as a leader that you couldn’t (or didn’t) do before we started?',
   q2: 'What changed for your team or your business as a result?',
-  q3: 'What would you tell another CEO who’s on the fence about working with Alex?',
+  q3: 'What would you tell another executive leader who’s on the fence about working with Alex?',
   nps: 'How likely are you to recommend Alex to another leader? (0–10)',
   consent: 'GPS may share my response, with my name and title, publicly.',
 };

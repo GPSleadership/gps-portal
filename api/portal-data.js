@@ -356,6 +356,65 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true });
       }
 
+      // ── Share a goal-hit with the leader's sponsor(s) ───────────────────────
+      // Emails each linked sponsor a short note + a link to their progress page,
+      // CC'ing the leader so they see it went out. Sponsor lookup is server-side
+      // (direct linked_client_id + sponsor_leaders join); the leader never sees
+      // the sponsor's token.
+      case 'share-celebration': {
+        const phase = (body.phase === 90 || body.phase === '90') ? 90 : 30;
+        const clRows = await (await sb(`/rest/v1/clients?id=eq.${clientId}&select=name,email&limit=1`)).json().catch(() => []);
+        const cl = (Array.isArray(clRows) && clRows[0]) ? clRows[0] : {};
+        const firstName = String(cl.name || '').trim().split(/\s+/)[0] || 'Your leader';
+
+        const direct = await (await sb(`/rest/v1/sponsors?linked_client_id=eq.${clientId}&select=name,email,sponsor_token`)).json().catch(() => []);
+        const slRows = await (await sb(`/rest/v1/sponsor_leaders?client_id=eq.${clientId}&select=sponsor_id`)).json().catch(() => []);
+        let joined = [];
+        const slIds = (Array.isArray(slRows) ? slRows : []).map(r => r.sponsor_id).filter(Boolean);
+        if (slIds.length) {
+          joined = await (await sb(`/rest/v1/sponsors?id=in.(${slIds.join(',')})&select=name,email,sponsor_token`)).json().catch(() => []);
+        }
+        const seen = new Set();
+        const sponsors = [].concat(Array.isArray(direct) ? direct : [], Array.isArray(joined) ? joined : [])
+          .filter(s => s && s.email && !seen.has(s.email) && seen.add(s.email));
+        if (!sponsors.length) return res.status(200).json({ ok: true, sent: 0 });
+
+        let sent = 0;
+        for (const sp of sponsors) {
+          const link = `https://portal.gpsleadership.org/sponsor?token=${sp.sponsor_token}`;
+          const spFirst = String(sp.name || '').trim().split(/\s+/)[0] || 'there';
+          const subject = `${firstName} just hit their ${phase}-day goal`;
+          const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;line-height:1.6;font-size:15px;">`
+            + `<div style="background:#004369;padding:18px 24px;border-radius:8px 8px 0 0;color:#fff;font-size:18px;font-weight:700;">${firstName} just hit their ${phase}-day goal</div>`
+            + `<div style="background:#fff;padding:24px;border:1px solid #d0d0d0;border-top:none;border-radius:0 0 8px 8px;">`
+            + `<p>Hi ${escapeHtml(spFirst)},</p>`
+            + `<p>${escapeHtml(firstName)} wanted you to see this: they just reached their ${phase}-day goal. The work is showing up in the numbers.</p>`
+            + `<div style="text-align:center;margin:22px 0;"><a href="${link}" style="background:#DB1F48;color:#fff;text-decoration:none;padding:13px 28px;border-radius:8px;font-weight:700;display:inline-block;">See their progress →</a></div>`
+            + `<p style="margin-top:24px;">– Alex Tremble<br><span style="color:#666;font-size:13px;">GPS Leadership Solutions</span></p></div></div>`;
+          if (RESEND_API_KEY) {
+            try {
+              const r = await fetch('https://api.resend.com/emails', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  from: `Alex Tremble – GPS Leadership <${RESEND_FROM}>`,
+                  to: [sp.email],
+                  cc: cl.email ? [cl.email] : undefined,
+                  reply_to: 'alex@gpsleadership.org',
+                  subject,
+                  html,
+                }),
+              });
+              if (r.ok) sent++;
+            } catch (_) { /* best-effort */ }
+          }
+        }
+        // Sharing also counts as seen, so the modal won't reappear.
+        const scol = phase === 90 ? 'celebrated_90_at' : 'celebrated_30_at';
+        await sb(`/rest/v1/clients?id=eq.${clientId}`, 'PATCH', { [scol]: new Date().toISOString() }, { Prefer: 'return=minimal' });
+        return res.status(200).json({ ok: true, sent });
+      }
+
       // ── Ask Alex history (post-lockdown read path; anon reads are dead) ─────
       case 'ask-history': {
         const r = await sb(`/rest/v1/ask_alex_log?client_id=eq.${clientId}&select=id,asked_at,question_text,response_text&order=asked_at.desc&limit=7`);
