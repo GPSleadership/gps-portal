@@ -12950,7 +12950,32 @@ async function drSendSponsor(sponsorId){
     var isA=(w.engagement_kind==='assessment');
     var statuses=isA?['setup','discovery_complete','questions_drafted','sponsor_review','pre_survey_open','pre_survey_closed','debrief_scheduled','report_uploaded','complete']:['setup','discovery_complete','questions_drafted','sponsor_review','pre_survey_open','pre_survey_closed','workshop_delivered','post_survey_open','post_survey_closed','debrief_scheduled','report_uploaded','complete'];
     var opts=statuses.map(function(s){ var lab=isA?s.replace('pre_survey','survey'):s; return '<option value="'+s+'"'+(w.status===s?' selected':'')+'>'+lab+'</option>'; }).join('');
+    // Engagement details editor — every intake field stays editable after creation
+    // (details arrive late, sponsors change). Org autocomplete reuses WS.orgs; load it
+    // if we deep-linked straight into a workshop before the list populated it.
+    if(!(WS.orgs&&WS.orgs.length)){ loadOrgs().then(function(){ var pp=document.getElementById('wsPane'); if(pp&&WS.tab==='overview') wsOverview(pp); }); }
+    var _lbl='display:block;font-size:12px;font-weight:700;color:#5a6b76;margin-bottom:4px;';
+    var _inp='width:100%;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;box-sizing:border-box;font-family:inherit;';
+    var wsdLevels={'':'—',executive:'Executive',manager:'Manager',mixed:'Mixed',na:'N/A'};
+    var wsdLevelOpts=['','executive','manager','mixed','na'].map(function(lv){ return '<option value="'+lv+'"'+(((w.audience_level||''))===lv?' selected':'')+'>'+wsdLevels[lv]+'</option>'; }).join('');
+    var wsdOrgDlHtml=(WS.orgs||[]).map(function(o){ return '<option value="'+esc(o.name)+'">'; }).join('');
+    var wsdTagsStr=(Array.isArray(w.tags)?w.tags:[]).join(', ');
+    var wsdDetailsCard=card(
+      '<div style="font-weight:800;margin-bottom:4px;color:#004369;">Engagement details</div>'+
+      '<div style="font-size:12px;color:#5a6b76;margin-bottom:12px;">Captured at intake — all editable anytime as details firm up or a sponsor changes.</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'+
+        '<div><label style="'+_lbl+'">Title</label><input id="wsdTitle" value="'+esc(w.title||'')+'" style="'+_inp+'"></div>'+
+        '<div><label style="'+_lbl+'">Client / organization'+(isA?' *':'')+'</label><input id="wsdOrg" list="wsdOrgDl" autocomplete="off" value="'+esc(w.client_org_name||'')+'" placeholder="Type or select" style="'+_inp+'"><datalist id="wsdOrgDl">'+wsdOrgDlHtml+'</datalist></div>'+
+        (isA?'':'<div><label style="'+_lbl+'">Workshop date</label><input type="date" id="wsdWsDate" value="'+(w.workshop_date||'')+'" style="'+_inp+'"></div>')+
+        '<div><label style="'+_lbl+'">Industry</label><input id="wsdIndustry" value="'+esc(w.industry||'')+'" style="'+_inp+'"></div>'+
+        '<div><label style="'+_lbl+'">Audience level</label><select id="wsdLevel" style="'+_inp+'">'+wsdLevelOpts+'</select></div>'+
+        '<div><label style="'+_lbl+'">Company size band</label><input id="wsdSize" value="'+esc(w.company_size_band||'')+'" placeholder="$10–25M" style="'+_inp+'"></div>'+
+        '<div style="grid-column:1 / -1;"><label style="'+_lbl+'">Internal tags (comma-separated)</label><input id="wsdTags" value="'+esc(wsdTagsStr)+'" placeholder="trucking, assessment" style="'+_inp+'"></div>'+
+      '</div>'+
+      '<div style="margin-top:12px;">'+btn('wsdSave','Save details','ghost')+'<span id="wsdOut" style="font-size:12px;color:#5a6b76;margin-left:8px;"></span></div>'
+    );
     p.innerHTML=
+      wsdDetailsCard+
       card('<div style="font-weight:800;margin-bottom:10px;color:#004369;">Status &amp; dates</div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;"><label style="font-size:12px;color:#5a6b76;font-weight:700;">Status</label><select id="wsStatus" style="padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;">'+opts+'</select>'+btn('wsStatusSave','Save status','ghost')+'</div><div style="font-size:13px;color:#5a6b76;">'+(isA?'':('Workshop: '+fmtDate(w.workshop_date)+' · '))+'Debrief date</div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px;"><input type="date" id="wsEditDebrief" value="'+(w.debrief_date||'')+'" style="padding:7px 10px;border:1.5px solid #dbe3e6;border-radius:7px;">'+btn('wsDatesSave','Save','ghost')+'<span id="wsDatesOut" style="font-size:12px;color:#5a6b76;"></span></div>')+
       card('<div style="font-weight:800;margin-bottom:6px;color:#004369;">Engagement fee</div><div style="font-size:12px;color:#5a6b76;margin-bottom:8px;">What you\'re charging for this '+(isA?'assessment':'workshop')+' — update anytime. Feeds the Insights revenue total.</div><div style="display:flex;gap:8px;align-items:center;"><span style="color:#5a6b76;">$</span><input type="number" id="wsEditFee" min="0" step="100" value="'+(w.fee!=null?w.fee:'')+'" placeholder="e.g. 5000" style="width:140px;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;">'+btn('wsFeeSave','Save','ghost')+'<span id="wsFeeOut" style="font-size:12px;color:#5a6b76;"></span></div>')+
       card('<div style="font-weight:800;margin-bottom:8px;color:#004369;">Sponsor dashboard link</div><div style="font-size:12px;background:#F7F4EE;padding:10px;border-radius:7px;word-break:break-all;color:#004369;">'+esc(spLink)+'</div><div style="margin-top:10px;">'+btn('wsCopyLink','Copy link','ghost')+'</div>')+
@@ -12960,6 +12985,26 @@ async function drSendSponsor(sponsorId){
     document.getElementById('wsStatusSave').onclick=async function(){ try{ await cdUpdate('workshops',{status:document.getElementById('wsStatus').value,updated_at:new Date().toISOString()},{eq:{id:w.id}}); w.status=document.getElementById('wsStatus').value; toast('Status saved.'); wsDetail(); }catch(e){ toast(e.message); } };
     var wsDatesBtn=document.getElementById('wsDatesSave'); if(wsDatesBtn) wsDatesBtn.onclick=async function(){ var o=document.getElementById('wsDatesOut'); o.textContent='Saving…'; var patch={ debrief_date:(document.getElementById('wsEditDebrief').value||null), updated_at:new Date().toISOString() }; var wd=document.getElementById('wsEditWsDate'); if(wd) patch.workshop_date=(wd.value||null); try{ await cdUpdate('workshops',patch,{eq:{id:w.id}}); w.debrief_date=patch.debrief_date; if(wd) w.workshop_date=patch.workshop_date; o.textContent='Saved.'; }catch(e){ o.textContent=e.message; } };
     var wsFeeBtn=document.getElementById('wsFeeSave'); if(wsFeeBtn) wsFeeBtn.onclick=async function(){ var o=document.getElementById('wsFeeOut'); o.textContent='Saving…'; var feeEl=document.getElementById('wsEditFee'); var fee=(feeEl&&feeEl.value!=='')?(parseFloat(feeEl.value)||0):null; try{ await cdUpdate('workshops',{fee:fee,updated_at:new Date().toISOString()},{eq:{id:w.id}}); w.fee=fee; o.textContent='Saved.'; }catch(e){ o.textContent=e.message; } };
+    var wsdBtn=document.getElementById('wsdSave');
+    if(wsdBtn) wsdBtn.onclick=async function(){
+      var o=document.getElementById('wsdOut'); o.textContent='Saving…';
+      var name=(document.getElementById('wsdOrg').value||'').trim();
+      if(isA && !name){ o.textContent='Client / organization is required for an assessment.'; return; }
+      var match=(WS.orgs||[]).find(function(x){ return (x.name||'').toLowerCase()===name.toLowerCase(); });
+      var tags=(document.getElementById('wsdTags').value||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
+      var patch={
+        title:(document.getElementById('wsdTitle').value||'').trim()||w.title,
+        client_org_name:name||null,
+        organization_id:(match?match.id:(w.organization_id||null)),
+        industry:((document.getElementById('wsdIndustry').value||'').trim()||null),
+        audience_level:(document.getElementById('wsdLevel').value||null),
+        company_size_band:((document.getElementById('wsdSize').value||'').trim()||null),
+        tags:tags,
+        updated_at:new Date().toISOString()
+      };
+      var wd=document.getElementById('wsdWsDate'); if(wd) patch.workshop_date=(wd.value||null);
+      try{ await cdUpdate('workshops',patch,{eq:{id:w.id}}); Object.assign(w,patch); toast('Details saved.'); wsDetail(); }catch(e){ o.textContent=e.message; }
+    };
     document.getElementById('wsCopyLink').onclick=function(){ navigator.clipboard.writeText(spLink).then(function(){ toast('Link copied.'); },function(){ toast(spLink); }); };
     var cpoc=document.getElementById('wsCopyPoc'); if(cpoc) cpoc.onclick=function(){ navigator.clipboard.writeText(pocLink).then(function(){ toast('POC link copied.'); },function(){ toast(pocLink); }); };
     document.getElementById('wsDiscSave').onclick=async function(){ var o=document.getElementById('wsDiscOut'); o.textContent='Saving…'; try{ await cdUpdate('workshops',{discovery_transcript:document.getElementById('wsDisc').value,updated_at:new Date().toISOString()},{eq:{id:w.id}}); w.discovery_transcript=document.getElementById('wsDisc').value; o.textContent='Saved.'; }catch(e){ o.textContent=e.message; } };
