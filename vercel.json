@@ -91,6 +91,10 @@
       "schedule": "0 12 * * 1-5"
     },
     {
+      "path": "/api/send-reminders?action=milestones",
+      "schedule": "0 13 * * *"
+    },
+    {
       "path": "/api/ops-monitor",
       "schedule": "0 */6 * * *"
     },

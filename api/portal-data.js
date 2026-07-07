@@ -113,6 +113,63 @@ async function visionGate(text) {
   }
 }
 
+// Milestone + celebration state for the 30- and 90-day goals. Computed here so the
+// dates and "on-time vs recovery" call are trustworthy (never client date math).
+// Reward-timing rule (locked): a hit ON/BEFORE the target date is on-time; a hit
+// AFTER it is recovery (still celebrated); target passed with value < target is a
+// miss (day-of reflection only — no false celebration).
+function computeMilestoneState(client) {
+  const startStr = client.coaching_program_start_date || client.plan_start_date || null;
+  const sponsored = client.sponsor_outcome_focus === true;
+  const out = { sponsored, preferred_name: client.preferred_name || null, m30: null, m90: null };
+  if (!startStr) return out;
+  const start = new Date(String(startStr).slice(0, 10) + 'T00:00:00Z');
+  if (isNaN(start.getTime())) return out;
+  const now = new Date();
+  const DAY = 86400000;
+  const day_n = Math.max(0, Math.floor((now - start) / DAY));
+  const target  = client.metric_target  != null ? Number(client.metric_target)  : null;
+  const current = client.metric_current != null ? Number(client.metric_current) : null;
+  const todayOnly = new Date(now.toISOString().slice(0, 10) + 'T00:00:00Z');
+  function phase(days, goalText, celebratedAt) {
+    const targetDate = new Date(start.getTime() + days * DAY);
+    const hasMetric = (target != null && current != null && !Number.isNaN(target) && !Number.isNaN(current));
+    const hit = hasMetric && current >= target;
+    const past = now > targetDate;
+    const missed = hasMetric && !hit && past;
+    const celebrated = !!celebratedAt;
+    const variant = hit ? (now <= targetDate ? 'on_time' : 'recovery') : (missed ? 'miss' : null);
+    // In-portal reminder window: exact T-5 and day-of (matches the email cadence),
+    // only while the goal isn't already hit. Client de-dups per session.
+    const daysUntil = Math.round((targetDate - todayOnly) / DAY);
+    let reminder_due = null;
+    if (!hit) {
+      if (daysUntil === 5) reminder_due = 't5';
+      else if (daysUntil === 0) reminder_due = 'dayof';
+    }
+    return {
+      target_date: targetDate.toISOString().slice(0, 10),
+      day_n,
+      days_until: daysUntil,
+      goal: goalText || null,
+      plan: client.start_behavior || null,
+      metric_current: current,
+      metric_target: target,
+      hit,
+      missed,
+      celebrated,
+      variant,
+      should_celebrate: hit && !celebrated,   // client shows the modal once
+      reminder_due,
+    };
+  }
+  out.m30 = phase(30, client.goal_30_day, client.celebrated_30_at);
+  // 90-day goal: dedicated field, falling back to goal_statement for clients
+  // captured before goal_90_day existed (§2.1).
+  out.m90 = phase(90, client.goal_90_day || client.goal_statement, client.celebrated_90_at);
+  return out;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -269,14 +326,16 @@ export default async function handler(req, res) {
       // ── Stakeholders ────────────────────────────────────────────────────────
       // ── Results tab data (post-lockdown read path; anon reads are dead) ─────
       case 'results-data': {
-        const [ck, sr, st, sc, sh] = await Promise.all([
+        const [ck, sr, st, sc, sh, cl] = await Promise.all([
           sb(`/rest/v1/checkins?client_id=eq.${clientId}&select=*&order=week_number.asc`),
           sb(`/rest/v1/survey_responses?client_id=eq.${clientId}&select=checkpoint,score,scale,open_response,comments,comments_visible_to_client,submitted_at&order=submitted_at.asc`),
           sb(`/rest/v1/survey_tokens?client_id=eq.${clientId}&select=checkpoint,non_response_flagged,is_used`),
           sb(`/rest/v1/self_checks?client_id=eq.${clientId}&select=checkpoint,q1_score,q2_score,q3_response,submitted_at`),
           sb(`/rest/v1/stakeholders?client_id=eq.${clientId}&is_active=eq.true&select=id,name,email,relationship,is_supervisor,is_board_member,confirmed_at,created_at&order=created_at.asc`),
+          sb(`/rest/v1/clients?id=eq.${clientId}&select=coaching_program_start_date,plan_start_date,metric_target,metric_current,goal_30_day,goal_90_day,goal_statement,start_behavior,sponsor_outcome_focus,preferred_name,celebrated_30_at,celebrated_90_at&limit=1`),
         ]);
         const j = async (r) => (r.ok ? await r.json() : []);
+        const clientRows = await j(cl);
         return res.status(200).json({
           ok: true,
           checkins: await j(ck),
@@ -284,7 +343,17 @@ export default async function handler(req, res) {
           survey_tokens: await j(st),
           self_checks: await j(sc),
           stakeholders: await j(sh),
+          milestone: clientRows[0] ? computeMilestoneState(clientRows[0]) : null,
         });
+      }
+
+      // ── Celebration seen: stamp so a goal-hit modal shows exactly once ───────
+      case 'celebration-seen': {
+        const phase = body.phase === 90 || body.phase === '90' ? 90 : (body.phase === 30 || body.phase === '30' ? 30 : null);
+        if (!phase) return res.status(400).json({ error: 'phase must be 30 or 90' });
+        const col = phase === 90 ? 'celebrated_90_at' : 'celebrated_30_at';
+        await sb(`/rest/v1/clients?id=eq.${clientId}`, 'PATCH', { [col]: new Date().toISOString() }, { Prefer: 'return=minimal' });
+        return res.status(200).json({ ok: true });
       }
 
       // ── Ask Alex history (post-lockdown read path; anon reads are dead) ─────

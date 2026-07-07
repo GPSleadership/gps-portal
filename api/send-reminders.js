@@ -286,6 +286,147 @@ export default async function handler(req, res) {
     }
   }
 
+  // ─── ACTION: milestones — 30/90-day reminders at T-5 and day-of ─────────────
+  // Mirrors the weekly sweep: active clients with a start date + email; compute each
+  // milestone's target date; send once at T-5 and once day-of, stamping the matching
+  // milestone_*_sent_at ONLY after a confirmed send (quota-safe, no silent dupes).
+  // Sponsored vs self copy diverges only on the 90-day 5-day-out note. Day-of is
+  // skipped when the goal is already hit (the celebration modal covers that).
+  if (action === 'milestones') {
+    try {
+      const clientsRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/clients?is_active=eq.true&is_archived=eq.false&email=not.is.null&select=id,name,email,token,coaching_program_start_date,plan_start_date,metric_target,metric_current,goal_30_day,goal_90_day,goal_statement,sponsor_outcome_focus,milestone_30_5day_sent_at,milestone_30_dayof_sent_at,milestone_90_5day_sent_at,milestone_90_dayof_sent_at`,
+        { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+      );
+      const clients = clientsRes.ok ? await clientsRes.json() : [];
+      if (!Array.isArray(clients) || clients.length === 0) {
+        await recordHeartbeat('send-milestones', 'ok', 'no active clients');
+        return res.status(200).json({ sent: 0 });
+      }
+
+      const FALLBACK = {
+        milestone_30_5day: {
+          subject: 'Your 30-day goal is 5 days away',
+          body: 'Your 30-day goal is 5 days away: "{{goal_30}}". This isn\'t a grade — it\'s your window to adjust while there\'s still time. One question: if the mark were today, would you have hit it? If yes, name what made it work so you keep doing it. If not, pick the one move you can still make in the next 5 days — and put it on your calendar now.',
+        },
+        milestone_30_dayof: {
+          subject: 'Today is your 30-day mark',
+          body: 'Today is your 30-day mark. The goal you set: "{{goal_30}}". Two minutes, straight answer: hit it, missed it, or somewhere in between? Log it in this week\'s check-in — what moved it, and what got in the way. Honest at 30 is what makes 90 possible.',
+        },
+        milestone_90_5day_sponsored: {
+          subject: '5 days to your 90-day goal',
+          body: 'Five days to your 90-day goal — the one your sponsor is watching: "{{goal_90}}". Get ahead of it now. What result can you point to, and what backs it up? If there\'s a gap between where you are and what you committed to, name it before the date — a gap you surface is a coaching conversation; a gap you hide is a surprise. Then make the one move that closes the most ground in the next 5 days.',
+        },
+        milestone_90_5day_self: {
+          subject: '5 days to your 90-day goal',
+          body: 'Five days to your 90-day goal — the number you set out to move: "{{goal_90}}". Get ahead of it now. What result can you point to, and what backs it up? If there\'s a gap between where you are and what you committed to, name it before the date — a gap you surface is a coaching conversation; a gap you bury just costs you the result you\'re paying for. Then make the one move that closes the most ground in the next 5 days.',
+        },
+        milestone_90_dayof: {
+          subject: 'Today is your 90-day mark',
+          body: 'Today is your 90-day mark. The goal you set 90 days ago: "{{goal_90}}". Log what you delivered against it — wins and misses, plainly. Then two questions: what would the people around you say changed over these 90 days? And what\'s worth building next? This is a checkpoint, not a verdict — the point is what you do with it.',
+        },
+      };
+
+      const todayM = new Date(); todayM.setHours(0, 0, 0, 0);
+      const DAYMS = 86400000;
+      let sent = 0; const errs = []; const sentList = [];
+
+      for (const client of clients) {
+        const startStr = client.coaching_program_start_date || client.plan_start_date;
+        if (!startStr) continue;
+        const start = parseLocalDate(startStr); start.setHours(0, 0, 0, 0);
+        if (isNaN(start)) continue;
+        const firstName = (client.name || '').split(' ')[0] || 'there';
+        const portalLink = `${PORTAL_BASE}?token=${client.token}`;
+        const target = client.metric_target != null ? Number(client.metric_target) : null;
+        const current = client.metric_current != null ? Number(client.metric_current) : null;
+        const hit = (target != null && current != null && !isNaN(target) && !isNaN(current) && current >= target);
+        const sponsored = client.sponsor_outcome_focus === true;
+        const goal30 = client.goal_30_day || '';
+        const goal90 = client.goal_90_day || client.goal_statement || '';
+
+        const phases = [
+          { days: 30, goalText: goal30, t5Key: 'milestone_30_5day', t5Col: 'milestone_30_5day_sent_at', dofKey: 'milestone_30_dayof', dofCol: 'milestone_30_dayof_sent_at' },
+          { days: 90, goalText: goal90, t5Key: sponsored ? 'milestone_90_5day_sponsored' : 'milestone_90_5day_self', t5Col: 'milestone_90_5day_sent_at', dofKey: 'milestone_90_dayof', dofCol: 'milestone_90_dayof_sent_at' },
+        ];
+
+        for (const ph of phases) {
+          const targetDate = new Date(start.getTime() + ph.days * DAYMS);
+          const daysUntil = Math.round((targetDate - todayM) / DAYMS);
+          let window = null, key = null, stampCol = null;
+          if (daysUntil === 5)      { window = 't5';    key = ph.t5Key;  stampCol = ph.t5Col; }
+          else if (daysUntil === 0) { window = 'dayof'; key = ph.dofKey; stampCol = ph.dofCol; }
+          if (!window) continue;
+          if (window === 'dayof' && hit) continue;   // a hit is celebrated, not reminded
+          if (client[stampCol]) continue;            // already sent this reminder
+          if (!ph.goalText) continue;                // no goal text → nothing to send
+
+          const gvar = ph.days === 30 ? { goal_30: ph.goalText, first_name: firstName } : { goal_90: ph.goalText, first_name: firstName };
+          const tpl = await getApprovedTemplate(key);
+          const fb = FALLBACK[key];
+          const subject = (tpl && tpl.subject) ? fillTemplate(tpl.subject, gvar) : fillTemplate(fb.subject, gvar);
+          const bodyProse = (tpl && tpl.body_text) ? tplProse(fillTemplate(tpl.body_text, gvar)) : tplProse(fillTemplate(fb.body, gvar));
+
+          const html = `
+            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
+              <div style="background:#004369;padding:20px 28px;border-radius:8px 8px 0 0;">
+                <div style="color:#E5DDC8;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">GPS Leadership Solutions</div>
+                <div style="color:#ffffff;font-size:20px;font-weight:700;">${subject}</div>
+              </div>
+              <div style="background:#ffffff;padding:28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
+                ${bodyProse}
+                <div style="text-align:center;margin:24px 0 8px;">
+                  <a href="${portalLink}" style="background:#DB1F48;color:#ffffff;text-decoration:none;padding:14px 30px;border-radius:8px;font-size:15px;font-weight:700;display:inline-block;">Open my check-in →</a>
+                </div>
+                <p style="margin-top:28px;">– Alex Tremble<br /><span style="color:#666;font-size:13px;">GPS Leadership Solutions</span></p>
+                <div style="margin-top:28px;padding-top:16px;border-top:1px solid #eee;font-size:11px;color:#999;">You're receiving this because you have an active engagement with GPS Leadership.</div>
+              </div>
+            </div>`;
+
+          if (!RESEND_API_KEY) continue;
+          try {
+            const emailRes = await fetch('https://api.resend.com/emails', {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                from: `Alex Tremble – GPS Leadership <${RESEND_FROM}>`,
+                to: [client.email],
+                subject,
+                html,
+                text: String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
+                reply_to: 'alex@gpsleadership.org',
+              }),
+            });
+            const result = await emailRes.json();
+            if (!emailRes.ok) {
+              errs.push({ client: client.name, key, error: result });
+              await logEmail({ clientId: client.id, recipientEmail: client.email, recipientName: client.name, emailType: 'milestone', subject, status: 'error', errorDetails: result });
+            } else {
+              sent++; sentList.push({ name: client.name, key });
+              await logEmail({ clientId: client.id, recipientEmail: client.email, recipientName: client.name, emailType: 'milestone', subject, status: 'sent', resendId: result.id });
+              const nowIso = new Date().toISOString();
+              await fetch(`${SUPABASE_URL}/rest/v1/clients?id=eq.${client.id}`, {
+                method: 'PATCH',
+                headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+                body: JSON.stringify({ [stampCol]: nowIso }),
+              });
+              client[stampCol] = nowIso; // guard against a double-send within this same run
+            }
+          } catch (err) {
+            errs.push({ client: client.name, key, error: err.message });
+            await logEmail({ clientId: client.id, recipientEmail: client.email, recipientName: client.name, emailType: 'milestone', subject, status: 'error', errorDetails: err.message });
+          }
+        }
+      }
+
+      await recordHeartbeat('send-milestones', 'ok', `sent ${sent}${errs.length ? '; ' + errs.length + ' errors' : ''}`);
+      return res.status(200).json({ sent, errors: errs, sentList });
+    } catch (err) {
+      await recordHeartbeat('send-milestones', 'error', err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   // ─── FETCH ALL ACTIVE CLIENTS WITH A PLAN ──────────────────────────────────
   const clientsRes = await fetch(
     `${SUPABASE_URL}/rest/v1/clients?is_active=eq.true&is_archived=eq.false&plan_start_date=not.is.null&email=not.is.null&select=id,name,email,token,plan_start_date`,

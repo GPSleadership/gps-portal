@@ -3654,6 +3654,9 @@ async function loadClient() {
       window._currentClient = client;
 
       renderPortal(client, checkins || []);
+      // Goal-hit celebration (once) takes priority; otherwise a due milestone
+      // reminder (T-5 / day-of), de-duped per session so it never stacks or nags.
+      try { if (!maybeShowCelebration(rd.milestone)) maybeShowMilestoneReminder(rd.milestone); } catch (_) {}
       // Email deep-link: the Monday reminder's status button (?checkin=on_track|partial|off_track)
       // drops the leader straight into the weekly check-in with the tapped status pre-noted. (2026-07-02)
       try {
@@ -5723,17 +5726,22 @@ function renderCheckinForm(client, checkins, currentWeek) {
         <div style="background:var(--light-sand);border-radius:6px;padding:10px 14px;font-size:13px;color:var(--navy);font-style:italic;">"${priorAction}"</div>
       </div>
       <div class="form-group">
-        <label>Did you follow through?</label>
+        <label>Last week's commitment — did you deliver? <span style="color:var(--red)">*</span></label>
         <div class="radio-group" id="completionGroup">
-          <label onclick="selectRadio('completionGroup', this)"><input type="radio" name="completion" value="Yes" /><span>Yes</span></label>
+          <label onclick="selectRadio('completionGroup', this)"><input type="radio" name="completion" value="Yes" /><span>Done</span></label>
           <label onclick="selectRadio('completionGroup', this)"><input type="radio" name="completion" value="Partially" /><span>Partially</span></label>
-          <label onclick="selectRadio('completionGroup', this)"><input type="radio" name="completion" value="No" /><span>No</span></label>
+          <label onclick="selectRadio('completionGroup', this)"><input type="radio" name="completion" value="No" /><span>Not done</span></label>
         </div>
       </div>
       <div class="form-group" id="barrierGroup" style="display:none;">
         <label>What got in the way? <span style="color:var(--red)">*</span></label>
         <div class="hint">1–2 sentences. This helps us troubleshoot the system, not judge you.</div>
         <textarea id="completionBarrier" placeholder="Be brief — what specifically got in the way?"></textarea>
+      </div>
+      <div class="form-group">
+        <label>What happened as a result? <span style="color:var(--red)">*</span></label>
+        <div class="hint">One or two lines — what moved, what got in the way.</div>
+        <textarea id="lastOutcome" placeholder="What happened as a result of last week's commitment?"></textarea>
       </div>` : ''}
 
       <!-- METRIC INPUTS (1 required, 2-3 if defined) -->
@@ -5855,6 +5863,7 @@ function collectFormData(noCompletion) {
     completion:  (!noCompletion && completionLabel) ? completionLabel.querySelector('input').value : '',
     action:      (document.getElementById('plannedAction')      || {}).value || '',
     barrier:     (document.getElementById('completionBarrier') || {}).value || '',
+    outcome:     (document.getElementById('lastOutcome')       || {}).value || '',
     notes:       (document.getElementById('reflectionNotes')   || {}).value || '',
   };
 }
@@ -5902,6 +5911,12 @@ function initRatioPreview() {
 }
 
 async function loadDraftIntoForm(clientId, weekNumber) {
+  // Carry a milestone-reminder "one move" into this week's commitment, once.
+  try {
+    var _pf = sessionStorage.getItem('gps_prefill_action');
+    var _pfEl = document.getElementById('plannedAction');
+    if (_pf && _pfEl && !_pfEl.value) { _pfEl.value = _pf; sessionStorage.removeItem('gps_prefill_action'); }
+  } catch (_) {}
   let data = null;
   try { const r = await portalData('get-draft', { week_number: weekNumber }); data = r.draft; }
   catch (e) { return; }
@@ -5946,9 +5961,11 @@ async function loadDraftIntoForm(clientId, weekNumber) {
   // Restore text areas
   const actionEl  = document.getElementById('plannedAction');
   const barrierEl = document.getElementById('completionBarrier');
+  const outcomeEl = document.getElementById('lastOutcome');
   const notesEl   = document.getElementById('reflectionNotes');
   if (actionEl  && d.action)  actionEl.value  = d.action;
   if (barrierEl && d.barrier) barrierEl.value = d.barrier;
+  if (outcomeEl && d.outcome) outcomeEl.value = d.outcome;
   if (notesEl   && d.notes)   notesEl.value   = d.notes;
 
   // Wire up ratio preview listeners now that the form is in the DOM
@@ -5967,6 +5984,143 @@ async function loadDraftIntoForm(clientId, weekNumber) {
 
 async function deleteDraft(clientId, weekNumber) {
   try { await portalData('delete-draft', { week_number: weekNumber }); } catch (_) { /* silent */ }
+}
+
+// ── Goal-hit celebration modal (Executive Impact System) ────────────────────
+// Fires once when the logged metric crosses the goal target. The server decides
+// should_celebrate + variant (on_time | recovery); dismissing stamps it seen so
+// it never reappears. Miss is handled by the day-of reminder, not here.
+function maybeShowCelebration(milestone) {
+  if (!milestone) return false;
+  var phase = null, m = null;
+  if (milestone.m90 && milestone.m90.should_celebrate) { phase = 90; m = milestone.m90; }
+  else if (milestone.m30 && milestone.m30.should_celebrate) { phase = 30; m = milestone.m30; }
+  if (!phase) return false;
+  showCelebration(phase, m, !!milestone.sponsored);
+  return true;
+}
+
+function showCelebration(phase, m, sponsored) {
+  var onTime  = m.variant === 'on_time';
+  var accent  = onTime ? '#01949A' : '#BA7517';
+  var badgeBg = onTime ? '#d7efe8' : '#faeeda';
+  var badgeFg = onTime ? '#0F6E56' : '#854F0B';
+  var badge   = (onTime ? 'On time' : 'Recovered') + ' · day ' + (m.day_n != null ? m.day_n : '');
+  var icon    = onTime ? '<path d="M20 6 9 17l-5-5"/>' : '<path d="M3 17l6-6 4 4 8-8"/><path d="M17 7h4v4"/>';
+  var goal    = escD(m.goal || 'your goal');
+  var plan    = m.plan ? escD(m.plan) : '';
+  var metric  = (m.metric_current != null ? escD(String(m.metric_current)) : '—');
+  var title, planLead, body, cta;
+  if (phase === 30) {
+    title    = onTime ? 'You hit your 30-day goal' : 'You reached your 30-day goal';
+    planLead = onTime ? 'The plan you wrote to get here:' : "It took a little longer than the mark — and you didn't quit to get here. The plan you set:";
+    body     = onTime
+      ? "You said you'd do it. You did, and the number moved. Name the one piece of that plan that mattered most — that's the habit to carry into the next 30."
+      : "Name the one thing that finally moved it, then carry that into the 90-day goal. You've got momentum now.";
+    cta      = onTime ? 'Start my next sprint →' : 'Set my next commitment →';
+  } else {
+    title    = onTime ? 'You hit your 90-day goal' : 'You reached your 90-day goal';
+    planLead = onTime ? 'Ninety days ago, this was the plan:' : 'Later than you planned — but you closed it, and closing it is what counts. Ninety days ago, this was the plan:';
+    body     = onTime
+      ? "You committed to it, you ran it, and here's the result. That's the proof the work produces the number. Take a beat — then decide what the next 90 is worth building toward."
+      : "The number moved because you stayed with it. Decide what the next 90 is worth building — and this time, where you'd protect the timeline.";
+    cta      = 'Start my next sprint →';
+  }
+  var metricLine = 'Target: ' + goal + ' &nbsp;·&nbsp; You logged: <span style="color:#002a42;font-weight:600;">' + metric + '</span>' + (onTime ? '' : ' on day ' + (m.day_n != null ? m.day_n : ''));
+  var sponsorLine = sponsored ? '<div style="font-size:13px;color:#5a6b76;margin:-6px 0 16px;">Worth making sure your sponsor sees this one.</div>' : '';
+  var shareBtn = sponsored ? '<button onclick="dismissCelebration(' + phase + ')" style="background:#fff;color:#004369;border:1px solid #004369;font-size:13px;font-weight:600;padding:11px;border-radius:8px;cursor:pointer;">Share this with your sponsor</button>' : '';
+
+  var ov = document.createElement('div');
+  ov.id = 'celebrationOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,42,66,.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;';
+  ov.innerHTML =
+    '<div style="background:#fff;border-radius:16px;max-width:400px;width:100%;padding:26px 24px;text-align:center;box-sizing:border-box;">' +
+      '<div style="width:56px;height:56px;border-radius:50%;background:' + accent + ';display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">' +
+        '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' + icon + '</svg></div>' +
+      '<div style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:' + badgeFg + ';background:' + badgeBg + ';display:inline-block;padding:4px 12px;border-radius:20px;font-weight:600;margin-bottom:12px;">' + escD(badge) + '</div>' +
+      '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:24px;color:#002a42;line-height:1.25;margin-bottom:10px;">' + escD(title) + '</div>' +
+      '<div style="font-size:13px;color:#5a6b76;margin-bottom:16px;">' + metricLine + '</div>' +
+      (plan ? '<div style="background:#f7f5f1;border-left:3px solid ' + accent + ';padding:12px 14px;text-align:left;font-size:13px;color:#33444f;line-height:1.55;margin-bottom:16px;">' + escD(planLead) + '<br><span style="color:#002a42;">"' + plan + '"</span></div>' : '') +
+      '<div style="font-size:14px;color:#33444f;line-height:1.6;margin-bottom:20px;">' + escD(body) + '</div>' +
+      sponsorLine +
+      '<div style="display:flex;flex-direction:column;gap:10px;">' +
+        '<button onclick="dismissCelebration(' + phase + ')" style="background:#DB1F48;color:#fff;font-size:14px;font-weight:600;padding:12px;border-radius:8px;border:none;cursor:pointer;">' + escD(cta) + '</button>' +
+        shareBtn +
+      '</div></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('click', function (e) { if (e.target === ov) dismissCelebration(phase); });
+}
+
+function dismissCelebration(phase) {
+  var ov = document.getElementById('celebrationOverlay');
+  if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
+  try { portalData('celebration-seen', { phase: phase }).catch(function () {}); } catch (_) {}
+}
+
+// ── Blocking milestone reminder modal (T-5 / day-of) ────────────────────────
+// Server flags reminder_due per phase; shown once per session (sessionStorage)
+// so it nudges without nagging. The email cron is the persistent channel.
+function maybeShowMilestoneReminder(milestone) {
+  if (!milestone) return false;
+  var phase = null, m = null;
+  if (milestone.m30 && milestone.m30.reminder_due) { phase = 30; m = milestone.m30; }
+  else if (milestone.m90 && milestone.m90.reminder_due) { phase = 90; m = milestone.m90; }
+  if (!phase) return false;
+  var key = 'gps_ms_rem_' + phase + '_' + m.reminder_due + '_' + (m.target_date || '');
+  try { if (sessionStorage.getItem(key) === '1') return false; } catch (_) {}
+  showMilestoneReminder(phase, m, !!milestone.sponsored, key);
+  return true;
+}
+
+function showMilestoneReminder(phase, m, sponsored, dedupKey) {
+  var t5 = m.reminder_due === 't5';
+  var goal = m.goal ? escD(m.goal) : '';
+  var eyebrow, title, body, placeholder;
+  if (phase === 30 && t5) {
+    eyebrow = '30-day goal · 5 days out';
+    title = 'Your 30-day goal is 5 days away';
+    body = "If the mark were today, would you have hit it? If yes, name what's working. If not, pick the one move you can still make in the next 5 days.";
+    placeholder = 'Your one move this week…';
+  } else if (phase === 30) {
+    eyebrow = '30-day goal · today';
+    title = 'Today is your 30-day mark';
+    body = 'Hit it, missed it, or somewhere in between? Log it in this week’s check-in — what moved it, and what got in the way.';
+    placeholder = 'Where you landed…';
+  } else if (phase === 90 && t5) {
+    eyebrow = '90-day goal · 5 days out';
+    title = '5 days to your 90-day goal';
+    body = sponsored
+      ? 'The one your sponsor is watching. What result can you point to, and what backs it up? Name any gap before the date — a gap you surface is a coaching conversation; a gap you hide is a surprise.'
+      : "The number you set out to move. What result can you point to, and what backs it up? Name any gap before the date — a gap you surface is a coaching conversation; a gap you bury just costs you the result you're paying for.";
+    placeholder = 'Your one move this week…';
+  } else {
+    eyebrow = '90-day goal · today';
+    title = 'Today is your 90-day mark';
+    body = 'Log what you delivered against it — wins and misses, plainly. What would the people around you say changed? And what’s worth building next?';
+    placeholder = 'Where you landed…';
+  }
+  var ov = document.createElement('div');
+  ov.id = 'milestoneReminderOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,42,66,.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;';
+  ov.innerHTML =
+    '<div style="background:#fff;border-radius:16px;max-width:420px;width:100%;padding:26px 24px;box-sizing:border-box;">' +
+      '<div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#01949A;font-weight:600;margin-bottom:10px;">' + escD(eyebrow) + '</div>' +
+      '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:21px;color:#002a42;line-height:1.3;margin-bottom:12px;">' + escD(title) + '</div>' +
+      (goal ? '<div style="background:#f2f8f7;border-left:3px solid #01949A;padding:10px 14px;font-size:14px;color:#002a42;line-height:1.5;margin-bottom:14px;">"' + goal + '"</div>' : '') +
+      '<div style="font-size:14px;color:#33444f;line-height:1.65;margin-bottom:16px;">' + escD(body) + '</div>' +
+      '<textarea id="milestoneReminderNote" rows="3" placeholder="' + escD(placeholder) + '" style="width:100%;box-sizing:border-box;background:#fff;border:1px solid #cfd8de;border-radius:8px;padding:10px 12px;font-size:13px;color:#33444f;line-height:1.55;font-family:inherit;resize:vertical;margin-bottom:14px;"></textarea>' +
+      '<button onclick="dismissMilestoneReminder()" style="display:block;width:100%;text-align:center;background:#DB1F48;color:#fff;font-size:14px;font-weight:600;padding:12px;border-radius:8px;border:none;cursor:pointer;">Log it and continue →</button>' +
+    '</div>';
+  document.body.appendChild(ov);
+  try { sessionStorage.setItem(dedupKey, '1'); } catch (_) {}
+}
+
+function dismissMilestoneReminder() {
+  var note = (document.getElementById('milestoneReminderNote') || {}).value || '';
+  // Carry the leader's "one move" into the weekly check-in as a starting point.
+  try { if (note.trim()) sessionStorage.setItem('gps_prefill_action', note.trim()); } catch (_) {}
+  var ov = document.getElementById('milestoneReminderOverlay');
+  if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
 }
 
 async function submitFormA(clientId, clientName, weekNumber, noCompletion) {
@@ -5994,6 +6148,8 @@ async function submitFormA(clientId, clientName, weekNumber, noCompletion) {
   const notes      = document.getElementById('reflectionNotes').value.trim();
   const barrierEl  = document.getElementById('completionBarrier');
   const barrier    = barrierEl ? barrierEl.value.trim() : '';
+  const outcomeEl  = document.getElementById('lastOutcome');
+  const outcome    = outcomeEl ? outcomeEl.value.trim() : '';
 
   const callSchedLabel  = document.querySelector('#callScheduledGroup label.selected');
   const attendLabel     = document.querySelector('#attendGroup label.selected');
@@ -6022,6 +6178,14 @@ async function submitFormA(clientId, clientName, weekNumber, noCompletion) {
     return;
   }
 
+  // "What happened as a result?" is required whenever there was a prior commitment.
+  if (!noCompletion && !outcome) {
+    errEl.textContent = 'Please answer "What happened as a result?" before submitting.';
+    errEl.style.display = 'block';
+    document.getElementById('lastOutcome')?.focus();
+    return;
+  }
+
   // Missed a scheduled coaching call → ask for a quick reason (valuable coaching signal).
   if (coachingCallScheduled === true && attendedCoaching === false && !coachingMissedReason) {
     errEl.textContent = 'Please add a quick note on what got in the way of your coaching call.';
@@ -6042,6 +6206,7 @@ async function submitFormA(clientId, clientName, weekNumber, noCompletion) {
     planned_action:     action || null,
     completion_status:  noCompletion ? null : completionStatus,
     completion_barrier: (!noCompletion && barrier) ? barrier : null,
+    last_commitment_outcome: (!noCompletion && outcome) ? outcome : null,
     metric_value:       metricVal,
     checkin_ratio_num:  isRatioMetric && !isNaN(ratioNum)   ? ratioNum   : null,
     checkin_ratio_denom:isRatioMetric && !isNaN(ratioDenom) ? ratioDenom : null,
