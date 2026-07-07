@@ -171,9 +171,28 @@ async function loadCcConfig() {
   } catch (_) {}
   return { cc_leader: true, cc_team: true, cc_alex: true, extra_cc: [] };
 }
-function buildDiagCc(cfg, diag) {
+// Leader CC is stage-based. Default: the leader is copied ONLY on the FIRST email (the
+// invite), for credibility — raters see their leader is genuinely behind this. The invite
+// goes to ALL raters before anyone has responded, so it reveals nothing about who has or
+// hasn't completed. The leader is deliberately NOT copied on the mid/final reminders:
+// those go only to people who haven't finished, so copying the leader there would expose
+// the non-completer list.
+//
+// Exception: a diagnostic flagged `cc_leader_first_reminder` also copies the leader on the
+// FIRST reminder. This is the catch-up for cohorts whose invite already went out without
+// the leader (e.g. JMAA): the first reminder fires early (~T-3), when almost no one has
+// completed yet, so the non-completer list is still essentially the whole roster and
+// reveals little — while still getting the leader onto a rater-facing thread.
+//
+// Decoupled from anonymous_feedback on purpose — that flag governs whether individual
+// RATINGS are shown, not whether the leader appears on a thread. Ratings stay anonymous
+// regardless. team@/alex@/extra_cc are unchanged for every stage.
+// Leader-eligible stages: 'invite' always; 'reminder_1' only when the flag is set.
+function buildDiagCc(cfg, diag, stage) {
   const out = [];
-  if (cfg.cc_leader && !diag.anonymous_feedback && diag.client_email) out.push(diag.client_email);
+  const leaderOnInvite        = (stage === 'invite');
+  const leaderOnFirstReminder = (stage === 'reminder_1' && diag.cc_leader_first_reminder === true);
+  if (cfg.cc_leader && (leaderOnInvite || leaderOnFirstReminder) && diag.client_email) out.push(diag.client_email);
   if (cfg.cc_team) out.push('team@gpsleadership.org');
   if (cfg.cc_alex) out.push('alex@gpsleadership.org');
   if (Array.isArray(cfg.extra_cc)) cfg.extra_cc.forEach(e => out.push(e));
@@ -468,7 +487,7 @@ async function handleResendRater(req, res) {
       raterName: rater.name, leaderName: diag.client_name, leaderTitle: diag.client_title,
       leaderOrg: diag.client_org, surveyLink, closeDate: closeDateDisp, calendarLink, bodyHtml,
     });
-    const cc = buildDiagCc(await loadCcConfig(), diag);
+    const cc = buildDiagCc(await loadCcConfig(), diag, 'invite');
     await sendEmail({ to: rater.email, subject, html, emailType: 'diagnostic_invite', recipientName: rater.name, cc });
     if (!rater.invited_at) {
       await sb(`/rest/v1/diagnostic_raters?id=eq.${rater.id}`, 'PATCH', { invited_at: now.toISOString() }, { Prefer: 'return=minimal' });
@@ -628,10 +647,11 @@ async function sendInvitesForDiagnostic(diagnostic_id) {
       bodyHtml,
     });
 
-    // On an anonymous diagnostic, never CC the leader — doing so reveals the full
-    // rater roster to them and shows raters their leader is copied, breaking the
-    // anonymity promise. Internal team@ still gets a copy either way.
-    const inviteCc = buildDiagCc(await loadCcConfig(), diag);
+    // The leader IS copied on the invite (stage 'invite') — deliberately, for credibility:
+    // raters see their leader is genuinely behind this. The invite predates any responses,
+    // so it exposes no completion data, and individual ratings remain anonymous regardless.
+    // Reminders (which target only non-completers) never copy the leader — see buildDiagCc.
+    const inviteCc = buildDiagCc(await loadCcConfig(), diag, 'invite');
     try {
       await sendEmail({ to: rater.email, subject, html, emailType: 'diagnostic_invite', recipientName: rater.name, cc: inviteCc });
       await sb(`/rest/v1/diagnostic_raters?id=eq.${rater.id}`, 'PATCH', { invited_at: nowISO }, { Prefer: 'return=minimal' });
@@ -3102,7 +3122,7 @@ async function handleReminders(req, res) {
 
   try {
     // ── Section 1: Rater Reminders (R1 + R2) ────────────────────────────────
-    const openDiagsRes = await sb(`/rest/v1/diagnostics?status=eq.survey_open&select=id,client_name,client_email,close_date,anonymous_feedback`);
+    const openDiagsRes = await sb(`/rest/v1/diagnostics?status=eq.survey_open&select=id,client_name,client_email,close_date,anonymous_feedback,cc_leader_first_reminder`);
     const openDiags    = await openDiagsRes.json() || [];
 
     // Editable templates (only used when coach has approved them; otherwise hardcoded copy stands)
@@ -3120,14 +3140,18 @@ async function handleReminders(req, res) {
         const daysSinceInvite = daysBetween(new Date(rater.invited_at), now);
         const surveyLink = `${PORTAL_BASE}/diagnostic-survey?token=${rater.token}`;
 
-        const reminderCc = buildDiagCc(await loadCcConfig(), diag);
+        const _ccCfg = await loadCcConfig();
+        const reminderCc1 = buildDiagCc(_ccCfg, diag, 'reminder_1');  // leader CC'd only if diag is flagged
+        const reminderCc2 = buildDiagCc(_ccCfg, diag, 'reminder_2');  // never copies the leader
+        const daysToClose = diag.close_date ? daysFromNow(diag.close_date) : 999;
 
         const closeFmt = diag.close_date
           ? new Date(diag.close_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
           : 'soon';
         const firstName = (rater.name || '').split(' ')[0] || 'there';
 
-        if (daysSinceInvite >= 2 && !rater.reminder_1_sent_at) {
+        // Reminder 1 — mid-window nudge, ~3 days before close. Leader CC'd only if flagged.
+        if (daysToClose <= 3.5 && daysToClose >= 0.5 && !rater.reminder_1_sent_at) {
           let bodyHtml = null, subjectOverride = null;
           if (r1Tpl) {
             const vars = { first_name: firstName, rater_name: rater.name, leader_name: diag.client_name, close_date: closeFmt, survey_link: surveyLink };
@@ -3136,7 +3160,7 @@ async function handleReminders(req, res) {
           }
           const email = buildReminderEmail({ raterName: rater.name, leaderName: diag.client_name, surveyLink, closeDate: diag.close_date, isSecond: false, bodyHtml, subjectOverride });
           try {
-            await sendEmail({ to: rater.email, ...email, emailType: 'diagnostic_reminder_1', recipientName: rater.name, cc: reminderCc });
+            await sendEmail({ to: rater.email, ...email, emailType: 'diagnostic_reminder_1', recipientName: rater.name, cc: reminderCc1 });
             await sb(`/rest/v1/diagnostic_raters?id=eq.${rater.id}`, 'PATCH', { reminder_1_sent_at: now.toISOString() }, { Prefer: 'return=minimal' });
             log.r1_sent.push({ name: rater.name, diag: diag.client_name });
           } catch (err) {
@@ -3145,7 +3169,8 @@ async function handleReminders(req, res) {
           continue;
         }
 
-        if (daysSinceInvite >= 5 && rater.reminder_1_sent_at && !rater.reminder_2_sent_at) {
+        // Reminder 2 — final nudge the morning the survey closes. Never copies the leader.
+        if (daysToClose < 0.5 && !rater.reminder_2_sent_at) {
           let bodyHtml = null, subjectOverride = null;
           if (r2Tpl) {
             const vars = { first_name: firstName, rater_name: rater.name, leader_name: diag.client_name, close_date: closeFmt, survey_link: surveyLink };
@@ -3154,7 +3179,7 @@ async function handleReminders(req, res) {
           }
           const email = buildReminderEmail({ raterName: rater.name, leaderName: diag.client_name, surveyLink, closeDate: diag.close_date, isSecond: true, bodyHtml, subjectOverride });
           try {
-            await sendEmail({ to: rater.email, ...email, emailType: 'diagnostic_reminder_2', recipientName: rater.name, cc: reminderCc });
+            await sendEmail({ to: rater.email, ...email, emailType: 'diagnostic_reminder_2', recipientName: rater.name, cc: reminderCc2 });
             await sb(`/rest/v1/diagnostic_raters?id=eq.${rater.id}`, 'PATCH', { reminder_2_sent_at: now.toISOString() }, { Prefer: 'return=minimal' });
             log.r2_sent.push({ name: rater.name, diag: diag.client_name });
           } catch (err) {
