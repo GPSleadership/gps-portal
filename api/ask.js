@@ -14,7 +14,7 @@ const CLAUDE_FAST     = process.env.CLAUDE_FAST  || 'claude-haiku-4-5-20251001';
 // Validate a portal token server-side → returns the client row (or null).
 async function getClientByToken(token) {
   if (!token || !SUPABASE_SECRET) return null;
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/clients?token=eq.${encodeURIComponent(token)}&is_archived=eq.false&select=id,ask_alex_enabled,name,title,organization,industry,revenue_band,num_locations,regions_owned,direct_reports_count,tp3_pillar,goal_description,goal_30_day,goal_statement,behavior_1,behavior_2,start_behavior,metric_name,metric_baseline,metric_target,metric_1_name,metric_1_baseline,metric_1_target,metric_2_name,metric_2_baseline,metric_2_target,metric_3_name,metric_3_baseline,metric_3_target,vision_statement&limit=1`,
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/clients?token=eq.${encodeURIComponent(token)}&is_archived=eq.false&select=id,ask_alex_enabled,name,title,organization,industry,revenue_band,num_locations,regions_owned,direct_reports_count,tp3_pillar,goal_description,goal_30_day,goal_statement,goal_90_day,behavior_1,behavior_2,start_behavior,metric_name,metric_baseline,metric_target,metric_1_name,metric_1_baseline,metric_1_target,metric_2_name,metric_2_baseline,metric_2_target,metric_3_name,metric_3_baseline,metric_3_target,vision_statement&limit=1`,
     { headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}` } });
   if (!r.ok) return null;
   const rows = await r.json();
@@ -59,8 +59,9 @@ function buildAskContext(c) {
     focus_pillar:         s(c.tp3_pillar),
     goal_description:     s(c.goal_description, 600),
     goal_30_day:          s(c.goal_30_day, 600),
-    goal_90_day_statement: s(c.goal_statement, 600),
+    goal_90_day_statement: s(c.goal_90_day || c.goal_statement, 600),
     vision:               s(c.vision_statement, 600),
+    has_vision:           !!(c.vision_statement && String(c.vision_statement).trim()),
     behavior_1:           s(c.behavior_1 || c.start_behavior, 600),
     behavior_2:           s(c.behavior_2, 600),
     metric_1_name:        s(c.metric_1_name || c.metric_name),
@@ -152,7 +153,9 @@ Use this context to personalize examples and align advice with their active TP3 
 GOAL & VISION ANCHORING — use their goal/vision as an anchor, but ONLY when it genuinely fits the question. Judgment first, never a formula:
 - WHEN the question relates to their 90-day goal, priority behaviors, or vision: OPEN by naming the relevant one back in their OWN words — warm and human, e.g. "Since your 90-day goal is to <goal> and you're building toward <vision>, here's how I'd handle this." Frame it as "because you told me this matters" — NEVER "based on your inputs" or "per your portal data." Then CLOSE with ONE concrete next step tied to that goal and this week's check-in.
 - WHEN the question is clearly unrelated to their goal/vision: DO NOT force a connection or shoehorn the goal in. Just answer it well and close with a clean, useful next step. A forced tie-in reads as robotic and erodes trust — skipping it is the right call.
-- Either way, reference their direction naturally, never more than once, and never in every sentence.` :
+- Either way, reference their direction naturally, never more than once, and never in every sentence.
+
+VISION ON-RAMP (opt-in only — NEVER force this): ${ctx.has_vision ? 'This leader ALREADY has a vision on file, shown above. Do NOT propose a new one unless they explicitly ask to change or rewrite it.' : 'This leader does NOT have a leadership vision saved yet.'} If — and ONLY if — the leader is explicitly asking to define, set, clarify, or rewrite their leadership vision (e.g. "help me define my vision", "what should my vision be", "I want to set my vision"), then in addition to your normal guidance, draft ONE clear, first-person, present-tense vision sentence in THEIR words (the future they are building toward, observable — what their team/business looks like when they lead at their best) and put JUST that sentence in the "vision_proposal" field. Do NOT propose a vision for any other kind of question. Do NOT gate your answer on whether they have a vision. Do NOT nag them to create one. If they are not asking about vision, leave "vision_proposal" as an empty string.` :
 `PORTAL CONTEXT: No client context loaded. Assume CEO/owner of a multi-location, operations-heavy business.`;
 
   // ── Government skin overrides ──────────────────────────────────────────────
@@ -301,7 +304,7 @@ Section 2 label: "OVER THE NEXT 7 DAYS:"
 2-4 bullets (use " - " prefix). Slightly larger behavior changes: a meeting cadence tweak, a GPS tool to run, a conversation to have, a rhythm to install. Specific enough to execute without coaching.
 
 Return exactly this structure:
-{"guidance":"Your answer here. Use CAPS for key phrases. 1-3 paragraphs of diagnosis and framing separated by PARAGRAPH_BREAK. Then PARAGRAPH_BREAK. Then DO THIS BEFORE THE END OF TODAY: followed by 1-3 action bullets. Then PARAGRAPH_BREAK. Then OVER THE NEXT 7 DAYS: followed by 2-4 action bullets.","next_step":"Suggested next step here.","tools":["Exact Tool Name 1","Exact Tool Name 2"],"handoff":"","escalation":false}
+{"guidance":"Your answer here. Use CAPS for key phrases. 1-3 paragraphs of diagnosis and framing separated by PARAGRAPH_BREAK. Then PARAGRAPH_BREAK. Then DO THIS BEFORE THE END OF TODAY: followed by 1-3 action bullets. Then PARAGRAPH_BREAK. Then OVER THE NEXT 7 DAYS: followed by 2-4 action bullets.","next_step":"Suggested next step here.","tools":["Exact Tool Name 1","Exact Tool Name 2"],"handoff":"","escalation":false,"vision_proposal":""}
 
 tools: 1-3 max, directly applicable only. Empty array if none fit. Use the EXACT tool names from the GPS TOOLS list above.
 handoff: one sentence string if coaching boundary triggered, else empty string.

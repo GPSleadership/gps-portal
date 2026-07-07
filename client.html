@@ -9043,6 +9043,21 @@ function qaAppendAlexMsg(parsed, question) {
   const escalationHTML = escalation
     ? `<div class="qa-escalation"><strong>This one needs Alex directly.</strong> This is high-stakes enough that he would want to walk through it with you live. <a href="mailto:alex@gpsleadership.org">Email his team</a> or bring it to your next session.</div>` : '';
 
+  // Opt-in vision on-ramp: Alex only fills vision_proposal when the leader asked to
+  // define/set their vision. Show it as an editable, one-click "lock it in" block.
+  const visionProp = (parsed.vision_proposal || '').trim();
+  const visionHTML = visionProp
+    ? `<div style="margin-top:14px;background:#f2f8f7;border:1px solid #cfe7e2;border-radius:10px;padding:14px 16px;">
+         <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#0F6E56;margin-bottom:8px;">Your vision — ready to lock in</div>
+         <div id="qa-vis-txt-${msgId}" contenteditable="true" style="font-size:14.5px;color:#002a42;line-height:1.6;background:#fff;border:1px solid #cfd8de;border-radius:8px;padding:10px 12px;outline:none;">${qaEscHtml(visionProp)}</div>
+         <div style="display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap;">
+           <button id="qa-vis-save-${msgId}" style="background:#01949A;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;padding:9px 16px;cursor:pointer;">Save as my vision</button>
+           <span id="qa-vis-st-${msgId}" style="font-size:12.5px;color:#5a6b76;"></span>
+         </div>
+         <div style="font-size:11.5px;color:#8a97a0;margin-top:8px;">Edit it above if you want, then lock it in. You can always change it later in your plan.</div>
+       </div>`
+    : '';
+
   const div = document.createElement('div');
   div.className = 'qa-msg-alex qa-fadein';
   div.id = msgId;
@@ -9053,7 +9068,7 @@ function qaAppendAlexMsg(parsed, question) {
     </div>
     <div class="qa-card">
       <div class="qa-body"><p>${guidance}</p></div>
-      ${toolsHTML}${nextStepHTML}${handoffHTML}${escalationHTML}
+      ${toolsHTML}${nextStepHTML}${visionHTML}${handoffHTML}${escalationHTML}
       <div class="qa-fbrow">
         <span class="qa-fblabel">Helpful?</span>
         <div class="qa-fbbtns">
@@ -9077,6 +9092,34 @@ function qaAppendAlexMsg(parsed, question) {
       </div>
     </div>`;
   document.getElementById('qa-thread').appendChild(div);
+
+  // Wire the vision "lock it in" button (only present when Alex proposed one).
+  const visSaveBtn = document.getElementById('qa-vis-save-' + msgId);
+  if (visSaveBtn) {
+    let visAttempt = 0;
+    visSaveBtn.addEventListener('click', async () => {
+      const txtEl = document.getElementById('qa-vis-txt-' + msgId);
+      const stEl  = document.getElementById('qa-vis-st-' + msgId);
+      const v = ((txtEl && txtEl.textContent) || '').trim();
+      if (!v) { if (stEl) stEl.textContent = 'Add a sentence first.'; return; }
+      visSaveBtn.disabled = true; if (stEl) stEl.textContent = 'Saving…';
+      try {
+        const r = await portalData('save-vision', { vision: v, attempt: visAttempt });
+        if (r && r.saved) {
+          if (stEl) { stEl.textContent = '✓ Saved to your plan'; stEl.style.color = '#0F6E56'; }
+          visSaveBtn.textContent = 'Saved'; visSaveBtn.style.background = '#8aa0a2'; visSaveBtn.style.cursor = 'default';
+          if (typeof currentClient !== 'undefined' && currentClient) currentClient.vision_statement = v;
+        } else {
+          visAttempt++;
+          if (stEl) stEl.textContent = (r && r.nudge) ? r.nudge : 'Sharpen it a little, then try again.';
+          visSaveBtn.disabled = false;
+        }
+      } catch (e) {
+        if (stEl) stEl.textContent = 'Could not save. Please try again.';
+        visSaveBtn.disabled = false;
+      }
+    });
+  }
 
   let fbDone = false;
   const btnUp = div.querySelector(`.qa-fbu-${msgId}`);
