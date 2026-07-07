@@ -699,8 +699,15 @@ function renderStatusCards() {
   let html  = '';
 
   // Org logo chip co-branding the report card header (optional; matched by org name server-side)
+  // Escape the logo URL for safe use inside a double-quoted src attribute.
+  // Some org logos are inline SVG data-URIs (utf8,<svg ...>) that contain " < >;
+  // interpolated raw they close the tag early and leak the rest of the markup as
+  // visible text on the report card. Entity-escaping keeps the attribute intact —
+  // the browser decodes it back to the raw URI, exactly like the header logo (set via .src).
+  const orgLogoSrc = String(DIAGNOSTIC.org_logo_url || '')
+    .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const orgChip = DIAGNOSTIC.org_logo_url
-    ? `<img src="${DIAGNOSTIC.org_logo_url}" alt="${(DIAGNOSTIC.client_org || '').replace(/"/g, '&quot;')} logo" style="max-height:30px;max-width:96px;object-fit:contain;margin-right:12px;" />`
+    ? `<img src="${orgLogoSrc}" alt="${(DIAGNOSTIC.client_org || '').replace(/"/g, '&quot;')} logo" style="max-height:30px;max-width:96px;object-fit:contain;margin-right:12px;" />`
     : '';
 
   if (s === 'survey_open') {
