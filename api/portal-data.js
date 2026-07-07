@@ -118,10 +118,11 @@ async function visionGate(text) {
 // Reward-timing rule (locked): a hit ON/BEFORE the target date is on-time; a hit
 // AFTER it is recovery (still celebrated); target passed with value < target is a
 // miss (day-of reflection only — no false celebration).
-function computeMilestoneState(client) {
+function computeMilestoneState(client, bookingUrl) {
   const startStr = client.coaching_program_start_date || client.plan_start_date || null;
   const sponsored = client.sponsor_outcome_focus === true;
-  const out = { sponsored, preferred_name: client.preferred_name || null, m30: null, m90: null };
+  const inCoaching = !!(client.in_coaching_program || client.is_active_coaching || client.coaching_sessions_enabled);
+  const out = { sponsored, in_coaching: inCoaching, preferred_name: client.preferred_name || null, booking_url: bookingUrl || null, m30: null, m90: null };
   if (!startStr) return out;
   const start = new Date(String(startStr).slice(0, 10) + 'T00:00:00Z');
   if (isNaN(start.getTime())) return out;
@@ -326,16 +327,20 @@ export default async function handler(req, res) {
       // ── Stakeholders ────────────────────────────────────────────────────────
       // ── Results tab data (post-lockdown read path; anon reads are dead) ─────
       case 'results-data': {
-        const [ck, sr, st, sc, sh, cl] = await Promise.all([
+        const [ck, sr, st, sc, sh, cl, rc] = await Promise.all([
           sb(`/rest/v1/checkins?client_id=eq.${clientId}&select=*&order=week_number.asc`),
           sb(`/rest/v1/survey_responses?client_id=eq.${clientId}&select=checkpoint,score,scale,open_response,comments,comments_visible_to_client,submitted_at&order=submitted_at.asc`),
           sb(`/rest/v1/survey_tokens?client_id=eq.${clientId}&select=checkpoint,non_response_flagged,is_used`),
           sb(`/rest/v1/self_checks?client_id=eq.${clientId}&select=checkpoint,q1_score,q2_score,q3_response,submitted_at`),
           sb(`/rest/v1/stakeholders?client_id=eq.${clientId}&is_active=eq.true&select=id,name,email,relationship,is_supervisor,is_board_member,confirmed_at,created_at&order=created_at.asc`),
-          sb(`/rest/v1/clients?id=eq.${clientId}&select=coaching_program_start_date,plan_start_date,metric_target,metric_current,goal_30_day,goal_90_day,goal_statement,start_behavior,sponsor_outcome_focus,preferred_name,celebrated_30_at,celebrated_90_at&limit=1`),
+          sb(`/rest/v1/clients?id=eq.${clientId}&select=coaching_program_start_date,plan_start_date,metric_target,metric_current,goal_30_day,goal_90_day,goal_statement,start_behavior,sponsor_outcome_focus,preferred_name,celebrated_30_at,celebrated_90_at,in_coaching_program,is_active_coaching,coaching_sessions_enabled&limit=1`),
+          sb(`/rest/v1/renewal_config?id=eq.1&select=discovery_call_url,booking_url&limit=1`),
         ]);
         const j = async (r) => (r.ok ? await r.json() : []);
         const clientRows = await j(cl);
+        const rcRows = await j(rc);
+        // Non-coached celebration CTA → discovery call (swappable), else booking_url.
+        const bookingUrl = (rcRows[0] && (rcRows[0].discovery_call_url || rcRows[0].booking_url)) || null;
         return res.status(200).json({
           ok: true,
           checkins: await j(ck),
@@ -343,7 +348,7 @@ export default async function handler(req, res) {
           survey_tokens: await j(st),
           self_checks: await j(sc),
           stakeholders: await j(sh),
-          milestone: clientRows[0] ? computeMilestoneState(clientRows[0]) : null,
+          milestone: clientRows[0] ? computeMilestoneState(clientRows[0], bookingUrl) : null,
         });
       }
 
@@ -413,6 +418,35 @@ export default async function handler(req, res) {
         const scol = phase === 90 ? 'celebrated_90_at' : 'celebrated_30_at';
         await sb(`/rest/v1/clients?id=eq.${clientId}`, 'PATCH', { [scol]: new Date().toISOString() }, { Prefer: 'return=minimal' });
         return res.status(200).json({ ok: true, sent });
+      }
+
+      // ── Coaching client taps "I'm ready for what's next" → ping the coach ───
+      // For active coaching clients the next-sprint conversation is a human one;
+      // this just flags interest to the coach at the peak moment. Non-coached
+      // leaders get the booking link instead (decided client-side).
+      case 'next-sprint-interest': {
+        const phase = (body.phase === 90 || body.phase === '90') ? 90 : 30;
+        const clRows = await (await sb(`/rest/v1/clients?id=eq.${clientId}&select=name,email&limit=1`)).json().catch(() => []);
+        const cl = (Array.isArray(clRows) && clRows[0]) ? clRows[0] : {};
+        const name = cl.name || 'A coaching client';
+        if (RESEND_API_KEY) {
+          try {
+            await fetch('https://api.resend.com/emails', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                from: `GPS Leadership Portal <${RESEND_FROM}>`,
+                to: ['team@gpsleadership.org'],
+                reply_to: cl.email || undefined,
+                subject: `${name} is ready for their next sprint`,
+                html: `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#1a1a1a;"><p><strong>${escapeHtml(name)}</strong> just hit their ${phase}-day goal and tapped &ldquo;I&rsquo;m ready for what&rsquo;s next&rdquo; on their celebration screen.</p><p>The proof moment is hot — reach out to line up the next sprint.</p></div>`,
+              }),
+            });
+          } catch (_) { /* best-effort */ }
+        }
+        const scol = phase === 90 ? 'celebrated_90_at' : 'celebrated_30_at';
+        await sb(`/rest/v1/clients?id=eq.${clientId}`, 'PATCH', { [scol]: new Date().toISOString() }, { Prefer: 'return=minimal' });
+        return res.status(200).json({ ok: true });
       }
 
       // ── Ask Alex history (post-lockdown read path; anon reads are dead) ─────

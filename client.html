@@ -5996,11 +5996,11 @@ function maybeShowCelebration(milestone) {
   if (milestone.m90 && milestone.m90.should_celebrate) { phase = 90; m = milestone.m90; }
   else if (milestone.m30 && milestone.m30.should_celebrate) { phase = 30; m = milestone.m30; }
   if (!phase) return false;
-  showCelebration(phase, m, !!milestone.sponsored);
+  showCelebration(phase, m, !!milestone.sponsored, milestone.booking_url || null, !!milestone.in_coaching);
   return true;
 }
 
-function showCelebration(phase, m, sponsored) {
+function showCelebration(phase, m, sponsored, bookingUrl, inCoaching) {
   var onTime  = m.variant === 'on_time';
   var accent  = onTime ? '#01949A' : '#BA7517';
   var badgeBg = onTime ? '#d7efe8' : '#faeeda';
@@ -6044,7 +6044,11 @@ function showCelebration(phase, m, sponsored) {
       '<div style="font-size:14px;color:#33444f;line-height:1.6;margin-bottom:20px;">' + escD(body) + '</div>' +
       sponsorLine +
       '<div style="display:flex;flex-direction:column;gap:10px;">' +
-        '<button onclick="dismissCelebration(' + phase + ')" style="background:#DB1F48;color:#fff;font-size:14px;font-weight:600;padding:12px;border-radius:8px;border:none;cursor:pointer;">' + escD(cta) + '</button>' +
+        (inCoaching
+          ? '<button onclick="notifyCoachNextSprint(' + phase + ',this)" style="background:#DB1F48;color:#fff;font-size:14px;font-weight:600;padding:12px;border-radius:8px;border:none;cursor:pointer;">Tell my coach I&#39;m ready for what&#39;s next</button>'
+          : (bookingUrl
+            ? '<a href="' + escD(bookingUrl) + '" target="_blank" rel="noopener" onclick="dismissCelebration(' + phase + ')" style="background:#DB1F48;color:#fff;font-size:14px;font-weight:600;padding:12px;border-radius:8px;text-decoration:none;display:block;text-align:center;cursor:pointer;">' + escD(cta) + '</a>'
+            : '<button onclick="dismissCelebration(' + phase + ')" style="background:#DB1F48;color:#fff;font-size:14px;font-weight:600;padding:12px;border-radius:8px;border:none;cursor:pointer;">' + escD(cta) + '</button>')) +
         shareBtn +
       '</div></div>';
   document.body.appendChild(ov);
@@ -6055,6 +6059,21 @@ function dismissCelebration(phase) {
   var ov = document.getElementById('celebrationOverlay');
   if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
   try { portalData('celebration-seen', { phase: phase }).catch(function () {}); } catch (_) {}
+}
+
+// Active coaching client → "Tell my coach I'm ready for what's next". Pings the
+// coach (the next-sprint talk stays a human conversation), marks seen, then closes.
+function notifyCoachNextSprint(phase, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Notifying your coach…'; }
+  portalData('next-sprint-interest', { phase: phase })
+    .then(function () {
+      if (btn) { btn.textContent = 'Your coach has been notified ✓'; }
+      setTimeout(function () { dismissCelebration(phase); }, 1400);
+    })
+    .catch(function () {
+      if (btn) { btn.disabled = false; btn.textContent = 'Tell my coach I\'m ready for what\'s next'; }
+      alert('Could not notify just now. Please try again.');
+    });
 }
 
 // "Share with your sponsor" — emails each linked sponsor a note + a link to their
