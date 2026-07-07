@@ -18,10 +18,12 @@ data-change-*.sql
 scripts/
 proposal_build_template.js
 .env.example
-check.sh
-deploy.sh
-smoke-test.sh
-install-hooks.sh
+# Shell / command scripts are build tooling, never web content. Wildcards catch
+# any future script (deploy-wizard-v20.sh, hotfix-coach.sh, push-portal.command, …)
+# instead of relying on listing each one — they were serving live at HTTP 200.
+*.sh
+*.command
+*.zsh
 deploy-allowed-pages.txt
 
 # ── Backup / demo / dev pages with NO route rewrite (pure exposure) ──
@@ -59,3 +61,6 @@ ziw7HK1Q
 # have intentional route rewrites in vercel.json and are LEFT deployed.
 # Decide separately whether /coach-emergency and /diagnostic-sandbox should
 # stay public — workshop-poc is a live client feature and must stay.
+
+# FitOS — never deploy with the portal
+gps-fit/

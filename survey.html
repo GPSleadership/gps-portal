@@ -359,6 +359,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 function show(id) {
   ['loadingState','errorState','alreadyDoneState','successState','surveyForm']
     .forEach(s => document.getElementById(s).style.display = (s === id ? 'block' : 'none'));
+  // Keep the header pill honest. It starts as "Loading…" and is set to the real
+  // checkpoint label by buildSurvey(); terminal states that never reach build must
+  // clear it so it doesn't sit on "Loading…" behind an error or completion card.
+  var pill = document.getElementById('checkpointLabel');
+  if (pill) {
+    if (id === 'errorState') pill.textContent = 'Survey';
+    else if (id === 'alreadyDoneState' || id === 'successState') pill.textContent = 'Complete';
+  }
 }
 
 // ── Build survey UI ───────────────────────────────────────────────────────────
