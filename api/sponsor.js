@@ -257,7 +257,7 @@ async function buildRosterCard(clientId) {
 // unchanged: only aggregate/plan/coach-authored fields are ever read.
 async function buildLeaderView(sponsor, clientId, isCoachPreview) {
   const mode = isCoachPreview ? 'summary' : (sponsor.confidentiality_mode || 'summary');
-  const cRows = await sbGet(`/rest/v1/clients?id=eq.${enc(clientId)}&select=name,organization,org,in_coaching_program,is_active_coaching,coaching_sessions_enabled,goal_statement,goal_description,goal_30_day,behavior_1,behavior_2,coaching_sessions_total,coaching_sessions_completed,coaching_program_end_date&limit=1`);
+  const cRows = await sbGet(`/rest/v1/clients?id=eq.${enc(clientId)}&select=name,organization,org,in_coaching_program,is_active_coaching,coaching_sessions_enabled,goal_statement,goal_description,goal_30_day,behavior_1,behavior_2,coaching_sessions_total,coaching_sessions_completed,coaching_program_end_date,metric_target,metric_current,metric_baseline,metric_1_name,metric_name,metric_1_type&limit=1`);
   const c = cRows[0];
   if (!c) return { error: 'Leader not found', status: 404 };
 
@@ -326,6 +326,22 @@ async function buildLeaderView(sponsor, clientId, isCoachPreview) {
   if (mode === 'summary') {
     const goal = c.goal_statement || c.goal_description || c.goal_30_day || null;
     payload.focus = { goal, behaviors: [c.behavior_1, c.behavior_2].filter(Boolean) };
+  }
+
+  // The number the sponsor came to see: the leader's own committed metric vs target.
+  // This is the leader's public goal metric (not confidential stakeholder feedback),
+  // so it's shown regardless of confidentiality mode.
+  const mTarget  = (c.metric_target  != null) ? Number(c.metric_target)  : null;
+  const mCurrent = (c.metric_current != null) ? Number(c.metric_current) : null;
+  if (mTarget != null && mCurrent != null && !Number.isNaN(mTarget) && !Number.isNaN(mCurrent)) {
+    payload.goal_progress = {
+      metric_name: c.metric_1_name || c.metric_name || 'Goal metric',
+      current: mCurrent,
+      target: mTarget,
+      is_ratio: c.metric_1_type === 'ratio',
+      hit: mCurrent >= mTarget,
+      pct: (mTarget > 0) ? Math.round((mCurrent / mTarget) * 100) : null,
+    };
   }
   return { payload };
 }

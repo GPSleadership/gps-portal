@@ -395,7 +395,7 @@ export default async function handler(req, res) {
             + `<p>Hi ${escapeHtml(spFirst)},</p>`
             + `<p>${escapeHtml(firstName)} wanted you to see this: they just reached their ${phase}-day goal. The work is showing up in the numbers.</p>`
             + `<div style="text-align:center;margin:22px 0;"><a href="${link}" style="background:#DB1F48;color:#fff;text-decoration:none;padding:13px 28px;border-radius:8px;font-weight:700;display:inline-block;">See their progress →</a></div>`
-            + `<p style="margin-top:24px;">– Alex Tremble<br><span style="color:#666;font-size:13px;">GPS Leadership Solutions</span></p></div></div>`;
+            + `<p style="margin-top:24px;">– Alex Tremble<br><span style="color:#666;font-size:13px;">Executive Coach &amp; Advisor &middot; GPS Leadership Solutions</span></p></div></div>`;
           if (RESEND_API_KEY) {
             try {
               const r = await fetch('https://api.resend.com/emails', {
