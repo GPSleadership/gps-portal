@@ -73,6 +73,51 @@ function isCoachingClient(c) {
 
 const COACH_MSG_TYPES = new Set(['quick_question', 'prep_for_session', 'progress_update', 'win', 'logistics', 'reschedule']);
 
+// ── Message attachments ───────────────────────────────────────────────────────
+// Files live in the PRIVATE 'message-attachments' bucket. Upload via the service key;
+// read only via a short-lived signed URL generated server-side (below). This keeps
+// client documents unreachable without an authenticated request to their own thread.
+const MSG_ATT_ALLOWED = /^(application\/pdf|application\/msword|application\/vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|spreadsheetml\.sheet|presentationml\.presentation)|application\/vnd\.ms-(excel|powerpoint)|image\/(png|jpe?g|webp|gif)|text\/(plain|csv))$/;
+// Returns { path, name, size, type } on success, { error } on rejection, or null if no file.
+async function uploadMsgAttachment(convId, att) {
+  if (!att || !att.data) return null;
+  const m = String(att.data).match(/^data:([^;]+);base64,(.+)$/);
+  if (!m) return { error: 'Unsupported file.' };
+  const mime = m[1];
+  if (!MSG_ATT_ALLOWED.test(mime)) return { error: 'File type not allowed. Use PDF, Word, Excel, PowerPoint, an image, or a text file.' };
+  const buf = Buffer.from(m[2], 'base64');
+  if (buf.length > 10 * 1024 * 1024) return { error: 'File is over 10 MB — please send a smaller one.' };
+  const safe = String(att.name || 'file').replace(/[^\w.\- ]+/g, '_').slice(0, 120) || 'file';
+  const path = `${convId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safe}`;
+  const up = await fetch(`${SUPABASE_URL}/storage/v1/object/message-attachments/${encodeURI(path)}`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}`, 'Content-Type': mime, 'x-upsert': 'true' },
+    body: buf,
+  });
+  if (!up.ok) return { error: 'Attachment upload failed.' };
+  return { path, name: safe, size: buf.length, type: mime };
+}
+async function signMsgAttachment(path) {
+  if (!path) return null;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/storage/v1/object/sign/message-attachments/${encodeURI(path)}`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expiresIn: 3600 }),
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    return j && j.signedURL ? `${SUPABASE_URL}/storage/v1${j.signedURL}` : null;
+  } catch (_) { return null; }
+}
+// Attach signed download URLs to a message list (mutates each row: adds attachment_download).
+async function withSignedAttachments(messages) {
+  for (const msg of messages) {
+    if (msg && msg.attachment_url) msg.attachment_download = await signMsgAttachment(msg.attachment_url);
+  }
+  return messages;
+}
+
 // Confirm a diagnostic belongs to this client before any rater/diagnostic write.
 async function diagnosticOwnedBy(diagnosticId, clientId) {
   if (!diagnosticId) return false;
@@ -491,8 +536,8 @@ export default async function handler(req, res) {
         const convs = cr.ok ? await cr.json() : [];
         const conv = convs[0] || null;
         if (!conv) return res.status(200).json({ ok: true, eligible: true, conversation: null, messages: [] });
-        const mr = await sb(`/rest/v1/coach_messages?conversation_id=eq.${conv.id}&select=id,sender_role,sender_name,message_type,message_text,created_at,read_by_client&order=created_at.asc`);
-        const messages = mr.ok ? await mr.json() : [];
+        const mr = await sb(`/rest/v1/coach_messages?conversation_id=eq.${conv.id}&select=id,sender_role,sender_name,message_type,message_text,created_at,read_by_client,attachment_url,attachment_name,attachment_size,attachment_type&order=created_at.asc`);
+        const messages = mr.ok ? await withSignedAttachments(await mr.json()) : [];
         // Mark coach replies as read by the client now that they're being viewed.
         await sb(`/rest/v1/coach_messages?conversation_id=eq.${conv.id}&sender_role=eq.coach&read_by_client=eq.false`, 'PATCH', { read_by_client: true }, { Prefer: 'return=minimal' }).catch(() => {});
         return res.status(200).json({ ok: true, eligible: true, conversation: conv, messages });
@@ -516,7 +561,8 @@ export default async function handler(req, res) {
       case 'coach-message-send': {
         if (!isCoachingClient(client)) return res.status(403).json({ error: 'Messaging is available to active coaching clients only.' });
         const text = (body.message_text || '').toString().trim();
-        if (!text) return res.status(400).json({ error: 'Message text is required.' });
+        const hasAtt = !!(body.attachment && body.attachment.data);
+        if (!text && !hasAtt) return res.status(400).json({ error: 'Add a message or a file.' });
         if (text.length > 5000) return res.status(400).json({ error: 'Message is too long (5000 character max).' });
         const msgType = COACH_MSG_TYPES.has(body.message_type) ? body.message_type : 'quick_question';
         const now = new Date().toISOString();
@@ -535,9 +581,16 @@ export default async function handler(req, res) {
           convId = (Array.isArray(rows) ? rows[0] : rows).id;
         }
 
+        let att = null;
+        if (hasAtt) {
+          att = await uploadMsgAttachment(convId, body.attachment);
+          if (att && att.error) return res.status(400).json({ error: att.error });
+        }
         const mr = await sb('/rest/v1/coach_messages', 'POST', {
           conversation_id: convId, client_id: clientId, sender_role: 'client',
           message_type: msgType, message_text: text, read_by_coach: false, read_by_client: true, created_at: now,
+          attachment_url: att ? att.path : null, attachment_name: att ? att.name : null,
+          attachment_size: att ? att.size : null, attachment_type: att ? att.type : null,
         }, { Prefer: 'return=representation' });
         if (!mr.ok) { const d = await mr.json().catch(() => ({})); return res.status(500).json({ error: 'Could not send message', detail: d }); }
         const saved = await mr.json();

@@ -67,6 +67,46 @@ function sb(path, method = 'GET', body = null, extra = {}) {
   });
 }
 
+// ── Message attachments (private bucket + signed links) ───────────────────────
+const MSG_ATT_ALLOWED = /^(application\/pdf|application\/msword|application\/vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|spreadsheetml\.sheet|presentationml\.presentation)|application\/vnd\.ms-(excel|powerpoint)|image\/(png|jpe?g|webp|gif)|text\/(plain|csv))$/;
+async function uploadMsgAttachment(convId, att) {
+  if (!att || !att.data) return null;
+  const m = String(att.data).match(/^data:([^;]+);base64,(.+)$/);
+  if (!m) return { error: 'Unsupported file.' };
+  const mime = m[1];
+  if (!MSG_ATT_ALLOWED.test(mime)) return { error: 'File type not allowed. Use PDF, Word, Excel, PowerPoint, an image, or a text file.' };
+  const buf = Buffer.from(m[2], 'base64');
+  if (buf.length > 10 * 1024 * 1024) return { error: 'File is over 10 MB — please send a smaller one.' };
+  const safe = String(att.name || 'file').replace(/[^\w.\- ]+/g, '_').slice(0, 120) || 'file';
+  const path = `${convId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safe}`;
+  const up = await fetch(`${SUPABASE_URL}/storage/v1/object/message-attachments/${encodeURI(path)}`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}`, 'Content-Type': mime, 'x-upsert': 'true' },
+    body: buf,
+  });
+  if (!up.ok) return { error: 'Attachment upload failed.' };
+  return { path, name: safe, size: buf.length, type: mime };
+}
+async function signMsgAttachment(path) {
+  if (!path) return null;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/storage/v1/object/sign/message-attachments/${encodeURI(path)}`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expiresIn: 3600 }),
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    return j && j.signedURL ? `${SUPABASE_URL}/storage/v1${j.signedURL}` : null;
+  } catch (_) { return null; }
+}
+async function withSignedAttachments(messages) {
+  for (const msg of messages) {
+    if (msg && msg.attachment_url) msg.attachment_download = await signMsgAttachment(msg.attachment_url);
+  }
+  return messages;
+}
+
 // Tables the dashboard may read through the generic proxy.
 const READ_TABLES = new Set([
   'clients', 'checkins', 'sprints', 'sprint_closeouts', 'self_checks',
@@ -596,8 +636,8 @@ export default async function handler(req, res) {
     if (action === 'coach-msg-thread') {
       const cid = body.conversation_id;
       if (!cid) return res.status(400).json({ error: 'conversation_id required' });
-      const mr = await sb(`/rest/v1/coach_messages?conversation_id=eq.${encodeURIComponent(cid)}&select=id,sender_role,sender_name,message_type,message_text,created_at,read_by_coach,read_by_client&order=created_at.asc`);
-      const messages = mr.ok ? await mr.json() : [];
+      const mr = await sb(`/rest/v1/coach_messages?conversation_id=eq.${encodeURIComponent(cid)}&select=id,sender_role,sender_name,message_type,message_text,created_at,read_by_coach,read_by_client,attachment_url,attachment_name,attachment_size,attachment_type&order=created_at.asc`);
+      const messages = mr.ok ? await withSignedAttachments(await mr.json()) : [];
       await sb(`/rest/v1/coach_messages?conversation_id=eq.${encodeURIComponent(cid)}&sender_role=eq.client&read_by_coach=eq.false`, 'PATCH', { read_by_coach: true }, { Prefer: 'return=minimal' }).catch(() => {});
       return res.status(200).json({ ok: true, messages });
     }
@@ -660,16 +700,21 @@ export default async function handler(req, res) {
       // attributed to whoever is signed in.
       const cid  = body.conversation_id;
       const text = (body.message_text || '').toString().trim();
-      if (!cid || !text) return res.status(400).json({ error: 'conversation_id and message_text required' });
+      const hasAtt = !!(body.attachment && body.attachment.data);
+      if (!cid || (!text && !hasAtt)) return res.status(400).json({ error: 'conversation_id and a message or file are required' });
       if (text.length > 5000) return res.status(400).json({ error: 'Message is too long (5000 character max).' });
       const cr = await sb(`/rest/v1/coach_conversations?id=eq.${encodeURIComponent(cid)}&select=id,client_id&limit=1`);
       const conv = (cr.ok ? await cr.json() : [])[0];
       if (!conv) return res.status(404).json({ error: 'Conversation not found' });
       const now = new Date().toISOString();
+      let att = null;
+      if (hasAtt) { att = await uploadMsgAttachment(cid, body.attachment); if (att && att.error) return res.status(400).json({ error: att.error }); }
       const ins = await sb('/rest/v1/coach_messages', 'POST', {
         conversation_id: cid, client_id: conv.client_id, sender_role: 'coach',
         sender_name: senderName, sender_admin_id: senderAid,
         message_type: 'progress_update', message_text: text, read_by_coach: true, read_by_client: false, created_at: now,
+        attachment_url: att ? att.path : null, attachment_name: att ? att.name : null,
+        attachment_size: att ? att.size : null, attachment_type: att ? att.type : null,
       }, { Prefer: 'return=minimal' });
       if (!ins.ok) { const d = await ins.json().catch(() => ({})); return res.status(500).json({ error: 'Could not send reply', detail: d }); }
       const newStatus = ['open', 'waiting_on_client', 'closed'].includes(body.status) ? body.status : 'waiting_on_client';
@@ -705,7 +750,8 @@ export default async function handler(req, res) {
       // Owner or assistant may start a message; attributed to whoever is signed in.
       const targetClient = body.client_id;
       const text = (body.message_text || '').toString().trim();
-      if (!targetClient || !text) return res.status(400).json({ error: 'client_id and message_text required' });
+      const hasAtt = !!(body.attachment && body.attachment.data);
+      if (!targetClient || (!text && !hasAtt)) return res.status(400).json({ error: 'client_id and a message or file are required' });
       if (text.length > 5000) return res.status(400).json({ error: 'Message is too long (5000 character max).' });
       // Only coaching clients have the in-portal messaging channel — guard server-side.
       const cgr = await sb(`/rest/v1/clients?id=eq.${encodeURIComponent(targetClient)}&select=in_coaching_program,coaching_sessions_enabled,is_active_coaching&limit=1`);
@@ -725,10 +771,14 @@ export default async function handler(req, res) {
         if (!insC.ok) { const d = await insC.json().catch(() => ({})); return res.status(500).json({ error: 'Could not start conversation', detail: d }); }
         const rows = await insC.json(); cid = (Array.isArray(rows) ? rows[0] : rows).id;
       }
+      let attS = null;
+      if (hasAtt) { attS = await uploadMsgAttachment(cid, body.attachment); if (attS && attS.error) return res.status(400).json({ error: attS.error }); }
       const insM = await sb('/rest/v1/coach_messages', 'POST', {
         conversation_id: cid, client_id: targetClient, sender_role: 'coach',
         sender_name: senderName, sender_admin_id: senderAid,
         message_type: 'progress_update', message_text: text, read_by_coach: true, read_by_client: false, created_at: now,
+        attachment_url: attS ? attS.path : null, attachment_name: attS ? attS.name : null,
+        attachment_size: attS ? attS.size : null, attachment_type: attS ? attS.type : null,
       }, { Prefer: 'return=minimal' });
       if (!insM.ok) { const d = await insM.json().catch(() => ({})); return res.status(500).json({ error: 'Could not send message', detail: d }); }
       try {

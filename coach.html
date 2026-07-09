@@ -4524,7 +4524,8 @@ async function openCoachConversation(convId){
     var who = mine ? esc(m.sender_name || 'You') : esc(conv.client_name||'Client');
     var bubble = mine ? 'background:#1A3D6E;color:#fff;margin-left:auto;border-bottom-right-radius:3px;' : 'background:#f1f4f6;color:#1a1a1a;margin-right:auto;border-bottom-left-radius:3px;';
     var label = mine ? '' : msgTypeLabel(m.message_type)+' · ';
-    return '<div style="max-width:80%;padding:9px 13px;border-radius:11px;'+bubble+'font-size:13px;line-height:1.5;margin-bottom:3px;word-wrap:break-word;overflow-wrap:anywhere;">'+esc(m.message_text||'').replace(/\n/g,'<br>')+'</div>'
+    var textBubble = (m.message_text && m.message_text.trim()) ? '<div style="max-width:80%;padding:9px 13px;border-radius:11px;'+bubble+'font-size:13px;line-height:1.5;margin-bottom:3px;word-wrap:break-word;overflow-wrap:anywhere;">'+esc(m.message_text||'').replace(/\n/g,'<br>')+'</div>' : '';
+    return textBubble + msgAttachmentCard(m, mine)
       + '<div style="font-size:10.5px;color:#8a97a0;margin:0 3px 11px;text-align:'+(mine?'right':'left')+';">'+who+' · '+label+msgFmtTime(m.created_at)+'</div>';
   }).join('') || '<div style="color:#8a97a0;font-size:13px;text-align:center;padding:20px 0;">No messages.</div>';
   pane.innerHTML =
@@ -4541,7 +4542,14 @@ async function openCoachConversation(convId){
         + '<button onclick="document.getElementById(\'msgReplyText\').value=\'\';document.getElementById(\'msgDraftIndicator\').style.display=\'none\';" style="background:none;border:none;color:#8a97a0;font-size:11px;cursor:pointer;padding:0;white-space:nowrap;">Clear</button>'
       + '</div>'
       + '<textarea id="msgReplyText" rows="3" placeholder="Write your reply…" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #ccc;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;"></textarea>'
-      + '<div style="display:flex;justify-content:flex-end;margin-top:8px;"><button id="msgReplyBtn" onclick="sendCoachReply(\''+convId+'\')" style="background:#01949A;color:#fff;border:none;border-radius:7px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;">Send reply</button></div>'
+      + '<input type="file" id="msgReplyFile" style="display:none" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.webp,.gif,.txt,.csv" onchange="msgPickFile(\'msgReplyFile\',\'msgReplyChip\')">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:8px;">'
+        + '<div style="display:flex;align-items:center;gap:8px;min-width:0;">'
+          + '<button type="button" title="Attach a file" onclick="document.getElementById(\'msgReplyFile\').click()" style="background:none;border:1px solid #dbe3e6;border-radius:7px;padding:6px 11px;cursor:pointer;font-size:15px;line-height:1;color:#5a6b76;">&#128206;</button>'
+          + '<span id="msgReplyChip" style="font-size:12px;color:#5a6b76;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>'
+        + '</div>'
+        + '<button id="msgReplyBtn" onclick="sendCoachReply(\''+convId+'\')" style="background:#01949A;color:#fff;border:none;border-radius:7px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">Send reply</button>'
+      + '</div>'
     + '</div>';
   if (conv.needs_reply || conv.overdue) { loadMsgDraft(convId); }
 }
@@ -4563,12 +4571,43 @@ async function loadMsgDraft(convId) {
     if (ta3) ta3.placeholder = 'Write your reply…';
   }
 }
+// ── Message attachment helpers (shared by composer + thread render) ───────────
+function msgPickFile(inputId, chipId){
+  var inp = document.getElementById(inputId), chip = document.getElementById(chipId);
+  var f = inp && inp.files && inp.files[0];
+  if (!f){ if(chip) chip.textContent=''; return; }
+  if (f.size > 10*1024*1024){ alert('That file is over 10 MB — please choose a smaller one.'); inp.value=''; if(chip) chip.textContent=''; return; }
+  if (chip) chip.innerHTML = '&#128206; ' + esc(f.name||'file') + ' <a href="javascript:void(0)" onclick="document.getElementById(\''+inputId+'\').value=\'\';document.getElementById(\''+chipId+'\').textContent=\'\';" style="color:#DB1F48;text-decoration:none;font-weight:700;margin-left:5px;">&#10005;</a>';
+}
+function msgReadFile(inputId){
+  return new Promise(function(resolve){
+    var inp = document.getElementById(inputId), f = inp && inp.files && inp.files[0];
+    if (!f){ resolve(null); return; }
+    var fr = new FileReader();
+    fr.onload = function(){ resolve({ name: f.name, type: f.type || 'application/octet-stream', data: fr.result }); };
+    fr.onerror = function(){ resolve(null); };
+    fr.readAsDataURL(f);
+  });
+}
+function msgAttachmentCard(m, mine){
+  if (!m || !m.attachment_name) return '';
+  var url = m.attachment_download || '';
+  var s = m.attachment_size ? (m.attachment_size > 1048576 ? (m.attachment_size/1048576).toFixed(1)+' MB' : Math.max(1, Math.round(m.attachment_size/1024))+' KB') : '';
+  return '<div style="max-width:80%;'+(mine?'margin-left:auto;':'margin-right:auto;')+'margin-bottom:3px;">'
+    + '<a href="'+esc(url)+'" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:9px;text-decoration:none;background:#fff;border:1px solid #dbe3e6;border-radius:10px;padding:9px 11px;">'
+      + '<span style="font-size:18px;line-height:1;">&#128196;</span>'
+      + '<span style="min-width:0;"><span style="display:block;font-size:12.5px;font-weight:700;color:#004369;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(m.attachment_name)+'</span>'
+        + '<span style="font-size:11px;color:#8a97a0;">'+(s?esc(s)+' &middot; ':'')+'Download</span></span>'
+    + '</a></div>';
+}
 async function sendCoachReply(convId){
   var ta = document.getElementById('msgReplyText'), btn = document.getElementById('msgReplyBtn');
-  var text = (ta.value||'').trim(); if(!text){ ta.focus(); return; }
+  var text = (ta.value||'').trim();
+  var att = await msgReadFile('msgReplyFile');
+  if(!text && !att){ ta.focus(); return; }
   btn.disabled = true; var orig = btn.textContent; btn.textContent = 'Sending…';
   try {
-    await coachData({ action:'coach-msg-reply', conversation_id: convId, message_text: text });
+    await coachData({ action:'coach-msg-reply', conversation_id: convId, message_text: text, attachment: att });
     await loadCoachInbox();
     await openCoachConversation(convId);
   } catch(e){

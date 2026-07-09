@@ -2568,8 +2568,13 @@
         Use the message below to request a reschedule — or reply to your session confirmation email for the fastest response.
       </div>
       <textarea id="coachMsgText" rows="3" placeholder="Write your message…" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #ccc;border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;"></textarea>
-      <div style="display:flex;justify-content:flex-end;margin-top:10px;">
-        <button id="coachSendBtn" onclick="sendCoachMessage()" style="background:#1A3D6E;color:#fff;border:none;border-radius:8px;padding:10px 22px;font-size:14px;font-weight:700;cursor:pointer;">Send to your coach</button>
+      <input type="file" id="coachMsgFile" style="display:none" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.webp,.gif,.txt,.csv" onchange="cmsgPickFile()">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:10px;">
+        <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+          <button type="button" title="Attach a file" onclick="document.getElementById('coachMsgFile').click()" style="background:none;border:1px solid #ccc;border-radius:8px;padding:8px 12px;cursor:pointer;font-size:16px;line-height:1;color:#555;">&#128206;</button>
+          <span id="coachMsgChip" style="font-size:12px;color:#555;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+        </div>
+        <button id="coachSendBtn" onclick="sendCoachMessage()" style="background:#1A3D6E;color:#fff;border:none;border-radius:8px;padding:10px 22px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;">Send to your coach</button>
       </div>
     </div>
   </div>
@@ -2755,10 +2760,40 @@ function renderCoachThread(messages) {
     const mine = m.sender_role === 'client';
     const who  = mine ? 'You' : (m.sender_name || 'Alex');
     const body = escHtmlResults(m.message_text || '').replace(/\n/g, '<br>');
-    return '<div class="cmsg ' + (mine ? 'cmsg-client' : 'cmsg-coach') + '">' + body + '</div>'
+    const textB = (m.message_text && m.message_text.trim()) ? '<div class="cmsg ' + (mine ? 'cmsg-client' : 'cmsg-coach') + '">' + body + '</div>' : '';
+    return textB + cmsgAttachmentCard(m, mine)
       + '<div class="cmsg-meta" style="text-align:' + (mine ? 'right' : 'left') + ';">' + who + ' · ' + coachMsgTypeLabel(m.message_type) + ' · ' + coachFmtTime(m.created_at) + '</div>';
   }).join('');
   thread.scrollTop = thread.scrollHeight;
+}
+// ── Attachment helpers (client side) ──────────────────────────────────────────
+function cmsgPickFile() {
+  const inp = document.getElementById('coachMsgFile'), chip = document.getElementById('coachMsgChip');
+  const f = inp && inp.files && inp.files[0];
+  if (!f) { if (chip) chip.textContent = ''; return; }
+  if (f.size > 10 * 1024 * 1024) { alert('That file is over 10 MB — please choose a smaller one.'); inp.value = ''; if (chip) chip.textContent = ''; return; }
+  if (chip) chip.innerHTML = '&#128206; ' + escHtmlResults(f.name || 'file') + ' <a href="javascript:void(0)" onclick="document.getElementById(\'coachMsgFile\').value=\'\';document.getElementById(\'coachMsgChip\').textContent=\'\';" style="color:#DB1F48;text-decoration:none;font-weight:700;margin-left:5px;">&#10005;</a>';
+}
+function cmsgReadFile() {
+  return new Promise(function (resolve) {
+    const inp = document.getElementById('coachMsgFile'), f = inp && inp.files && inp.files[0];
+    if (!f) { resolve(null); return; }
+    const fr = new FileReader();
+    fr.onload = function () { resolve({ name: f.name, type: f.type || 'application/octet-stream', data: fr.result }); };
+    fr.onerror = function () { resolve(null); };
+    fr.readAsDataURL(f);
+  });
+}
+function cmsgAttachmentCard(m, mine) {
+  if (!m || !m.attachment_name) return '';
+  const url = m.attachment_download || '';
+  const s = m.attachment_size ? (m.attachment_size > 1048576 ? (m.attachment_size / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(m.attachment_size / 1024)) + ' KB') : '';
+  return '<div style="max-width:78%;' + (mine ? 'margin-left:auto;' : 'margin-right:auto;') + 'margin-bottom:4px;">'
+    + '<a href="' + escHtmlResults(url) + '" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:10px;text-decoration:none;background:#fff;border:1px solid #e2e2e2;border-radius:11px;padding:10px 13px;">'
+      + '<span style="font-size:19px;line-height:1;">&#128196;</span>'
+      + '<span style="min-width:0;"><span style="display:block;font-size:13px;font-weight:700;color:#1A3D6E;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escHtmlResults(m.attachment_name) + '</span>'
+        + '<span style="font-size:11px;color:#999;">' + (s ? escHtmlResults(s) + ' &middot; ' : '') + 'Download</span></span>'
+    + '</a></div>';
 }
 async function sendCoachMessage() {
   const btn = document.getElementById('coachSendBtn');
@@ -2766,11 +2801,14 @@ async function sendCoachMessage() {
   const sel = document.getElementById('coachMsgType');
   const ack = document.getElementById('coachAck');
   const text = (ta.value || '').trim();
-  if (!text) { ta.focus(); return; }
+  const att = await cmsgReadFile();
+  if (!text && !att) { ta.focus(); return; }
   btn.disabled = true; const orig = btn.textContent; btn.textContent = 'Sending…';
   try {
-    await portalData('coach-message-send', { message_text: text, message_type: sel.value });
+    await portalData('coach-message-send', { message_text: text, message_type: sel.value, attachment: att });
     ta.value = '';
+    const _cf = document.getElementById('coachMsgFile'); if (_cf) _cf.value = '';
+    const _cc = document.getElementById('coachMsgChip'); if (_cc) _cc.textContent = '';
     if (ack) { ack.textContent = 'Got it — Alex usually replies within one business day.'; ack.style.color = '#0F6E56'; ack.style.background = '#E1F5EE'; ack.style.display = 'block'; }
     await loadCoachThread();
   } catch (e) {
