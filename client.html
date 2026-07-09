@@ -812,7 +812,7 @@
     #coachPanel { display: none; background: var(--light-sand); min-height: calc(100vh - 140px); padding-bottom: 60px; }
     #coachPanel.active { display: block; }
     .ptab-coach.active { border-bottom-color: #2EA887; }
-    .cmsg { max-width: 78%; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.5; margin-bottom: 4px; word-wrap: break-word; }
+    .cmsg { max-width: 78%; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.5; margin-bottom: 4px; word-wrap: break-word; overflow-wrap: anywhere; }
     .cmsg-client { background: #1A3D6E; color: #fff; border-bottom-right-radius: 3px; margin-left: auto; }
     .cmsg-coach { background: #fff; color: #1a1a1a; border: 1px solid #e2e2e2; border-bottom-left-radius: 3px; margin-right: auto; }
     .cmsg-meta { font-size: 11px; color: #888; margin: 0 4px 12px; }
@@ -2549,7 +2549,7 @@
       Use this space to send questions or updates between sessions. I respond within one business day.
       For emergencies or urgent safety issues, use your company channels, not this portal.
     </p>
-    <div id="coachThread" style="background:#fff;border:1px solid #e2e2e2;border-radius:12px;padding:16px;min-height:160px;display:flex;flex-direction:column;">
+    <div id="coachThread" style="background:#fff;border:1px solid #e2e2e2;border-radius:12px;padding:16px;min-height:160px;display:flex;flex-direction:column;overflow-x:hidden;max-width:100%;">
       <div style="margin:auto;color:#999;font-size:13px;">Loading…</div>
     </div>
     <div id="coachAck" style="display:none;margin-top:10px;font-size:13px;color:#0F6E56;background:#E1F5EE;border-radius:8px;padding:10px 14px;"></div>

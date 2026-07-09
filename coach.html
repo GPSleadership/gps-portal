@@ -4524,7 +4524,7 @@ async function openCoachConversation(convId){
     var who = mine ? esc(m.sender_name || 'You') : esc(conv.client_name||'Client');
     var bubble = mine ? 'background:#1A3D6E;color:#fff;margin-left:auto;border-bottom-right-radius:3px;' : 'background:#f1f4f6;color:#1a1a1a;margin-right:auto;border-bottom-left-radius:3px;';
     var label = mine ? '' : msgTypeLabel(m.message_type)+' · ';
-    return '<div style="max-width:80%;padding:9px 13px;border-radius:11px;'+bubble+'font-size:13px;line-height:1.5;margin-bottom:3px;word-wrap:break-word;">'+esc(m.message_text||'').replace(/\n/g,'<br>')+'</div>'
+    return '<div style="max-width:80%;padding:9px 13px;border-radius:11px;'+bubble+'font-size:13px;line-height:1.5;margin-bottom:3px;word-wrap:break-word;overflow-wrap:anywhere;">'+esc(m.message_text||'').replace(/\n/g,'<br>')+'</div>'
       + '<div style="font-size:10.5px;color:#8a97a0;margin:0 3px 11px;text-align:'+(mine?'right':'left')+';">'+who+' · '+label+msgFmtTime(m.created_at)+'</div>';
   }).join('') || '<div style="color:#8a97a0;font-size:13px;text-align:center;padding:20px 0;">No messages.</div>';
   pane.innerHTML =
@@ -4533,7 +4533,7 @@ async function openCoachConversation(convId){
     + '<select id="msgStatusSel" onchange="setCoachConvStatus(\''+convId+'\', this.value)" style="padding:5px 8px;border:1px solid #dbe3e6;border-radius:6px;font-size:12px;">'
       + ['open','waiting_on_client','closed'].map(function(s){ return '<option value="'+s+'"'+(conv.status===s?' selected':'')+'>'+msgStatusLabel(s)+'</option>'; }).join('')
     + '</select></div>'
-    + '<div style="display:flex;flex-direction:column;max-height:46vh;overflow:auto;padding-right:4px;">'+thread+'</div>'
+    + '<div style="display:flex;flex-direction:column;max-height:46vh;overflow-y:auto;overflow-x:hidden;min-width:0;padding-right:4px;">'+thread+'</div>'
     + '<div style="margin-top:14px;border-top:1px solid #eef1f2;padding-top:12px;">'
       + '<div id="msgDraftIndicator" style="display:none;align-items:center;gap:8px;margin-bottom:8px;padding:6px 10px;background:#f0f9f9;border:1px solid #b2dfdb;border-radius:6px;font-size:11.5px;color:#5a6b76;">'
         + '<span style="background:#01949A;color:#fff;border-radius:4px;padding:1px 7px;font-size:10px;font-weight:700;letter-spacing:0.3px;white-space:nowrap;">AI DRAFT</span>'
