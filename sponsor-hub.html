@@ -76,7 +76,7 @@
 
     html += '<div class="list">';
     ws.forEach(function(w){
-      var isDone = (w.status==='complete') || (w.status==='report_uploaded');
+      var isDone = !!w.results_url || (w.status==='complete') || (w.status==='report_uploaded');
       var badge = isDone
         ? '<span class="badge done">Results ready</span>'
         : '<span class="badge progress">In progress</span>';

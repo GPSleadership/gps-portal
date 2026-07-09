@@ -19,8 +19,11 @@ diagnostic-leader.html
 diagnostic-sandbox.html
 diagnostic-survey.html
 feedback.html
+omb-interpersonal-communication-results.html
 omb-message-clarity-results.html
+omb-speaking-confidently-results.html
 recover.html
+sponsor-hub.html
 sponsor.html
 survey.html
 wayside-truck-parts-proposal.html
