@@ -2695,6 +2695,35 @@ async function portalData(action, payload = {}) {
   if (!res.ok) throw new Error(json.error || ('Request failed (' + res.status + ')'));
   return json;
 }
+// Resilient GET for CRITICAL calls (e.g. loading the client). Retries transient
+// failures — a serverless cold-start timeout, a dropped connection, a 5xx — with
+// exponential backoff before giving up. Definitive answers (2xx, or 4xx like 403/404)
+// return immediately; we never retry a real response. This is what stops a cold
+// function from ever blanking the portal: by the 2nd attempt the function is warm.
+async function fetchResilient(url, opts) {
+  opts = opts || {};
+  const attempts  = opts.attempts  || 3;
+  const timeoutMs = opts.timeoutMs || 12000;
+  let lastErr = null;
+  for (let i = 0; i < attempts; i++) {
+    const ctrl  = new AbortController();
+    const timer = setTimeout(function () { ctrl.abort(); }, timeoutMs);
+    try {
+      const res = await fetch(url, { signal: ctrl.signal });
+      clearTimeout(timer);
+      if (res.status >= 500 && i < attempts - 1) { await _retryDelay(i); continue; }
+      return res;
+    } catch (e) {
+      clearTimeout(timer);
+      lastErr = e;
+      if (i < attempts - 1) { await _retryDelay(i); continue; }
+      throw e;
+    }
+  }
+  throw lastErr || new Error('Network request failed after retries');
+}
+function _retryDelay(i) { return new Promise(function (r) { setTimeout(r, 500 * Math.pow(2, i) + Math.random() * 250); }); }
+
 let currentClient    = null; // set when portal loads — used by submitFormA
 
 // ─────────────────────────────────────────────
@@ -3513,8 +3542,16 @@ async function submitRaterListFromPortal() {
 
 async function loadClient() {
   try {
-    // Fetch client securely via server-side API (service role key never exposed to browser)
-    const clientRes = await fetch(`/api/get-client?token=${encodeURIComponent(token)}`);
+    // Fetch client securely via server-side API (service role key never exposed to browser).
+    // Retries transient/cold-start failures so a warm-up hiccup never blanks the portal.
+    let clientRes;
+    try {
+      clientRes = await fetchResilient(`/api/get-client?token=${encodeURIComponent(token)}`, { attempts: 3, timeoutMs: 12000 });
+    } catch (netErr) {
+      // Genuine connectivity failure after retries — offer a live reconnect, never a dead end.
+      showError('Reconnecting…', 'We could not reach the server just now. This is usually momentary — reconnecting automatically.', { reload: true, autoRetryMs: 4000 });
+      return;
+    }
 
     if (clientRes.status === 403) {
       showError('Access not available.', 'Contact your coach at alex@gpsleadership.org.');
@@ -3555,8 +3592,10 @@ async function loadClient() {
       return;
     }
 
-    // 90-day access window for non-coaching clients
-    const accessStatus = await initPortalAccessCheck(client);
+    // 90-day access window for non-coaching clients. Fail OPEN on a transient check
+    // error — a momentary hiccup must never lock a paying client out of their portal.
+    let accessStatus = null;
+    try { accessStatus = await initPortalAccessCheck(client); } catch (_) { accessStatus = null; }
     if (accessStatus === 'expired') return;
 
     const firstName = (client.name || '').split(' ')[0] || 'there';
@@ -3704,15 +3743,19 @@ async function loadClient() {
           setTimeout(function () { try { applyEmailCheckin(_emailCi); } catch (_) {} }, 250);
         }
       } catch (_) {}
-      renderRenewalOffer();
-      renderResultsTab(surveyData || [], checkins || [], client, surveyTokenData || [], selfCheckData || []);
-      renderClientStakeholderCard(client.id, stakeholderData || []);
-      loadClientDiagnostic();
-      loadMySponsor();
-      if (_resultsLoadFailed) showResultsLoadError();
+      // Secondary widgets are isolated: a failure in any ONE renders a local fallback
+      // in that card only and never blanks the portal. The plan + nav are already up.
+      try { renderRenewalOffer(); } catch (e) { console.error('[renderRenewalOffer]', e); }
+      try { renderResultsTab(surveyData || [], checkins || [], client, surveyTokenData || [], selfCheckData || []); }
+      catch (e) { console.error('[renderResultsTab]', e); if (typeof showResultsLoadError === 'function') showResultsLoadError(); }
+      try { renderClientStakeholderCard(client.id, stakeholderData || []); } catch (e) { console.error('[renderClientStakeholderCard]', e); }
+      try { loadClientDiagnostic(); } catch (e) { console.error('[loadClientDiagnostic]', e); }
+      try { loadMySponsor(); } catch (e) { console.error('[loadMySponsor]', e); }
+      if (_resultsLoadFailed) { try { showResultsLoadError(); } catch (_) {} }
     }
   } catch (e) {
-    showError('Something went wrong.', 'Please refresh the page. If the problem continues, contact alex@gpsleadership.org.');
+    console.error('[loadClient] fatal', e);
+    showError('Something went wrong.', 'Please reload the page. If it keeps happening, contact alex@gpsleadership.org.', { reload: true });
   }
 }
 
@@ -7987,14 +8030,20 @@ function renderResources(client) {
 // ─────────────────────────────────────────────
 // UTILITY
 // ─────────────────────────────────────────────
-function showError(title, message) {
+function showError(title, message, opts) {
+  opts = opts || {};
+  const reloadBtn = opts.reload
+    ? `<button onclick="location.reload()" style="margin-top:18px;padding:10px 22px;border:none;border-radius:8px;background:#1A3D6E;color:#fff;font-size:14px;font-weight:600;cursor:pointer;">Reload</button>`
+    : '';
   document.getElementById('mainContent').innerHTML = `
     <div class="state-screen">
-      <div style="font-size:40px;margin-bottom:16px;">🔒</div>
+      <div style="font-size:40px;margin-bottom:16px;">${opts.reload ? '🔄' : '🔒'}</div>
       <h2>${title}</h2>
       <p>${message}</p>
+      ${reloadBtn}
     </div>
   `;
+  if (opts.autoRetryMs) setTimeout(function () { location.reload(); }, opts.autoRetryMs);
 }
 
 // Warm holding state for a sponsor whose workshop results aren't published yet
