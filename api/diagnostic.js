@@ -717,11 +717,13 @@ async function sendInvitesForDiagnostic(diagnostic_id) {
   const now = new Date();
   const nowISO = now.toISOString();
 
-  // Close date = exactly 7 days from invite send (overrides any manual close_date)
+  // Close date = exactly 7 days from invite send (overrides any manual close_date).
+  // A survey should never close on a weekend — roll Sat/Sun forward to Monday so the
+  // 3-day-out reminder lands on the Friday before, not on a Saturday nobody reads.
   const closeDate = new Date(now);
   closeDate.setDate(closeDate.getDate() + 7);
-  const closeDateISO  = closeDate.toISOString().split('T')[0]; // YYYY-MM-DD
-  const closeDateDisp = closeDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  const closeDateISO  = rollCloseOffWeekend(closeDate.toISOString().split('T')[0]); // YYYY-MM-DD, never a weekend
+  const closeDateDisp = new Date(closeDateISO + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 
   // Editable invite template (Communication → Email Templates); loaded once, filled per rater.
   const inviteTpl = await getApprovedTemplate('diagnostic_invite');
@@ -3217,6 +3219,19 @@ async function handleSubmitExternalFeedback(req, res) {
   }
 }
 
+// A survey should never close on a Saturday or Sunday. Given a 'YYYY-MM-DD' close
+// date, roll a weekend date forward to the following Monday. Weekdays pass through
+// unchanged. Uses UTC so it matches how close dates are stored and compared.
+function rollCloseOffWeekend(iso) {
+  if (!iso) return iso;
+  const d = new Date(iso + 'T12:00:00Z');
+  if (isNaN(d.getTime())) return iso;
+  const day = d.getUTCDay(); // 0 = Sun, 6 = Sat
+  if (day === 6) d.setUTCDate(d.getUTCDate() + 2);
+  else if (day === 0) d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().split('T')[0];
+}
+
 async function handleReminders(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -3234,14 +3249,29 @@ async function handleReminders(req, res) {
 
   try {
     // ── Section 1: Rater Reminders (R1 + R2) ────────────────────────────────
-    const openDiagsRes = await sb(`/rest/v1/diagnostics?status=eq.survey_open&select=id,client_name,client_email,close_date,anonymous_feedback,cc_leader_first_reminder`);
+    const openDiagsRes = await sb(`/rest/v1/diagnostics?status=eq.survey_open&select=id,client_name,client_email,close_date,anonymous_feedback,cc_leader_first_reminder,suppress_auto_reminders`);
     const openDiags    = await openDiagsRes.json() || [];
+
+    // Weekend-close guard (runs daily): no survey should close on a Sat/Sun. Roll any
+    // open diagnostic whose close date landed on a weekend forward to the Monday, and
+    // persist it so the survey page, emails, and reminder cadence all agree.
+    for (const diag of openDiags) {
+      if (!diag.close_date) continue;
+      const rolled = rollCloseOffWeekend(diag.close_date);
+      if (rolled !== diag.close_date) {
+        try { await sb(`/rest/v1/diagnostics?id=eq.${diag.id}`, 'PATCH', { close_date: rolled }, { Prefer: 'return=minimal' }); } catch (_) {}
+        diag.close_date = rolled;
+      }
+    }
 
     // Editable templates (only used when coach has approved them; otherwise hardcoded copy stands)
     const r1Tpl = await getApprovedTemplate('diagnostic_reminder_1');
     const r2Tpl = await getApprovedTemplate('diagnostic_reminder_2');
 
     for (const diag of openDiags) {
+      // Skip per-leader rater reminders when this diagnostic is handled by the
+      // consolidated peer-feedback nudge instead (one email per rater, not per leader).
+      if (diag.suppress_auto_reminders) continue;
       const ratersRes = await sb(
         `/rest/v1/diagnostic_raters?diagnostic_id=eq.${diag.id}&is_self=eq.false&completed_at=is.null&invited_at=not.is.null&select=id,name,email,token,invited_at,reminder_1_sent_at,reminder_2_sent_at,email_bounced`
       );
