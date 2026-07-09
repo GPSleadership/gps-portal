@@ -1297,7 +1297,10 @@ I'm taking part in a leadership assessment run by GPS Leadership Solutions. Thei
       <!-- LIST VIEW — filterable table only; rich command-center lives on Dashboard tab -->
       <div id="view-diag-list">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
-          <div style="font-family:'Montserrat',sans-serif;font-size:18px;font-weight:800;color:var(--d-blue);">All Diagnostics</div>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div style="font-family:'Montserrat',sans-serif;font-size:18px;font-weight:800;color:var(--d-blue);">All Diagnostics</div>
+            <button class="dbtn dbtn-outline dbtn-sm" onclick="peerNudge()" style="border-color:#DB1F48;color:#DB1F48;" title="One email per rater covering every leader they rate, with progress">Peer-feedback nudge</button>
+          </div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
             <input id="diag-search" type="text" placeholder="Search name, org…" oninput="renderDiagTable()"
               style="padding:7px 12px;border:1.5px solid var(--d-border);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;min-width:180px;outline:none;"
@@ -7884,6 +7887,25 @@ function toggleDiagSort(col) {
   renderDiagTable();
 }
 
+async function peerNudge(){
+  var org = window.prompt('Send a consolidated peer-feedback nudge for which organization?\n\nEach rater gets ONE email listing every leader they rate, with completed/outstanding progress. People who have finished all their ratings are skipped.', '');
+  if(!org || !org.trim()) return;
+  org = org.trim();
+  try {
+    var dryResp = await fetch('/api/diagnostic?action=consolidated-rater-nudge', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ client_org: org, dry_run: true, session: getCoachSessionToken() }) });
+    var dry = await dryResp.json().catch(function(){ return {}; });
+    if (dry.error){ toast('Could not preview: ' + dry.error); return; }
+    if (!dry.leaders){ toast('No open diagnostics found for "' + org + '".'); return; }
+    var toSend = (dry.results||[]).filter(function(r){ return r.outstanding > 0; });
+    if (!toSend.length){ toast('Everyone has finished their feedback for ' + org + '. Nothing to send.'); return; }
+    var lines = toSend.map(function(r){ return '• ' + (r.name || r.email) + ' — ' + r.outstanding + ' to rate' + (r.done ? ', ' + r.done + ' done' : ''); }).join('\n');
+    if (!window.confirm('Send the peer-feedback nudge for ' + org + '?\n\n' + toSend.length + ' rater(s) will each get one email:\n\n' + lines)) return;
+    var sendResp = await fetch('/api/diagnostic?action=consolidated-rater-nudge', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ client_org: org, dry_run: false, session: getCoachSessionToken() }) });
+    var out = await sendResp.json().catch(function(){ return {}; });
+    if (out.error){ toast('Send failed: ' + out.error); return; }
+    toast('Sent to ' + out.sent + ' rater' + (out.sent === 1 ? '' : 's') + ' for ' + org + '.');
+  } catch(e){ toast('Peer-feedback nudge failed: ' + (e.message || e)); }
+}
 function renderDiagTable() {
   const el = document.getElementById('diag-table-wrap');
   if (!el) return;

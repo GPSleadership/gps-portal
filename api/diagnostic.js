@@ -381,6 +381,95 @@ async function handleSendKickoffEmail(req, res) {
   }
 }
 
+// ── Consolidated rater nudge (peer-feedback) ─────────────────────────────────
+// One email per rater covering EVERY leader they rate in an org's open cohort, with
+// completed (green) vs outstanding (red + link) status. Raises completion by showing
+// progress ("2 of 4 done") instead of scattering separate emails per leader.
+function escHtml(s) {
+  return String(s == null ? '' : s).replace(/[<>&"]/g, function (c) { return { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]; });
+}
+function buildConsolidatedNudgeEmail(rater, done, cohortClose) {
+  const first = (rater.name || '').split(' ')[0] || 'there';
+  const items = rater.items;
+  const total = items.length;
+  const outstanding = total - done;
+  const closeFmt = cohortClose ? new Date(cohortClose + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) : 'soon';
+  const subject = done > 0
+    ? `You're partway. ${outstanding} left to rate.`
+    : `Your leadership feedback: ${total} ${total === 1 ? 'person' : 'people'} to rate`;
+  const intro = done > 0
+    ? `Thanks for the feedback you've already shared. You're ${done} of ${total} done, ${outstanding} to go, about 15 minutes each. Your answers stay anonymous. Scores are averaged across raters and comments never carry a name.`
+    : `You've been asked to give confidential feedback on ${total} ${total === 1 ? 'leader' : 'leaders'} as part of their GPS Leadership Solutions diagnostic. About 15 minutes each. Your answers stay anonymous. Scores are averaged across raters and comments never carry a name.`;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const progressBar = done > 0
+    ? `<tr><td style="padding:4px 0 14px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="background:#eef1f2;border-radius:20px;"><table role="presentation" width="${pct}%" cellpadding="0" cellspacing="0"><tr><td style="background:#0F6E56;height:8px;border-radius:20px;font-size:0;line-height:0;">&nbsp;</td></tr></table></td></tr></table><div style="font-size:12px;color:#5a6b76;margin-top:5px;font-weight:700;">${done} of ${total} done</div></td></tr>`
+    : '';
+  const rows = items.map(function (it) {
+    if (it.completed) {
+      return `<tr><td style="padding:7px 0;font-size:15px;color:#5a6b76;">${escHtml(it.leader)}</td><td align="right" style="padding:7px 0;"><span style="background:#0F6E56;color:#ffffff;border-radius:6px;padding:6px 13px;font-size:13px;font-weight:700;">&#10003; Completed</span></td></tr>`;
+    }
+    const link = `${PORTAL_BASE}/diagnostic-survey?token=${encodeURIComponent(it.token)}`;
+    return `<tr><td style="padding:7px 0;font-size:15px;color:#1a1a1a;font-weight:700;">${escHtml(it.leader)}</td><td align="right" style="padding:7px 0;"><a href="${link}" style="background:#DB1F48;color:#ffffff;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:700;text-decoration:none;display:inline-block;">Give feedback</a></td></tr>`;
+  }).join('');
+  const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#1a1a1a;">
+    <div style="background:#004369;color:#ffffff;padding:14px 22px;font-size:14px;font-weight:700;border-radius:10px 10px 0 0;">GPS Leadership Solutions &middot; Executive Leadership Diagnostic</div>
+    <div style="border:1px solid #e6e6e6;border-top:none;border-radius:0 0 10px 10px;padding:22px;">
+      <p style="font-size:15px;line-height:1.6;margin:0 0 14px;">${escHtml(first)},</p>
+      <p style="font-size:15px;line-height:1.6;margin:0 0 16px;">${intro}</p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${progressBar}${rows}</table>
+      <p style="font-size:15px;line-height:1.6;margin:18px 0 0;">Everything closes ${closeFmt}. ${outstanding > 0 ? 'Finish the rest and you\'re done.' : ''}</p>
+      <p style="font-size:15px;line-height:1.6;margin:16px 0 0;">Thank you. This is the feedback that makes the coaching real.</p>
+      <p style="font-size:15px;line-height:1.6;margin:16px 0 0;">Alex Tremble<br>GPS Leadership Solutions</p>
+    </div>
+    <p style="font-size:12px;color:#8a97a0;text-align:center;margin:14px 0 0;">Button not opening? Some workplace email systems block links. Reply to this email and we'll send your links directly.</p>
+  </div>`;
+  const textLines = items.map(function (it) { return it.completed ? `${it.leader}: completed` : `${it.leader}: ${PORTAL_BASE}/diagnostic-survey?token=${it.token}`; });
+  const text = `${first},\n\n${intro}\n\n${textLines.join('\n')}\n\nEverything closes ${closeFmt}.\n\nThank you.\nAlex Tremble\nGPS Leadership Solutions`;
+  return { subject, html, text };
+}
+async function handleConsolidatedRaterNudge(req, res) {
+  if (!verifyCoachSession(req.body?.session)) return res.status(401).json({ error: 'Unauthorized' });
+  const clientOrg = (req.body?.client_org || '').toString().trim();
+  const dryRun = !!req.body?.dry_run;
+  if (!clientOrg) return res.status(400).json({ error: 'client_org is required' });
+  try {
+    const dRes = await sb(`/rest/v1/diagnostics?status=eq.survey_open&client_org=ilike.${encodeURIComponent('*' + clientOrg + '*')}&select=id,client_name,close_date,client_org`);
+    const diags = dRes.ok ? await dRes.json() : [];
+    if (!diags.length) return res.status(200).json({ ok: true, cohort: clientOrg, leaders: 0, raters: 0, results: [], message: 'No open diagnostics for that organization.' });
+    const leaderById = {}; diags.forEach(function (d) { leaderById[d.id] = d; });
+    const diagIds = diags.map(function (d) { return d.id; });
+    const closes = diags.map(function (d) { return d.close_date; }).filter(Boolean).sort();
+    const cohortClose = closes[0] || null;
+    const rRes = await sb(`/rest/v1/diagnostic_raters?diagnostic_id=in.(${diagIds.map(encodeURIComponent).join(',')})&is_self=eq.false&invited_at=not.is.null&select=id,name,email,token,completed_at,diagnostic_id,email_bounced`);
+    const raters = rRes.ok ? await rRes.json() : [];
+    const byEmail = {};
+    for (const r of raters) {
+      if (!r.email || r.email_bounced) continue;
+      const key = r.email.toLowerCase();
+      if (!byEmail[key]) byEmail[key] = { name: r.name, email: r.email, items: [] };
+      byEmail[key].items.push({ leader: (leaderById[r.diagnostic_id] || {}).client_name || 'a leader', completed: !!r.completed_at, token: r.token });
+    }
+    const results = [];
+    for (const key of Object.keys(byEmail)) {
+      const rater = byEmail[key];
+      const done = rater.items.filter(function (i) { return i.completed; }).length;
+      const outstanding = rater.items.length - done;
+      if (outstanding === 0) { results.push({ email: rater.email, name: rater.name, done, outstanding: 0, skipped: 'all complete' }); continue; }
+      const email = buildConsolidatedNudgeEmail(rater, done, cohortClose);
+      if (dryRun) { results.push({ email: rater.email, name: rater.name, done, outstanding, subject: email.subject, leaders: rater.items.map(function (i) { return i.leader + (i.completed ? ' (done)' : ' (open)'); }) }); continue; }
+      try {
+        await sendEmail({ to: rater.email, subject: email.subject, html: email.html, text: email.text, emailType: 'diagnostic_consolidated_nudge', recipientName: rater.name, cc: ['team@gpsleadership.org'] });
+        results.push({ email: rater.email, name: rater.name, sent: true, done, outstanding });
+      } catch (e) { results.push({ email: rater.email, error: e.message }); }
+    }
+    const sent = results.filter(function (r) { return r.sent; }).length;
+    const skipped = results.filter(function (r) { return r.skipped; }).length;
+    return res.status(200).json({ ok: true, cohort: clientOrg, dry_run: dryRun, leaders: diags.length, raters: Object.keys(byEmail).length, sent, skipped, results });
+  } catch (e) {
+    return res.status(502).json({ error: 'Could not send the nudge. ' + (e.message || '') });
+  }
+}
+
 // ── Main handler ─────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {
@@ -401,6 +490,7 @@ export default async function handler(req, res) {
     case 'trial-sweep':          return handleTrialSweep(req, res);
     case 'send-leader-link':     return handleSendLeaderLink(req, res);
     case 'resend-rater':         return handleResendRater(req, res);
+    case 'consolidated-rater-nudge': return handleConsolidatedRaterNudge(req, res);
     case 'generate-question':    return handleGenerateQuestion(req, res);
     case 'generate-g2-question': return handleGenerateG2Question(req, res);
     case 'generate-report':      return handleGenerateReport(req, res);
