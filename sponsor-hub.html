@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Your Workshops — GPS Leadership</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root { --navy:#004369; --navy-deep:#04243a; --red:#DB1F48; --teal:#01949A; --sand:#E5DDC8; --light-teal:#E8F7F7; --light-sand:#F7F4EE; --white:#fff; --gray-100:#f5f5f5; --gray-200:#e8e8e8; --gray-300:#d0d0d0; --gray-600:#666; --text:#1a1a1a; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Open Sans',sans-serif; background:var(--gray-100); color:var(--text); min-height:100vh; padding-bottom:44px; }
+  .top-bar { height:6px; background:linear-gradient(to right,var(--navy),var(--teal),var(--red)); }
+  .header { background:var(--navy); padding:16px 32px; display:flex; align-items:center; gap:14px; }
+  .header-logo-text { font-family:'Montserrat',sans-serif; font-size:22px; font-weight:800; color:var(--sand); letter-spacing:1px; }
+  .header-title { color:rgba(255,255,255,0.75); font-size:11px; text-transform:uppercase; letter-spacing:0.6px; font-weight:600; }
+  .header-sub { color:var(--white); font-family:'Montserrat',sans-serif; font-size:15px; font-weight:700; }
+  .wrap { max-width:820px; margin:0 auto; padding:24px; }
+  .hero { background:var(--navy-deep); color:#fff; border-radius:14px; padding:24px 26px; margin-bottom:20px; }
+  .hero .eyebrow { font-size:11px; letter-spacing:1.4px; text-transform:uppercase; color:#9fc4d2; margin-bottom:8px; }
+  .hero h1 { font-family:'Montserrat',sans-serif; font-size:23px; font-weight:800; line-height:1.25; }
+  .hero p { color:#cfe3ea; font-size:14px; margin-top:6px; }
+  .list { display:flex; flex-direction:column; gap:14px; }
+  .item { background:#fff; border:1px solid var(--gray-200); border-radius:12px; padding:18px 20px; box-shadow:0 2px 10px rgba(0,0,0,.05); }
+  .item-top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; }
+  .item h2 { font-family:'Montserrat',sans-serif; font-size:16.5px; font-weight:800; color:var(--navy); }
+  .item .meta { font-size:12.5px; color:var(--gray-600); margin-top:3px; }
+  .badge { font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:0.4px; padding:4px 10px; border-radius:20px; white-space:nowrap; }
+  .badge.done { background:var(--light-teal); color:#0F6E56; }
+  .badge.progress { background:#FFF4E5; color:#B45309; }
+  .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; }
+  .btn { display:inline-block; font-family:'Montserrat',sans-serif; font-weight:700; font-size:13px; padding:10px 18px; border-radius:8px; text-decoration:none; cursor:pointer; border:none; }
+  .btn-primary { background:var(--teal); color:#fff; }
+  .btn-ghost { background:#fff; border:1.5px solid var(--gray-300); color:var(--navy); }
+  .empty { background:#fff; border:1px solid var(--gray-200); border-radius:12px; padding:28px 22px; text-align:center; color:var(--gray-600); font-size:14px; }
+  .loading { text-align:center; padding:64px 20px; color:var(--gray-600); }
+  .spinner { width:36px; height:36px; border:4px solid var(--gray-300); border-top-color:var(--teal); border-radius:50%; animation:spin .8s linear infinite; margin:0 auto 16px; } @keyframes spin { to { transform:rotate(360deg); } }
+  .foot-note { text-align:center; color:#8a99a0; font-size:12px; margin-top:26px; }
+  .foot-note a { color:var(--teal); text-decoration:none; }
+  @media (max-width:560px){ .header { padding:14px 18px; } .wrap { padding:18px 14px; } }
+</style>
+</head>
+<body>
+<div class="top-bar"></div>
+<header class="header">
+  <div class="header-logo-text">GPS</div>
+  <div><div class="header-title">Leadership Solutions</div><div class="header-sub">Your Workshops</div></div>
+</header>
+<div class="wrap"><div id="view"><div class="loading"><div class="spinner"></div>Loading your workshops&hellip;</div></div></div>
+
+<script>
+(function(){
+  var TOKEN = new URLSearchParams(location.search).get('token') || '';
+  var view = document.getElementById('view');
+  function esc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function fmtDate(d){ if(!d) return ''; var s=String(d).slice(0,10).split('-'); if(s.length<3) return String(d); var m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return m[parseInt(s[1],10)-1]+' '+parseInt(s[2],10)+', '+s[0]; }
+  function fail(msg){ view.innerHTML='<div class="empty">'+esc(msg)+'</div>'; }
+
+  if(!TOKEN){ fail('This link is missing its access token. Please use the link from your invitation email.'); return; }
+
+  fetch('/api/sponsor-hub',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:TOKEN})})
+    .then(function(r){ return r.json().then(function(j){ if(!r.ok||!j.ok) throw new Error(j.error||('HTTP '+r.status)); return j; }); })
+    .then(render)
+    .catch(function(e){ fail(e.message); });
+
+  function render(d){
+    var sp = d.sponsor || {};
+    var ws = d.workshops || [];
+    var name = sp.name ? (', '+sp.name.split(' ')[0]) : '';
+    var html = '<div class="hero"><div class="eyebrow">GPS Leadership Solutions</div>'
+      + '<h1>Welcome back'+esc(name)+'</h1>'
+      + '<p>'+(sp.org?esc(sp.org)+' · ':'')+'every workshop and assessment we have run with your team, in one place.</p></div>';
+
+    if(!ws.length){ html += '<div class="empty">Your workshops will appear here as they are scheduled.</div>'; view.innerHTML = html; return; }
+
+    html += '<div class="list">';
+    ws.forEach(function(w){
+      var isDone = (w.status==='complete') || (w.status==='report_uploaded');
+      var badge = isDone
+        ? '<span class="badge done">Results ready</span>'
+        : '<span class="badge progress">In progress</span>';
+      var kindLabel = (w.kind==='assessment') ? 'Assessment' : 'Workshop';
+      var metaBits = [kindLabel];
+      if(w.date) metaBits.push(fmtDate(w.date));
+      if(w.org) metaBits.push(w.org);
+      var meta = metaBits.map(esc).join(' · ');
+
+      var actions = '';
+      // Primary: curated results page when we have one, else the live dashboard.
+      if(w.results_url){
+        actions += '<a class="btn btn-primary" href="'+esc(w.results_url)+'" target="_blank" rel="noopener">View results</a>';
+        if(w.dashboard_token){ actions += '<a class="btn btn-ghost" href="/workshop-room.html?token='+esc(w.dashboard_token)+'">Open dashboard</a>'; }
+      } else if(w.dashboard_token){
+        actions += '<a class="btn btn-primary" href="/workshop-room.html?token='+esc(w.dashboard_token)+'">Open dashboard</a>';
+      } else {
+        actions += '<span class="btn btn-ghost" style="cursor:default;opacity:.7">Results coming soon</span>';
+      }
+
+      html += '<div class="item"><div class="item-top"><div><h2>'+esc(w.title)+'</h2><div class="meta">'+meta+'</div></div>'+badge+'</div>'
+        + '<div class="actions">'+actions+'</div></div>';
+    });
+    html += '</div>';
+
+    html += '<div class="foot-note">Prepared by GPS Leadership Solutions · <a href="https://gpsleadership.org">gpsleadership.org</a></div>';
+    view.innerHTML = html;
+  }
+})();
+</script>
+</body>
+</html>
