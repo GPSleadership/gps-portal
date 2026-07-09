@@ -404,7 +404,7 @@ function buildConsolidatedNudgeEmail(rater, done, cohortClose) {
   const progressBar = done > 0
     ? `<tr><td style="padding:4px 0 14px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="background:#eef1f2;border-radius:20px;"><table role="presentation" width="${pct}%" cellpadding="0" cellspacing="0"><tr><td style="background:#0F6E56;height:8px;border-radius:20px;font-size:0;line-height:0;">&nbsp;</td></tr></table></td></tr></table><div style="font-size:12px;color:#5a6b76;margin-top:5px;font-weight:700;">${done} of ${total} done</div></td></tr>`
     : '';
-  const rows = items.map(function (it) {
+  const rows = items.slice().sort(function (a, b) { return (b.completed ? 1 : 0) - (a.completed ? 1 : 0); }).map(function (it) {
     if (it.completed) {
       return `<tr><td style="padding:7px 0;font-size:15px;color:#5a6b76;">${escHtml(it.leader)}</td><td align="right" style="padding:7px 0;"><span style="background:#0F6E56;color:#ffffff;border-radius:6px;padding:6px 13px;font-size:13px;font-weight:700;">&#10003; Completed</span></td></tr>`;
     }
@@ -431,6 +431,7 @@ async function handleConsolidatedRaterNudge(req, res) {
   if (!verifyCoachSession(req.body?.session)) return res.status(401).json({ error: 'Unauthorized' });
   const clientOrg = (req.body?.client_org || '').toString().trim();
   const dryRun = !!req.body?.dry_run;
+  const testTo = (req.body?.test_to || '').toString().trim();
   if (!clientOrg) return res.status(400).json({ error: 'client_org is required' });
   try {
     const dRes = await sb(`/rest/v1/diagnostics?status=eq.survey_open&client_org=ilike.${encodeURIComponent('*' + clientOrg + '*')}&select=id,client_name,close_date,client_org`);
@@ -448,6 +449,27 @@ async function handleConsolidatedRaterNudge(req, res) {
       const key = r.email.toLowerCase();
       if (!byEmail[key]) byEmail[key] = { name: r.name, email: r.email, items: [] };
       byEmail[key].items.push({ leader: (leaderById[r.diagnostic_id] || {}).client_name || 'a leader', completed: !!r.completed_at, token: r.token });
+    }
+    // Test send: model one real rater's version and deliver it only to the given address.
+    if (testTo) {
+      let demo = null, fallback = null;
+      for (const key of Object.keys(byEmail)) {
+        const r = byEmail[key];
+        const d = r.items.filter(function (i) { return i.completed; }).length;
+        const o = r.items.length - d;
+        if (o === 0) continue;
+        if (!fallback) fallback = { rater: r, done: d, outstanding: o };
+        if (d > 0 && o > 0) { demo = { rater: r, done: d, outstanding: o }; break; }
+      }
+      const pick = demo || fallback;
+      if (!pick) return res.status(200).json({ ok: true, test_to: testTo, message: 'No outstanding raters to model a test email on.' });
+      const em = buildConsolidatedNudgeEmail(pick.rater, pick.done, cohortClose);
+      try {
+        await sendEmail({ to: testTo, subject: em.subject, html: em.html, text: em.text, emailType: 'diagnostic_consolidated_nudge_test', recipientName: pick.rater.name });
+        return res.status(200).json({ ok: true, test_to: testTo, modeled_on: pick.rater.name, done: pick.done, outstanding: pick.outstanding, subject: em.subject });
+      } catch (e) {
+        return res.status(502).json({ error: 'Test send failed. ' + (e.message || '') });
+      }
     }
     const results = [];
     for (const key of Object.keys(byEmail)) {
