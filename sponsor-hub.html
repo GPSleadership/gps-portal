@@ -51,7 +51,10 @@
 
 <script>
 (function(){
-  var TOKEN = new URLSearchParams(location.search).get('token') || '';
+  // Token can arrive as ?token=... OR as a #hash (e.g. sponsor-hub.html#<token>).
+  // The hash form is used in emails because it has no "=" for mail encoders to mangle.
+  var HASH_TOKEN = (location.hash || '').replace(/^#/, '').replace(/^token=/, '');
+  var TOKEN = new URLSearchParams(location.search).get('token') || HASH_TOKEN || '';
   var view = document.getElementById('view');
   function esc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function fmtDate(d){ if(!d) return ''; var s=String(d).slice(0,10).split('-'); if(s.length<3) return String(d); var m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return m[parseInt(s[1],10)-1]+' '+parseInt(s[2],10)+', '+s[0]; }
