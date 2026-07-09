@@ -10002,6 +10002,25 @@ By clicking "I Agree and Continue," you confirm that you have read and understoo
 <script>
 (function(){
   if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js').catch(function(){}); }
+  // ── PWA auto-update ────────────────────────────────────────────────────────
+  // iOS "installed app" (standalone) mode has no pull-to-refresh and keeps the page in
+  // memory, so a new deploy never reaches the user until they reinstall. On return to
+  // foreground, re-check the page's version tag; if the deploy changed, reload once.
+  // Reloads ONLY on a genuine new version — no needless reloads, no lost work otherwise.
+  (function () {
+    var loadedTag = null, checking = false;
+    function pageTag(cb) {
+      fetch(location.pathname, { method: 'HEAD', cache: 'no-store' })
+        .then(function (r) { cb(r.headers.get('ETag') || r.headers.get('Last-Modified') || null); })
+        .catch(function () { cb(null); });
+    }
+    pageTag(function (t) { loadedTag = t; });
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState !== 'visible' || loadedTag === null || checking) return;
+      checking = true;
+      pageTag(function (t) { checking = false; if (t && t !== loadedTag) location.reload(); });
+    });
+  })();
   var deferredPrompt = null;
   window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); deferredPrompt = e; });
   // Snooze by OPEN COUNT, not time: "Not now" hides it for ~12 visits; "Save it"
