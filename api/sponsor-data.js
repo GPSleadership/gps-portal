@@ -516,8 +516,8 @@ async function assembleMemberReportsBulk(members, opts) {
   const [clientsRows, checkinsRows, stakeRows, srRows, diagRows] = await Promise.all([
     sbGet(`/rest/v1/clients?id=in.(${idList})&select=id,name,business_outcome_goal,sponsor_outcome_focus,coaching_cadence,goal_description,goal_statement,goal_30_day,behavior_1,behavior_2,metric_1_name,metric_1_baseline,metric_1_target`).catch(() => []),
     sbGet(`/rest/v1/checkins?client_id=in.(${idList})&select=client_id,week_number,attended_coaching,completion_status,metric_value`).catch(() => []),
-    sbGet(`/rest/v1/stakeholders?client_id=in.(${idList})&is_active=eq.true&select=id,client_id,relationship,is_supervisor&order=id.asc`).catch(() => []),
-    sbGet(`/rest/v1/survey_responses?client_id=in.(${idList})&select=client_id,stakeholder_id,checkpoint,score,scale&order=id.asc`).catch(() => []),
+    sbGet(`/rest/v1/stakeholders?client_id=in.(${idList})&is_active=eq.true&select=id,client_id,relationship,is_supervisor`).catch(() => []),
+    sbGet(`/rest/v1/survey_responses?client_id=in.(${idList})&select=client_id,stakeholder_id,checkpoint,score,scale`).catch(() => []),
     sbGet(`/rest/v1/diagnostics?client_id=in.(${idList})&select=id,client_id,is_archived,created_at,status,kickoff_date,kickoff_completed_at,invites_sent_at,invites_scheduled_at,all_raters_complete_at,survey_closed_at,close_date,report_finalized_at,report_release_at,report_generated_at,debrief_date,debrief_completed_at,plan_locked_at,plan_status,debrief_time,plan_requires_sponsor_approval,plan_sponsor_status,plan_sponsor_decided_at,plan_sponsor_note,self_successor_candidates,custom_g1_question,custom_g2_question&order=created_at.desc`).catch(() => []),
   ]);
 
@@ -540,7 +540,7 @@ async function assembleMemberReportsBulk(members, opts) {
   if (diagIdList) {
     const jobs = [ sbGet(`/rest/v1/diagnostic_raters?diagnostic_id=in.(${diagIdList})&select=id,is_self,diagnostic_id`).catch(() => []) ];
     if (!isPrivate) {
-      jobs.push(sbGet(`/rest/v1/diagnostic_responses?diagnostic_id=in.(${diagIdList})&select=rater_id,question_code,score,rater_relationship,text_response,diagnostic_id&order=id.asc`).catch(() => []));
+      jobs.push(sbGet(`/rest/v1/diagnostic_responses?diagnostic_id=in.(${diagIdList})&select=rater_id,question_code,score,rater_relationship,text_response,diagnostic_id`).catch(() => []));
       jobs.push(sbGet(`/rest/v1/diagnostic_report_drafts?diagnostic_id=in.(${diagIdList})&select=diagnostic_id,scores_json,generated_at&order=generated_at.desc`).catch(() => []));
     }
     const done = await Promise.all(jobs);
