@@ -331,14 +331,37 @@
 
   // Load the sponsor view. leaderId null = default (roster if multi-leader, else
   // the single leader). A leaderId drills into ONE leader's follow-along.
+  // Resilient POST to /api/sponsor: retries transient failures (cold-start timeout,
+  // dropped connection, 5xx) with backoff so a warm-up hiccup never shows the error
+  // state. Returns {ok, j}; a real 4xx flows through as ok:false (handled by caller).
+  function resilientSponsorPost(reqBody) {
+    var ATTEMPTS = 3, TIMEOUT_MS = 12000;
+    function delay(i){ return new Promise(function(res){ setTimeout(res, 500*Math.pow(2,i) + Math.random()*250); }); }
+    function once(i){
+      var ctrl = (typeof AbortController!=='undefined') ? new AbortController() : null;
+      var timer = ctrl ? setTimeout(function(){ ctrl.abort(); }, TIMEOUT_MS) : null;
+      return fetch('/api/sponsor', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(reqBody), signal: ctrl ? ctrl.signal : undefined })
+        .then(function (r) {
+          if(timer) clearTimeout(timer);
+          if(r.status >= 500 && i < ATTEMPTS-1){ return delay(i).then(function(){ return once(i+1); }); }
+          return r.json().then(function (j) { return { ok:r.ok, j:j }; }).catch(function(){ return { ok:r.ok, j:{} }; });
+        })
+        .catch(function (err) {
+          if(timer) clearTimeout(timer);
+          if(err && (err.name==='AbortError' || err.name==='TypeError') && i < ATTEMPTS-1){ return delay(i).then(function(){ return once(i+1); }); }
+          throw err;
+        });
+    }
+    return once(0);
+  }
+
   function load(leaderId) {
     only('loading');
     document.getElementById('backToRoster').classList.add('hidden');
     var reqBody = { action:'get', token:token };
     if (coachSession) reqBody.coach_session = coachSession;
     if (leaderId) reqBody.leader_id = leaderId;
-    fetch('/api/sponsor', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(reqBody) })
-      .then(function (r) { return r.json().then(function (j) { return { ok:r.ok, j:j }; }); })
+    resilientSponsorPost(reqBody)
       .then(function (res) {
         if (!res.ok) { only('errorState'); return; }
         if (res.j.unlinked) { only('unlinkedState'); return; }

@@ -218,15 +218,33 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON);
 // Phase 1: all reads/writes go through the token-validated server endpoint
 // (/api/diag-portal) instead of the public anon key. `db` is being phased out.
 let SURVEY_TOKEN = null;
-async function diagPortal(action, payload) {
-  const res = await fetch('/api/diag-portal', {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify(Object.assign({ action, token: SURVEY_TOKEN }, payload || {}))
-  });
-  let j = {}; try { j = await res.json(); } catch (_) {}
-  if (!res.ok) throw new Error(j.error || ('Request failed (' + res.status + ')'));
-  return j;
+// opts.retry — retries transient failures (cold-start timeout, dropped connection,
+// 5xx) with backoff. OPT-IN ONLY: enabled for the initial load (a read), never for
+// submits, which must run exactly once. Without opts.retry this behaves as before.
+async function diagPortal(action, payload, opts) {
+  const bodyStr = JSON.stringify(Object.assign({ action, token: SURVEY_TOKEN }, payload || {}));
+  const retry = !!(opts && opts.retry);
+  const ATTEMPTS = retry ? 3 : 1, TIMEOUT_MS = 12000;
+  const delay = (i) => new Promise(r => setTimeout(r, 500 * Math.pow(2, i) + Math.random() * 250));
+  let lastErr = null;
+  for (let i = 0; i < ATTEMPTS; i++) {
+    const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), TIMEOUT_MS) : null;
+    try {
+      const res = await fetch('/api/diag-portal', { method:'POST', headers:{'Content-Type':'application/json'}, body: bodyStr, signal: ctrl ? ctrl.signal : undefined });
+      if (timer) clearTimeout(timer);
+      if (res.status >= 500 && i < ATTEMPTS - 1) { await delay(i); continue; }
+      let j = {}; try { j = await res.json(); } catch (_) {}
+      if (!res.ok) throw new Error(j.error || ('Request failed (' + res.status + ')'));
+      return j;
+    } catch (e) {
+      if (timer) clearTimeout(timer);
+      lastErr = e;
+      if (retry && (e.name === 'AbortError' || e.name === 'TypeError') && i < ATTEMPTS - 1) { await delay(i); continue; }
+      throw e;
+    }
+  }
+  throw lastErr || new Error('Request failed');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -260,7 +278,7 @@ async function init() {
   // Load rater + diagnostic + overrides by survey token (server validates the token)
   SURVEY_TOKEN = token;
   let portal;
-  try { portal = await diagPortal('rater-get'); }
+  try { portal = await diagPortal('rater-get', null, { retry: true }); }
   catch (e) { showState('screen-error'); return; }
   if (!portal || !portal.rater) { showState('screen-error'); return; }
 

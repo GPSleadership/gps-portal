@@ -337,7 +337,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Validate the token through the service-key endpoint. The old browser
     // anon-key read of survey_tokens is dead under the v26 RLS lockdown (anon
     // has no policy on that table), which is what was erroring for stakeholders.
-    const tRes = await fetch('/api/survey?action=get', {
+    const tRes = await resilientFetch('/api/survey?action=get', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ token }),
@@ -355,6 +355,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     show('errorState');
   }
 });
+
+// Resilient GET for the survey load only: retries transient failures (cold-start
+// timeout, dropped connection, 5xx) with backoff, then returns the final Response.
+// The submit path deliberately does NOT use this — a submit must never auto-retry.
+async function resilientFetch(url, opts) {
+  const ATTEMPTS = 3, TIMEOUT_MS = 12000;
+  const delay = (i) => new Promise(r => setTimeout(r, 500 * Math.pow(2, i) + Math.random() * 250));
+  let lastErr = null;
+  for (let i = 0; i < ATTEMPTS; i++) {
+    const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), TIMEOUT_MS) : null;
+    try {
+      const res = await fetch(url, Object.assign({}, opts, { signal: ctrl ? ctrl.signal : undefined }));
+      if (timer) clearTimeout(timer);
+      if (res.status >= 500 && i < ATTEMPTS - 1) { await delay(i); continue; }
+      return res;
+    } catch (e) {
+      if (timer) clearTimeout(timer);
+      lastErr = e;
+      if ((e.name === 'AbortError' || e.name === 'TypeError') && i < ATTEMPTS - 1) { await delay(i); continue; }
+      throw e;
+    }
+  }
+  throw lastErr || new Error('fetch failed');
+}
 
 function show(id) {
   ['loadingState','errorState','alreadyDoneState','successState','surveyForm']

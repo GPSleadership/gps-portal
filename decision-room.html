@@ -218,8 +218,28 @@ function band(v){ if(v==null) return null; return v>=4.0?'green':(v>=3.0?'amber'
 function api(action, extra){
   var body = Object.assign({ action:action, token:TOKEN }, extra||{});
   if(COACH_SESSION) body.coach_session = COACH_SESSION;
-  return fetch('/api/sponsor-data', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
-    .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||('HTTP '+r.status)); return j; }); });
+  // Resilient: retries transient failures (serverless cold-start timeout, dropped
+  // connection, 5xx) with backoff so a warm-up hiccup never dead-ends the room.
+  // Definitive answers (2xx, or 4xx like an invalid token) return/throw immediately.
+  var ATTEMPTS = 3, TIMEOUT_MS = 12000;
+  function delay(i){ return new Promise(function(res){ setTimeout(res, 500*Math.pow(2,i) + Math.random()*250); }); }
+  function once(i){
+    var ctrl = (typeof AbortController!=='undefined') ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function(){ ctrl.abort(); }, TIMEOUT_MS) : null;
+    return fetch('/api/sponsor-data', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body), signal: ctrl ? ctrl.signal : undefined })
+      .then(function(r){
+        if(timer) clearTimeout(timer);
+        if(r.status >= 500 && i < ATTEMPTS-1){ return delay(i).then(function(){ return once(i+1); }); }
+        return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||('HTTP '+r.status)); return j; });
+      })
+      .catch(function(err){
+        if(timer) clearTimeout(timer);
+        // Only retry network drops / cold-start timeouts — never a real 4xx (which is an Error, not TypeError/AbortError).
+        if(err && (err.name==='AbortError' || err.name==='TypeError') && i < ATTEMPTS-1){ return delay(i).then(function(){ return once(i+1); }); }
+        throw err;
+      });
+  }
+  return once(0);
 }
 
 function init(){
