@@ -642,6 +642,25 @@ export default async function handler(req, res) {
         if (toInsert.length === 0) return res.status(200).json({ ok: true, inserted: 0 });
         const r = await sb('/rest/v1/stakeholders', 'POST', toInsert, { Prefer: 'return=minimal' });
         if (!r.ok) { const detail = await r.json().catch(() => ({})); return res.status(500).json({ error: 'Insert failed', detail }); }
+
+        // ── Auto-send for self-service trial participants ──────────────────────
+        // Coaching clients' stakeholder surveys stay coach-gated (deliberate). But a
+        // self-service assessment participant (is_workshop_participant + trial, not
+        // coaching) added their own raters and expects the survey to just go out — no
+        // coach approval. performSend is idempotent (skips already-sent + self), requires
+        // a priority behavior, and logs. Non-blocking: a send failure must never break
+        // the wizard save.
+        try {
+          const cr = await sb(`/rest/v1/clients?id=eq.${clientId}&select=is_workshop_participant,account_type,in_coaching_program,is_active_coaching,coaching_sessions_enabled&limit=1`);
+          const crow = cr.ok ? (await cr.json())[0] : null;
+          const isCoaching = !!(crow && (crow.in_coaching_program || crow.is_active_coaching || crow.coaching_sessions_enabled));
+          const isSelfServiceTrial = !!(crow && crow.is_workshop_participant && crow.account_type === 'trial' && !isCoaching);
+          if (isSelfServiceTrial) {
+            const { performSend } = await import('./survey.js');
+            await performSend(clientId, 'baseline');
+          }
+        } catch (_) { /* non-blocking */ }
+
         return res.status(200).json({ ok: true, inserted: toInsert.length });
       }
       case 'update-stakeholder': {

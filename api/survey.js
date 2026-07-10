@@ -435,9 +435,10 @@ async function handleSend(req, res) {
   }
 }
 
-// Core stakeholder send — shared by handleSend (manual) and handleSendScheduled (cron).
+// Core stakeholder send — shared by handleSend (manual), handleSendScheduled (cron),
+// and the self-service auto-send in portal-data.js (add-stakeholders).
 // Returns { ok:true, results } or { ok:false, status, error }. No HTTP here.
-async function performSend(client_id, checkpoint) {
+export async function performSend(client_id, checkpoint) {
   const clientRes = await sbFetch(`/rest/v1/clients?id=eq.${client_id}&select=id,name,email,behavior_1,start_behavior,current_sprint_number,observable_measure,organization,industry,gs_grade,project_cc_emails`);
   if (!clientRes.ok) return { ok:false, status:500, error:'Failed to load client' };
   const clients = await clientRes.json();
@@ -473,6 +474,13 @@ async function performSend(client_id, checkpoint) {
   for (const stakeholder of stakeholders) {
     if (alreadySentIds.has(stakeholder.id)) {
       results.skipped.push({ name: stakeholder.name, reason: 'Already sent for this checkpoint' });
+      continue;
+    }
+    // Never email a "stakeholder" who is actually the leader themselves. Some
+    // self-service users enter their own address in the rater field; a feedback
+    // survey about yourself, sent to yourself, is never intended.
+    if ((stakeholder.email || '').trim().toLowerCase() === (client.email || '').trim().toLowerCase()) {
+      results.skipped.push({ name: stakeholder.name, reason: 'Self (same email as leader)' });
       continue;
     }
 
