@@ -439,12 +439,17 @@ async function handleSend(req, res) {
 // and the self-service auto-send in portal-data.js (add-stakeholders).
 // Returns { ok:true, results } or { ok:false, status, error }. No HTTP here.
 export async function performSend(client_id, checkpoint) {
-  const clientRes = await sbFetch(`/rest/v1/clients?id=eq.${client_id}&select=id,name,email,behavior_1,start_behavior,current_sprint_number,observable_measure,organization,industry,gs_grade,project_cc_emails`);
+  const clientRes = await sbFetch(`/rest/v1/clients?id=eq.${client_id}&select=id,name,email,behavior_1,start_behavior,current_sprint_number,observable_measure,organization,industry,gs_grade,project_cc_emails,is_workshop_participant,account_type,in_coaching_program,is_active_coaching,coaching_sessions_enabled`);
   if (!clientRes.ok) return { ok:false, status:500, error:'Failed to load client' };
   const clients = await clientRes.json();
   if (!clients || clients.length === 0) return { ok:false, status:404, error:'Client not found' };
   const client = clients[0];
   const ccCfg = await loadCcConfig();
+
+  // Self-service trial participants aren't paying clients — don't CC alex@/team@ on
+  // their rater surveys (it just fills the inbox). Coaching clients keep CC as configured.
+  const _isCoaching  = !!(client.in_coaching_program || client.is_active_coaching || client.coaching_sessions_enabled);
+  const _selfService = !!(client.is_workshop_participant && client.account_type === 'trial' && !_isCoaching);
 
   const priorityBehavior = (client.observable_measure || client.behavior_1 || client.start_behavior || '').trim();
   if (!priorityBehavior) {
@@ -501,8 +506,9 @@ export async function performSend(client_id, checkpoint) {
     }
 
     const surveyLink = `${SITE_URL}/survey?t=${token}`;
-    // CC per the configurable global toggles + this client's project CCs.
-    const ccAddresses = buildCcList(ccCfg, client.email, client.project_cc_emails);
+    // CC per the configurable global toggles + this client's project CCs — but
+    // self-service trial participants get no CC (they aren't paying clients).
+    const ccAddresses = _selfService ? [] : buildCcList(ccCfg, client.email, client.project_cc_emails);
     const _bl = require('./brand-link');
     const _html = _bl.autoLinkBrand(buildSendEmailHtml(stakeholder.name, client.name, checkpoint, priorityBehavior, surveyLink, progressNote), _bl.gpsDiagnosticLink(client));
     const emailRes = await fetch('https://api.resend.com/emails', {
