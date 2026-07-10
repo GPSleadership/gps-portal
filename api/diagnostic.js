@@ -507,6 +507,7 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
+  if (req.query && req.query.ping !== undefined) return res.status(200).json({ ok: true, warm: true }); // cron warm-ping: keep hot, no auth/DB
   res.setHeader('Access-Control-Allow-Origin', '*');
 
   const action = req.query?.action || req.body?.action;
