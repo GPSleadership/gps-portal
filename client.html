@@ -8455,7 +8455,18 @@ function openProfileModal() {
   document.getElementById('profileOrg').value           = client.organization || client.org || '';
   document.getElementById('profilePhone').value         = client.phone || '';
   document.getElementById('profileSmsOptIn').checked    = !!client.sms_opt_in;
-  document.getElementById('profileDob').value           = client.date_of_birth || '';
+  (function(){
+    var mSel = document.getElementById('profileDobMonth'), dSel = document.getElementById('profileDobDay');
+    if (mSel && !mSel.dataset.built) {
+      var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      mSel.innerHTML = '<option value="">Month</option>' + months.map(function(n,i){ var v=('0'+(i+1)).slice(-2); return '<option value="'+v+'">'+n+'</option>'; }).join('');
+      var days = '<option value="">Day</option>'; for (var d=1; d<=31; d++){ var dv=('0'+d).slice(-2); days += '<option value="'+dv+'">'+d+'</option>'; }
+      dSel.innerHTML = days; mSel.dataset.built = '1';
+    }
+    var s = String(client.date_of_birth || '').slice(0,10).split('-'); // YYYY-MM-DD
+    if (mSel) mSel.value = (s.length === 3) ? s[1] : '';
+    if (dSel) dSel.value = (s.length === 3) ? s[2] : '';
+  })();
   document.getElementById('profileMailLine1').value     = client.mailing_line1 || '';
   document.getElementById('profileMailLine2').value     = client.mailing_line2 || '';
   document.getElementById('profileMailCity').value      = client.mailing_city || '';
@@ -8531,7 +8542,10 @@ async function saveProfile() {
   const phone          = document.getElementById('profilePhone').value.trim();
   const sms_opt_in     = document.getElementById('profileSmsOptIn').checked;
   const timezone       = document.getElementById('profileTimezone').value;
-  const date_of_birth      = document.getElementById('profileDob').value || null;
+  const _dobM = document.getElementById('profileDobMonth').value;
+  const _dobD = document.getElementById('profileDobDay').value;
+  // Month + day only — stored against a neutral fixed year so no birth year is captured.
+  const date_of_birth      = (_dobM && _dobD) ? ('2000-' + _dobM + '-' + _dobD) : null;
   const mailing_line1      = document.getElementById('profileMailLine1').value.trim();
   const mailing_line2      = document.getElementById('profileMailLine2').value.trim();
   const mailing_city       = document.getElementById('profileMailCity').value.trim();
@@ -8546,8 +8560,11 @@ async function saveProfile() {
   if (phone && !/^[\d\s+\-().]{7,20}$/.test(phone)) { pmSetError('profilePhone', 'Enter a valid phone, or leave it blank.'); ok = false; }
   if (mailing_postal_code && !/^[\d\-\s]{3,12}$/.test(mailing_postal_code)) { pmSetError('profileMailZip', 'Enter a valid ZIP.'); ok = false; }
   if (date_of_birth) {
-    const dob = new Date(date_of_birth);
-    if (isNaN(dob.getTime()) || dob > new Date() || dob.getFullYear() < 1900) { formErr.textContent = 'Check the date of birth.'; ok = false; }
+    const dob = new Date(date_of_birth + 'T12:00:00Z');
+    const validDay = !isNaN(dob.getTime()) && (dob.getUTCMonth() + 1) === parseInt(_dobM, 10) && dob.getUTCDate() === parseInt(_dobD, 10);
+    if (!validDay) { formErr.textContent = "That day isn't valid for that month."; ok = false; }
+  } else if (_dobM || _dobD) {
+    formErr.textContent = 'Pick both a month and a day, or leave both blank.'; ok = false;
   }
   if (!ok) { if (!formErr.textContent) formErr.textContent = 'Please fix the highlighted fields.'; return; }
 
@@ -9986,8 +10003,11 @@ By clicking "I Agree and Continue," you confirm that you have read and understoo
           <div class="pm-err" id="err-profilePhone"></div>
         </div>
         <div class="form-group">
-          <label for="profileDob">Date of birth</label>
-          <input type="date" id="profileDob">
+          <label for="profileDobMonth">Date of birth <span style="font-weight:400;color:var(--gray-500);font-size:12px;">(month &amp; day)</span></label>
+          <div style="display:flex;gap:8px;">
+            <select id="profileDobMonth" style="flex:1;"><option value="">Month</option></select>
+            <select id="profileDobDay" style="flex:1;"><option value="">Day</option></select>
+          </div>
         </div>
       </div>
       <div class="form-group">
