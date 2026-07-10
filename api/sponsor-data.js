@@ -435,6 +435,186 @@ async function buildEngagement(clientId) {
   };
 }
 
+// ── Pure compute helpers (no I/O) — shared logic so the bulk path below produces
+// output identical to the per-member helpers above. Each takes already-fetched data.
+function computePipelineRow(d, ratersTotal) {
+  if (!d) return null;
+  ratersTotal = ratersTotal || 0;
+  const ps = String(d.plan_status || '');
+  const planActive = !!d.plan_locked_at || ['active', 'in_progress', 'locked'].includes(ps);
+  const planComplete = ['complete', 'completed', 'closed', 'done'].includes(ps);
+  const reportReleased = !d.report_release_at || (new Date() >= new Date(d.report_release_at));
+  const reportReady = reportReleased && !!(d.report_finalized_at || d.report_generated_at);
+  const stages = [
+    { key: 'kickoff',  label: 'Kickoff',              date: d.kickoff_date || null,                                                 done: !!d.kickoff_completed_at },
+    { key: 'survey',   label: 'Survey sent',          date: d.invites_sent_at || d.invites_scheduled_at || null,                    done: !!d.invites_sent_at },
+    { key: 'collect',  label: 'Collecting responses', date: d.all_raters_complete_at || d.survey_closed_at || d.close_date || null, done: !!(d.all_raters_complete_at || d.survey_closed_at), note: ratersTotal ? (ratersTotal + ' rater' + (ratersTotal === 1 ? '' : 's') + ' loaded') : null },
+    { key: 'report',   label: reportReady ? 'Report ready' : 'Drafting report', date: reportReady ? (d.report_release_at || d.report_finalized_at) : (d.report_release_at || null), done: reportReady },
+    { key: 'debrief',  label: 'Debrief',              date: d.debrief_date || null,                                                 done: !!d.debrief_completed_at },
+    { key: 'plan',     label: '90-day plan active',   date: d.plan_locked_at || null,                                               done: planActive || planComplete },
+    { key: 'complete', label: '90-day complete',      date: null,                                                                   done: planComplete },
+  ];
+  const current = stages.find(s => !s.done);
+  return { stages, current_key: current ? current.key : 'complete', current_label: current ? current.label : '90-day complete' };
+}
+function computeSelfVsRatersRow(diag, raters, resp) {
+  if (!diag) return null;
+  if (!diag.survey_closed_at) return { surveyClosed: false, closesOn: diag.close_date || null };
+  const selfIds = new Set((raters || []).filter(r => r.is_self).map(r => r.id));
+  const selfResp = (resp || []).filter(r => selfIds.has(r.rater_id));
+  const otherResp = (resp || []).filter(r => !selfIds.has(r.rater_id));
+  const self = tp3From(selfResp);
+  const raterAvg = tp3From(otherResp);
+  return { surveyClosed: true, asOf: diag.survey_closed_at, tp3: {
+    trust:        { self: self.trust,        raters: raterAvg.trust },
+    proactivity:  { self: self.proactivity,  raters: raterAvg.proactivity },
+    productivity: { self: self.productivity, raters: raterAvg.productivity },
+  } };
+}
+function computeSponsorReadoutRow(d, scores, sponsorVerbatims) {
+  if (!d) return null;
+  return {
+    scores: scores || null,
+    sponsor_verbatims: sponsorVerbatims || [],
+    custom_questions: [d.custom_g1_question, d.custom_g2_question].filter(Boolean),
+    succession: { successor_identified: !!(d.self_successor_candidates && String(d.self_successor_candidates).trim()) },
+    debrief: { date: d.debrief_date || null, time: d.debrief_time || null },
+    plan_approval: { requires: !!d.plan_requires_sponsor_approval, status: d.plan_sponsor_status || 'none', decided_at: d.plan_sponsor_decided_at || null, note: d.plan_sponsor_note || null },
+  };
+}
+function computePlanFocusRow(c, cks, scoreboard) {
+  if (!c) return null;
+  const goal = c.goal_description || c.goal_statement || c.goal_30_day;
+  if (!goal) return null;
+  const behaviors = [c.behavior_1, c.behavior_2].filter(Boolean);
+  let selfMetric = null;
+  if (c.metric_1_name) {
+    let latest = null;
+    for (const k of (cks || [])) { if (!latest || (k.week_number || 0) > (latest.week_number || 0)) latest = k; }
+    selfMetric = { label: c.metric_1_name, baseline: c.metric_1_baseline, target: c.metric_1_target, current: (latest && latest.metric_value != null) ? latest.metric_value : c.metric_1_baseline, unit: '' };
+  }
+  let stakeholderMetric = null;
+  if (scoreboard && scoreboard.length) {
+    const av = (a) => { const v = a.filter(x => x != null); return v.length ? Math.round(v.reduce((s, x) => s + x, 0) / v.length * 100) / 100 : null; };
+    const b = av(scoreboard.map(s => s.baseline));
+    const cur = av(scoreboard.map(s => s.d90 != null ? s.d90 : s.d30));
+    if (b != null && cur != null) stakeholderMetric = { label: 'Stakeholder rating of the worked behavior', baseline: b, target: 4.0, current: cur, unit: '' };
+  }
+  return { goal90: goal, behaviors, stakeholderMetric, selfMetric };
+}
+
+// Bulk team assembler for NON-progress rooms: one query per table for the whole
+// team (client_id IN (...)) instead of ~15 per-member round trips. Output matches
+// members.map(m => buildMemberReport(m, isPrivate)) — verified by equivalence test.
+async function assembleMemberReportsBulk(members, opts) {
+  opts = opts || {};
+  const isPrivate = !!opts.isPrivate;
+  const ids = members.map(m => m.client_id).filter(Boolean);
+  if (!ids.length) return Promise.all(members.map(m => buildMemberReport(m, isPrivate)));
+  const idList = Array.from(new Set(ids)).map(enc).join(',');
+
+  const [clientsRows, checkinsRows, stakeRows, srRows, diagRows] = await Promise.all([
+    sbGet(`/rest/v1/clients?id=in.(${idList})&select=id,name,business_outcome_goal,sponsor_outcome_focus,coaching_cadence,goal_description,goal_statement,goal_30_day,behavior_1,behavior_2,metric_1_name,metric_1_baseline,metric_1_target`).catch(() => []),
+    sbGet(`/rest/v1/checkins?client_id=in.(${idList})&select=client_id,week_number,attended_coaching,completion_status,metric_value`).catch(() => []),
+    sbGet(`/rest/v1/stakeholders?client_id=in.(${idList})&is_active=eq.true&select=id,client_id,relationship,is_supervisor&order=id.asc`).catch(() => []),
+    sbGet(`/rest/v1/survey_responses?client_id=in.(${idList})&select=client_id,stakeholder_id,checkpoint,score,scale&order=id.asc`).catch(() => []),
+    sbGet(`/rest/v1/diagnostics?client_id=in.(${idList})&select=id,client_id,is_archived,created_at,status,kickoff_date,kickoff_completed_at,invites_sent_at,invites_scheduled_at,all_raters_complete_at,survey_closed_at,close_date,report_finalized_at,report_release_at,report_generated_at,debrief_date,debrief_completed_at,plan_locked_at,plan_status,debrief_time,plan_requires_sponsor_approval,plan_sponsor_status,plan_sponsor_decided_at,plan_sponsor_note,self_successor_candidates,custom_g1_question,custom_g2_question&order=created_at.desc`).catch(() => []),
+  ]);
+
+  const groupBy = (rows, key) => { const m = {}; for (const r of (rows || [])) { (m[r[key]] = m[r[key]] || []).push(r); } return m; };
+  const clientsById = {}; for (const c of clientsRows) clientsById[c.id] = c;
+  const checkinsByClient = groupBy(checkinsRows, 'client_id');
+  const stakeByClient = groupBy(stakeRows, 'client_id');
+  const srByClient = groupBy(srRows, 'client_id');
+
+  const latestAny = {}, latestActive = {};
+  for (const d of diagRows) { // created_at desc
+    if (!(d.client_id in latestAny)) latestAny[d.client_id] = d;
+    if (!d.is_archived && !(d.client_id in latestActive)) latestActive[d.client_id] = d;
+  }
+  const usedDiagIds = new Set();
+  for (const cid of ids) { if (latestAny[cid]) usedDiagIds.add(latestAny[cid].id); if (latestActive[cid]) usedDiagIds.add(latestActive[cid].id); }
+  const diagIdList = Array.from(usedDiagIds).map(enc).join(',');
+
+  let ratersByDiag = {}, respByDiag = {}, draftByDiag = {};
+  if (diagIdList) {
+    const jobs = [ sbGet(`/rest/v1/diagnostic_raters?diagnostic_id=in.(${diagIdList})&select=id,is_self,diagnostic_id`).catch(() => []) ];
+    if (!isPrivate) {
+      jobs.push(sbGet(`/rest/v1/diagnostic_responses?diagnostic_id=in.(${diagIdList})&select=rater_id,question_code,score,rater_relationship,text_response,diagnostic_id&order=id.asc`).catch(() => []));
+      jobs.push(sbGet(`/rest/v1/diagnostic_report_drafts?diagnostic_id=in.(${diagIdList})&select=diagnostic_id,scores_json,generated_at&order=generated_at.desc`).catch(() => []));
+    }
+    const done = await Promise.all(jobs);
+    ratersByDiag = groupBy(done[0], 'diagnostic_id');
+    if (!isPrivate) {
+      respByDiag = groupBy(done[1], 'diagnostic_id');
+      for (const dr of (done[2] || [])) { if (!(dr.diagnostic_id in draftByDiag)) draftByDiag[dr.diagnostic_id] = dr; }
+    }
+  }
+
+  return members.map(function (m) {
+    const cid = m.client_id;
+    const clientData = clientsById[cid] || null;
+    const report = {
+      id: m.id, client_id: m.client_id, role: m.role,
+      is_coaching_client: m.is_coaching_client,
+      coach_summary: m.coach_summary || null,
+      report_json: Object.assign({}, m.report_json || {}),
+    };
+    report.name = report.report_json.name || null;
+    if (!report.name && clientData && clientData.name) report.name = clientData.name;
+    report.business_outcome_goal = (clientData && clientData.sponsor_outcome_focus && clientData.business_outcome_goal) ? clientData.business_outcome_goal : null;
+
+    // scoreboard
+    const stks = stakeByClient[cid] || [];
+    let scoreboard = null;
+    if (stks.length) {
+      const byStk = {};
+      for (const s of stks) byStk[s.id] = { role: s.is_supervisor ? 'Supervisor' : (s.relationship || 'Stakeholder'), supervisor: !!s.is_supervisor, baseline: null, d30: null, d90: null };
+      for (const r of (srByClient[cid] || [])) { const row = byStk[r.stakeholder_id]; if (row) row[cpKey(r.checkpoint)] = norm5(r.score, r.scale); }
+      scoreboard = Object.values(byStk);
+    }
+    report.scoreboard = scoreboard;
+
+    // engagement
+    const cks = checkinsByClient[cid] || [];
+    let engagement = null;
+    if (cks.length) {
+      const weeks = cks.length;
+      const weeksElapsed = Math.max(weeks, ...cks.map(c => c.week_number || 0));
+      const practiced = cks.filter(c => c.completion_status === 'Yes').length;
+      const attended = cks.filter(c => c.attended_coaching === true).length;
+      const cadence = (clientData && clientData.coaching_cadence) || 'weekly';
+      const everyN = cadence === 'monthly' ? 4 : (cadence === 'biweekly' ? 2 : 1);
+      const expectedSessions = Math.max(1, Math.round(weeksElapsed / everyN));
+      engagement = { weeksElapsed, checkinRate: weeksElapsed ? Math.round((weeks / weeksElapsed) * 100) / 100 : 0, behaviorRate: weeks ? Math.round((practiced / weeks) * 100) / 100 : 0, coachingAttended: Math.min(attended, expectedSessions), coachingTotal: expectedSessions, cadence };
+    }
+    report.engagement = engagement;
+
+    // pipeline (latest ACTIVE diagnostic)
+    const dPipe = latestActive[cid] || null;
+    report.pipeline = computePipelineRow(dPipe, dPipe ? (ratersByDiag[dPipe.id] || []).length : 0);
+
+    // planFocus (depends on scoreboard)
+    const planFocus = computePlanFocusRow(clientData, cks, scoreboard);
+    if (planFocus) report.report_json.focus = planFocus;
+
+    if (!isPrivate) {
+      const dSelf = latestAny[cid] || null;
+      report.selfVsRaters = computeSelfVsRatersRow(dSelf, dSelf ? (ratersByDiag[dSelf.id] || []) : [], dSelf ? (respByDiag[dSelf.id] || []) : []);
+      const dSpon = latestActive[cid] || null;
+      let sr = null;
+      if (dSpon) {
+        const draft = draftByDiag[dSpon.id];
+        const scores = (draft && draft.scores_json) ? draft.scores_json : null;
+        const verbatims = (respByDiag[dSpon.id] || []).filter(r => /supervisor/i.test(r.rater_relationship || '') && r.text_response).map(x => String(x.text_response || '').trim()).filter(t => t.length > 15).slice(0, 4);
+        sr = computeSponsorReadoutRow(dSpon, scores, verbatims);
+      }
+      report.sponsorReadout = (sr && sr.scores) ? sr : ((m.report_json && m.report_json.sponsorReadout) ? m.report_json.sponsorReadout : sr);
+    }
+    return report;
+  });
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -549,13 +729,20 @@ export default async function handler(req, res) {
       // They DO see their OWN full report, matched by the sponsor's linked client id.
       // All member reports are built in PARALLEL — a sequential for-await loop was
       // causing 30-40 chained Supabase round trips for a 4-person team (~4-5s load).
-      const memberReports = await Promise.all(members.map(m => {
-        if (isProgress) {
+      // Non-progress rooms use the bulk assembler — one query per table for the whole
+      // team instead of ~15 round trips per member. Progress rooms keep the light
+      // per-member path. `body.legacy_reports` forces the old path (equivalence test).
+      let memberReports;
+      if (isProgress) {
+        memberReports = await Promise.all(members.map(m => {
           if (ownClientId && m.client_id === ownClientId) return buildMemberReport(m, false);
           return buildMemberStatus(m);
-        }
-        return buildMemberReport(m, isPrivate);
-      }));
+        }));
+      } else if (body.legacy_reports) {
+        memberReports = await Promise.all(members.map(m => buildMemberReport(m, isPrivate)));
+      } else {
+        memberReports = await assembleMemberReportsBulk(members, { isPrivate });
+      }
 
       // Results-level content (recommendations, signals, written team report, sprint config)
       // are independent of each other — fetch all in parallel instead of sequentially.
