@@ -662,28 +662,28 @@ export default async function handler(req, res) {
       // is completely unaffected — only the coach sees this override.
       const isCoachPreview = !!(body.coach_session && verifyCoachSession(body.coach_session));
 
-      // Org logo (matched by organization name) — shown in the Decision Room header.
-      // Also read the org's billing mode + optional per-org payment link (Phase 3).
-      let orgLogo = null;
-      let orgBillingMode = 'both';
-      let orgPayLink = null;
-      if (team.client_org_name) {
-        try {
-          const olr = await sbGet(`/rest/v1/organizations?name=eq.${enc(team.client_org_name)}&select=logo_url,billing_mode,payment_link_url&limit=1`);
-          if (olr && olr[0]) {
-            if (olr[0].logo_url) orgLogo = olr[0].logo_url;
-            if (olr[0].billing_mode) orgBillingMode = olr[0].billing_mode;
-            if (olr[0].payment_link_url) orgPayLink = olr[0].payment_link_url;
-          }
-        } catch (_) { /* optional */ }
-      }
-      // Effective payment link: per-org override, else the global default.
-      let payUrl = orgPayLink;
-      if (!payUrl && orgBillingMode !== 'contract') {
-        try { const gl = await sbGet(`/rest/v1/renewal_config?id=eq.1&select=sponsor_payment_link_url&limit=1`); if (gl && gl[0] && gl[0].sponsor_payment_link_url) payUrl = gl[0].sponsor_payment_link_url; } catch (_) { /* optional */ }
-      }
-      // Contract-mode orgs never expose a payment link, whatever is configured.
-      if (orgBillingMode === 'contract') payUrl = null;
+      // Org logo + billing mode + effective payment link. Kicked off as a promise so
+      // it resolves CONCURRENTLY with team members and results content below, instead
+      // of running as its own sequential stage first.
+      const orgPromise = (async () => {
+        let orgLogo = null, orgBillingMode = 'both', orgPayLink = null;
+        if (team.client_org_name) {
+          try {
+            const olr = await sbGet(`/rest/v1/organizations?name=eq.${enc(team.client_org_name)}&select=logo_url,billing_mode,payment_link_url&limit=1`);
+            if (olr && olr[0]) {
+              if (olr[0].logo_url) orgLogo = olr[0].logo_url;
+              if (olr[0].billing_mode) orgBillingMode = olr[0].billing_mode;
+              if (olr[0].payment_link_url) orgPayLink = olr[0].payment_link_url;
+            }
+          } catch (_) { /* optional */ }
+        }
+        let payUrl = orgPayLink;
+        if (!payUrl && orgBillingMode !== 'contract') {
+          try { const gl = await sbGet(`/rest/v1/renewal_config?id=eq.1&select=sponsor_payment_link_url&limit=1`); if (gl && gl[0] && gl[0].sponsor_payment_link_url) payUrl = gl[0].sponsor_payment_link_url; } catch (_) { /* optional */ }
+        }
+        if (orgBillingMode === 'contract') payUrl = null;
+        return { orgLogo, orgBillingMode, payUrl };
+      })();
 
       const isPrivate = !isCoachPreview && link.confidentiality_mode === 'private';
       // 'progress' = staged view: the sponsor sees ONLY where each leader is in the
@@ -708,7 +708,25 @@ export default async function handler(req, res) {
       const supervises = Array.isArray(link.supervises_client_ids) ? link.supervises_client_ids
                        : (link.supervises_client_ids ? JSON.parse(link.supervises_client_ids) : []);
 
+      // Results-level content — started as a promise now so it resolves concurrently
+      // with team members + member assembly, instead of as a later sequential stage.
+      const resultsPromise = Promise.all([
+        isProgress
+          ? Promise.resolve([])
+          : sbGet(`/rest/v1/recommendations?team_id=eq.${enc(teamId)}&status=eq.approved&visible_to_client=eq.true&select=id,short_title,description,owner,timeframe,category,target_band,quick_start_today,quick_start_week,updated_at&order=updated_at.desc`).catch(() => []),
+        isProgress
+          ? Promise.resolve([])
+          : sbGet(`/rest/v1/external_signals?team_id=eq.${enc(teamId)}&visible_to_client=eq.true&select=*&order=date_observed.desc`).catch(() => []),
+        isProgress
+          ? Promise.resolve(null)
+          : sbGet(`/rest/v1/diagnostic_team_reports?team_id=eq.${enc(teamId)}&sponsor_visible=eq.true&report_pdf_url=not.is.null&select=report_pdf_url,generated_at&order=generated_at.desc&limit=1`).catch(() => null),
+        (!isProgress && !isPrivate)
+          ? sbGet(`/rest/v1/renewal_config?id=eq.1&select=first_sprint_credit_url,booking_url&limit=1`).catch(() => null)
+          : Promise.resolve(null),
+      ]);
+
       const members = await teamMembers(teamId);
+      const { orgLogo, orgBillingMode, payUrl } = await orgPromise;
 
       // ── HARD FEEDBACK GATE (before assembling any team data) ───────────────
       const owed = await feedbackOwed(supervises, members);
@@ -744,26 +762,8 @@ export default async function handler(req, res) {
         memberReports = await assembleMemberReportsBulk(members, { isPrivate });
       }
 
-      // Results-level content (recommendations, signals, written team report, sprint config)
-      // are independent of each other — fetch all in parallel instead of sequentially.
-      // Progress sponsors never see results content, so those resolve immediately.
-      const [recsRaw, signalsRaw, trRaw, rcRow] = await Promise.all([
-        isProgress
-          ? Promise.resolve([])
-          : sbGet(`/rest/v1/recommendations?team_id=eq.${enc(teamId)}&status=eq.approved&visible_to_client=eq.true&select=id,short_title,description,owner,timeframe,category,target_band,quick_start_today,quick_start_week,updated_at&order=updated_at.desc`).catch(() => []),
-        isProgress
-          ? Promise.resolve([])
-          : sbGet(`/rest/v1/external_signals?team_id=eq.${enc(teamId)}&visible_to_client=eq.true&select=*&order=date_observed.desc`).catch(() => []),
-        // Written team report — sponsor sees branded PDF, never draft text. Only when
-        // published (sponsor_visible) AND a PDF URL exists.
-        isProgress
-          ? Promise.resolve(null)
-          : sbGet(`/rest/v1/diagnostic_team_reports?team_id=eq.${enc(teamId)}&sponsor_visible=eq.true&report_pdf_url=not.is.null&select=report_pdf_url,generated_at&order=generated_at.desc&limit=1`).catch(() => null),
-        // Sprint CTA config — only needed for fully-revealed (non-progress, non-private) mode.
-        (!isProgress && !isPrivate)
-          ? sbGet(`/rest/v1/renewal_config?id=eq.1&select=first_sprint_credit_url,booking_url&limit=1`).catch(() => null)
-          : Promise.resolve(null),
-      ]);
+      // Results-level content was started as resultsPromise above; await it here.
+      const [recsRaw, signalsRaw, trRaw, rcRow] = await resultsPromise;
 
       const teamReport = (trRaw && trRaw[0]) ? { report_pdf_url: trRaw[0].report_pdf_url, generated_at: trRaw[0].generated_at } : null;
 
