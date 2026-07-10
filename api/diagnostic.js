@@ -427,66 +427,72 @@ function buildConsolidatedNudgeEmail(rater, done, cohortClose) {
   const text = `${first},\n\n${intro}\n\n${textLines.join('\n')}\n\nEverything closes ${closeFmt}.\n\nThank you.\nAlex Tremble\nGPS Leadership Solutions`;
   return { subject, html, text };
 }
+// Core: build the per-rater consolidated peer-feedback nudge for an org and (unless
+// dryRun) send one email per rater. Callable from the coach HTTP action AND from the
+// server-side scheduler — so a scheduled send fires with no coach logged in. No auth
+// here; callers are responsible for authorization.
+async function sendConsolidatedNudge(clientOrg, opts) {
+  opts = opts || {};
+  const dryRun = !!opts.dryRun;
+  const testTo = (opts.testTo || '').toString().trim();
+  const dRes = await sb(`/rest/v1/diagnostics?status=eq.survey_open&client_org=ilike.${encodeURIComponent('*' + clientOrg + '*')}&select=id,client_name,close_date,client_org`);
+  const diags = dRes.ok ? await dRes.json() : [];
+  if (!diags.length) return { ok: true, cohort: clientOrg, leaders: 0, raters: 0, results: [], message: 'No open diagnostics for that organization.' };
+  const leaderById = {}; diags.forEach(function (d) { leaderById[d.id] = d; });
+  const diagIds = diags.map(function (d) { return d.id; });
+  const closes = diags.map(function (d) { return d.close_date; }).filter(Boolean).sort();
+  const cohortClose = closes[0] || null;
+  const rRes = await sb(`/rest/v1/diagnostic_raters?diagnostic_id=in.(${diagIds.map(encodeURIComponent).join(',')})&is_self=eq.false&invited_at=not.is.null&select=id,name,email,token,completed_at,diagnostic_id,email_bounced`);
+  const raters = rRes.ok ? await rRes.json() : [];
+  const byEmail = {};
+  for (const r of raters) {
+    if (!r.email || r.email_bounced) continue;
+    const key = r.email.toLowerCase();
+    if (!byEmail[key]) byEmail[key] = { name: r.name, email: r.email, items: [] };
+    byEmail[key].items.push({ leader: (leaderById[r.diagnostic_id] || {}).client_name || 'a leader', completed: !!r.completed_at, token: r.token });
+  }
+  // Test send: model one real rater's version and deliver it only to the given address.
+  if (testTo) {
+    let demo = null, fallback = null;
+    for (const key of Object.keys(byEmail)) {
+      const r = byEmail[key];
+      const d = r.items.filter(function (i) { return i.completed; }).length;
+      const o = r.items.length - d;
+      if (o === 0) continue;
+      if (!fallback) fallback = { rater: r, done: d, outstanding: o };
+      if (d > 0 && o > 0) { demo = { rater: r, done: d, outstanding: o }; break; }
+    }
+    const pick = demo || fallback;
+    if (!pick) return { ok: true, test_to: testTo, message: 'No outstanding raters to model a test email on.' };
+    const em = buildConsolidatedNudgeEmail(pick.rater, pick.done, cohortClose);
+    await sendEmail({ to: testTo, subject: em.subject, html: em.html, text: em.text, emailType: 'diagnostic_consolidated_nudge_test', recipientName: pick.rater.name });
+    return { ok: true, test_to: testTo, modeled_on: pick.rater.name, done: pick.done, outstanding: pick.outstanding, subject: em.subject };
+  }
+  const results = [];
+  for (const key of Object.keys(byEmail)) {
+    const rater = byEmail[key];
+    const done = rater.items.filter(function (i) { return i.completed; }).length;
+    const outstanding = rater.items.length - done;
+    if (outstanding === 0) { results.push({ email: rater.email, name: rater.name, done, outstanding: 0, skipped: 'all complete' }); continue; }
+    const email = buildConsolidatedNudgeEmail(rater, done, cohortClose);
+    if (dryRun) { results.push({ email: rater.email, name: rater.name, done, outstanding, subject: email.subject, leaders: rater.items.map(function (i) { return i.leader + (i.completed ? ' (done)' : ' (open)'); }) }); continue; }
+    try {
+      await sendEmail({ to: rater.email, subject: email.subject, html: email.html, text: email.text, emailType: 'diagnostic_consolidated_nudge', recipientName: rater.name, cc: ['team@gpsleadership.org'] });
+      results.push({ email: rater.email, name: rater.name, sent: true, done, outstanding });
+    } catch (e) { results.push({ email: rater.email, error: e.message }); }
+  }
+  const sent = results.filter(function (r) { return r.sent; }).length;
+  const skipped = results.filter(function (r) { return r.skipped; }).length;
+  return { ok: true, cohort: clientOrg, dry_run: dryRun, leaders: diags.length, raters: Object.keys(byEmail).length, sent, skipped, results };
+}
+
 async function handleConsolidatedRaterNudge(req, res) {
   if (!verifyCoachSession(req.body?.session)) return res.status(401).json({ error: 'Unauthorized' });
   const clientOrg = (req.body?.client_org || '').toString().trim();
-  const dryRun = !!req.body?.dry_run;
-  const testTo = (req.body?.test_to || '').toString().trim();
   if (!clientOrg) return res.status(400).json({ error: 'client_org is required' });
   try {
-    const dRes = await sb(`/rest/v1/diagnostics?status=eq.survey_open&client_org=ilike.${encodeURIComponent('*' + clientOrg + '*')}&select=id,client_name,close_date,client_org`);
-    const diags = dRes.ok ? await dRes.json() : [];
-    if (!diags.length) return res.status(200).json({ ok: true, cohort: clientOrg, leaders: 0, raters: 0, results: [], message: 'No open diagnostics for that organization.' });
-    const leaderById = {}; diags.forEach(function (d) { leaderById[d.id] = d; });
-    const diagIds = diags.map(function (d) { return d.id; });
-    const closes = diags.map(function (d) { return d.close_date; }).filter(Boolean).sort();
-    const cohortClose = closes[0] || null;
-    const rRes = await sb(`/rest/v1/diagnostic_raters?diagnostic_id=in.(${diagIds.map(encodeURIComponent).join(',')})&is_self=eq.false&invited_at=not.is.null&select=id,name,email,token,completed_at,diagnostic_id,email_bounced`);
-    const raters = rRes.ok ? await rRes.json() : [];
-    const byEmail = {};
-    for (const r of raters) {
-      if (!r.email || r.email_bounced) continue;
-      const key = r.email.toLowerCase();
-      if (!byEmail[key]) byEmail[key] = { name: r.name, email: r.email, items: [] };
-      byEmail[key].items.push({ leader: (leaderById[r.diagnostic_id] || {}).client_name || 'a leader', completed: !!r.completed_at, token: r.token });
-    }
-    // Test send: model one real rater's version and deliver it only to the given address.
-    if (testTo) {
-      let demo = null, fallback = null;
-      for (const key of Object.keys(byEmail)) {
-        const r = byEmail[key];
-        const d = r.items.filter(function (i) { return i.completed; }).length;
-        const o = r.items.length - d;
-        if (o === 0) continue;
-        if (!fallback) fallback = { rater: r, done: d, outstanding: o };
-        if (d > 0 && o > 0) { demo = { rater: r, done: d, outstanding: o }; break; }
-      }
-      const pick = demo || fallback;
-      if (!pick) return res.status(200).json({ ok: true, test_to: testTo, message: 'No outstanding raters to model a test email on.' });
-      const em = buildConsolidatedNudgeEmail(pick.rater, pick.done, cohortClose);
-      try {
-        await sendEmail({ to: testTo, subject: em.subject, html: em.html, text: em.text, emailType: 'diagnostic_consolidated_nudge_test', recipientName: pick.rater.name });
-        return res.status(200).json({ ok: true, test_to: testTo, modeled_on: pick.rater.name, done: pick.done, outstanding: pick.outstanding, subject: em.subject });
-      } catch (e) {
-        return res.status(502).json({ error: 'Test send failed. ' + (e.message || '') });
-      }
-    }
-    const results = [];
-    for (const key of Object.keys(byEmail)) {
-      const rater = byEmail[key];
-      const done = rater.items.filter(function (i) { return i.completed; }).length;
-      const outstanding = rater.items.length - done;
-      if (outstanding === 0) { results.push({ email: rater.email, name: rater.name, done, outstanding: 0, skipped: 'all complete' }); continue; }
-      const email = buildConsolidatedNudgeEmail(rater, done, cohortClose);
-      if (dryRun) { results.push({ email: rater.email, name: rater.name, done, outstanding, subject: email.subject, leaders: rater.items.map(function (i) { return i.leader + (i.completed ? ' (done)' : ' (open)'); }) }); continue; }
-      try {
-        await sendEmail({ to: rater.email, subject: email.subject, html: email.html, text: email.text, emailType: 'diagnostic_consolidated_nudge', recipientName: rater.name, cc: ['team@gpsleadership.org'] });
-        results.push({ email: rater.email, name: rater.name, sent: true, done, outstanding });
-      } catch (e) { results.push({ email: rater.email, error: e.message }); }
-    }
-    const sent = results.filter(function (r) { return r.sent; }).length;
-    const skipped = results.filter(function (r) { return r.skipped; }).length;
-    return res.status(200).json({ ok: true, cohort: clientOrg, dry_run: dryRun, leaders: diags.length, raters: Object.keys(byEmail).length, sent, skipped, results });
+    const out = await sendConsolidatedNudge(clientOrg, { dryRun: !!req.body?.dry_run, testTo: (req.body?.test_to || '').toString().trim() });
+    return res.status(200).json(out);
   } catch (e) {
     return res.status(502).json({ error: 'Could not send the nudge. ' + (e.message || '') });
   }
@@ -890,6 +896,34 @@ async function handleSendScheduled(req, res) {
       if (r.ok) log.auto_closed.push({ id: od.id, client: od.client_name });
     }
   } catch (e) { log.errors.push({ stage: 'auto-close', error: e.message }); }
+
+  // ── Scheduled consolidated peer-feedback nudges ──────────────────────────────
+  // A server-side schedule: fire a consolidated nudge for an org at a set time,
+  // independent of any coach being logged in. Atomic claim (claimed_at flips from
+  // null) guarantees exactly one run sends it, even with overlapping cron ticks.
+  try {
+    const nudgeRes = await sb(
+      `/rest/v1/scheduled_nudges?scheduled_for=lte.${nowISO}&sent_at=is.null&claimed_at=is.null&select=id,client_org,kind&order=scheduled_for.asc&limit=20`
+    );
+    const dueNudges = nudgeRes.ok ? (await nudgeRes.json() || []) : [];
+    for (const n of dueNudges) {
+      const claim = await sb(
+        `/rest/v1/scheduled_nudges?id=eq.${n.id}&claimed_at=is.null`, 'PATCH',
+        { claimed_at: new Date().toISOString() }, { Prefer: 'return=representation' });
+      const claimed = claim.ok ? await claim.json() : [];
+      if (!Array.isArray(claimed) || claimed.length === 0) { log.skipped.push({ nudge: n.id, reason: 'already claimed' }); continue; }
+      try {
+        const out = await sendConsolidatedNudge(n.client_org, { dryRun: false });
+        await sb(`/rest/v1/scheduled_nudges?id=eq.${n.id}`, 'PATCH',
+          { sent_at: new Date().toISOString(), result: out }, { Prefer: 'return=minimal' });
+        log.processed.push({ scheduled_nudge: n.id, org: n.client_org, sent: out.sent, skipped: out.skipped });
+      } catch (e) {
+        await sb(`/rest/v1/scheduled_nudges?id=eq.${n.id}`, 'PATCH',
+          { result: { error: e.message } }, { Prefer: 'return=minimal' });
+        log.errors.push({ stage: 'scheduled-nudge', nudge: n.id, error: e.message });
+      }
+    }
+  } catch (e) { log.errors.push({ stage: 'scheduled-nudges', error: e.message }); }
 
   try {
     const dueRes = await sb(
