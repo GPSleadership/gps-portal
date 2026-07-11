@@ -268,3 +268,35 @@ All items below were built, tested, and pushed to `main` after the July 1 audit.
 - **Move this file into the gps-portal repo** at `docs/MASTER_BUILD_LIST.md` and commit. Version-controlled alongside the code. Delete the Tool Creation copy once moved.
 - **Archive `GPS-PORTAL-ROADMAP.md` and `GPS_PORTAL_BACKLOG.md`** — superseded by this doc.
 - **Deprecate `council.portal_roadmap`** in Supabase — 4 items, all captured here.
+- **P3 — Clean up + commit the "Tool Creation" folder.** The repo working dir has accumulated loose scratch files (sandbox HTML experiments, old migration SQL, review markdowns, `.fuse_hidden*` junk) mixed in with real governance docs (`CLAUDE.md`, this build list, retired backlog) that have never been committed. Sort keep-vs-delete, make sure internal `.md` docs are `.vercelignore`'d so they don't serve publicly, then hand Alex a clean commit (he runs git). ~20 min, housekeeping.
+- **P3 — Adopt a dedicated `/sandbox/` folder convention for experiments.** Going forward, every throwaway experiment page/file gets created inside a single `sandbox/` folder in the repo (git-ignored + vercel-ignored) so scratch work never clutters the real tree and can be wiped anytime without risk. Add the rule to `CLAUDE.md` and the `gps-portal-safe-build` skill once the folder exists.
+
+---
+
+## Section 7 — Migrated from GPS_PORTAL_BACKLOG.md (June 5, 2026 — now retired)
+_These open items lived only in the old backlog; pulled in here so nothing is lost. `GPS_PORTAL_BACKLOG.md` is now a pointer to this file._
+
+- **P2 — In-portal question review & approval (kills the email back-and-forth).** Coach clicks
+  "Send for review" on proposed/AI questions → sponsor/leader (or POC if present) gets a
+  token-gated, mobile-first review page: each question has Approve / Request change (comment) /
+  inline Edit, plus Approve all; standard core is read-only. On submit: update question status,
+  advance workshop status (sponsor_review → ready), notify coach. Reuse `workshop_questions.status`;
+  assessment uses the `workshop_sponsors` link, diagnostic uses `leader_token` for custom G1/G2.
+  New actions: `get-review-questions(token)`, `submit-question-review(token, decisions)`,
+  coach `send-questions-for-review`. **Phase 1** = read-only shareable preview link (low effort,
+  removes most friction); **Phase 2** = full approve/request-change/edit + status flow + notifications.
+- **P2 — Per-person logins / named coach-side accounts (individual auth).** Today = single shared
+  coach password → one signed session. `admin_accounts` (hashed passwords, is_active) is the
+  foundation. Build = named accounts + per-user sessions + a light who-did-what audit log.
+  **Trigger, not a date:** the first second human in the coach console (EA/VA/associate), OR the
+  first gov/enterprise security review asking "who can access our data." Keep clients frictionless
+  (token links, no password); add named logins only on the COACH/admin side.
+- **P3 — Inline coach editing of per-member Decision Room cards** (focus / succession). Generation
+  fills them; quick inline edit by the coach is a fast-follow.
+- **P3 — SMS text nudge for missed check-ins.** Email nudge already shipped. Needs an SMS provider
+  (Twilio): account, API keys in Vercel env, client mobile numbers, opt-in consent. Wire the SMS
+  send alongside the email on the same "Send reminder" button, with editable text.
+- **P3 — Legacy 360 CSV importer (#48).** Ingest past diagnostics from CSV: text-match the question
+  columns (don't trust numbering), "Self" row identifies the leader, map the 1–5 items + 1–10 overall
+  impact, capture START/STOP/CONTINUE verbatims. Store and chart, clearly labeled as a prior/different
+  instrument.

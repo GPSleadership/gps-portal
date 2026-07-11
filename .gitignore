@@ -47,3 +47,6 @@ supabase-add-coach-settings.sql
 #    never track in git, never deploy). Already .vercelignore'd; this keeps it out of the repo too. ──
 gps-executive-console.html
 gps-executive-console-deploy.html
+
+# FitOS lives here temporarily — never track in the portal repo (moving to its own repo)
+gps-fit/
