@@ -429,7 +429,7 @@ export default async function handler(req, res) {
 
   // ─── FETCH ALL ACTIVE CLIENTS WITH A PLAN ──────────────────────────────────
   const clientsRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/clients?is_active=eq.true&is_archived=eq.false&plan_start_date=not.is.null&email=not.is.null&select=id,name,email,token,plan_start_date`,
+    `${SUPABASE_URL}/rest/v1/clients?is_active=eq.true&is_archived=eq.false&plan_start_date=not.is.null&email=not.is.null&select=id,name,email,token,plan_start_date,phone,sms_opt_in`,
     { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
   );
   const clients = await clientsRes.json();
@@ -486,6 +486,9 @@ export default async function handler(req, res) {
   let sent = 0;
   const errors = [];
   const sentList = [];
+  let smsSent = 0;                 // opt-in SMS reminders sent this run
+  const smsErrors = [];            // real SMS failures (skips are not errors)
+  const { sendSms } = require('./twilio-sms');
 
   for (const client of toRemind) {
     const startDate   = parseLocalDate(client.plan_start_date); // fix UTC off-by-one
@@ -620,6 +623,22 @@ export default async function handler(req, res) {
         errorDetails: err.message,
       });
     }
+
+    // ─── SMS reminder (opt-in only) ─────────────────────────────────────────
+    // Fires alongside the email for clients who gave SMS consent and have a
+    // number on file. Non-blocking: an SMS failure never affects the email path.
+    // No-ops cleanly until the Twilio env vars are set (smsConfigured() === false).
+    // STOP/HELP are handled automatically by the Messaging Service.
+    if (client.sms_opt_in && client.phone) {
+      try {
+        const smsBody = `GPS Leadership: Hi ${firstName}, your Week ${currentWeek} check-in is ready (about 2 min): ${portalLink} Reply STOP to opt out`;
+        const smsRes = await sendSms({ to: client.phone, body: smsBody });
+        if (smsRes.ok) smsSent++;
+        else if (!smsRes.skipped) smsErrors.push({ client: client.name, error: smsRes.error || smsRes.code });
+      } catch (smsErr) {
+        smsErrors.push({ client: client.name, error: smsErr.message });
+      }
+    }
   }
 
   // ─── SEND SCHEDULED EMAIL DRAFTS ──────────────────────────────────────────
@@ -711,13 +730,14 @@ export default async function handler(req, res) {
     draftsErrors.push({ error: 'Email sequence sweep failed: ' + seqErr.message });
   }
 
-  await recordHeartbeat('send-reminders', 'ok', `sent ${sent} of ${toRemind.length}; seq=${draftsSent.length}`);
+  await recordHeartbeat('send-reminders', 'ok', `sent ${sent} of ${toRemind.length}; sms=${smsSent}; seq=${draftsSent.length}`);
   return res.status(200).json({
     message: `Reminders sent: ${sent} of ${toRemind.length}`,
     sent,
     sentList,
     skipped,
     errors: errors.length > 0 ? errors : [],
+    sms: { sent: smsSent, errors: smsErrors.length > 0 ? smsErrors : [] },
     email_sequence: { sent: draftsSent.length, errors: draftsErrors.length > 0 ? draftsErrors : [] },
   });
 }
