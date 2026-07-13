@@ -781,6 +781,7 @@
       <div style="font-family:'Montserrat',sans-serif;font-size:16px;font-weight:800;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" id="profileHeaderName"></div>
       <div style="font-size:12px;color:rgba(255,255,255,0.7);margin-top:1px;" id="profileHeaderMeta"></div>
     </div>
+    <button class="profile-back-btn" onclick="openSmsComposer(currentProfileClientId)" title="Send this client a text message">Send text</button>
   </div>
   <div class="profile-body">
     <div class="profile-sidenav">
@@ -2512,6 +2513,73 @@ function closeClientProfile() {
   document.getElementById('clientProfileOverlay').style.display = 'none';
   document.body.style.overflow = '';
   currentProfileClientId = null;
+}
+
+// ── Ad-hoc SMS composer (coach → one client) ────────────────────────────────
+// Text a single opted-in client a custom message. Gated: only enabled when the
+// client opted in AND has a mobile number. Sends via coach-data send-client-sms.
+function openSmsComposer(clientId) {
+  const client = (typeof allClients !== 'undefined' ? allClients : []).find(c => c.id === clientId);
+  if (!client) return;
+  let modal = document.getElementById('smsComposerModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'smsComposerModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;';
+    modal.innerHTML = ''
+      + '<div style="background:#fff;border-radius:10px;max-width:480px;width:100%;padding:22px;box-shadow:0 10px 40px rgba(0,0,0,0.25);font-family:\'Open Sans\',sans-serif;">'
+      +   '<div style="font-family:\'Montserrat\',sans-serif;font-weight:800;color:var(--navy);font-size:17px;margin-bottom:4px;">Send a text message</div>'
+      +   '<div id="smsComposerTo" style="font-size:13px;color:var(--gray-600);margin-bottom:12px;"></div>'
+      +   '<div id="smsComposerGate" style="display:none;font-size:13px;background:#FCEBEB;border:1px solid #f3c2c2;border-radius:8px;padding:10px 12px;color:#8a1f1f;margin-bottom:12px;"></div>'
+      +   '<textarea id="smsComposerText" maxlength="640" rows="4" placeholder="Hey — haven\'t heard from you in a bit. Let\'s connect: [your link]" style="width:100%;padding:10px 12px;border:2px solid var(--gray-300);border-radius:8px;font-size:14px;font-family:\'Open Sans\',sans-serif;box-sizing:border-box;resize:vertical;"></textarea>'
+      +   '<div style="font-size:11px;color:var(--gray-500);margin-top:4px;">Long messages may send as more than one text. STOP/HELP are handled automatically.</div>'
+      +   '<div id="smsComposerMsg" style="font-size:13px;margin-top:8px;"></div>'
+      +   '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">'
+      +     '<button onclick="closeSmsComposer()" style="padding:8px 16px;background:none;border:1px solid var(--gray-300);border-radius:7px;font-size:13px;cursor:pointer;color:var(--gray-600);">Cancel</button>'
+      +     '<button id="smsComposerSend" onclick="sendClientSmsNow()" style="padding:8px 18px;background:var(--teal);color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;">Send text</button>'
+      +   '</div>'
+      + '</div>';
+    document.body.appendChild(modal);
+  }
+  modal.dataset.clientId = clientId;
+  const optedIn = !!client.sms_opt_in;
+  const hasPhone = !!(client.phone && String(client.phone).trim());
+  document.getElementById('smsComposerTo').textContent = 'To: ' + (client.name || 'Client') + (hasPhone ? ' · ' + client.phone : '');
+  const gate = document.getElementById('smsComposerGate');
+  const sendBtn = document.getElementById('smsComposerSend');
+  const ta = document.getElementById('smsComposerText');
+  document.getElementById('smsComposerMsg').textContent = '';
+  ta.value = '';
+  if (!optedIn || !hasPhone) {
+    gate.style.display = 'block';
+    gate.textContent = !hasPhone
+      ? "This client has no mobile number on file, so they can't be texted yet."
+      : "This client hasn't opted in to text messages. They can turn it on in their profile before you can text them.";
+    ta.disabled = true; sendBtn.disabled = true; sendBtn.style.opacity = '0.5';
+  } else {
+    gate.style.display = 'none';
+    ta.disabled = false; sendBtn.disabled = false; sendBtn.style.opacity = '1';
+  }
+  modal.style.display = 'flex';
+}
+function closeSmsComposer() { const m = document.getElementById('smsComposerModal'); if (m) m.style.display = 'none'; }
+async function sendClientSmsNow() {
+  const modal = document.getElementById('smsComposerModal');
+  const clientId = modal && modal.dataset.clientId;
+  const text = (document.getElementById('smsComposerText').value || '').trim();
+  const msg = document.getElementById('smsComposerMsg');
+  const btn = document.getElementById('smsComposerSend');
+  if (!clientId) return;
+  if (!text) { msg.style.color = 'var(--red)'; msg.textContent = 'Type a message first.'; return; }
+  btn.disabled = true; const orig = btn.textContent; btn.textContent = 'Sending…';
+  try {
+    const session = getCoachSessionToken();
+    const res = await fetch('/api/coach-data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send-client-sms', client_id: clientId, message: text, session }) });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || j.error) { msg.style.color = 'var(--red)'; msg.textContent = j.error || ('Could not send (HTTP ' + res.status + ').'); btn.disabled = false; btn.textContent = orig; return; }
+    msg.style.color = '#157347'; msg.textContent = '✓ Text sent.';
+    setTimeout(closeSmsComposer, 900);
+  } catch (e) { msg.style.color = 'var(--red)'; msg.textContent = 'Error: ' + e.message; btn.disabled = false; btn.textContent = orig; }
 }
 
 function switchProfileNav(section) {

@@ -694,6 +694,35 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, draft });
     }
 
+    // ── Ad-hoc SMS to a single client (opt-in required, compliance-gated) ──────
+    // Lets a coach text one client a custom message (e.g. "haven't heard from
+    // you — let's talk"). Only sends to clients who opted in AND have a number.
+    if (action === 'send-client-sms') {
+      const clientId = body.client_id;
+      const text = (body.message || '').toString().trim();
+      if (!clientId || !text) return res.status(400).json({ error: 'client_id and message are required' });
+      if (text.length > 640) return res.status(400).json({ error: 'Message is too long (640 character max).' });
+      const clr = await sb(`/rest/v1/clients?id=eq.${encodeURIComponent(clientId)}&select=id,name,phone,sms_opt_in&limit=1`);
+      const cl = (clr.ok ? await clr.json() : [])[0];
+      if (!cl) return res.status(404).json({ error: 'Client not found' });
+      if (!cl.sms_opt_in) return res.status(400).json({ error: "This client hasn't opted in to text messages. They can turn it on in their profile." });
+      if (!cl.phone) return res.status(400).json({ error: 'This client has no mobile number on file.' });
+      const { sendSms, smsConfigured } = require('./twilio-sms');
+      if (!smsConfigured()) return res.status(503).json({ error: 'Texting is not live yet (Twilio setup / campaign approval pending).' });
+      const r = await sendSms({ to: cl.phone, body: text });
+      try {
+        await sb('/rest/v1/email_log', 'POST', {
+          client_id: cl.id, recipient_email: cl.phone, recipient_name: cl.name,
+          email_type: 'coach_sms', subject: text.slice(0, 140),
+          status: r.ok ? 'sent' : 'error',
+          error_details: r.ok ? null : (r.error || r.reason || 'send failed'),
+          resend_id: r.sid || null,
+        }, { Prefer: 'return=minimal' });
+      } catch (_) { /* audit log is best-effort */ }
+      if (!r.ok) return res.status(502).json({ error: r.error || r.reason || 'Text failed to send.' });
+      return res.status(200).json({ ok: true, to: r.to, sid: r.sid });
+    }
+
     // ── Contact Your Coach: coach reply (owner only) ──────────────────────────
     if (action === 'coach-msg-reply') {
       // Any authenticated coach (owner or assistant) may reply; the message is

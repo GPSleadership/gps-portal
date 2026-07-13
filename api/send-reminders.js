@@ -625,16 +625,22 @@ export default async function handler(req, res) {
     }
 
     // ─── SMS reminder (opt-in only) ─────────────────────────────────────────
-    // Fires alongside the email for clients who gave SMS consent and have a
-    // number on file. Non-blocking: an SMS failure never affects the email path.
-    // No-ops cleanly until the Twilio env vars are set (smsConfigured() === false).
-    // STOP/HELP are handled automatically by the Messaging Service.
+    // Message text AND on/off both live in Communication > Templates, in the
+    // `reminder_weekly_checkin_sms` row: edit body_text to change the wording,
+    // toggle "Approved" to turn SMS reminders on or off. There is NO hardcoded
+    // fallback — if no APPROVED template exists, no SMS is sent (that is the off
+    // switch). Vars: {{first_name}}, {{week}}, {{link}}.
+    // Non-blocking: an SMS failure never affects the email path. No-ops cleanly
+    // until Twilio env vars are set. STOP/HELP handled by the Messaging Service.
     if (client.sms_opt_in && client.phone) {
       try {
-        const smsBody = `GPS Leadership: Hi ${firstName}, your Week ${currentWeek} check-in is ready (about 2 min): ${portalLink} Reply STOP to opt out`;
-        const smsRes = await sendSms({ to: client.phone, body: smsBody });
-        if (smsRes.ok) smsSent++;
-        else if (!smsRes.skipped) smsErrors.push({ client: client.name, error: smsRes.error || smsRes.code });
+        const smsTpl = await getApprovedTemplate('reminder_weekly_checkin_sms');
+        if (smsTpl && smsTpl.body_text && smsTpl.body_text.trim()) {
+          const smsBody = fillTemplate(smsTpl.body_text, { first_name: firstName, week: currentWeek, link: portalLink });
+          const smsRes = await sendSms({ to: client.phone, body: smsBody });
+          if (smsRes.ok) smsSent++;
+          else if (!smsRes.skipped) smsErrors.push({ client: client.name, error: smsRes.error || smsRes.code });
+        }
       } catch (smsErr) {
         smsErrors.push({ client: client.name, error: smsErr.message });
       }
