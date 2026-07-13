@@ -1103,9 +1103,9 @@ function sponsorReadoutCards(m){
   var quotes=(r.sponsor_verbatims||[]).map(function(q){ return '<p style="margin:6px 0;font-style:italic;font-family:Georgia,serif;color:#3a2e16;font-size:14px;">"'+esc(q)+'"</p>'; }).join('');
   out += '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>How you rated '+esc(first)+' vs. how the team did</div></div>'
     + '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;"><thead><tr><th style="text-align:left;color:'+C.mid+';font-weight:600;border-bottom:2px solid '+C.line+';padding:7px 6px;">Rater</th><th style="'+th+'">Trust</th><th style="'+th+'">Proact.</th><th style="'+th+'">Prod.</th><th style="'+th+'">TP3</th></tr></thead><tbody>'
-    + trow('Direct reports',dr,false) + trow('Other colleagues',other,false) + trow('You (supervisor)',sup,true)
+    + trow((dr && dr.label) || 'Direct reports',dr,false) + trow('Other colleagues',other,false) + trow('You (supervisor)',sup,true)
     + '</tbody></table>'
-    + '<div style="font-size:12px;color:'+C.mid+';margin-top:8px;">Peers are folded into "Other colleagues" -- groups under 3 raters aren\'t broken out, to protect confidentiality. Individual comments stay in '+esc(first)+"'s confidential debrief.</div>"
+    + '<div style="font-size:12px;color:'+C.mid+';margin-top:8px;">Groups with fewer than 3 raters aren\'t broken out, to protect confidentiality -- their scores are folded into "Other colleagues." Individual comments stay in '+esc(first)+"'s confidential debrief.</div>"
     + (quotes?'<div style="background:'+C.sand+';border-radius:10px;padding:14px 18px;margin-top:14px;"><div style="font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:'+C.mid+';font-weight:700;margin-bottom:6px;">In your words -- what you wrote about '+esc(first)+'</div>'+quotes+'</div>':'')
     + '</div>';
 

@@ -108,12 +108,15 @@
   // n-weighted-merged into "Other colleagues" (shown only if the merge reaches n>=3)
   // so no individual can be identified.
   function _rvGroupTable(bg){
-    const LBL={direct_report:'Direct reports',peer:'Peers',internal_partner:'Internal partners'};
+    // Default names. A group the coach renamed carries its own `label` on the
+    // by_group row, so the portal always matches the report word-for-word.
+    // (The server already suppresses anything under 3, so the n>=3 test below is
+    // now a belt-and-braces second line of defence, not the primary one.)
+    const LBL={direct_report:'Direct reports',peer:'Peers',internal_partner:'Internal partners',board:'Board members'};
     const named=[]; const merge=[];
-    // Named peer-type groups show individually at n>=3; smaller ones fold into the pool.
-    ['direct_report','peer','internal_partner'].forEach(k=>{
+    ['direct_report','peer','internal_partner','board'].forEach(k=>{
       const g=bg[k]; if(!g||!g.n) return;
-      if(g.n>=3) named.push({k,label:LBL[k],g});
+      if(g.n>=3) named.push({k,label:(g.label||LBL[k]||k),g});
       else merge.push(g);
     });
     // The engine's uncategorized cohort ("Other") always joins the combined pool.
@@ -157,11 +160,17 @@
     let nR = raters.filter(r=>r.completed_at && !r.is_self).length;
     if(!nR) nR = sc.rater_count || null;
     // lowest non-self group (the relationship gap) + lowest two pillars
-    const GL={direct_report:'direct reports',peer:'peers',internal_partner:'internal partners',supervisor:'supervisor'};
+    // Default names, used only when the coach has NOT renamed the group. A renamed
+    // group carries its label on the by_group row (scores_json), so the portal always
+    // says the same thing the report said — never "peers" for a group the report
+    // called "Chiefs / Leadership Team".
+    const GL={direct_report:'direct reports',peer:'peers',internal_partner:'internal partners',supervisor:'supervisor',board:'board members',other_colleagues:'other colleagues'};
+    const glabel=k=>{ const g=bg[k]; return (g&&g.label) ? String(g.label).toLowerCase() : (GL[k]||k); };
+    const GKEYS_R=['supervisor','peer','internal_partner','direct_report','board','other_colleagues'];
     let lowG=null;
-    ['supervisor','peer','internal_partner','direct_report'].forEach(k=>{ const g=bg[k]; if(g&&g.n&&g.tp3!=null){ if(!lowG||g.tp3<lowG.tp3) lowG={k,tp3:g.tp3,trust:g.trust,label:GL[k]}; } });
+    GKEYS_R.forEach(k=>{ const g=bg[k]; if(g&&g.n&&g.tp3!=null){ if(!lowG||g.tp3<lowG.tp3) lowG={k,tp3:g.tp3,trust:g.trust,label:glabel(k)}; } });
     let topG=null;
-    ['direct_report','peer','internal_partner','supervisor'].forEach(k=>{ const g=bg[k]; if(g&&g.n&&g.tp3!=null){ if(!topG||g.tp3>topG.tp3) topG={k,tp3:g.tp3,label:GL[k]}; } });
+    GKEYS_R.slice().reverse().forEach(k=>{ const g=bg[k]; if(g&&g.n&&g.tp3!=null){ if(!topG||g.tp3>topG.tp3) topG={k,tp3:g.tp3,label:glabel(k)}; } });
     const pills=[['Trust',sc.trust],['Proactivity',sc.proactivity],['Productivity',sc.productivity]].filter(p=>p[1]!=null).sort((a,b)=>a[1]-b[1]);
     const lowP=pills.slice(0,2).map(p=>p[0]);
     const topPill=pills.length?pills[pills.length-1]:null;

@@ -523,6 +523,7 @@ export default async function handler(req, res) {
     case 'generate-question':    return handleGenerateQuestion(req, res);
     case 'generate-g2-question': return handleGenerateG2Question(req, res);
     case 'generate-report':      return handleGenerateReport(req, res);
+    case 'save-rater-group-labels': return handleSaveRaterGroupLabels(req, res);
     case 'import-survey-data':   return handleImportSurveyData(req, res);
     case 'generate-team-report': return handleGenerateTeamReport(req, res);
     case 'finalize-report':      return handleFinalizeReport(req, res);
@@ -1533,8 +1534,50 @@ function formatVerbatimsForPrompt(verbatims) {
   return lines.length > 0 ? lines.join('\n') : '\n(No verbatim responses available)';
 }
 
+// ── Save per-diagnostic rater group labels + note (coach only) ───────────────
+// Renames a rater group WITHOUT moving anyone between buckets. Use when the
+// relationship a leader picked does not match the org chart — e.g. a CEO who
+// entered her four chiefs as "Peer". Renaming keeps the group's numbers intact;
+// merging it into another bucket would average its scores away.
+async function handleSaveRaterGroupLabels(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!verifyCoachSession(req.body?.session)) return res.status(401).json({ error: 'Unauthorized' });
+
+  const diagnostic_id = req.body?.diagnostic_id;
+  if (!diagnostic_id) return res.status(400).json({ error: 'diagnostic_id is required' });
+
+  const ALLOWED = ['direct_report', 'peer', 'supervisor', 'internal_partner', 'board', 'other_colleagues'];
+  const incoming = req.body?.labels;
+  const labels = {};
+  if (incoming && typeof incoming === 'object') {
+    for (const k of ALLOWED) {
+      const v = incoming[k];
+      if (typeof v === 'string' && v.trim()) labels[k] = v.trim().slice(0, 60);
+    }
+  }
+  const noteRaw = req.body?.note;
+  const note = (typeof noteRaw === 'string' && noteRaw.trim()) ? noteRaw.trim().slice(0, 1000) : null;
+
+  try {
+    const r = await sb(`/rest/v1/diagnostics?id=eq.${encodeURIComponent(diagnostic_id)}`, 'PATCH',
+      { rater_group_labels: labels, rater_group_note: note, updated_at: new Date().toISOString() },
+      { Prefer: 'return=minimal' });
+    if (!r.ok) throw new Error(`Save failed (HTTP ${r.status}): ${(await r.text()).slice(0, 200)}`);
+    return res.status(200).json({ ok: true, labels, note });
+  } catch (err) {
+    console.error('[diagnostic/save-rater-group-labels] error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+}
+
 // ── Per-rater-group data builder (Option B) ──────────────────────────────────
-function buildRaterGroupData(responses, allRaters) {
+// labelOverrides (diagnostics.rater_group_labels) lets a group be RENAMED without
+// moving anyone between buckets. The relationship a leader picks does not always
+// match the org chart — on JMAA/Rosa the four chiefs (her actual executive team)
+// were entered as "Peer". Merging them into Direct Reports would average their
+// 3.48 trust into the other reports' 5.00 and destroy the central finding, so we
+// keep the bucket intact and fix the name instead.
+function buildRaterGroupData(responses, allRaters, labelOverrides) {
   const raterMetaMap = new Map(allRaters.map(r => [r.id, r]));
 
   // G2/G3 appear in BOTH lists: each custom question is either rated (score
@@ -1631,11 +1674,17 @@ function buildRaterGroupData(responses, allRaters) {
     if (!r.is_self) completedCounts.all_others++;  // every non-self rater counts here, bucketed or not
   }
 
-  const GROUP_LABELS = {
+  const DEFAULT_LABELS = {
     direct_report: 'Direct Reports', peer: 'Peers', supervisor: 'Supervisors',
     internal_partner: 'Internal Partners', board: 'Board Members',
     self: 'Self', all_others: 'All Others', other_colleagues: 'Other Colleagues',
   };
+  const ov = (labelOverrides && typeof labelOverrides === 'object') ? labelOverrides : {};
+  const GROUP_LABELS = {};
+  for (const k of Object.keys(DEFAULT_LABELS)) {
+    const custom = typeof ov[k] === 'string' ? ov[k].trim() : '';
+    GROUP_LABELS[k] = custom || DEFAULT_LABELS[k];
+  }
 
   const result = {};
   for (const [key, b] of Object.entries(buckets)) {
@@ -1646,6 +1695,8 @@ function buildRaterGroupData(responses, allRaters) {
     const pdAvg = avg(['C1','C2','C3','C4','C5','C6'].map(c => avgScores[c]).filter(s => s != null));
     result[key] = {
       label:           GROUP_LABELS[key],
+      defaultLabel:    DEFAULT_LABELS[key],
+      renamed:         GROUP_LABELS[key] !== DEFAULT_LABELS[key],
       n:               Math.max(b.raterIds.size, completedCounts[key] || 0),
       avgScores,
       verbatims:       b.verbatims,
@@ -1792,12 +1843,17 @@ function formatRaterGroupDataForPrompt(gd, diag) {
     ['self', 'Self'],
     ['all_others', 'All-Oth'],
   ];
-  const GRPS = ALL_GRPS.filter(([g]) => {
-    const grp = gd[g];
-    if (!grp || grp.suppressed) return false;
-    if (g === 'self') return true;
-    return (grp.n || 0) > 0;
-  });
+  // A renamed group is referred to by its NEW name everywhere in the prompt —
+  // column headers, item rows, verbatim attributions. The model must never see
+  // the word "Peers" for a group the coach has renamed "Chiefs / Leadership Team".
+  const GRPS = ALL_GRPS
+    .filter(([g]) => {
+      const grp = gd[g];
+      if (!grp || grp.suppressed) return false;
+      if (g === 'self') return true;
+      return (grp.n || 0) > 0;
+    })
+    .map(([g, abbr]) => [g, (gd[g]?.renamed ? gd[g].label : abbr)]);
   const f = v => (v != null ? v.toFixed(2) : 'n/a');
   const row = (name, key) => {
     const vals = GRPS.map(([g]) => f(gd[g]?.[key]).padStart(5)).join(' | ');
@@ -1805,6 +1861,34 @@ function formatRaterGroupDataForPrompt(gd, diag) {
   };
 
   const lines = [];
+
+  // ── Rater group names — AUTHORITATIVE. The relationship a leader picks when
+  //    building their rater list does not always match the org chart, so the coach
+  //    can rename a group. When they do, the NEW NAME defines what that group IS.
+  //    The system prompt's default gloss ("Peers — cross-functional follow-through")
+  //    must not be applied to a group that has been renamed to something else, or
+  //    the report will interpret a leader's own executive team as outside peers.
+  const renamed = ALL_GRPS
+    .map(([g]) => gd[g])
+    .filter(x => x && x.renamed && !x.suppressed && ((x.n || 0) > 0 || x.label === gd.self?.label));
+  if (renamed.length) {
+    lines.push('=== RATER GROUP NAMES (AUTHORITATIVE — THESE OVERRIDE THE DEFAULT NAMES) ===');
+    lines.push('The coach has renamed one or more rater groups because the relationship labels the leader chose did not match the real org chart.');
+    for (const g of renamed) {
+      lines.push(`  · "${g.label}"  (was: ${g.defaultLabel})`);
+    }
+    lines.push('RULES:');
+    lines.push('  1. Use these exact names everywhere — headings, tables, narrative, and quote attributions.');
+    lines.push('  2. NEVER use the old default name for a renamed group. Do not write "Peers" for a group now called something else.');
+    lines.push('  3. The NAME defines what the group is. Do NOT apply the default meaning of the old category to it. If a group is named for the leader\'s own executive team, interpret it as their closest-in reports — daily trust, safety, delegation — not as outside peers.');
+    lines.push('');
+  }
+  if (diag && diag.rater_group_note && String(diag.rater_group_note).trim()) {
+    lines.push('=== NOTE ABOUT WHO IS IN EACH GROUP (STATE THIS PLAINLY IN THE REPORT) ===');
+    lines.push(String(diag.rater_group_note).trim());
+    lines.push('Include this as a short "How to read the rater groups" note near the top of the report, in the leader\'s language. Do not editorialize it or soften it.');
+    lines.push('');
+  }
 
   // ── Confidentiality preamble — must come FIRST so the model never tries to
   //    describe, count, or apologize for a group it cannot see. Saying "we only
@@ -2087,7 +2171,7 @@ async function handleGenerateReport(req, res) {
 
   try {
     const diagRes = await sb(
-      `/rest/v1/diagnostics?id=eq.${diagnostic_id}&select=id,client_id,client_name,client_title,client_org,close_date,tier,custom_g1_question,custom_g2_question,custom_g3_question,self_three_year_vision,self_future_self_capabilities,self_immediate_successor_view,self_successor_candidates,self_successor_development_actions,intake_notes,coaching_notes,interview_notes,interview_notes_json,impact_scale&limit=1`
+      `/rest/v1/diagnostics?id=eq.${diagnostic_id}&select=id,client_id,client_name,client_title,client_org,close_date,tier,custom_g1_question,custom_g2_question,custom_g3_question,self_three_year_vision,self_future_self_capabilities,self_immediate_successor_view,self_successor_candidates,self_successor_development_actions,intake_notes,coaching_notes,interview_notes,interview_notes_json,impact_scale,rater_group_labels,rater_group_note&limit=1`
     );
     const diags = await diagRes.json();
     if (!Array.isArray(diags) || diags.length === 0) return res.status(404).json({ error: 'Diagnostic not found' });
@@ -2139,7 +2223,7 @@ async function handleGenerateReport(req, res) {
     const overrideMap = Object.fromEntries(overrides.map(o => [o.question_code, o.override_text]));
 
     // Build per-group data for full report (Option B)
-    const groupData = buildRaterGroupData(responses, allRaters);
+    const groupData = buildRaterGroupData(responses, allRaters, diag.rater_group_labels);
 
     // ── Confidentiality gate ──────────────────────────────────────────────
     // If any rater group fell under the minimum, the coach has to see what is
@@ -2275,10 +2359,13 @@ Write the complete 14-Day Executive Leadership Diagnostic Report for ${diag.clie
         // COACH (coach.html) and the SPONSOR (decision-room.html via sponsor-data.js).
         // Suppressed groups are dropped here, at the single point they all read from,
         // so a group under MIN_N cannot surface on any of those surfaces.
+        // `label` rides along so the leader, coach and sponsor views all show the
+        // SAME name the report used. Without it, the PDF would say "Chiefs /
+        // Leadership Team" while the portal still said "Peers" for the same people.
         by_group: Object.fromEntries(
           Object.entries(groupData)
             .filter(([k, v]) => !k.startsWith('_') && k !== 'all_others' && !v.suppressed)
-            .map(([k, v]) => [k, { n: v.n, trust: v.trustAvg, proactivity: v.proactivityAvg, productivity: v.productivityAvg, tp3: v.tp3Index, bench: v.benchAvg }])
+            .map(([k, v]) => [k, { n: v.n, label: v.label, trust: v.trustAvg, proactivity: v.proactivityAvg, productivity: v.productivityAvg, tp3: v.tp3Index, bench: v.benchAvg }])
         ),
       },
       generated_at:   now,

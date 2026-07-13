@@ -8936,6 +8936,7 @@ function renderReportTab() {
       ${done>=1 ? `<button class="dbtn dbtn-outline" onclick="viewCurrentScores()">📊 View current scores (numbers only)</button>` : ''}
       ${d.leader_token ? `<a href="${DIAG_BASE_URL}/diagnostic-leader.html?token=${d.leader_token}&preview=debrief_complete" target="_blank" class="dbtn dbtn-outline">👁 Preview ${(d.client_name||'leader').split(' ')[0]}'s page (as debrief complete)</a>` : ''}
       ${d.report_generated_at ? `<button class="dbtn dbtn-outline" onclick="openResultsNarrativeEditor()">✍️ Edit results-page words</button>` : ''}
+      <button class="dbtn dbtn-outline" onclick="openGroupLabelEditor()">🏷 Rename rater groups</button>
       <button class="dbtn dbtn-outline" onclick="openReportDocEditor()">🧱 Edit structured report (sections)</button>
       ${d.client_id ? `<button class="dbtn dbtn-outline" onclick="openPlanPrefillEditor()">🎯 Draft 90-day plan (prefill client)</button>` : ''}
       <button class="dbtn dbtn-primary" ${canGenerate?'':'disabled'} onclick="generateReport(event)">
@@ -9762,6 +9763,120 @@ async function generateG1() {
     alert('Error generating question: ' + e.message + '\n\nIf this keeps happening, reload the page — the question may have generated anyway.');
     if (btn) { btn.disabled = false; btn.textContent = DIAG_SEL.custom_g1_question ? `Regenerate (${remaining} left) →` : 'Generate Now →'; }
   }
+}
+
+// ── Rename rater groups ─────────────────────────────────────────────────────
+// The relationship a leader picks when building their rater list often does not
+// match the org chart. A CEO entered her four chiefs — her actual executive team —
+// as "Peer." Reporting their feedback under a "Peers" heading turns a trust
+// problem inside her own leadership team into cross-functional friction.
+//
+// The tempting fix is to move people between groups. Don't. Merging a critical
+// group into a glowing one averages the signal away and the finding disappears.
+// Rename the group instead: same people, same numbers, honest label.
+function openGroupLabelEditor() {
+  const d = DIAG_SEL;
+  if (!d) return;
+  const cur  = (d.rater_group_labels && typeof d.rater_group_labels === 'object') ? d.rater_group_labels : {};
+  const note = d.rater_group_note || '';
+
+  const GROUPS = [
+    ['direct_report',    'Direct Reports'],
+    ['peer',             'Peers'],
+    ['supervisor',       'Supervisors'],
+    ['internal_partner', 'Internal Partners'],
+    ['board',            'Board Members'],
+    ['other_colleagues', 'Other Colleagues'],
+  ];
+
+  // Show how many raters actually sit in each group, so the rename is made against
+  // reality rather than a guess. Uses the same normalization the server uses.
+  const norm = (rel) => {
+    if (!rel) return 'other_colleagues';
+    const s = String(rel).toLowerCase().replace(/[^a-z]/g, '');
+    if (s.includes('board') || s.includes('trustee')) return 'board';
+    if (s.includes('skip') || s.includes('indirect')) return 'direct_report';
+    if (s.includes('superv') || s.includes('manager') || s.includes('boss') || s.includes('owner')) return 'supervisor';
+    if (s.includes('internal')) return 'internal_partner';
+    if (s === 'peer' || s === 'peers') return 'peer';
+    if (s.includes('directreport')) return 'direct_report';
+    return 'other_colleagues';
+  };
+  const members = {};
+  (DIAG_RATERS || []).filter(r => !r.is_self).forEach(r => {
+    const k = norm(r.relationship);
+    (members[k] = members[k] || []).push({ name: r.name, done: !!r.completed_at });
+  });
+
+  const rows = GROUPS.map(([key, def]) => {
+    const ppl  = members[key] || [];
+    const done = ppl.filter(p => p.done).length;
+    if (!ppl.length) return '';
+    const who = ppl.map(p => (p.done ? '<strong>' + escHtml(p.name) + '</strong>' : '<span style="color:#94a3b8;">' + escHtml(p.name) + '</span>')).join(', ');
+    const under3 = done > 0 && done < 3;
+    return '<div style="padding:12px 0;border-bottom:1px solid #e2e8f0;">'
+      + '<div style="display:flex;gap:10px;align-items:center;margin-bottom:6px;">'
+      +   '<div style="min-width:150px;font-size:13px;font-weight:700;color:#0f172a;">' + escHtml(def) + '</div>'
+      +   '<input id="gl-' + key + '" value="' + escHtml(cur[key] || '') + '" placeholder="' + escHtml(def) + ' (leave blank to keep)" maxlength="60" style="flex:1;border:1px solid #cbd5e1;border-radius:6px;padding:7px 10px;font-size:13px;font-family:inherit;" />'
+      + '</div>'
+      + '<div style="font-size:12px;color:#64748b;line-height:1.5;padding-left:160px;">'
+      +   done + ' of ' + ppl.length + ' responded' + (under3 ? ' <span style="color:#b45309;font-weight:700;">· under the 3-response minimum, will be withheld</span>' : '')
+      +   '<br>' + who
+      + '</div>'
+      + '</div>';
+  }).join('');
+
+  const ov = document.createElement('div');
+  ov.className = 'modal-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;';
+  ov.innerHTML =
+    '<div style="background:#fff;border-radius:12px;max-width:760px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 20px 50px rgba(0,0,0,.25);">'
+    + '<div style="padding:20px 24px;border-bottom:1px solid #e2e8f0;">'
+    +   '<div style="font-size:19px;font-weight:700;color:#0f172a;">Rename rater groups</div>'
+    +   '<div style="font-size:13px;color:#475569;margin-top:6px;line-height:1.55;">Leaders often pick the wrong relationship when building their rater list. Renaming a group changes only what it is <em>called</em> — the same people stay in it and the scores do not move. Never fix a mislabeled group by merging it into another one; that averages its signal away.</div>'
+    + '</div>'
+    + '<div style="padding:8px 24px 4px;">' + (rows || '<div style="padding:16px 0;color:#64748b;">No raters on this diagnostic yet.</div>') + '</div>'
+    + '<div style="padding:14px 24px;">'
+    +   '<div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:4px;">Note about who is in each group <span style="font-weight:400;color:#64748b;">(optional — stated plainly in the report)</span></div>'
+    +   '<div style="font-size:12px;color:#64748b;margin-bottom:8px;line-height:1.5;">Use this when you are not certain who a group contains. Saying so in the report is better than printing a label you cannot stand behind.</div>'
+    +   '<textarea id="gl-note" rows="3" placeholder="e.g. The Chiefs / Leadership Team group are the four executives who report directly to you. The Direct Reports group are the other colleagues you listed; their reporting line was not specified." style="width:100%;border:1px solid #cbd5e1;border-radius:6px;padding:9px 11px;font-size:13px;font-family:inherit;line-height:1.5;">' + escHtml(note) + '</textarea>'
+    + '</div>'
+    + '<div style="padding:16px 24px;border-top:1px solid #e2e8f0;display:flex;gap:10px;justify-content:flex-end;">'
+    +   '<button id="gl-cancel" style="padding:9px 16px;border:1px solid #cbd5e1;background:#fff;border-radius:7px;font-weight:600;cursor:pointer;color:#334155;">Cancel</button>'
+    +   '<button id="gl-save" style="padding:9px 16px;border:0;background:#0f172a;color:#fff;border-radius:7px;font-weight:600;cursor:pointer;">Save names</button>'
+    + '</div>'
+    + '</div>';
+
+  document.body.appendChild(ov);
+  const close = function() { if (ov.parentNode) ov.parentNode.removeChild(ov); };
+  ov.addEventListener('click', function(ev) { if (ev.target === ov) close(); });
+  ov.querySelector('#gl-cancel').onclick = close;
+  ov.querySelector('#gl-save').onclick = async function() {
+    const btn = this;
+    btn.disabled = true; btn.textContent = 'Saving…';
+    const labels = {};
+    GROUPS.forEach(([key]) => {
+      const el = document.getElementById('gl-' + key);
+      if (el && el.value.trim()) labels[key] = el.value.trim();
+    });
+    const noteEl = document.getElementById('gl-note');
+    try {
+      const r = await fetch('/api/diagnostic?action=save-rater-group-labels', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ diagnostic_id: d.id, session: getCoachSessionToken(), labels, note: noteEl ? noteEl.value : '' }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'Save failed');
+      DIAG_SEL.rater_group_labels = j.labels;
+      DIAG_SEL.rater_group_note   = j.note;
+      close();
+      alert('Saved. Regenerate the report for the new names to appear in it.');
+      await refreshSelected();
+    } catch (ex) {
+      btn.disabled = false; btn.textContent = 'Save names';
+      alert('Could not save: ' + ex.message);
+    }
+  };
 }
 
 // ── Confidentiality gate ────────────────────────────────────────────────────
