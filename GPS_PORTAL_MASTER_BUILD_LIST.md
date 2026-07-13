@@ -35,6 +35,23 @@ Full detail and evidence in **`EIS_Master_Audit_and_Plan_2026-07-01.md`**. Every
 | **P0-3** | **Seven public zip blobs** (`zi5BMnX1`…`ziw7HK1Q`) leak full portal + api source, DB schema snapshot, Ask-Alex system prompt. `git rm` all seven + redeploy; rotate captured secrets. | S | 🔧 building | Verified: 7 blobs tracked & served |
 | **P0-4** | **Unauthenticated privileged actions** in `api/diagnostic.js` (`send-invites` L661, `generate-question` L1049, `generate-g2-question` L1145, `finalize-report` L2024, `import-survey-data` L3620) — service-key writes/email/Anthropic spend with only a method check; IDs interpolated without `encodeURIComponent`. Add `verifyCoachSession` + encode all IDs. | M | ⏳ queued | Verified: code read |
 
+### P0 — Rater confidentiality (added 2026-07-13, JMAA/Rosa audit)
+
+Standard of record: **`Knowledge/GPS-Frameworks/Rater Confidentiality Standard.md`** (Obsidian vault). Any change to reporting, prompts, PDFs, or exports must conform to it.
+
+| # | Item | Effort | Status | Evidence |
+|---|------|--------|--------|----------|
+| **P0-C1** | **No MIN-N suppression anywhere in the diagnostic path.** `buildRaterGroupData` returned scores + verbatims for every group with no n check. Rosa Beckett's Peers group = **n=1 (Kimberly Carlisle) with 13 verbatims** incl. "Threatening the team. Micromanaging." Would have rendered under a "Peers" heading. Fix: MIN-N=3 hard floor + complementary (residual) suppression + verbatim scrub from the All Others pool. | M | ✅ Done 2026-07-13 (`feature/diagnostic-min-n`) | `api/diagnostic.js:1633-1655` (old); verified against live JMAA data |
+| **P0-C2** | **`scores_json.by_group` propagates sub-3 groups to the LEADER, COACH and SPONSOR.** Read by `results-visual.js`, `coach.html`, `decision-room.html`, `sponsor-data.js`. Filter suppressed groups at the write. | S | ✅ Done 2026-07-13 | Live drafts: Sergio `direct_report n=1`, Michael Gater `peer n=1` |
+| **P0-C3** | **Board Members not a real group** — fell through `normalizeRel()` to null and blended into Other Colleagues. Protected by accident. Promote to a first-class confidential, aggregate-only, MIN-N group. | S | ✅ Done 2026-07-13 | `api/diagnostic.js:1549-1562` (old) |
+| **P0-C4** | **Survey copy promised aggregation we did not enforce** ("Scores are averaged across raters") and promised anonymity to the *supervisor*, whom we attribute. Three-way consent copy: self / supervisor / everyone else. | S | ✅ Done 2026-07-13 | `diagnostic-survey.html:351,374,747` (old) |
+| **P0-C5** | **Coach confidentiality gate** — report generation blocked (409) until the coach reviews what is withheld. Acknowledging does not unsuppress. | S | ✅ Done 2026-07-13 | new |
+| **P1-C6** | **Historical drafts still carry sub-3 groups.** Sergio Sabido's *delivered* report had `direct_report n=1`; Michael Gater's coach preview has `peer n=1`. Their `scores_json.by_group` blobs are still read by the leader + sponsor views. Decide: scrub the stored blobs, or regenerate. | S | ⏳ **queued — Alex's call** | DB query 2026-07-13 |
+| **P1-C7** | **Raters name other people inside verbatims.** A live JMAA peer verbatim names another leader by first name. MIN-N does not catch this. Needs a de-identification pass over verbatim text before display. | M | ⏳ queued | Live JMAA data |
+| **P2-C8** | **`diagnostic_raters.relationship` is free text** — no enum/constraint. Duplicates (`Manager/Supervisor` vs `Supervisor / Manager`). Single-person labels ("Other: FBO Tenant at HKS") identify by label alone. Constrain to a controlled vocabulary. | M | ⏳ queued | `information_schema` |
+| **P2-C9** | **`anonymous_feedback = false` path retains `rater_id`** while the copy promises non-attribution. Either enforce or change the copy. | S | ⏳ queued | `api/diagnostic.js` |
+| **P2-C10** | **Update the report-generation prompt** to carry Section 7 of the Confidentiality Standard (the six "never do" rules). Alex holds the prompt. | S | ⏳ **queued — Alex holds the prompt** | — |
+
 ### P0.5 — Structural prevention (stops the next P0)
 
 - **Deploy is a denylist → every new file is public by default.** How BOTH P0-1 and P0-3 escaped. Move to an allowlist deploy (explicit `public/` set) **or** add a pre-push check that flags any newly tracked non-HTML/JS file. Highest-leverage prevention in the audit. — M
@@ -269,6 +286,7 @@ All items below were built, tested, and pushed to `main` after the July 1 audit.
 - **Archive `GPS-PORTAL-ROADMAP.md` and `GPS_PORTAL_BACKLOG.md`** — superseded by this doc.
 - **Deprecate `council.portal_roadmap`** in Supabase — 4 items, all captured here.
 - **P3 — Clean up + commit the "Tool Creation" folder.** The repo working dir has accumulated loose scratch files (sandbox HTML experiments, old migration SQL, review markdowns, `.fuse_hidden*` junk) mixed in with real governance docs (`CLAUDE.md`, this build list, retired backlog) that have never been committed. Sort keep-vs-delete, make sure internal `.md` docs are `.vercelignore`'d so they don't serve publicly, then hand Alex a clean commit (he runs git). ~20 min, housekeeping.
+- **P3 — SMS follow-ups (after A2P campaign approval).** The SMS send path (`api/twilio-sms.js` + `send-reminders.js`) and the opt-in checkbox are built and merged. Remaining polish: (1) capture a `sms_opt_in_at` consent timestamp on the client for TCR audit proof (migration + save in portal-data/client.html); (2) dedicated SMS delivery logging (currently counted in the run response only, not persisted per-message); (3) full end-to-end send test once the campaign shows Registered, the `TWILIO_MESSAGING_SERVICE_SID` env var is set, and the number is attached to the Messaging Service — test with one opted-in TEST client + Alex's own mobile.
 - **P3 — Adopt a dedicated `/sandbox/` folder convention for experiments.** Going forward, every throwaway experiment page/file gets created inside a single `sandbox/` folder in the repo (git-ignored + vercel-ignored) so scratch work never clutters the real tree and can be wiped anytime without risk. Add the rule to `CLAUDE.md` and the `gps-portal-safe-build` skill once the folder exists.
 
 ---

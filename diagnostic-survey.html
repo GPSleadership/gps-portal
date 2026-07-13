@@ -202,7 +202,7 @@ textarea.tall{min-height:130px;}
 <div class="state-screen" id="screen-thankyou" style="display:none;">
   <div class="state-icon">🙏</div>
   <div class="state-title">Thank you!</div>
-  <div class="state-sub" id="thankyou-msg">Your responses have been submitted. They are confidential and will be aggregated with other raters' feedback before being shared. Your perspective matters — thank you for taking the time.</div>
+  <div class="state-sub" id="thankyou-msg">Your responses have been submitted. Thank you for taking the time.</div>
   <div id="thankyou-redirect" style="display:none;margin-top:16px;font-size:13px;color:var(--mid);">Taking you back to your portal in a moment…</div>
 </div>
 
@@ -263,7 +263,19 @@ let RATER       = null;   // diagnostic_raters row
 let DIAGNOSTIC  = null;   // diagnostics row
 let OVERRIDES   = {};     // { 'B2': 'new question text', ... }
 let IS_SELF     = false;
+let IS_SUPERVISOR = false;   // the ONE rater type we do not promise confidentiality to
 let LEADER_FIRST = '';
+
+// Mirrors normalizeRel() in api/diagnostic.js. Board is checked FIRST — a board
+// member is never a supervisor, even when their title contains "chair" or "owner".
+// The supervisor is the only rater whose feedback is attributed back to them, so
+// they are the only rater who must NOT be shown the confidentiality promise.
+function isSupervisorRel(rel) {
+  if (!rel) return false;
+  const s = String(rel).toLowerCase().replace(/[^a-z]/g, '');
+  if (s.includes('board') || s.includes('trustee')) return false;
+  return s.includes('superv') || s.includes('manager') || s.includes('boss') || s.includes('owner');
+}
 let SECTIONS    = [];     // ordered list of section codes for this mode
 let CUR_SEC     = 0;      // index into SECTIONS
 let ANSWERS     = {};     // { 'A1': { score: 4 }, 'A8': { text: '...' }, ... }
@@ -284,6 +296,7 @@ async function init() {
 
   RATER   = portal.rater;
   IS_SELF = RATER.is_self;
+  IS_SUPERVISOR = !IS_SELF && isSupervisorRel(RATER.relationship);
 
   // Already submitted?
   if (RATER.completed_at) { showState('screen-done-already'); return; }
@@ -345,11 +358,24 @@ async function init() {
 // ─────────────────────────────────────────────────────────────────────────────
 function renderWelcome() {
   const container = document.getElementById('survey-container');
+  // Three different promises, because we keep three different promises.
+  //
+  //  · SELF        — private to the leader.
+  //  · SUPERVISOR  — ATTRIBUTED. We tell them so, plainly, before they answer.
+  //                  The supervisor's view carries decision weight and is meant
+  //                  to be identifiable, so it reports even as a group of one.
+  //                  Showing them the confidentiality copy and then attributing
+  //                  their feedback would be a broken promise. This is the fix.
+  //  · EVERYONE ELSE — confidential and aggregated, and now that is ENFORCED:
+  //                  no group is reported below three responses, so "grouped with
+  //                  others" is a fact, not a hope.
   const selfNote = IS_SELF
     ? `<p style="font-size:13.5px;color:var(--dark);line-height:1.6;">You'll rate yourself on each item using a 1–5 scale, then answer several open-ended questions. The final section asks about succession — where you're going and who could succeed you. Your responses stay confidential and appear only in your copy of the report.</p>`
-    : (DIAGNOSTIC.anonymous_feedback
-      ? `<p style="font-size:13.5px;color:var(--dark);line-height:1.6;">You'll rate <strong>${LEADER_FIRST}</strong> on each item using a 1–5 scale, then answer several open-ended questions. <strong>Your responses are anonymous.</strong> Your name and email are used only to deliver this survey and its reminders. They are never attached to your answers. Scores are averaged across raters, and written responses appear in the report without any record of who wrote them.</p>`
-      : `<p style="font-size:13.5px;color:var(--dark);line-height:1.6;">You'll rate <strong>${LEADER_FIRST}</strong> on each item using a 1–5 scale, then answer several open-ended questions. Your numeric scores will be averaged with other raters' feedback. Your written responses are used verbatim in the report but are not attributed to you individually.</p>`);
+    : (IS_SUPERVISOR
+      ? `<p style="font-size:13.5px;color:var(--dark);line-height:1.6;">You'll rate <strong>${LEADER_FIRST}</strong> on each item using a 1–5 scale, then answer several open-ended questions. <strong>Please read this before you begin: your feedback is not anonymous.</strong> As ${LEADER_FIRST}'s supervisor, your ratings and written comments are reported separately and identified as coming from the supervisor, even if you are the only supervisor responding. This is deliberate. Your view carries decision-making weight and ${LEADER_FIRST} needs to know it is yours. Please answer with that in mind.</p>`
+      : (DIAGNOSTIC.anonymous_feedback
+        ? `<p style="font-size:13.5px;color:var(--dark);line-height:1.6;">You'll rate <strong>${LEADER_FIRST}</strong> on each item using a 1–5 scale, then answer several open-ended questions. <strong>Your responses are confidential.</strong> Your name and email are used only to deliver this survey and its reminders. They are never attached to your answers. Your feedback is reported only as part of a group, and a group is never reported unless at least three of its members respond — so your scores and comments are always combined with other people's before ${LEADER_FIRST} sees them.</p>`
+        : `<p style="font-size:13.5px;color:var(--dark);line-height:1.6;">You'll rate <strong>${LEADER_FIRST}</strong> on each item using a 1–5 scale, then answer several open-ended questions. Your feedback is never attributed to you by name. It is reported only as part of a group, and a group is never reported unless at least three of its members respond — so your scores and comments are always combined with other people's before ${LEADER_FIRST} sees them.</p>`));
 
   container.innerHTML = `
   <div class="screen active" id="screen-welcome">
@@ -371,7 +397,11 @@ function renderWelcome() {
       ${selfNote}
       <ul class="welcome-points" style="margin-top:16px;">
         <li><span style="color:#0F6E56;font-weight:800;">•</span><span>Takes approximately <strong>15–20 minutes</strong></span></li>
-        <li><span style="color:#0F6E56;font-weight:800;">•</span><span>${IS_SELF ? 'Your responses appear only in your private copy of the report' : 'Your identity is never shown. Scores are averaged across all raters before being shared.'}</span></li>
+        <li><span style="color:#0F6E56;font-weight:800;">•</span><span>${IS_SELF
+          ? 'Your responses appear only in your private copy of the report'
+          : (IS_SUPERVISOR
+            ? 'Your feedback is identified as the supervisor\'s. It is not anonymous.'
+            : 'Your name is never shown, and no group is reported unless at least three of its members respond.')}</span></li>
         <li><span style="color:#0F6E56;font-weight:800;">•</span><span>Scale: <strong>1 = Strongly Disagree, 5 = Strongly Agree</strong> for all rated items</span></li>
         <li><span style="color:#0F6E56;font-weight:800;">•</span><span>Open-ended questions require a brief response. Take your time — this is the most useful part.</span></li>
       </ul>
@@ -743,9 +773,9 @@ async function submitSurvey() {
 
     const tyMsg = IS_SELF
       ? 'Your self-assessment is complete. Alex will now finalize your rater list and send survey invitations. You\'ll receive an email when they go out.'
-      : (DIAGNOSTIC.anonymous_feedback
-        ? 'Your responses have been submitted anonymously. Your name was not attached to your answers, and they will be aggregated with other raters\' feedback. Your perspective matters. Thank you.'
-        : 'Your responses have been submitted. They are confidential and will be aggregated with other raters\' feedback before being shared with the leader. Your perspective matters — thank you.');
+      : (IS_SUPERVISOR
+        ? 'Your responses have been submitted. As the supervisor, your feedback is reported separately and identified as yours. Your perspective matters — thank you.'
+        : 'Your responses have been submitted. Your name was not attached to your answers. Your feedback is reported only as part of a group, and never unless at least three of that group respond. Your perspective matters — thank you.');
 
     document.getElementById('thankyou-msg').textContent = tyMsg;
     showState('screen-thankyou');

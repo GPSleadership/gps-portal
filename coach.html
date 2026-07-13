@@ -9764,19 +9764,84 @@ async function generateG1() {
   }
 }
 
-async function generateReport(e) {
+// ── Confidentiality gate ────────────────────────────────────────────────────
+// The server refuses to generate a report (409) when any rater group came in
+// under the 3-response minimum. It tells us exactly what is being withheld and
+// why. We show that to the coach and make them decide, on the record, before a
+// single token is spent. Acknowledging does NOT unsuppress anything — the data
+// stays out of the report either way. The coach is choosing between: generate
+// without those groups, or go get the outstanding raters.
+function showConfidentialityGate(conf, msg, onProceed) {
+  const ov = document.createElement('div');
+  ov.className = 'modal-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;';
+
+  const blocked = !!(conf && conf.poolSuppressed);
+  const rows = (conf && conf.withheld ? conf.withheld : []).map(function(w) {
+    return '<tr>'
+      + '<td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;font-weight:600;">' + escHtml(w.label) + '</td>'
+      + '<td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;text-align:center;">' + w.n + '</td>'
+      + '<td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;color:#475569;font-size:13px;">' + escHtml(w.reason === 'residual_protection' ? 'Withheld so the suppressed raters cannot be recovered by subtraction' : 'Under the ' + conf.minN + '-response minimum') + '</td>'
+      + '</tr>';
+  }).join('');
+
+  ov.innerHTML =
+    '<div style="background:#fff;border-radius:12px;max-width:660px;width:100%;max-height:88vh;overflow:auto;box-shadow:0 20px 50px rgba(0,0,0,.25);">'
+    + '<div style="padding:20px 24px;border-bottom:1px solid #e2e8f0;">'
+    +   '<div style="font-size:12px;font-weight:700;letter-spacing:.06em;color:#b45309;text-transform:uppercase;">Confidentiality review</div>'
+    +   '<div style="font-size:19px;font-weight:700;color:#0f172a;margin-top:4px;">'
+    +     (blocked ? 'This report cannot be generated yet' : 'Some rater groups will be withheld')
+    +   '</div>'
+    + '</div>'
+    + '<div style="padding:20px 24px;">'
+    +   '<p style="margin:0 0 14px;color:#334155;line-height:1.55;">' + escHtml(msg || '') + '</p>'
+    +   (rows
+        ? '<table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:16px;">'
+          + '<thead><tr>'
+          + '<th style="text-align:left;padding:8px 10px;border-bottom:2px solid #cbd5e1;font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;">Group</th>'
+          + '<th style="text-align:center;padding:8px 10px;border-bottom:2px solid #cbd5e1;font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;">Responded</th>'
+          + '<th style="text-align:left;padding:8px 10px;border-bottom:2px solid #cbd5e1;font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;">Why it is withheld</th>'
+          + '</tr></thead><tbody>' + rows + '</tbody></table>'
+        : '')
+    +   '<div style="background:#f8fafc;border-left:3px solid #94a3b8;padding:12px 14px;border-radius:0 6px 6px 0;font-size:13px;color:#475569;line-height:1.6;">'
+    +     '<strong style="color:#0f172a;">What happens to their feedback.</strong> Nothing is deleted. Their scores still count inside the All Others average. What they lose is a separate row of their own, because a group of one or two is not a group — reporting it would name them, and it would tell the leader something untrue about that group.'
+    +     '<br><br><strong style="color:#0f172a;">The better move is usually to go get the responses.</strong> One or two more raters in a short group turns it back into a full section with its own scores and verbatims.'
+    +   '</div>'
+    + '</div>'
+    + '<div style="padding:16px 24px;border-top:1px solid #e2e8f0;display:flex;gap:10px;justify-content:flex-end;">'
+    +   '<button id="cg-cancel" style="padding:9px 16px;border:1px solid #cbd5e1;background:#fff;border-radius:7px;font-weight:600;cursor:pointer;color:#334155;">Go chase the raters</button>'
+    +   (blocked ? '' : '<button id="cg-proceed" style="padding:9px 16px;border:0;background:#0f172a;color:#fff;border-radius:7px;font-weight:600;cursor:pointer;">Generate without these groups</button>')
+    + '</div>'
+    + '</div>';
+
+  document.body.appendChild(ov);
+  const close = function() { if (ov.parentNode) ov.parentNode.removeChild(ov); };
+  ov.addEventListener('click', function(ev) { if (ev.target === ov) close(); });
+  const cx = ov.querySelector('#cg-cancel'); if (cx) cx.onclick = close;
+  const px = ov.querySelector('#cg-proceed');
+  if (px) px.onclick = function() { close(); onProceed(); };
+}
+
+async function generateReport(e, ack) {
   const btn = e ? e.currentTarget : null;
   if (btn) { btn.disabled = true; btn.textContent = '⚙ Generating…'; }
+  const reset = function() { if (btn) { btn.disabled = false; btn.textContent = '⚙ Generate Draft Report (Claude)'; } };
   try {
     const resp = await fetch('/api/diagnostic?action=generate-report', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ diagnostic_id: DIAG_SEL.id, session: getCoachSessionToken() }),
+      body: JSON.stringify({ diagnostic_id: DIAG_SEL.id, session: getCoachSessionToken(), confidentiality_ack: ack === true }),
     });
+    if (resp.status === 409) {
+      const j = await resp.json();
+      reset();
+      showConfidentialityGate(j.confidentiality, j.message, function() { generateReport(btn ? { currentTarget: btn } : null, true); });
+      return;
+    }
     if (!resp.ok) throw new Error(await resp.text());
     await updateDiag({ status: 'report_draft', report_generated_at: new Date().toISOString() });
     await refreshSelected();
   } catch(ex) {
-    if (btn) { btn.disabled = false; btn.textContent = '⚙ Generate Draft Report (Claude)'; }
+    reset();
     alert('Error generating report: ' + ex.message);
   }
 }
@@ -10234,21 +10299,31 @@ async function viewCurrentScores() {
 // changing the diagnostic status (survey keeps collecting) and WITHOUT enabling the
 // finalize/send path — leader and sponsor can never see it until the survey closes
 // and the report is finalized.
-async function generateReportPreview(e) {
+// The preview runs the SAME confidentiality gate as the real report. A private
+// preview still puts suppressed numbers in front of a human who then walks into
+// a debrief carrying them — the protection has to hold here too.
+async function generateReportPreview(e, ack) {
   const btn = e ? e.currentTarget : null;
   if (btn) { btn.disabled = true; btn.textContent = '⚙ Generating preview…'; }
+  const reset = function() { if (btn) { btn.disabled = false; btn.textContent = '👁 Preview report now (private)'; } };
   try {
     const resp = await fetch('/api/diagnostic?action=generate-report', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ diagnostic_id: DIAG_SEL.id, preview: true, session: getCoachSessionToken() }),
+      body: JSON.stringify({ diagnostic_id: DIAG_SEL.id, preview: true, session: getCoachSessionToken(), confidentiality_ack: ack === true }),
     });
+    if (resp.status === 409) {
+      const j = await resp.json();
+      reset();
+      showConfidentialityGate(j.confidentiality, j.message, function() { generateReportPreview(btn ? { currentTarget: btn } : null, true); });
+      return;
+    }
     if (!resp.ok) throw new Error(await resp.text());
     await updateDiag({ report_preview_at: new Date().toISOString() });
     openReportPreview({ preview: true });
+    reset();
   } catch(ex) {
+    reset();
     alert('Error generating preview: ' + ex.message);
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '👁 Preview report now (private)'; }
   }
 }
 

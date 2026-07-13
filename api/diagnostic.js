@@ -1542,7 +1542,7 @@ function buildRaterGroupData(responses, allRaters) {
   // only ever carries one of the two, so dual membership is safe.
   const RATED  = ['A1','A2','A3','A4','A5','A6','A7','B1','B2','B3','B4','B5','B6','C1','C2','C3','C4','C5','C6','D1','F1','F2','G1','G2','G3'];
   const OPEN   = ['A8','A9','A10','B7','B8','B9','B10','C7','C8','C9','D2','F3','G2','G3'];
-  const GKEYS  = ['direct_report','peer','supervisor','internal_partner'];
+  const GKEYS  = ['direct_report','peer','supervisor','internal_partner','board'];
 
   // Normalize DB relationship values to GKEYS — DB may store title-case ("Peer", "Direct Report")
   // or legacy values ("Manager"). Match case-insensitively, then map to snake_case keys.
@@ -1552,9 +1552,15 @@ function buildRaterGroupData(responses, allRaters) {
     if (n === 'manager') return 'supervisor';     // legacy alias
     if (GKEYS.includes(n)) return n;
     // Current taxonomy (leader page, coach bulk import, Excel template):
-    // map onto the four report groups; everything else has no group bucket
+    // map onto the report groups; everything else has no group bucket
     // (still counted in All Others via the fallback below).
     const s = n.replace(/[^a-z]/g, '');
+    // Board FIRST — a board member is never a supervisor, even when their title
+    // contains "owner"/"chair". Board is a confidential, aggregate-only group:
+    // it is never attributed and, like every other group, never reported under
+    // MIN_N. (Before this, "Board Member" fell through to null and was silently
+    // blended into Other Colleagues — protected by accident, not by design.)
+    if (s.includes('board') || s.includes('trustee')) return 'board';
     if (s.includes('skip') || s.includes('indirect')) return 'direct_report';
     if (s.includes('superv') || s.includes('manager') || s.includes('boss') || s.includes('owner')) return 'supervisor';
     if (s.includes('internal')) return 'internal_partner';
@@ -1571,6 +1577,7 @@ function buildRaterGroupData(responses, allRaters) {
     peer:             mkBucket(),
     supervisor:       mkBucket(),
     internal_partner: mkBucket(),
+    board:            mkBucket(),
     self:             mkBucket(),
     all_others:       mkBucket(),
     // Uncategorized non-self raters ("Other", "Driver", any unmapped label) — surfaced
@@ -1616,7 +1623,7 @@ function buildRaterGroupData(responses, allRaters) {
 
   // Rater counts (n) come from the completed-raters list, not from response
   // rows — anonymous rows carry no rater identity to count distinctly.
-  const completedCounts = { direct_report: 0, peer: 0, supervisor: 0, internal_partner: 0, self: 0, all_others: 0, other_colleagues: 0 };
+  const completedCounts = { direct_report: 0, peer: 0, supervisor: 0, internal_partner: 0, board: 0, self: 0, all_others: 0, other_colleagues: 0 };
   for (const r of allRaters) {
     const k = r.is_self ? 'self' : normalizeRel(r.relationship);
     if (k) completedCounts[k]++;
@@ -1626,8 +1633,8 @@ function buildRaterGroupData(responses, allRaters) {
 
   const GROUP_LABELS = {
     direct_report: 'Direct Reports', peer: 'Peers', supervisor: 'Supervisors',
-    internal_partner: 'Internal Partners', self: 'Self', all_others: 'All Others',
-    other_colleagues: 'Other Colleagues',
+    internal_partner: 'Internal Partners', board: 'Board Members',
+    self: 'Self', all_others: 'All Others', other_colleagues: 'Other Colleagues',
   };
 
   const result = {};
@@ -1650,21 +1657,147 @@ function buildRaterGroupData(responses, allRaters) {
       benchAvg:        avg(['F1','F2'].map(c => avgScores[c]).filter(s => s != null)),
       g1Avg:           avgScores['G1'],
       g2Avg:           avgScores['G2'],
+      suppressed:      false,
+      suppressReason:  null,
     };
   }
+
+  applyMinNSuppression(result);
   return result;
+}
+
+// ── Confidentiality: minimum-n suppression ──────────────────────────────────
+// THE STANDARD (see Knowledge/GPS-Frameworks/Rater Confidentiality Standard):
+//
+//   1. A group is only reportable when at least MIN_N of its raters responded.
+//      Below that it gets NO row, NO label, NO n, NO scores, NO verbatims.
+//      Its scores still flow into the All Others average — nothing is deleted,
+//      it just stops being separately countable.
+//
+//      This is not only a confidentiality rule. "Peers rated you 4.2," drawn
+//      from one of three peers, is a FALSE STATEMENT about that group. One
+//      person is not a group's view. The floor protects the validity of the
+//      finding as much as it protects the rater.
+//
+//   2. SUPERVISOR IS EXEMPT. The supervisor is the one rater type we do not
+//      promise confidentiality to — their view is meant to be attributable and
+//      carries decision weight. They report at any n, including n=1. The
+//      supervisor consent screen says so explicitly before they answer.
+//
+//   3. COMPLEMENTARY SUPPRESSION. Suppressing a group is not enough on its own.
+//      If every displayed group average is shown next to the overall average,
+//      the average of whatever is LEFT can be recovered by subtraction. If that
+//      residual is 1 or 2 people, we just leaked them with arithmetic. So we
+//      keep suppressing the smallest displayed group until the residual is
+//      either 0 (nothing is hidden) or >= MIN_N (safely anonymous).
+//
+const MIN_N = 3;
+
+function applyMinNSuppression(result) {
+  // Groups that can be withheld. Supervisor is exempt by design; self is the
+  // leader's own data; all_others is the pool that absorbs everyone.
+  const NAMED = ['direct_report', 'peer', 'internal_partner', 'board', 'other_colleagues'];
+  const POOL  = 'all_others';
+
+  const withheld = [];
+  const orphanedText = new Set();   // verbatims belonging to suppressed groups
+
+  const suppress = (key, reason) => {
+    const g = result[key];
+    if (!g || g.suppressed) return;
+    // Remember this group's verbatims before we drop them. The All Others bucket
+    // also accumulated a copy of every one of them, and a verbatim carries its
+    // author's vantage point in the WORDS — re-labelling it "All Others" launders
+    // nothing. Nothing renders all_others verbatims today, but one future line of
+    // code would resurrect the leak. Scrub them from the pool as well.
+    for (const arr of Object.values(g.verbatims || {})) {
+      for (const t of arr) if (t) orphanedText.add(t);
+    }
+    g.suppressed     = true;
+    g.suppressReason = reason;
+    g.avgScores      = {};   // no scores
+    g.verbatims      = {};   // no verbatims — ever
+    g.trustAvg = g.proactivityAvg = g.productivityAvg = null;
+    g.tp3Index = g.impactAvg = g.benchAvg = g.g1Avg = g.g2Avg = null;
+  };
+
+  // 1. Primary suppression — any named group that responded but fell under MIN_N.
+  //    (n === 0 means nobody responded; there is nothing to withhold.)
+  for (const k of NAMED) {
+    const n = result[k]?.n || 0;
+    if (n === 0 || n >= MIN_N) continue;
+    suppress(k, `Only ${n} of this group responded. A group needs at least ${MIN_N} responses before it can be reported separately.`);
+    withheld.push({ key: k, label: result[k].label, n, reason: 'below_minimum' });
+  }
+
+  // 2. Complementary suppression — close the subtraction hole.
+  const poolN     = result[POOL]?.n || 0;
+  const shownKeys = () => NAMED.filter(k => !result[k].suppressed && (result[k].n || 0) > 0);
+  const shownN    = () => (result.supervisor?.n || 0) + shownKeys().reduce((s, k) => s + (result[k].n || 0), 0);
+
+  let residual = poolN - shownN();
+  for (let guard = 0; guard < NAMED.length && residual > 0 && residual < MIN_N; guard++) {
+    const smallest = shownKeys().sort((a, b) => (result[a].n || 0) - (result[b].n || 0))[0];
+    if (!smallest) break;
+    const n = result[smallest].n;
+    suppress(smallest, `Withheld to protect the ${residual} rater${residual === 1 ? '' : 's'} in the suppressed groups. If this group were shown, their scores could be recovered by subtracting it from the overall average.`);
+    withheld.push({ key: smallest, label: result[smallest].label, n, reason: 'residual_protection' });
+    residual = poolN - shownN();
+  }
+
+  // 3. If the confidential pool itself (everyone except the supervisor) is under
+  //    MIN_N, there is no safe aggregate to report at all. Suppress the pool and
+  //    let the coach gate block the report.
+  const confidentialN = poolN - (result.supervisor?.n || 0);
+  if (confidentialN > 0 && confidentialN < MIN_N) {
+    suppress(POOL, `Only ${confidentialN} confidential rater${confidentialN === 1 ? '' : 's'} responded in total — fewer than the ${MIN_N} required for any aggregate to be anonymous.`);
+  }
+
+  // Scrub suppressed groups' verbatims out of the All Others pool. Their SCORES
+  // stay in the pool average (that is the whole point — nothing is deleted, it
+  // just stops being separately countable). Their WORDS do not, because words
+  // identify their author no matter which bucket they are filed under.
+  if (orphanedText.size && result[POOL]?.verbatims) {
+    for (const code of Object.keys(result[POOL].verbatims)) {
+      result[POOL].verbatims[code] = result[POOL].verbatims[code].filter(t => !orphanedText.has(t));
+    }
+  }
+
+  result._confidentiality = {
+    minN:             MIN_N,
+    poolN,
+    confidentialN,
+    residual,                                   // raters folded into All Others only
+    supervisorReported: (result.supervisor?.n || 0) > 0,
+    withheld,
+    poolSuppressed:   !!result[POOL]?.suppressed,
+    // The report can still be generated — but the coach must acknowledge what is
+    // being withheld first. Acknowledging does NOT unsuppress anything.
+    requiresAck:      withheld.length > 0 || !!result[POOL]?.suppressed,
+  };
 }
 
 // ── Format per-group data for the Claude prompt ──────────────────────────────
 function formatRaterGroupDataForPrompt(gd, diag) {
-  const GRPS = [
+  // Only groups that survived min-n suppression are ever shown to the model.
+  // A suppressed group has no column, no count, and no verbatims — the model
+  // cannot leak what it was never given.
+  const ALL_GRPS = [
     ['direct_report', 'DR'],
     ['peer', 'Peer'],
     ['supervisor', 'Supr'],
     ['internal_partner', 'IntP'],
+    ['board', 'Board'],
+    ['other_colleagues', 'Other'],
     ['self', 'Self'],
     ['all_others', 'All-Oth'],
   ];
+  const GRPS = ALL_GRPS.filter(([g]) => {
+    const grp = gd[g];
+    if (!grp || grp.suppressed) return false;
+    if (g === 'self') return true;
+    return (grp.n || 0) > 0;
+  });
   const f = v => (v != null ? v.toFixed(2) : 'n/a');
   const row = (name, key) => {
     const vals = GRPS.map(([g]) => f(gd[g]?.[key]).padStart(5)).join(' | ');
@@ -1672,8 +1805,26 @@ function formatRaterGroupDataForPrompt(gd, diag) {
   };
 
   const lines = [];
+
+  // ── Confidentiality preamble — must come FIRST so the model never tries to
+  //    describe, count, or apologize for a group it cannot see. Saying "we only
+  //    heard from one peer" would defeat the entire suppression.
+  const conf = gd._confidentiality;
+  if (conf && (conf.withheld?.length || conf.poolSuppressed)) {
+    lines.push('=== CONFIDENTIALITY — READ BEFORE ANYTHING ELSE ===');
+    lines.push(`One or more rater groups did not reach the minimum of ${conf.minN} respondents. They have been REMOVED from the data below entirely.`);
+    lines.push('Their scores are still inside the All Others averages. They have no column, no count, no scores, and no verbatims of their own.');
+    lines.push('HARD RULES — a violation of any one of these makes the report unusable:');
+    lines.push('  1. Write the report using ONLY the rater groups that appear in the table below.');
+    lines.push('  2. NEVER mention, name, count, imply, apologize for, or speculate about any group that is absent.');
+    lines.push('  3. NEVER write "no peer data," "only one peer responded," "we did not hear from," "response rates were low," or anything equivalent. Absence is not a finding — do not narrate it.');
+    lines.push('  4. NEVER attribute a quote or a theme to a group that is not in the table.');
+    lines.push('  5. Do not infer a missing group\'s view from the gap between a shown group and All Others.');
+    lines.push('');
+  }
+
   lines.push('=== TP3 SCORES BY RATER GROUP (scale 1-5 unless noted) ===');
-  lines.push(`\n${'Dimension'.padEnd(22)}| ${'  DR'.padStart(5)} | ${'Peer'.padStart(5)} | ${'Supr'.padStart(5)} | ${'IntP'.padStart(5)} | ${'Self'.padStart(5)} | ${'All-Oth'.padStart(7)}`);
+  lines.push(`\n${'Dimension'.padEnd(22)}| ${GRPS.map(([, l]) => l.padStart(5)).join(' | ')}`);
   lines.push('-'.repeat(70));
   lines.push(row('Trust (A1-A7)', 'trustAvg'));
   lines.push(row('Proactivity (B1-B6)', 'proactivityAvg'));
@@ -1703,7 +1854,7 @@ function formatRaterGroupDataForPrompt(gd, diag) {
       const qText = QUESTIONS[c] || (c === 'G1' ? diag.custom_g1_question : c === 'G2' ? diag.custom_g2_question : c === 'G3' ? diag.custom_g3_question : null) || c;
       const vals = GRPS.map(([g]) => f(gd[g]?.avgScores?.[c]).padStart(5)).join(' | ');
       lines.push(`  ${c}: ${qText.slice(0, 65)}${qText.length > 65 ? '…' : ''}`);
-      lines.push(`     → ${vals}  (DR | Peer | Supr | IntP | Self | All-Oth)`);
+      lines.push(`     → ${vals}  (${GRPS.map(([, l]) => l).join(' | ')})`);
     }
   }
 
@@ -1990,6 +2141,24 @@ async function handleGenerateReport(req, res) {
     // Build per-group data for full report (Option B)
     const groupData = buildRaterGroupData(responses, allRaters);
 
+    // ── Confidentiality gate ──────────────────────────────────────────────
+    // If any rater group fell under the minimum, the coach has to see what is
+    // being withheld BEFORE a report is generated. Acknowledging does not
+    // unsuppress anything — the data stays out either way. The coach is
+    // acknowledging the loss, and choosing between generating without those
+    // groups, chasing the outstanding raters, or extending the survey.
+    // Gate runs before the Claude call so a blocked request costs nothing.
+    const conf = groupData._confidentiality;
+    if (conf?.requiresAck && !(req.body && req.body.confidentiality_ack === true)) {
+      return res.status(409).json({
+        error: 'confidentiality_review_required',
+        message: conf.poolSuppressed
+          ? `Only ${conf.confidentialN} confidential rater${conf.confidentialN === 1 ? '' : 's'} responded. That is below the minimum of ${conf.minN}, so no group and no aggregate can be reported without identifying them. Chase the outstanding raters or extend the survey.`
+          : `${conf.withheld.length} rater group${conf.withheld.length === 1 ? '' : 's'} did not reach the ${conf.minN}-response minimum and will be withheld from this report.`,
+        confidentiality: conf,
+      });
+    }
+
     // Also compute aggregate scores (non-self only) for scores_json backward compat
     const raterMetaMap = new Map(allRaters.map(r => [r.id, r]));
     const nonSelfResponses = responses.filter(r => !raterMetaMap.get(r.rater_id)?.is_self);
@@ -2079,7 +2248,16 @@ Write the complete 14-Day Executive Leadership Diagnostic Report for ${diag.clie
     const draftRes = await sb('/rest/v1/diagnostic_report_drafts', 'POST', {
       diagnostic_id,
       version:         nextVersion,
-      content_json:    { report_format: 'html_v2', generated_with_model: CLAUDE_REPORT_MODEL, rater_groups_used: Object.fromEntries(Object.entries(groupData).map(([k,v]) => [k, v.n])) },
+      content_json:    {
+        report_format: 'html_v2',
+        generated_with_model: CLAUDE_REPORT_MODEL,
+        rater_groups_used: Object.fromEntries(
+          Object.entries(groupData).filter(([k]) => !k.startsWith('_')).map(([k, v]) => [k, v.n])
+        ),
+        // Coach-facing audit trail of what was withheld and why. Never rendered to
+        // the leader or the sponsor — this lives here so the decision is on record.
+        confidentiality: groupData._confidentiality || null,
+      },
       raw_markdown:    reportHtml,
       prompt_snapshot: userPrompt.slice(0, 3000),
       scores_json: {
@@ -2093,9 +2271,13 @@ Write the complete 14-Day Executive Leadership Diagnostic Report for ${diag.clie
         g2:           scores.g2Score,
         rater_count:  scores.raterCount,
         per_question: scores.perQuestion,
+        // by_group is the blob that reaches the LEADER (results-visual.js), the
+        // COACH (coach.html) and the SPONSOR (decision-room.html via sponsor-data.js).
+        // Suppressed groups are dropped here, at the single point they all read from,
+        // so a group under MIN_N cannot surface on any of those surfaces.
         by_group: Object.fromEntries(
           Object.entries(groupData)
-            .filter(([k]) => k !== 'all_others')
+            .filter(([k, v]) => !k.startsWith('_') && k !== 'all_others' && !v.suppressed)
             .map(([k, v]) => [k, { n: v.n, trust: v.trustAvg, proactivity: v.proactivityAvg, productivity: v.productivityAvg, tp3: v.tp3Index, bench: v.benchAvg }])
         ),
       },
@@ -2128,6 +2310,7 @@ Write the complete 14-Day Executive Leadership Diagnostic Report for ${diag.clie
         bench:        scores.benchScore,
         rater_count:  scores.raterCount,
       },
+      confidentiality: groupData._confidentiality || null,   // coach-facing only
       generated_at: now,
     });
 
