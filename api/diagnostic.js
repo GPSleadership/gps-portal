@@ -524,6 +524,7 @@ export default async function handler(req, res) {
     case 'generate-g2-question': return handleGenerateG2Question(req, res);
     case 'generate-report':      return handleGenerateReport(req, res);
     case 'save-rater-group-labels': return handleSaveRaterGroupLabels(req, res);
+    case 'extend-survey':        return handleExtendSurvey(req, res);
     case 'import-survey-data':   return handleImportSurveyData(req, res);
     case 'generate-team-report': return handleGenerateTeamReport(req, res);
     case 'finalize-report':      return handleFinalizeReport(req, res);
@@ -887,8 +888,18 @@ async function handleSendScheduled(req, res) {
   // promises ("follows automatically when the survey window ends") — previously it
   // never happened, so surveys sat open past their date. Runs every 15 min via this
   // cron. The status=eq.survey_open guard on the PATCH makes it safe + idempotent.
+  //
+  // TIMEZONE (fixed 2026-07-13): this used the UTC date. Midnight UTC is 8:00 PM ET,
+  // so every survey closed at 8pm Eastern on its close date and raters silently lost
+  // the last four hours of the day they were promised. A JMAA chief was locked out
+  // mid-evening on his close date because of it.
+  //
+  // GPS surveys close at 11:59 PM EASTERN on close_date. Comparing against the
+  // Eastern date means the first tick after midnight ET is the one that closes it —
+  // which is exactly 11:59 PM ET on the stated day. 'en-CA' yields YYYY-MM-DD, the
+  // format PostgREST wants. Handles EST/EDT automatically.
   try {
-    const todayStr = nowISO.split('T')[0];
+    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
     const ocRes = await sb(`/rest/v1/diagnostics?status=eq.survey_open&close_date=lt.${todayStr}&select=id,client_name`);
     const overdue = ocRes.ok ? (await ocRes.json() || []) : [];
     for (const od of overdue) {
@@ -1532,6 +1543,64 @@ function formatVerbatimsForPrompt(verbatims) {
     if (quotes.length > 0) { lines.push(`\n${s.label}:`); lines.push(...quotes); }
   }
   return lines.length > 0 ? lines.join('\n') : '\n(No verbatim responses available)';
+}
+
+// ── Extend / reopen a survey (coach only) ───────────────────────────────────
+// Sets a new close_date and, if the survey has already closed, reopens it.
+// Surveys close at 11:59 PM EASTERN on close_date (see the auto-close block).
+//
+// Why this exists: a survey that closed a few hours early — or a rater who needs
+// one more day — used to require a hand-written database update. That is not a
+// thing a coach should have to ask an engineer for at 8pm.
+async function handleExtendSurvey(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!verifyCoachSession(req.body?.session)) return res.status(401).json({ error: 'Unauthorized' });
+
+  const diagnostic_id = req.body?.diagnostic_id;
+  const close_date    = req.body?.close_date;    // 'YYYY-MM-DD', Eastern
+  if (!diagnostic_id) return res.status(400).json({ error: 'diagnostic_id is required' });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(close_date || ''))) {
+    return res.status(400).json({ error: 'close_date must be a date (YYYY-MM-DD).' });
+  }
+
+  // The new close date has to be today or later in EASTERN time — the same clock the
+  // auto-close runs on. Validating against UTC here would reject a perfectly valid
+  // "today" for four hours every evening, which is the exact bug this ships alongside.
+  const todayET = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  if (close_date < todayET) {
+    return res.status(400).json({ error: `That date has already passed in Eastern time (today is ${todayET}). Pick today or later.` });
+  }
+
+  try {
+    const dr = await sb(`/rest/v1/diagnostics?id=eq.${encodeURIComponent(diagnostic_id)}&select=id,client_name,status,close_date,survey_closed_at,report_generated_at,report_finalized_at&limit=1`);
+    const d  = (dr.ok ? await dr.json() : [])[0];
+    if (!d) return res.status(404).json({ error: 'Diagnostic not found' });
+
+    // Hard stop: the leader already has their report. Letting new answers in after
+    // the fact would silently change the numbers underneath a document they have read.
+    if (d.report_finalized_at) {
+      return res.status(409).json({ error: 'This report has already been finalized and sent. Reopening the survey now would change the numbers underneath a report the leader has already read. Start a new diagnostic instead.' });
+    }
+
+    const wasClosed = d.status === 'survey_closed' || !!d.survey_closed_at;
+    const patch = { close_date, updated_at: new Date().toISOString() };
+    if (wasClosed) { patch.status = 'survey_open'; patch.survey_closed_at = null; }
+
+    const r = await sb(`/rest/v1/diagnostics?id=eq.${encodeURIComponent(diagnostic_id)}`, 'PATCH', patch, { Prefer: 'return=minimal' });
+    if (!r.ok) throw new Error(`Update failed (HTTP ${r.status}): ${(await r.text()).slice(0, 200)}`);
+
+    return res.status(200).json({
+      ok: true,
+      reopened: wasClosed,
+      close_date,
+      previous_close_date: d.close_date,
+      // A draft built before the extension is now stale — new responses are not in it.
+      stale_draft_warning: !!d.report_generated_at,
+    });
+  } catch (err) {
+    console.error('[diagnostic/extend-survey] error:', err);
+    return res.status(500).json({ error: err.message });
+  }
 }
 
 // ── Save per-diagnostic rater group labels + note (coach only) ───────────────

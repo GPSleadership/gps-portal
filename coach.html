@@ -8575,6 +8575,27 @@ function renderRatersTab() {
         <button class="dbtn dbtn-outline dbtn-sm" style="color:var(--d-red2);border-color:var(--d-red2);" onclick="cancelScheduledInvites()">Cancel</button>` : ''}
       ${invitesSent ? `<span style="font-size:12px;color:var(--d-green);">✓ Invites sent ${diagFormatDate(d.invites_sent_at)}</span>` : ''}
     </div>
+    ${(() => {
+      // Survey window — visible at a glance, and changeable without asking anyone.
+      // Surveys close at 11:59 PM EASTERN on the close date.
+      if (!d.close_date && d.status !== 'survey_closed') return '';
+      const closed = d.status === 'survey_closed' || !!d.survey_closed_at;
+      if (d.report_finalized_at) return '';   // report is out; window is not reopenable
+      const pretty = d.close_date
+        ? new Date(d.close_date + 'T12:00:00').toLocaleDateString('en-US', { weekday:'short', month:'long', day:'numeric', year:'numeric' })
+        : 'not set';
+      return '<div style="margin-top:12px;padding:10px 12px;border-radius:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;'
+        + (closed ? 'background:#fef3c7;border:1px solid #fcd34d;' : 'background:#f0f7ff;border:1px solid #bdd8f5;') + '">'
+        + '<div style="font-size:12px;color:var(--d-dark);flex:1;min-width:240px;">'
+        +   (closed
+              ? '<strong style="color:#92400e;">Survey is closed.</strong> Raters can no longer submit.'
+              : '<strong>Survey is open.</strong> Closes <strong>' + pretty + '</strong> at 11:59 PM ET.')
+        + '</div>'
+        + '<button class="dbtn dbtn-outline dbtn-sm" onclick="openExtendSurveyModal()">'
+        +   (closed ? '↻ Reopen survey' : '📅 Change close date')
+        + '</button>'
+        + '</div>';
+    })()}
   </div>
   ${!d.self_assessment_completed_at ? `<div class="dalert dalert-amber"><span class="dalert-icon">🔒</span>
     <div>Invites locked until leader completes self-assessment. <span style="font-size:12px;color:var(--d-mid);">You can still add raters to the list now.</span></div></div>` : ''}
@@ -9770,6 +9791,99 @@ async function generateG1() {
     alert('Error generating question: ' + e.message + '\n\nIf this keeps happening, reload the page — the question may have generated anyway.');
     if (btn) { btn.disabled = false; btn.textContent = DIAG_SEL.custom_g1_question ? `Regenerate (${remaining} left) →` : 'Generate Now →'; }
   }
+}
+
+// ── Extend / reopen the survey window ───────────────────────────────────────
+// Surveys close at 11:59 PM EASTERN on their close date. Reopening a survey that
+// closed early, or giving a straggler one more day, should never require a
+// database edit.
+function openExtendSurveyModal() {
+  const d = DIAG_SEL;
+  if (!d) return;
+  const closed = d.status === 'survey_closed' || !!d.survey_closed_at;
+
+  // "Today" in EASTERN — the same clock the auto-close runs on. Using the browser's
+  // local date here would offer a date the server then rejects.
+  const todayET = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const plusDays = (n) => {
+    const base = new Date(todayET + 'T12:00:00');
+    base.setDate(base.getDate() + n);
+    return base.toLocaleDateString('en-CA');
+  };
+  const pretty = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
+
+  const ov = document.createElement('div');
+  ov.className = 'modal-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;';
+  ov.innerHTML =
+    '<div style="background:#fff;border-radius:12px;max-width:520px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.25);">'
+    + '<div style="padding:20px 24px;border-bottom:1px solid #e2e8f0;">'
+    +   '<div style="font-size:19px;font-weight:700;color:#0f172a;">' + (closed ? 'Reopen the survey' : 'Change the close date') + '</div>'
+    +   '<div style="font-size:13px;color:#475569;margin-top:6px;line-height:1.55;">'
+    +     (closed
+            ? 'This survey is closed. Picking a date reopens it and raters can submit again.'
+            : 'Currently closing <strong>' + (d.close_date ? pretty(d.close_date) : 'not set') + '</strong>.')
+    +     ' Surveys always close at <strong>11:59 PM Eastern</strong> on the date you choose.'
+    +   '</div>'
+    + '</div>'
+    + '<div style="padding:20px 24px;">'
+    +   '<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">'
+    +     '<button class="es-quick" data-d="' + todayET     + '" style="padding:7px 13px;border:1px solid #cbd5e1;background:#fff;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:#334155;">End of today</button>'
+    +     '<button class="es-quick" data-d="' + plusDays(1) + '" style="padding:7px 13px;border:1px solid #cbd5e1;background:#fff;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:#334155;">Tomorrow</button>'
+    +     '<button class="es-quick" data-d="' + plusDays(3) + '" style="padding:7px 13px;border:1px solid #cbd5e1;background:#fff;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:#334155;">+3 days</button>'
+    +     '<button class="es-quick" data-d="' + plusDays(7) + '" style="padding:7px 13px;border:1px solid #cbd5e1;background:#fff;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:#334155;">+1 week</button>'
+    +   '</div>'
+    +   '<label style="display:block;font-size:12px;font-weight:700;color:#0f172a;margin-bottom:5px;">New close date</label>'
+    +   '<input type="date" id="es-date" min="' + todayET + '" value="' + (d.close_date && d.close_date >= todayET ? d.close_date : plusDays(1)) + '" style="width:100%;border:1px solid #cbd5e1;border-radius:7px;padding:9px 11px;font-size:14px;font-family:inherit;box-sizing:border-box;" />'
+    +   '<div id="es-echo" style="font-size:12px;color:#475569;margin-top:8px;"></div>'
+    +   (d.report_generated_at ? '<div style="margin-top:14px;background:#fef3c7;border:1px solid #fcd34d;border-radius:7px;padding:10px 12px;font-size:12px;color:#92400e;line-height:1.5;"><strong>A draft report already exists.</strong> Any responses that come in after this extension will not be in it. Regenerate the report once the survey closes.</div>' : '')
+    + '</div>'
+    + '<div style="padding:16px 24px;border-top:1px solid #e2e8f0;display:flex;gap:10px;justify-content:flex-end;">'
+    +   '<button id="es-cancel" style="padding:9px 16px;border:1px solid #cbd5e1;background:#fff;border-radius:7px;font-weight:600;cursor:pointer;color:#334155;">Cancel</button>'
+    +   '<button id="es-save" style="padding:9px 16px;border:0;background:#0f172a;color:#fff;border-radius:7px;font-weight:600;cursor:pointer;">' + (closed ? 'Reopen survey' : 'Save close date') + '</button>'
+    + '</div>'
+    + '</div>';
+
+  document.body.appendChild(ov);
+  const close = function() { if (ov.parentNode) ov.parentNode.removeChild(ov); };
+  ov.addEventListener('click', function(ev) { if (ev.target === ov) close(); });
+  ov.querySelector('#es-cancel').onclick = close;
+
+  const dateEl = ov.querySelector('#es-date');
+  const echoEl = ov.querySelector('#es-echo');
+  const echo = function() {
+    echoEl.innerHTML = dateEl.value
+      ? 'Raters can submit until <strong>' + escHtml(pretty(dateEl.value)) + ', 11:59 PM Eastern</strong>.'
+      : '';
+  };
+  dateEl.addEventListener('change', echo);
+  echo();
+  ov.querySelectorAll('.es-quick').forEach(function(b) {
+    b.onclick = function() { dateEl.value = b.getAttribute('data-d'); echo(); };
+  });
+
+  ov.querySelector('#es-save').onclick = async function() {
+    const btn = this;
+    const val = dateEl.value;
+    if (!val) { alert('Pick a close date.'); return; }
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+      const r = await fetch('/api/diagnostic?action=extend-survey', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ diagnostic_id: d.id, close_date: val, session: getCoachSessionToken() }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'Could not update the survey window');
+      close();
+      alert((j.reopened ? 'Survey reopened. ' : 'Close date updated. ')
+            + 'Raters can submit until ' + pretty(val) + ', 11:59 PM Eastern.'
+            + (j.stale_draft_warning ? '\n\nHeads up: the existing draft report does not include anything submitted from now on. Regenerate it after the survey closes.' : ''));
+      await refreshSelected();
+    } catch (ex) {
+      btn.disabled = false; btn.textContent = closed ? 'Reopen survey' : 'Save close date';
+      alert(ex.message);
+    }
+  };
 }
 
 // Maps a raw rater relationship to the bucket the report will put it in. Mirrors
