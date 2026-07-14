@@ -8714,14 +8714,25 @@ function renderSurveyTab() {
   const completed = nonSelf.filter(r => r.completed_at);
   const pct       = nonSelf.length > 0 ? Math.round(completed.length / nonSelf.length * 100) : 0;
   const d = DIAG_SEL;
+  // Group by the DISPLAY name (what the report will call this group), not the raw
+  // relationship. Rosa's four chiefs were entered as "Peer"; this table said "Peer"
+  // while the report said "Chiefs / Leadership Team" — the same people under two
+  // different names, on two screens, in the same product.
+  const ovL = (d && d.rater_group_labels && typeof d.rater_group_labels === 'object') ? d.rater_group_labels : {};
+  const catName = (rel) => {
+    const key = _raterBucketKey(rel);
+    const custom = (typeof ovL[key] === 'string' && ovL[key].trim()) ? ovL[key].trim() : '';
+    return custom || rel || '—';
+  };
   const cats = {};
   nonSelf.forEach(r => {
-    if (!cats[r.relationship]) cats[r.relationship] = { invited:0, done:0 };
-    cats[r.relationship].invited++;
-    if (r.completed_at) cats[r.relationship].done++;
+    const nm = catName(r.relationship);
+    if (!cats[nm]) cats[nm] = { invited:0, done:0 };
+    cats[nm].invited++;
+    if (r.completed_at) cats[nm].done++;
   });
   const catRows = Object.entries(cats).map(([rel, c]) =>
-    `<tr><td>${rel}</td><td style="text-align:center;">${c.invited}</td>
+    `<tr><td>${escHtml(rel)}</td><td style="text-align:center;">${c.invited}</td>
      <td style="text-align:center;"><span style="color:${c.done===c.invited?'var(--d-green)':'var(--d-amber)'};">${c.done}</span></td>
      <td style="text-align:center;">${Math.round(c.done/c.invited*100)}%</td></tr>`
   ).join('');
