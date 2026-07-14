@@ -52,6 +52,15 @@ Standard of record: **`Knowledge/GPS-Frameworks/Rater Confidentiality Standard.m
 | **P2-C9** | **`anonymous_feedback = false` path retains `rater_id`** while the copy promises non-attribution. Either enforce or change the copy. | S | ⏳ queued | `api/diagnostic.js` |
 | **P2-C10** | **Update the report-generation prompt** to carry Section 7 of the Confidentiality Standard (the six "never do" rules). Alex holds the prompt. | S | ⏳ **queued — Alex holds the prompt** | — |
 
+### P0 — Survey window (added 2026-07-13, found live during the JMAA close)
+
+| # | Item | Effort | Status | Evidence |
+|---|------|--------|--------|----------|
+| **P0-S1** | **Every survey closed 4 hours early.** Auto-close compared `close_date` to the **UTC** date (`api/diagnostic.js:891`); midnight UTC is 8:00 PM ET. Every rater silently lost the last 4 hours of the day they were promised. Hit the whole JMAA exec cohort at once — Rosa, Jana, Kimberly, Michael all flipped shut at `00:00:19 UTC`, and a chief (Patrick Minor) was locked out mid-evening. Now compares against the `America/New_York` date, so surveys close at **11:59 PM ET** on `close_date`. | S | ✅ Done 2026-07-13 (`feature/survey-extend`) | DB: 4 diagnostics `survey_closed_at = 2026-07-14 00:00:19Z` |
+| **P0-S2** | **No way to extend or reopen a survey without a database edit.** Added `extend-survey` (coach-gated) + a "Change close date / Reopen survey" button on the rater card. Blocks reopening a **finalized** report (would change numbers under a document the leader already read); warns when a draft exists. | S | ✅ Done 2026-07-13 | new |
+| **P1-S3** | **Extending a survey notifies nobody.** The new button silently buys raters time they never learn about. Worse on cohorts like JMAA where `suppress_auto_reminders = true` (they use the consolidated nudge, which is *scheduled*, not automatic) — so an extended survey can close a second time with the outstanding raters never having heard a word. Caught only because Alex asked. Fix: on extend/reopen, offer to (a) send the per-leader reminder, or (b) schedule/queue a consolidated nudge for the cohort. Should be one checkbox in the extend modal. | S | ⏳ queued | Live: JMAA had `scheduled_nudges` last fired 2026-07-10; nothing queued for the 7/14 close until manually inserted |
+| **P2-S4** | **Reminder state is not reset on extend.** `reminder_1_sent_at` / `reminder_2_sent_at` are one-shot guards. A survey extended past its original close will never re-send R1/R2 to anyone who already got them. Decide: clear the stamps on extend, or add a third "extended" reminder. | S | ⏳ queued | `api/diagnostic.js:3698,3717` |
+
 ### P0.5 — Structural prevention (stops the next P0)
 
 - **Deploy is a denylist → every new file is public by default.** How BOTH P0-1 and P0-3 escaped. Move to an allowlist deploy (explicit `public/` set) **or** add a pre-push check that flags any newly tracked non-HTML/JS file. Highest-leverage prevention in the audit. — M
@@ -129,6 +138,7 @@ Schema: reuse `diagnostics.self_three_year_vision`; add `clients.vision_statemen
 ### Doc hygiene
 
 - `GPS-PORTAL-ROADMAP.md` still lists **PWA as "planned"** — it's shipped. Prune roadmap/backlog so this list stays the single source of truth.
+- **P3 — `GPS_SURVIVAL_PACKAGE.md` (local) is stale against the live schema.** (added 2026-07-13, nightly-backup run) The file map (Section 3) and data model (Section 7) still describe an older table set (`assessments`, `surveys`, `coach_notes`, ~50 migrations) vs. the live system, which has 65 tables and 97+ migrations as of tonight. Not urgent — the nightly backup's Drive copy now refreshes Section 7 live from Supabase each run, so the reconstruction data itself isn't stale, only the narrative file map/architecture prose in the local working copy. Do a full rewrite of Sections 3 and 7 next time portal docs are touched.
 
 ---
 
