@@ -525,6 +525,7 @@ export default async function handler(req, res) {
     case 'generate-report':      return handleGenerateReport(req, res);
     case 'save-rater-group-labels': return handleSaveRaterGroupLabels(req, res);
     case 'extend-survey':        return handleExtendSurvey(req, res);
+    case 'report-packet':        return handleReportPacket(req, res);
     case 'import-survey-data':   return handleImportSurveyData(req, res);
     case 'generate-team-report': return handleGenerateTeamReport(req, res);
     case 'finalize-report':      return handleFinalizeReport(req, res);
@@ -1543,6 +1544,100 @@ function formatVerbatimsForPrompt(verbatims) {
     if (quotes.length > 0) { lines.push(`\n${s.label}:`); lines.push(...quotes); }
   }
   return lines.length > 0 ? lines.join('\n') : '\n(No verbatim responses available)';
+}
+
+// ── Report packet (coach only) ──────────────────────────────────────────────
+// Returns the EXACT payload the portal would hand Claude to write the report —
+// suppression already applied, sub-3 verbatims already stripped, renamed groups
+// already resolved, coach notes attached.
+//
+// WHY THIS EXISTS: the CSV/XLSX export is the COACH's raw view — every group,
+// including ones under three. If that raw file is pasted into an outside AI to draft
+// a report, that model will cheerfully write "Peers rated you 4.2" off a single peer,
+// because none of our guards exist outside the portal. This packet is the safe thing
+// to paste: it is built by the same functions, so it cannot drift from what the portal
+// itself would send, and a group that was withheld here is simply not in the file.
+async function handleReportPacket(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!verifyCoachSession(req.body?.session)) return res.status(401).json({ error: 'Unauthorized' });
+
+  const diagnostic_id = req.body?.diagnostic_id;
+  if (!diagnostic_id) return res.status(400).json({ error: 'diagnostic_id is required' });
+
+  try {
+    const dr = await sb(`/rest/v1/diagnostics?id=eq.${encodeURIComponent(diagnostic_id)}&select=id,client_id,client_name,client_title,client_org,close_date,tier,custom_g1_question,custom_g2_question,custom_g3_question,self_three_year_vision,self_future_self_capabilities,self_immediate_successor_view,self_successor_candidates,self_successor_development_actions,intake_notes,coaching_notes,interview_notes,interview_notes_json,impact_scale,rater_group_labels,rater_group_note&limit=1`);
+    const diag = (dr.ok ? await dr.json() : [])[0];
+    if (!diag) return res.status(404).json({ error: 'Diagnostic not found' });
+
+    const rr = await sb(`/rest/v1/diagnostic_raters?diagnostic_id=eq.${encodeURIComponent(diagnostic_id)}&completed_at=not.is.null&select=id,relationship,is_self`);
+    const allRaters = rr.ok ? await rr.json() : [];
+    if (!Array.isArray(allRaters) || !allRaters.length) return res.status(400).json({ error: 'No completed responses yet.' });
+
+    const completedIds = new Set(allRaters.map(r => r.id));
+    const pr = await sb(`/rest/v1/diagnostic_responses?diagnostic_id=eq.${encodeURIComponent(diagnostic_id)}&select=rater_id,question_code,score,text_response,rater_relationship`);
+    const allRows = pr.ok ? await pr.json() : [];
+    const responses = (allRows || []).filter(r => r.rater_id === null || completedIds.has(r.rater_id));
+    if (!responses.length) return res.status(400).json({ error: 'No responses found.' });
+
+    // Same builder the report uses. Same suppression. No second implementation.
+    const groupData = buildRaterGroupData(responses, allRaters, diag.rater_group_labels);
+    const conf = groupData._confidentiality;
+
+    const interviewEntries = Array.isArray(diag.interview_notes_json) ? diag.interview_notes_json : [];
+    const interviewsText = interviewEntries.map((iv, i) => {
+      const nm = (iv && iv.name) ? String(iv.name).trim() : `Interview ${i + 1}`;
+      const dt = (iv && iv.date) ? ` (${iv.date})` : '';
+      const nt = (iv && iv.notes) ? String(iv.notes).trim() : '';
+      return nt ? `--- 1:1 Interview: ${nm}${dt} ---\n${nt}` : '';
+    }).filter(Boolean).join('\n\n');
+
+    const coachNotesSection = (diag.intake_notes || diag.coaching_notes || diag.interview_notes || interviewsText)
+      ? `\n=== COACH NOTES (CONFIDENTIAL — FOR REPORT CONTEXT ONLY) ===\n`
+        + `${diag.intake_notes ? `Kick-off / Intake Notes:\n${diag.intake_notes}\n` : ''}`
+        + `${diag.coaching_notes ? `Coaching Notes:\n${diag.coaching_notes}\n` : ''}`
+        + `${diag.interview_notes ? `General Interview Notes:\n${diag.interview_notes}\n` : ''}`
+        + `${interviewsText ? `\n1:1 INTERVIEW WRITE-UPS:\n${interviewsText}\n` : ''}`
+      : '';
+
+    const withheldNote = (conf && (conf.demoted?.length || conf.excluded?.length))
+      ? `\n=== NOTE TO WHOEVER USES THIS FILE ===\n`
+        + `Rater groups that did not reach ${conf.minN} responses have ALREADY been removed from the data below.\n`
+        + `Do not ask for them, infer them, or mention their absence. Write the report using only the groups present.\n`
+        + (conf.demoted?.length ? `Folded into Other Colleagues (scores only, no comments): ${conf.demoted.map(d => `${d.label} (${d.n})`).join(', ')}\n` : '')
+        + (conf.excluded?.length ? `Left out entirely: ${conf.excluded.map(e => `${e.label} (${e.n})`).join(', ')}\n` : '')
+      : '';
+
+    const packet = `GPS LEADERSHIP — 14-DAY EXECUTIVE LEADERSHIP DIAGNOSTIC
+REPORT PACKET  ·  CONFIDENTIAL  ·  Generated ${new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })} ET
+
+This file contains everything needed to write the report, and NOTHING that would
+identify an individual rater. Confidentiality suppression has already been applied.
+${withheldNote}
+LEADER: ${diag.client_name}${diag.client_title ? `, ${diag.client_title}` : ''}${diag.client_org ? ` — ${diag.client_org}` : ''}
+DIAGNOSTIC TIER: ${diag.tier || 'standard'}
+${diag.custom_g1_question ? `\nCUSTOM G1 QUESTION (Vision Alignment): "${diag.custom_g1_question}"` : ''}${diag.custom_g2_question ? `\nCUSTOM G2 QUESTION: "${diag.custom_g2_question}"` : ''}${diag.custom_g3_question ? `\nCUSTOM G3 QUESTION: "${diag.custom_g3_question}"` : ''}
+
+${formatRaterGroupDataForPrompt(groupData, diag)}
+
+=== SELF-ASSESSMENT — SUCCESSION & FUTURE SELF (LEADER ONLY, CONFIDENTIAL) ===
+3-Year Vision: ${diag.self_three_year_vision || 'Not provided'}
+Future self / capabilities needed: ${diag.self_future_self_capabilities || 'Not provided'}
+View of immediate successor readiness: ${diag.self_immediate_successor_view || 'Not provided'}
+Successor candidates identified: ${diag.self_successor_candidates || 'Not provided'}
+Successor development actions underway: ${diag.self_successor_development_actions || 'Not provided'}
+${coachNotesSection}
+=== END OF PACKET ===`.trim();
+
+    return res.status(200).json({
+      ok: true,
+      leader: diag.client_name,
+      packet,
+      confidentiality: conf || null,
+    });
+  } catch (err) {
+    console.error('[diagnostic/report-packet] error:', err);
+    return res.status(500).json({ error: err.message });
+  }
 }
 
 // ── Extend / reopen a survey (coach only) ───────────────────────────────────

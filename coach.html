@@ -8788,8 +8788,11 @@ function renderSurveyTab() {
         <span style="font-size:11px;font-weight:400;color:var(--d-mid);margin-left:8px;">Never shown to the leader.</span>
       </span>
       <div style="display:inline-flex;gap:6px;">
-        <button class="dbtn dbtn-outline dbtn-sm" onclick="exportDiagData('csv')"   title="Download as CSV — for other tools / AI import">⬇ CSV</button>
-        <button class="dbtn dbtn-outline dbtn-sm" onclick="exportDiagData('excel')" title="Download as Excel — for pivot tables and scoring analysis">⬇ Excel</button>
+        <button class="dbtn dbtn-primary dbtn-sm" onclick="downloadReportPacket('pdf')" title="One PDF with everything an AI needs to write the report — confidentiality suppression already applied. This is the file to paste into an outside AI.">⬇ Report Packet (PDF)</button>
+        <button class="dbtn dbtn-outline dbtn-sm" onclick="downloadReportPacket('txt')" title="Same packet as plain text. Better for an AI than a PDF — no lossy extraction step.">⬇ .txt</button>
+        <span style="width:1px;background:var(--d-border);margin:0 3px;"></span>
+        <button class="dbtn dbtn-outline dbtn-sm" onclick="exportDiagData('csv')"   title="RAW coach data — every group, including ones under the 3-response minimum. For your own analysis. Do NOT paste this into an outside AI.">⬇ CSV</button>
+        <button class="dbtn dbtn-outline dbtn-sm" onclick="exportDiagData('excel')" title="RAW coach data — every group, including ones under the 3-response minimum. For pivots and scoring. Do NOT paste this into an outside AI.">⬇ Excel</button>
       </div>
     </div>
     <table>
@@ -11425,6 +11428,84 @@ async function saveRaterEmail(id) {
   const rater = DIAG_RATERS.find(r => r.id === id);
   if (rater) { rater.email = newEmail; rater.email_bounced = false; }
   renderRatersTab();
+}
+
+// ── Report Packet (PDF / txt) ────────────────────────────────────────────────
+// The file to hand an outside AI. It is built by the SAME server functions the portal
+// uses to write the report, so it cannot drift: suppression already applied, sub-3
+// verbatims already stripped, renamed groups already resolved, coach notes attached.
+//
+// The CSV/XLSX exports are the RAW coach view — every group, including ones under the
+// minimum. Pasting that into an outside model would let it write "Peers rated you 4.2"
+// off a single peer, because none of our guards exist out there. Hence two clearly
+// different buttons, and this comment.
+async function downloadReportPacket(fmt) {
+  const d = DIAG_SEL;
+  if (!d) return;
+  const btn = event && event.target;
+  const label = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Building…'; }
+
+  try {
+    const r = await fetch('/api/diagnostic?action=report-packet', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ diagnostic_id: d.id, session: getCoachSessionToken() }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Could not build the packet');
+
+    const safe = (d.client_name || 'leader').replace(/[^a-z0-9]/gi, '_');
+    const date = new Date().toISOString().slice(0, 10);
+    const base = `GPS_Report_Packet_${safe}_${date}`;
+
+    if (fmt === 'txt') {
+      const blob = new Blob([j.packet], { type: 'text/plain;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = base + '.txt';
+      document.body.appendChild(a); a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    } else {
+      // PDF via the browser's own print engine. No extra library, correct pagination,
+      // and the text stays selectable so an AI can actually extract it.
+      const esc = function (s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+      const w = window.open('', '_blank');
+      if (!w) { alert('Your browser blocked the popup. Allow popups for this site, or use the .txt download.'); return; }
+      w.document.write(
+        '<!doctype html><html><head><meta charset="utf-8"><title>' + esc(base) + '</title>'
+        + '<style>'
+        + '@page { size: letter; margin: 0.6in; }'
+        + 'body { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 9.5pt; line-height: 1.45; color: #111; }'
+        + 'pre { white-space: pre-wrap; word-wrap: break-word; margin: 0; font: inherit; }'
+        + '.hdr { font-family: Georgia, serif; border-bottom: 2px solid #004369; padding-bottom: 8px; margin-bottom: 16px; }'
+        + '.hdr .t { font-size: 15pt; font-weight: 700; color: #004369; }'
+        + '.hdr .s { font-size: 9pt; color: #666; margin-top: 3px; }'
+        + '.conf { font-size: 8pt; color: #8a6d00; background: #fff8e1; border: 1px solid #ffe082; padding: 6px 9px; margin-bottom: 14px; }'
+        + '</style></head><body>'
+        + '<div class="hdr"><div class="t">14-Day Executive Leadership Diagnostic — Report Packet</div>'
+        + '<div class="s">' + esc(j.leader || d.client_name) + ' · GPS Leadership Solutions · Confidential</div></div>'
+        + '<div class="conf">Confidentiality suppression has already been applied to this file. Any rater group that did not reach the minimum is not in it. Do not add, infer, or mention groups that are absent.</div>'
+        + '<pre>' + esc(j.packet) + '</pre>'
+        + '</body></html>'
+      );
+      w.document.close();
+      w.focus();
+      setTimeout(function () { w.print(); }, 400);   // user picks "Save as PDF"
+    }
+
+    // Tell the coach exactly what was left out, so the packet is never a black box.
+    const c = j.confidentiality;
+    if (c && ((c.demoted && c.demoted.length) || (c.excluded && c.excluded.length))) {
+      const bits = [];
+      if (c.demoted && c.demoted.length)  bits.push('Folded into Other Colleagues (scores only, no comments): ' + c.demoted.map(function (x) { return x.label + ' (' + x.n + ')'; }).join(', '));
+      if (c.excluded && c.excluded.length) bits.push('Left out entirely: ' + c.excluded.map(function (x) { return x.label + ' (' + x.n + ')'; }).join(', '));
+      alert('Packet ready.\n\nConfidentiality applied — this is NOT in the file:\n\n' + bits.join('\n\n') + '\n\nEvery group that reached ' + c.minN + ' is in there in full.');
+    }
+  } catch (ex) {
+    alert('Could not build the packet: ' + ex.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+  }
 }
 
 // ── Export Diagnostic Data (CSV or Excel) ────────────────────────────────────
