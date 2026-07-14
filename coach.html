@@ -10051,22 +10051,31 @@ function showConfidentialityGate(conf, msg, onProceed) {
   ov.className = 'modal-overlay';
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;';
 
-  const blocked = !!(conf && conf.poolSuppressed);
-  const rows = (conf && conf.withheld ? conf.withheld : []).map(function(w) {
+  const blocked = false;   // a report can always be generated; groups that qualify always report
+  const reporting = (conf && conf.reporting) ? conf.reporting : [];
+  const demoted   = (conf && conf.demoted)   ? conf.demoted   : [];
+  const excluded  = (conf && conf.excluded)  ? conf.excluded  : [];
+
+  const row = function(label, n, what, colour) {
     return '<tr>'
-      + '<td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;font-weight:600;">' + escHtml(w.label) + '</td>'
-      + '<td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;text-align:center;">' + w.n + '</td>'
-      + '<td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;color:#475569;font-size:13px;">' + escHtml(w.reason === 'residual_protection' ? 'Withheld so the suppressed raters cannot be recovered by subtraction' : 'Under the ' + conf.minN + '-response minimum') + '</td>'
+      + '<td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;font-weight:600;">' + escHtml(label) + '</td>'
+      + '<td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;text-align:center;">' + n + '</td>'
+      + '<td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;color:' + colour + ';font-size:13px;">' + escHtml(what) + '</td>'
       + '</tr>';
-  }).join('');
+  };
+  const rows = reporting.map(function(g) {
+      return row(g.label, g.n, 'Reports in full — scores and comments', '#166534');
+    }).concat(demoted.map(function(d) {
+      return row(d.label, d.n, 'Under ' + conf.minN + ' — scores folded into Other Colleagues, comments not reported', '#b45309');
+    })).concat(excluded.map(function(e) {
+      return row(e.label, e.n, 'Under ' + conf.minN + ' with no group to join — left out of the report entirely', '#b91c1c');
+    })).join('');
 
   ov.innerHTML =
     '<div style="background:#fff;border-radius:12px;max-width:660px;width:100%;max-height:88vh;overflow:auto;box-shadow:0 20px 50px rgba(0,0,0,.25);">'
     + '<div style="padding:20px 24px;border-bottom:1px solid #e2e8f0;">'
     +   '<div style="font-size:12px;font-weight:700;letter-spacing:.06em;color:#b45309;text-transform:uppercase;">Confidentiality review</div>'
-    +   '<div style="font-size:19px;font-weight:700;color:#0f172a;margin-top:4px;">'
-    +     (blocked ? 'This report cannot be generated yet' : 'Some rater groups will be withheld')
-    +   '</div>'
+    +   '<div style="font-size:19px;font-weight:700;color:#0f172a;margin-top:4px;">Here is what will and will not be in this report</div>'
     + '</div>'
     + '<div style="padding:20px 24px;">'
     +   '<p style="margin:0 0 14px;color:#334155;line-height:1.55;">' + escHtml(msg || '') + '</p>'
@@ -10075,17 +10084,18 @@ function showConfidentialityGate(conf, msg, onProceed) {
           + '<thead><tr>'
           + '<th style="text-align:left;padding:8px 10px;border-bottom:2px solid #cbd5e1;font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;">Group</th>'
           + '<th style="text-align:center;padding:8px 10px;border-bottom:2px solid #cbd5e1;font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;">Responded</th>'
-          + '<th style="text-align:left;padding:8px 10px;border-bottom:2px solid #cbd5e1;font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;">Why it is withheld</th>'
+          + '<th style="text-align:left;padding:8px 10px;border-bottom:2px solid #cbd5e1;font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;">What happens to it</th>'
           + '</tr></thead><tbody>' + rows + '</tbody></table>'
         : '')
     +   '<div style="background:#f8fafc;border-left:3px solid #94a3b8;padding:12px 14px;border-radius:0 6px 6px 0;font-size:13px;color:#475569;line-height:1.6;">'
-    +     '<strong style="color:#0f172a;">What happens to their feedback.</strong> Nothing is deleted. Their scores still count inside the All Others average. What they lose is a separate row of their own, because a group of one or two is not a group — reporting it would name them, and it would tell the leader something untrue about that group.'
-    +     '<br><br><strong style="color:#0f172a;">The better move is usually to go get the responses.</strong> One or two more raters in a short group turns it back into a full section with its own scores and verbatims.'
+    +     '<strong style="color:#0f172a;">Every group that reached ' + (conf ? conf.minN : 3) + ' reports in full.</strong> A qualifying group is never sacrificed to protect anyone else — if three peers weighed in, the leader hears from her peers.'
+    +     '<br><br><strong style="color:#0f172a;">Raters under the minimum are left out of the published numbers.</strong> That is exactly what we promised them: their feedback is reported only as part of a group of at least ' + (conf ? conf.minN : 3) + '. If their group cannot reach that, leaving them out keeps the promise rather than breaking it. It also means nothing is left over for the leader to recover by subtracting the reported groups from the total.'
+    +     '<br><br><strong style="color:#0f172a;">One more response usually fixes it.</strong> Getting a short group to ' + (conf ? conf.minN : 3) + ' turns it back into a full section — scores, comments, and all.'
     +   '</div>'
     + '</div>'
     + '<div style="padding:16px 24px;border-top:1px solid #e2e8f0;display:flex;gap:10px;justify-content:flex-end;">'
     +   '<button id="cg-cancel" style="padding:9px 16px;border:1px solid #cbd5e1;background:#fff;border-radius:7px;font-weight:600;cursor:pointer;color:#334155;">Go chase the raters</button>'
-    +   (blocked ? '' : '<button id="cg-proceed" style="padding:9px 16px;border:0;background:#0f172a;color:#fff;border-radius:7px;font-weight:600;cursor:pointer;">Generate without these groups</button>')
+    +   (blocked ? '' : '<button id="cg-proceed" style="padding:9px 16px;border:0;background:#0f172a;color:#fff;border-radius:7px;font-weight:600;cursor:pointer;">Generate the report</button>')
     + '</div>'
     + '</div>';
 

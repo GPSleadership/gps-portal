@@ -1755,6 +1755,96 @@ function buildRaterGroupData(responses, allRaters, labelOverrides) {
     GROUP_LABELS[k] = custom || DEFAULT_LABELS[k];
   }
 
+  // ── Confidentiality, applied to the RAW BUCKETS before any average is computed ──
+  //
+  // THE RULE (v2 — 2026-07-13). See Knowledge/GPS-Frameworks/Rater Confidentiality Standard.
+  //
+  //   1. A group that reaches MIN_N ALWAYS reports. It is NEVER sacrificed to
+  //      protect anyone else. The whole point of a 360 is the group view; a leader
+  //      who had three peers respond must hear from her peers.
+  //
+  //   2. SUPERVISOR always reports, at any n, attributed. They are told so before
+  //      they answer.
+  //
+  //   3. A named group under MIN_N is DEMOTED into the Other Colleagues pool. Its
+  //      SCORES go with it. Its VERBATIMS DO NOT — a peer's comment reads like a
+  //      peer's comment no matter what label sits above it, so re-filing it launders
+  //      nothing.
+  //
+  //   4. If the pool still cannot reach MIN_N, it is EXCLUDED from EVERYTHING —
+  //      including the published All Others average. Nothing is left over, so there
+  //      is no residual to recover by subtraction. This is what closes the hole,
+  //      and it closes it by construction rather than by obscurity.
+  //
+  // WHY v1 WAS WRONG: it protected stragglers by suppressing the smallest reportable
+  // group. On a real client that meant sacrificing THREE peers to shield TWO
+  // stragglers — it always burned the bigger group to shield the smaller one. And
+  // hiding the pool's headcount does not help: the leader can derive it by
+  // subtracting the reported groups from the total.
+  //
+  // WHAT IT COSTS: one or two stragglers' scores do not move the published numbers.
+  // That is consistent with what we promised them — "reported only as part of a
+  // group of at least three." If their group cannot reach three, leaving them out
+  // KEEPS that promise. The coach gate names them so they can be chased.
+  const MIN_N   = 3;
+  const NAMED   = ['direct_report', 'peer', 'internal_partner', 'board'];
+  const POOL    = 'other_colleagues';
+  const emptyScores = () => Object.fromEntries(RATED.map(c => [c, []]));
+  const emptyVerbs  = () => Object.fromEntries(OPEN.map(c => [c, []]));
+  const nOf = (k) => Math.max(buckets[k].raterIds.size, completedCounts[k] || 0);
+
+  const nativePoolN = nOf(POOL);          // people natively in Other Colleagues
+  const demoted     = [];
+  const excluded    = [];
+
+  // 1. Demote every named group that fell short. Scores travel; words do not.
+  for (const k of NAMED) {
+    const n = nOf(k);
+    if (n === 0 || n >= MIN_N) continue;
+    for (const c of RATED) buckets[POOL].scores[c].push(...buckets[k].scores[c]);
+    for (const id of buckets[k].raterIds) buckets[POOL].raterIds.add(id);
+    completedCounts[POOL] += n;
+    demoted.push({ key: k, label: GROUP_LABELS[k], n });
+    buckets[k].scores    = emptyScores();
+    buckets[k].verbatims = emptyVerbs();   // verbatims are never re-labelled
+    buckets[k].raterIds  = new Set();
+    completedCounts[k]   = 0;
+  }
+
+  // 2. The pool may only quote people whose OWN group reached MIN_N. If the pool's
+  //    native membership was under three, it has no right to anyone's words —
+  //    even if demotions pushed its headcount over the line.
+  if (nativePoolN < MIN_N) buckets[POOL].verbatims = emptyVerbs();
+
+  // 3. Decide who reports. Supervisor is exempt and always does.
+  const reports = { supervisor: nOf('supervisor') > 0, self: true };
+  for (const k of NAMED) reports[k] = nOf(k) >= MIN_N;
+  reports[POOL] = nOf(POOL) >= MIN_N;
+
+  // 4. Everything that still cannot reach MIN_N is excluded outright.
+  for (const k of [...NAMED, POOL]) {
+    const n = nOf(k);
+    if (n === 0 || reports[k]) continue;
+    excluded.push({ key: k, label: GROUP_LABELS[k], n });
+    buckets[k].scores    = emptyScores();
+    buckets[k].verbatims = emptyVerbs();
+    buckets[k].raterIds  = new Set();
+    completedCounts[k]   = 0;
+  }
+
+  // 5. Rebuild All Others from the REPORTING groups only. Because the excluded
+  //    raters are not in it, (overall − reported groups) = 0. There is literally
+  //    nothing to subtract.
+  const contributing = [...NAMED, POOL, 'supervisor'].filter(k => reports[k] && nOf(k) > 0);
+  buckets.all_others = mkBucket();
+  completedCounts.all_others = 0;
+  for (const k of contributing) {
+    for (const c of RATED) buckets.all_others.scores[c].push(...buckets[k].scores[c]);
+    for (const c of OPEN)  buckets.all_others.verbatims[c].push(...buckets[k].verbatims[c]);
+    for (const id of buckets[k].raterIds) buckets.all_others.raterIds.add(id);
+    completedCounts.all_others += nOf(k);
+  }
+
   const result = {};
   for (const [key, b] of Object.entries(buckets)) {
     const avgScores = {};
@@ -1782,119 +1872,40 @@ function buildRaterGroupData(responses, allRaters, labelOverrides) {
     };
   }
 
-  applyMinNSuppression(result);
-  return result;
-}
-
-// ── Confidentiality: minimum-n suppression ──────────────────────────────────
-// THE STANDARD (see Knowledge/GPS-Frameworks/Rater Confidentiality Standard):
-//
-//   1. A group is only reportable when at least MIN_N of its raters responded.
-//      Below that it gets NO row, NO label, NO n, NO scores, NO verbatims.
-//      Its scores still flow into the All Others average — nothing is deleted,
-//      it just stops being separately countable.
-//
-//      This is not only a confidentiality rule. "Peers rated you 4.2," drawn
-//      from one of three peers, is a FALSE STATEMENT about that group. One
-//      person is not a group's view. The floor protects the validity of the
-//      finding as much as it protects the rater.
-//
-//   2. SUPERVISOR IS EXEMPT. The supervisor is the one rater type we do not
-//      promise confidentiality to — their view is meant to be attributable and
-//      carries decision weight. They report at any n, including n=1. The
-//      supervisor consent screen says so explicitly before they answer.
-//
-//   3. COMPLEMENTARY SUPPRESSION. Suppressing a group is not enough on its own.
-//      If every displayed group average is shown next to the overall average,
-//      the average of whatever is LEFT can be recovered by subtraction. If that
-//      residual is 1 or 2 people, we just leaked them with arithmetic. So we
-//      keep suppressing the smallest displayed group until the residual is
-//      either 0 (nothing is hidden) or >= MIN_N (safely anonymous).
-//
-const MIN_N = 3;
-
-function applyMinNSuppression(result) {
-  // Groups that can be withheld. Supervisor is exempt by design; self is the
-  // leader's own data; all_others is the pool that absorbs everyone.
-  const NAMED = ['direct_report', 'peer', 'internal_partner', 'board', 'other_colleagues'];
-  const POOL  = 'all_others';
-
-  const withheld = [];
-  const orphanedText = new Set();   // verbatims belonging to suppressed groups
-
-  const suppress = (key, reason) => {
+  // Mark the excluded groups so no downstream surface can render them, and record
+  // the demotions/exclusions for the coach gate.
+  const wipe = (key, reason) => {
     const g = result[key];
-    if (!g || g.suppressed) return;
-    // Remember this group's verbatims before we drop them. The All Others bucket
-    // also accumulated a copy of every one of them, and a verbatim carries its
-    // author's vantage point in the WORDS — re-labelling it "All Others" launders
-    // nothing. Nothing renders all_others verbatims today, but one future line of
-    // code would resurrect the leak. Scrub them from the pool as well.
-    for (const arr of Object.values(g.verbatims || {})) {
-      for (const t of arr) if (t) orphanedText.add(t);
-    }
+    if (!g) return;
     g.suppressed     = true;
     g.suppressReason = reason;
-    g.avgScores      = {};   // no scores
-    g.verbatims      = {};   // no verbatims — ever
+    g.avgScores      = {};
+    g.verbatims      = {};
     g.trustAvg = g.proactivityAvg = g.productivityAvg = null;
     g.tp3Index = g.impactAvg = g.benchAvg = g.g1Avg = g.g2Avg = null;
+    g.n = 0;
   };
-
-  // 1. Primary suppression — any named group that responded but fell under MIN_N.
-  //    (n === 0 means nobody responded; there is nothing to withhold.)
-  for (const k of NAMED) {
-    const n = result[k]?.n || 0;
-    if (n === 0 || n >= MIN_N) continue;
-    suppress(k, `Only ${n} of this group responded. A group needs at least ${MIN_N} responses before it can be reported separately.`);
-    withheld.push({ key: k, label: result[k].label, n, reason: 'below_minimum' });
+  for (const d of demoted) {
+    wipe(d.key, `Only ${d.n} of this group responded. Their scores were folded into ${GROUP_LABELS[POOL]}; their written comments are not reported, because a comment carries its author's vantage point no matter which group it is filed under.`);
+  }
+  for (const e of excluded) {
+    wipe(e.key, `Only ${e.n} responded, and there was no larger group to fold them into. Their feedback is left out of this report entirely — which is exactly what we promised them: reported only as part of a group of at least ${MIN_N}.`);
   }
 
-  // 2. Complementary suppression — close the subtraction hole.
-  const poolN     = result[POOL]?.n || 0;
-  const shownKeys = () => NAMED.filter(k => !result[k].suppressed && (result[k].n || 0) > 0);
-  const shownN    = () => (result.supervisor?.n || 0) + shownKeys().reduce((s, k) => s + (result[k].n || 0), 0);
-
-  let residual = poolN - shownN();
-  for (let guard = 0; guard < NAMED.length && residual > 0 && residual < MIN_N; guard++) {
-    const smallest = shownKeys().sort((a, b) => (result[a].n || 0) - (result[b].n || 0))[0];
-    if (!smallest) break;
-    const n = result[smallest].n;
-    suppress(smallest, `Withheld to protect the ${residual} rater${residual === 1 ? '' : 's'} in the suppressed groups. If this group were shown, their scores could be recovered by subtracting it from the overall average.`);
-    withheld.push({ key: smallest, label: result[smallest].label, n, reason: 'residual_protection' });
-    residual = poolN - shownN();
-  }
-
-  // 3. If the confidential pool itself (everyone except the supervisor) is under
-  //    MIN_N, there is no safe aggregate to report at all. Suppress the pool and
-  //    let the coach gate block the report.
-  const confidentialN = poolN - (result.supervisor?.n || 0);
-  if (confidentialN > 0 && confidentialN < MIN_N) {
-    suppress(POOL, `Only ${confidentialN} confidential rater${confidentialN === 1 ? '' : 's'} responded in total — fewer than the ${MIN_N} required for any aggregate to be anonymous.`);
-  }
-
-  // Scrub suppressed groups' verbatims out of the All Others pool. Their SCORES
-  // stay in the pool average (that is the whole point — nothing is deleted, it
-  // just stops being separately countable). Their WORDS do not, because words
-  // identify their author no matter which bucket they are filed under.
-  if (orphanedText.size && result[POOL]?.verbatims) {
-    for (const code of Object.keys(result[POOL].verbatims)) {
-      result[POOL].verbatims[code] = result[POOL].verbatims[code].filter(t => !orphanedText.has(t));
-    }
-  }
-
+  const publishedN = completedCounts.all_others;
   result._confidentiality = {
-    minN:             MIN_N,
-    poolN,
-    confidentialN,
-    residual,                                   // raters folded into All Others only
-    supervisorReported: (result.supervisor?.n || 0) > 0,
-    withheld,
-    poolSuppressed:   !!result[POOL]?.suppressed,
-    // The report can still be generated — but the coach must acknowledge what is
-    // being withheld first. Acknowledging does NOT unsuppress anything.
-    requiresAck:      withheld.length > 0 || !!result[POOL]?.suppressed,
+    minN:               MIN_N,
+    publishedN,                                  // respondents behind the published numbers
+    reporting:          contributing.map(k => ({ key: k, label: GROUP_LABELS[k], n: nOf(k) })),
+    demoted,                                     // scores kept (pooled), words dropped
+    excluded,                                    // left out of the report entirely
+    supervisorReported: reports.supervisor,
+    // Residual is 0 BY CONSTRUCTION: All Others is rebuilt from the reporting groups
+    // only, so subtracting them from it leaves nothing.
+    residual:           0,
+    requiresAck:        demoted.length > 0 || excluded.length > 0,
   };
+  return result;
 }
 
 // ── Format per-group data for the Claude prompt ──────────────────────────────
@@ -2302,12 +2313,29 @@ async function handleGenerateReport(req, res) {
     // groups, chasing the outstanding raters, or extending the survey.
     // Gate runs before the Claude call so a blocked request costs nothing.
     const conf = groupData._confidentiality;
+
+    // Hard stop, not a gate: if no group reached the minimum, there is nothing that
+    // can be reported without identifying someone. Acknowledging cannot fix this —
+    // only more responses can.
+    if (conf && conf.publishedN === 0) {
+      return res.status(409).json({
+        error: 'confidentiality_blocked',
+        message: `No rater group reached the ${conf.minN}-response minimum, so there is nothing that can be reported without identifying individual raters. Reopen the survey and chase the outstanding raters.`,
+        confidentiality: conf,
+        blocked: true,
+      });
+    }
+
     if (conf?.requiresAck && !(req.body && req.body.confidentiality_ack === true)) {
+      const nOut = (conf.excluded || []).reduce((s, e) => s + e.n, 0);
+      const nDem = (conf.demoted  || []).reduce((s, d) => s + d.n, 0);
+      const bits = [];
+      if (nOut) bits.push(`${nOut} rater${nOut === 1 ? "'s" : "s'"} feedback will be left out of this report entirely`);
+      if (nDem) bits.push(`${nDem} rater${nDem === 1 ? "'s" : "s'"} scores will be folded into another group, without their written comments`);
       return res.status(409).json({
         error: 'confidentiality_review_required',
-        message: conf.poolSuppressed
-          ? `Only ${conf.confidentialN} confidential rater${conf.confidentialN === 1 ? '' : 's'} responded. That is below the minimum of ${conf.minN}, so no group and no aggregate can be reported without identifying them. Chase the outstanding raters or extend the survey.`
-          : `${conf.withheld.length} rater group${conf.withheld.length === 1 ? '' : 's'} did not reach the ${conf.minN}-response minimum and will be withheld from this report.`,
+        message: bits.join(', and ') + '. Every group that reached the '
+               + conf.minN + '-response minimum still reports in full.',
         confidentiality: conf,
       });
     }
