@@ -8032,7 +8032,14 @@ function renderDiagTable() {
     const s = DIAG_RATER_STATS[d.id] || { total:0, responded:0, pct:0 };
     const daysLeft = d.close_date ? diagDaysUntil(d.close_date) : null;
     const dayColor = daysLeft === null ? '' : daysLeft <= 2 ? 'var(--d-red2)' : daysLeft <= 5 ? 'var(--d-amber)' : 'var(--d-mid)';
-    const pctColor = s.pct >= 60 ? 'var(--d-green)' : s.pct >= 40 ? 'var(--d-amber)' : 'var(--d-red2)';
+    // Colour by the COUNT of respondents, not the percentage. Percentage punishes a
+    // leader for being generous with their rater list: Rosa had 10 responses — a better
+    // report than most — and showed RED at 38%, purely because she invited 26 people.
+    // Meanwhile 9 of 11 showed green. What actually gates a valid report is 7 responses,
+    // so that is what the colour should mean. (Matches the Report Generation card, which
+    // already used done>=7.) The percentage is still shown; it just no longer drives the
+    // signal.
+    const pctColor = s.responded >= 7 ? 'var(--d-green)' : s.responded >= 3 ? 'var(--d-amber)' : 'var(--d-red2)';
     return `<tr onclick="openDiag('${d.id}')" style="cursor:pointer;">
       <td><div style="font-weight:700;font-size:13px;">${escHtml(d.client_name)}</div>
           <div style="font-size:11px;color:var(--d-mid);">${escHtml([d.client_title,d.client_org].filter(Boolean).join(' · '))}</div></td>
@@ -11427,11 +11434,50 @@ async function exportDiagData(format = 'csv') {
   if (btn) { btn.textContent = '⏳ Loading…'; btn.disabled = true; }
 
   try {
-    const responses = await cdSelect('diagnostic_responses', { eq: { diagnostic_id: DIAG_SEL.id }, select: 'rater_id,question_code,score,text_response' });
+    // rater_relationship + created_at are ESSENTIAL and were missing from this select.
+    // On an anonymous diagnostic rater_id is NULL by design, so joining to the rater
+    // record returns nothing — which is why every exported row came back with a blank
+    // Relationship and a bogus "Pending". The relationship lives on the response row
+    // itself (the snapshot taken at submit); created_at identifies the submission.
+    const responses = await cdSelect('diagnostic_responses', {
+      eq: { diagnostic_id: DIAG_SEL.id },
+      select: 'rater_id,question_code,score,text_response,rater_relationship,created_at',
+      order: { col: 'created_at', asc: true },
+    });
 
     // Build lookup maps
     const raterMap = {};
     DIAG_RATERS.forEach(r => { raterMap[r.id] = r; });
+
+    // ── Anonymous respondent key ────────────────────────────────────────────────
+    // Every submission writes all of its rows in a single transaction, so one
+    // submission == one exact created_at. That makes (relationship, created_at) a
+    // stable per-respondent key WITHOUT ever identifying who they are — so the export
+    // can say "Peer 1 / Peer 2 / Peer 3" and you can read one person's whole answer
+    // set, or pivot by group, while their name stays out of it entirely.
+    const submissionKey = (resp) => resp.rater_id != null
+      ? 'id:' + resp.rater_id
+      : 'anon:' + (resp.rater_relationship || '?') + '|' + resp.created_at;
+
+    // Report group (what the report will call them) + a per-group respondent number.
+    const groupOf = (resp) => {
+      const rater = raterMap[resp.rater_id] || {};
+      if (rater.is_self) return 'Self';
+      const rel = rater.relationship || resp.rater_relationship || '';
+      const ov  = (DIAG_SEL.rater_group_labels && typeof DIAG_SEL.rater_group_labels === 'object') ? DIAG_SEL.rater_group_labels : {};
+      const key = _raterBucketKey(rel);
+      const DEF = { direct_report:'Direct Reports', peer:'Peers', supervisor:'Supervisors', internal_partner:'Internal Partners', board:'Board Members', other_colleagues:'Other Colleagues' };
+      return (typeof ov[key] === 'string' && ov[key].trim()) ? ov[key].trim() : (DEF[key] || 'Other Colleagues');
+    };
+
+    const seen = {};            // group -> { subKey -> ordinal }
+    const respondentNo = (resp) => {
+      const g = groupOf(resp);
+      const k = submissionKey(resp);
+      if (!seen[g]) seen[g] = {};
+      if (!(k in seen[g])) seen[g][k] = Object.keys(seen[g]).length + 1;
+      return g === 'Self' ? 'Self' : g + ' ' + seen[g][k];
+    };
 
     const firstName = DIAG_SEL.client_name.split(' ')[0];
     const qMap = {};
@@ -11451,11 +11497,20 @@ async function exportDiagData(format = 'csv') {
     const dataRows = (responses || []).map(resp => {
       const rater = raterMap[resp.rater_id] || {};
       const qText = qMap[resp.question_code] || openEndedLabels[resp.question_code] || resp.question_code;
+      const isSelf = !!rater.is_self;
       return {
-        'Rater Name':      rater.name || '',
-        'Relationship':    rater.relationship || (rater.is_self ? 'Self' : ''),
-        'Is Self':         rater.is_self ? 'Yes' : 'No',
-        'Completed':       rater.completed_at ? diagFormatDate(rater.completed_at) : 'Pending',
+        // Group = what the REPORT calls this cohort (honours a renamed group).
+        // Respondent = a stable, anonymous per-person key inside that group — pivot on
+        // it to read one rater's full answer set without knowing who they are.
+        'Group':           isSelf ? 'Self' : groupOf(resp),
+        'Respondent':      isSelf ? 'Self' : respondentNo(resp),
+        'Relationship (as entered)': rater.relationship || resp.rater_relationship || (isSelf ? 'Self' : ''),
+        // Name is deliberately blank on an anonymous diagnostic. Do not "fix" this.
+        'Rater Name':      isSelf ? (rater.name || '') : (resp.rater_id != null ? (rater.name || '') : ''),
+        'Is Self':         isSelf ? 'Yes' : 'No',
+        // A response row exists => that person submitted. The old code said "Pending"
+        // for every anonymous rater because it was reading a rater record that isn't linked.
+        'Submitted':       resp.created_at ? diagFormatDate(resp.created_at) : (rater.completed_at ? diagFormatDate(rater.completed_at) : ''),
         'Question Code':   resp.question_code,
         'Question Text':   qText,
         'Score':           resp.score != null ? resp.score : '',
@@ -11530,7 +11585,7 @@ async function exportDiagData(format = 'csv') {
     } else {
       // CSV export
       const headers = Object.keys(dataRows[0] || {
-        'Rater Name':'','Relationship':'','Is Self':'','Completed':'',
+        'Group':'','Respondent':'','Relationship (as entered)':'','Rater Name':'','Is Self':'','Submitted':'',
         'Question Code':'','Question Text':'','Score':'','Text Response':'',
       });
       function csvEsc(v) {
@@ -12339,7 +12394,13 @@ async function aiStudioSavePrompt() {
       // Update existing
       r = await fetch('/api/coach-data', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ op: 'update', table: 'coach_prompts', filters: { id: { eq: id } }, values: payload, session: token })
+        // buildQuery() in api/coach-data.js reads `eq` off the TOP LEVEL of the body.
+        // This used to send `filters: { id: { eq: id } }`, which buildQuery never looks
+        // at — so the query string came back empty, the "never PATCH all rows" guard
+        // fired, and every edit to an existing prompt failed with "Refusing unfiltered
+        // update". Saving a NEW prompt worked (insert needs no filter), which is why it
+        // went unnoticed. The guard was right; the caller was wrong.
+        body: JSON.stringify({ op: 'update', table: 'coach_prompts', eq: { id: id }, values: payload, session: token })
       });
     } else {
       // Insert new
@@ -12366,7 +12427,9 @@ async function aiStudioDeletePrompt() {
     var token = localStorage.getItem('gps_coach_session') || '';
     var r = await fetch('/api/coach-data', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ op: 'update', table: 'coach_prompts', filters: { id: { eq: id } }, values: { is_active: false }, session: token })
+      // Same bug as the save path — `filters` is not a shape buildQuery understands.
+      // Without this, Delete silently failed too (it soft-deletes via is_active=false).
+      body: JSON.stringify({ op: 'update', table: 'coach_prompts', eq: { id: id }, values: { is_active: false }, session: token })
     });
     var data = await r.json();
     if (!data.ok && r.status !== 200) throw new Error(data.error || 'Delete failed');
