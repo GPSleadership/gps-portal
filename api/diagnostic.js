@@ -2141,6 +2141,28 @@ function formatRaterGroupDataForPrompt(gd, diag) {
 }
 
 // ── Full-report system prompt (Option B) ────────────────────────────────────
+// ── Editable prompt library (AI Studio) ─────────────────────────────────────
+// Every generator sources its system prompt from the coach_prompts table (the AI
+// Studio "prompt library") so Alex can tune wording without a code deploy. The
+// hardcoded constant below each generator is the FALLBACK — used only when the
+// library row is missing, empty, inactive, or the lookup fails. Generation can
+// therefore never break because a prompt was deleted or the DB hiccupped.
+//
+// Returns { text, format } where format is 'text' | 'html' | 'json'. Callers that
+// care about output shape (the report generator) branch on it.
+async function getLibraryPrompt(name, fallbackText, fallbackFormat) {
+  const fb = { text: fallbackText, format: fallbackFormat || 'text', source: 'fallback' };
+  try {
+    const r = await sb(`/rest/v1/coach_prompts?name=eq.${encodeURIComponent(name)}&is_active=eq.true&select=prompt_text,output_format&limit=1`);
+    if (!r.ok) return fb;
+    const row = (await r.json())[0];
+    if (!row || !row.prompt_text || !row.prompt_text.trim()) return fb;
+    return { text: row.prompt_text, format: (row.output_format || fallbackFormat || 'text'), source: 'library' };
+  } catch (_) {
+    return fb;
+  }
+}
+
 const REPORT_SYSTEM_PROMPT = `You are writing a GPS Leadership 14-Day Executive Leadership Diagnostic Report. This is a client-facing document — the leader will read every word. No coach-facing notes, no "Note to coach" lines, no internal commentary.
 
 VOICE AND TONE RULES — follow these exactly:
@@ -2491,11 +2513,18 @@ ${coachNotesSection}
 
 Write the complete 14-Day Executive Leadership Diagnostic Report for ${diag.client_name} now.`.trim();
 
-    // Sonnet + 8000 tokens — no retry, 280s hard timeout (Vercel Pro 300s ceiling)
-    // Quality-first mode: give Claude full room to produce a complete 11-section report
-    const raw = await callClaude(REPORT_SYSTEM_PROMPT, userPrompt, 8000, { retries: 0, model: CLAUDE_REPORT_MODEL, timeoutMs: 280000 });
+    // System prompt comes from the AI Studio library ("Individual Diagnostic Report"),
+    // falling back to the built-in HTML prompt. output_format decides how we store it.
+    const _sys = await getLibraryPrompt('Individual Diagnostic Report', REPORT_SYSTEM_PROMPT, 'html');
+    const outFormat = (_sys.format === 'text') ? 'text' : 'html';
 
-    // Output is full HTML — prepend branded cover before storing
+    // Sonnet + 8000 tokens — no retry, 280s hard timeout (Vercel Pro 300s ceiling)
+    const raw = await callClaude(_sys.text, userPrompt, 8000, { retries: 0, model: CLAUDE_REPORT_MODEL, timeoutMs: 280000 });
+
+    if (!raw || !raw.trim()) {
+      return res.status(500).json({ error: 'Claude returned an empty report. Please try again.' });
+    }
+
     const reportDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     const clientLine = [diag.client_name, diag.client_title, diag.client_org].filter(Boolean).join(' · ');
     const brandedCover = `<div class="report-cover">
@@ -2510,14 +2539,28 @@ Write the complete 14-Day Executive Leadership Diagnostic Report for ${diag.clie
 </div>
 <hr class="report-cover-divider">
 `;
-    const reportHtml = brandedCover + raw.trim();
-    if (!reportHtml) {
-      return res.status(500).json({ error: 'Claude returned an empty report. Please try again.' });
-    }
-    // Basic sanity check — should contain at least one heading tag
-    if (!reportHtml.includes('<h2') && !reportHtml.includes('<h3')) {
-      console.error('[diagnostic/generate-report] Unexpected output (no headings). First 500 chars:\n', reportHtml.slice(0, 500));
-      return res.status(500).json({ error: 'Claude returned unexpected content. Please try again.', raw: reportHtml.slice(0, 500) });
+
+    let reportHtml, storedFormat;
+    if (outFormat === 'html') {
+      reportHtml = brandedCover + raw.trim();
+      storedFormat = 'html_v2';
+      // Sanity check — an HTML prompt must return heading tags. A text prompt would
+      // legitimately have none, so only enforce this for HTML.
+      if (!reportHtml.includes('<h2') && !reportHtml.includes('<h3')) {
+        console.error('[diagnostic/generate-report] HTML prompt returned no headings. First 500:\n', reportHtml.slice(0, 500));
+        return res.status(500).json({ error: 'Claude returned unexpected content. Please try again.', raw: reportHtml.slice(0, 500) });
+      }
+    } else {
+      // TEXT output: escape it and wrap in <pre> so the SAME stored field is faithful
+      // plain text AND valid HTML for every existing renderer (leader view, report-doc
+      // editor, finalize→PDF). This is what makes format-aware output safe without
+      // rebuilding a single downstream renderer — a text report can never blank a page.
+      const escHtmlServer = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      reportHtml = brandedCover
+        + '<pre class="report-plaintext" style="white-space:pre-wrap;word-wrap:break-word;font-family:Georgia,\'Times New Roman\',serif;font-size:14px;line-height:1.6;color:#1a2a3a;margin:0;">'
+        + escHtmlServer(raw.trim())
+        + '</pre>';
+      storedFormat = 'text_v1';
     }
 
     const now = new Date().toISOString();
@@ -2525,7 +2568,8 @@ Write the complete 14-Day Executive Leadership Diagnostic Report for ${diag.clie
       diagnostic_id,
       version:         nextVersion,
       content_json:    {
-        report_format: 'html_v2',
+        report_format: storedFormat,
+        prompt_source: _sys.source,        // 'library' or 'fallback' — so we can tell
         generated_with_model: CLAUDE_REPORT_MODEL,
         rater_groups_used: Object.fromEntries(
           Object.entries(groupData).filter(([k]) => !k.startsWith('_')).map(([k, v]) => [k, v.n])
