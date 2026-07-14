@@ -8399,10 +8399,17 @@ function renderRatersTab() {
   const nonSelf = DIAG_RATERS.filter(r => !r.is_self);
   const selfRow = DIAG_RATERS.find(r => r.is_self);
   const d = DIAG_SEL;
+  // Badge by the group's DISPLAY name (what the report will call it), not the raw
+  // relationship — otherwise a renamed group shows up here under its old name.
   const cats = {};
-  nonSelf.forEach(r => { if (!cats[r.relationship]) cats[r.relationship] = 0; cats[r.relationship]++; });
+  nonSelf.forEach(r => {
+    const ov  = (d && d.rater_group_labels && typeof d.rater_group_labels === 'object') ? d.rater_group_labels : {};
+    const key = _raterBucketKey(r.relationship);
+    const nm  = (typeof ov[key] === 'string' && ov[key].trim()) ? ov[key].trim() : (r.relationship || '—');
+    if (!cats[nm]) cats[nm] = 0; cats[nm]++;
+  });
   const catBadges = Object.entries(cats).map(([rel, n]) =>
-    `<span style="font-size:12px;background:var(--d-light);border:1px solid var(--d-border);padding:3px 10px;border-radius:20px;">${rel}: ${n}</span>`
+    `<span style="font-size:12px;background:var(--d-light);border:1px solid var(--d-border);padding:3px 10px;border-radius:20px;">${escHtml(rel)}: ${n}</span>`
   ).join(' ');
 
   // ── Interview state ──────────────────────────────────────────────────────────
@@ -8438,7 +8445,7 @@ function renderRatersTab() {
         <button class="dbtn dbtn-outline dbtn-sm" style="margin-left:4px;" onclick="closeEditRaterEmail('${r.id}')">Cancel</button>
       </div>
     </td>
-    <td style="font-size:12px;">${r.relationship}</td>
+    <td style="font-size:12px;">${raterGroupDisplay(r.relationship)}</td>
     <td style="font-size:12px;color:var(--d-mid);">${r.invited_at ? diagFormatDate(r.invited_at) : '—'}</td>
     <td>
       ${r.email_bounced
@@ -8703,7 +8710,7 @@ function renderSurveyTab() {
         <div style="font-weight:700;font-size:13px;">${r.name}</div>
         <div style="font-size:11px;color:${r.email_bounced?'var(--d-red2)':'var(--d-mid)'};">${r.email_bounced ? '⚠ ' : ''}${r.email}</div>
       </td>
-      <td style="font-size:12px;">${r.relationship}</td>
+      <td style="font-size:12px;">${raterGroupDisplay(r.relationship)}</td>
       <td>
         ${r.email_bounced
           ? `<span style="color:var(--d-red2);font-weight:700;font-size:12px;">⚠ Email Bounced</span>`
@@ -9763,6 +9770,34 @@ async function generateG1() {
     alert('Error generating question: ' + e.message + '\n\nIf this keeps happening, reload the page — the question may have generated anyway.');
     if (btn) { btn.disabled = false; btn.textContent = DIAG_SEL.custom_g1_question ? `Regenerate (${remaining} left) →` : 'Generate Now →'; }
   }
+}
+
+// Maps a raw rater relationship to the bucket the report will put it in. Mirrors
+// normalizeRel() in api/diagnostic.js — keep the two in step.
+function _raterBucketKey(rel) {
+  if (!rel) return 'other_colleagues';
+  const s = String(rel).toLowerCase().replace(/[^a-z]/g, '');
+  if (s.includes('board') || s.includes('trustee')) return 'board';
+  if (s.includes('skip') || s.includes('indirect')) return 'direct_report';
+  if (s.includes('superv') || s.includes('manager') || s.includes('boss') || s.includes('owner')) return 'supervisor';
+  if (s.includes('internal')) return 'internal_partner';
+  if (s === 'peer' || s === 'peers') return 'peer';
+  if (s.includes('directreport')) return 'direct_report';
+  return 'other_colleagues';
+}
+
+// What this rater's group is CALLED on this diagnostic. If the coach renamed the
+// group, the roster says the new name — otherwise you would rename "Peer" to
+// "Chiefs / Leadership Team", come back to this list, still see "Peer", and
+// reasonably conclude the rename never took. The raw value is kept underneath so
+// the underlying bucket is never a mystery.
+function raterGroupDisplay(rel) {
+  const ov = (DIAG_SEL && DIAG_SEL.rater_group_labels && typeof DIAG_SEL.rater_group_labels === 'object') ? DIAG_SEL.rater_group_labels : {};
+  const key = _raterBucketKey(rel);
+  const custom = (typeof ov[key] === 'string' && ov[key].trim()) ? ov[key].trim() : '';
+  if (!custom) return escHtml(rel || '—');
+  return '<span style="font-weight:700;">' + escHtml(custom) + '</span>'
+       + '<span style="display:block;color:var(--d-mid);font-size:11px;">entered as "' + escHtml(rel) + '"</span>';
 }
 
 // ── Rename rater groups ─────────────────────────────────────────────────────
