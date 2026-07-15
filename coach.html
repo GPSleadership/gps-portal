@@ -8975,59 +8975,80 @@ function reportStepperHtml(d, done, canGenerate) {
   // contradictory published-but-not-reviewed state.
   const reviewedEff  = reviewed || published;
   const debriefed    = !!d.debrief_completed_at;
+  const pdfUploaded  = !!d.report_pdf_url;
+  const pdfDone      = pdfUploaded || published;          // publishing implies we're past upload
   const planApplicable = !!d.client_id;
   const planDone     = planDrafted || !planApplicable;    // not applicable => not a gate
   let current;
   if (!generated)        current = 1;
-  else if (!planDone)    current = 2;
-  else if (!reviewedEff) current = 3;
-  else if (!published)   current = 4;
-  else if (!debriefed)   current = 5;
-  else                   current = 6;                     // all complete
+  else if (!pdfDone)     current = 2;
+  else if (!planDone)    current = 3;
+  else if (!reviewedEff) current = 4;
+  else if (!published)   current = 5;
+  else if (!debriefed)   current = 6;
+  else                   current = 7;                     // all complete
   const st = (i) => i < current ? 'done' : (i === current ? 'active' : 'locked');
-  const s1state = st(1), s2state = st(2), s3state = st(3), s4state = st(4), s5state = st(5);
+  const s1state = st(1), s2state = st(2), s3state = st(3), s4state = st(4), s5state = st(5), s6state = st(6);
 
   // Step 1 — Generate
-  let s1cta;
-  if (s1state === 'active' && !canGenerate) s1cta = muted('Waiting on 7 or more completed raters before the report can be generated.');
-  else if (s1state === 'active')            s1cta = '<button class="dbtn dbtn-primary" onclick="generateReport(event)">Generate report</button>';
-  else                                      s1cta = '<button class="dbtn dbtn-outline dbtn-sm" onclick="generateReport(event)">Regenerate</button>' + muted('Generated ' + diagFormatDate(d.report_generated_at) + '. Regenerating re-locks publish.');
+  let genCta;
+  if (s1state === 'active' && !canGenerate) genCta = muted('Waiting on 7 or more completed raters before the report can be generated.');
+  else if (s1state === 'active')            genCta = '<button class="dbtn dbtn-primary" onclick="generateReport(event)">Generate report</button>';
+  else                                      genCta = '<button class="dbtn dbtn-outline dbtn-sm" onclick="generateReport(event)">Regenerate</button>' + muted('Generated ' + diagFormatDate(d.report_generated_at) + '. Regenerating re-locks publish.');
 
-  // Step 2 — Draft 90-day plan (prefills the wizard).
-  let s2cta;
-  if (!planApplicable)          s2cta = muted('No linked client to pre-fill &mdash; link one on the client profile to draft a plan.');
-  else if (s2state === 'locked') s2cta = muted('Generate the report first.');
-  else if (s2state === 'done')   s2cta = '<button class="dbtn dbtn-outline dbtn-sm" onclick="openPlanPrefillEditor()">Edit drafted plan</button>';
-  else                           s2cta = '<button class="dbtn dbtn-primary" onclick="openPlanPrefillEditor()">Draft 90-day plan</button>';
-
-  // Step 3 — Review (HARD GATE). Preview the leader page + a deliberate confirm.
-  let s3cta;
-  if (s3state === 'locked')      s3cta = muted('Complete the step above first.');
-  else if (s3state === 'done')   s3cta = (previewUrl ? '<a class="dbtn dbtn-outline dbtn-sm" href="' + previewUrl + '" target="_blank">Re-open ' + first + "'s page</a>" : '') + muted(reviewed ? ('Reviewed ' + diagFormatDate(d.report_reviewed_at) + '.') : 'Reviewed at publish.');
-  else                           s3cta = (previewUrl ? '<a class="dbtn dbtn-primary" href="' + previewUrl + '" target="_blank">Preview ' + first + "'s page</a>" : muted('No leader link on file.')) + '<button class="dbtn dbtn-outline" onclick="markReportReviewed()">I have reviewed it &mdash; unlock publish</button>';
-
-  // Step 4 — Publish.
-  let s4cta;
-  if (s4state === 'done')        s4cta = '<span style="font-size:12px;color:' + TEAL + ';font-weight:600;">Published ' + diagFormatDate(d.report_finalized_at) + ' &mdash; live to ' + first + '.</span>';
-  else if (s4state === 'locked') s4cta = muted('Review the page first.');
-  else                           s4cta = '<button class="dbtn dbtn-gold" onclick="openReportPreview()">Publish report</button>' + muted('Makes it visible to ' + first + '.');
-
-  // Step 5 — Debrief complete. Opens the leader's Executive Impact System access
-  // and sends their results email. Done at or right after the debrief meeting.
-  let s5cta;
-  if (s5state === 'locked')      s5cta = muted('Publish the report first.');
-  else if (s5state === 'done') {
-    s5cta = '<span style="font-size:12px;color:' + TEAL + ';font-weight:600;">Debrief complete ' + diagFormatDate(d.debrief_completed_at) + ' &mdash; ' + first + ' now has access.</span>';
-    if (planApplicable)     s5cta += '<button class="dbtn dbtn-outline dbtn-sm" onclick="openActivateSprintModal()">Activate paid 90-day sprint</button>';
-    if (!d.plan_locked_at)  s5cta += '<button class="dbtn dbtn-outline dbtn-sm" style="color:#b91c1c;border-color:#e3b3b3;" onclick="undoDebriefComplete()">Undo</button>';
+  // Step 2 — Upload the report PDF. Sets report_pdf_url ONLY; going live happens at Publish.
+  // The file controls reuse the IDs previewFinalReport()/uploadFinalReport() look up, so the
+  // old standalone upload card is removed to avoid duplicate IDs.
+  let pdfCta;
+  if (s2state === 'locked') pdfCta = muted('Generate the report first.');
+  else {
+    var _picker =
+      '<label style="display:inline-flex;align-items:center;gap:8px;padding:8px 16px;background:#fff;border:1.5px solid ' + (pdfUploaded ? LINE : NAVY) + ';border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;color:' + (pdfUploaded ? '#1b2a3a' : NAVY) + ';">'
+        + (pdfUploaded ? 'Replace PDF' : 'Choose PDF')
+        + '<input type="file" accept=".pdf" style="display:none;" onchange="previewFinalReport(this)"></label>'
+      + '<span id="finalReportFilename" style="font-size:12px;color:' + MUTE + ';">No file selected</span>'
+      + '<button class="dbtn dbtn-primary" id="finalReportSaveBtn" style="display:none;" onclick="uploadFinalReport()">Upload PDF</button>'
+      + '<span id="upload-report-msg" style="font-size:12px;display:none;"></span>';
+    if (pdfUploaded) pdfCta = '<a class="dbtn dbtn-outline dbtn-sm" href="' + d.report_pdf_url + '" target="_blank">View PDF</a>' + _picker;
+    else             pdfCta = _picker + muted('Upload the finished report PDF. It stays private until you publish.');
   }
-  else                           s5cta = '<button class="dbtn dbtn-primary" onclick="markDebriefComplete()">Mark debrief complete</button>' + muted('Emails ' + first + ' their results and opens their Executive Impact System access.');
 
-  return step(1, s1state, 'Generate the report', 'Runs the analysis and writes the draft from the closed survey.', s1cta, false)
-    + step(2, s2state, 'Draft the 90-day plan', 'Pre-fills the leader&rsquo;s wizard. Do this before the debrief.', s2cta, false)
-    + step(3, s3state, 'Review ' + first + '&rsquo;s page', 'See exactly what the leader will see &mdash; scores, bars, report. Required before publishing.', s3cta, false)
-    + step(4, s4state, 'Publish the report', 'Makes it live to the leader. Until then they see only a holding message.', s4cta, false)
-    + step(5, s5state, 'Debrief complete', 'After the debrief meeting: emails ' + first + ' their results and opens their Executive Impact System access.', s5cta, true);
+  // Step 3 — Draft 90-day plan (prefills the wizard).
+  let planCta;
+  if (!planApplicable)           planCta = muted('No linked client to pre-fill &mdash; link one on the client profile to draft a plan.');
+  else if (s3state === 'locked') planCta = muted('Upload the report PDF first.');
+  else if (s3state === 'done')   planCta = '<button class="dbtn dbtn-outline dbtn-sm" onclick="openPlanPrefillEditor()">Edit drafted plan</button>';
+  else                           planCta = '<button class="dbtn dbtn-primary" onclick="openPlanPrefillEditor()">Draft 90-day plan</button>';
+
+  // Step 4 — Review (HARD GATE). Preview the leader page + a deliberate confirm.
+  let reviewCta;
+  if (s4state === 'locked')      reviewCta = muted('Complete the step above first.');
+  else if (s4state === 'done')   reviewCta = (previewUrl ? '<a class="dbtn dbtn-outline dbtn-sm" href="' + previewUrl + '" target="_blank">Re-open ' + first + "'s page</a>" : '') + muted(reviewed ? ('Reviewed ' + diagFormatDate(d.report_reviewed_at) + '.') : 'Reviewed at publish.');
+  else                           reviewCta = (previewUrl ? '<a class="dbtn dbtn-primary" href="' + previewUrl + '" target="_blank">Preview ' + first + "'s page</a>" : muted('No leader link on file.')) + '<button class="dbtn dbtn-outline" onclick="markReportReviewed()">I have reviewed it &mdash; unlock publish</button>';
+
+  // Step 5 — Publish.
+  let pubCta;
+  if (s5state === 'done')        pubCta = '<span style="font-size:12px;color:' + TEAL + ';font-weight:600;">Published ' + diagFormatDate(d.report_finalized_at) + ' &mdash; live to ' + first + '.</span>';
+  else if (s5state === 'locked') pubCta = muted('Review the page first.');
+  else                           pubCta = '<button class="dbtn dbtn-gold" onclick="openReportPreview()">Publish report</button>' + muted('Makes it visible to ' + first + '.');
+
+  // Step 6 — Debrief complete. Opens the leader's Executive Impact System access
+  // and sends their results email. Done at or right after the debrief meeting.
+  let debriefCta;
+  if (s6state === 'locked')      debriefCta = muted('Publish the report first.');
+  else if (s6state === 'done') {
+    debriefCta = '<span style="font-size:12px;color:' + TEAL + ';font-weight:600;">Debrief complete ' + diagFormatDate(d.debrief_completed_at) + ' &mdash; ' + first + ' now has access.</span>';
+    if (planApplicable)     debriefCta += '<button class="dbtn dbtn-outline dbtn-sm" onclick="openActivateSprintModal()">Activate paid 90-day sprint</button>';
+    if (!d.plan_locked_at)  debriefCta += '<button class="dbtn dbtn-outline dbtn-sm" style="color:#b91c1c;border-color:#e3b3b3;" onclick="undoDebriefComplete()">Undo</button>';
+  }
+  else                           debriefCta = '<button class="dbtn dbtn-primary" onclick="markDebriefComplete()">Mark debrief complete</button>' + muted('Emails ' + first + ' their results and opens their Executive Impact System access.');
+
+  return step(1, s1state, 'Generate the report', 'Runs the analysis and writes the draft from the closed survey.', genCta, false)
+    + step(2, s2state, 'Upload the report PDF', 'Add the finished report PDF (the one you build in Claude). It stays private until you publish.', pdfCta, false)
+    + step(3, s3state, 'Draft the 90-day plan', 'Pre-fills the leader&rsquo;s wizard. Do this before the debrief.', planCta, false)
+    + step(4, s4state, 'Review ' + first + '&rsquo;s page', 'See exactly what the leader will see &mdash; scores, bars, report. Required before publishing.', reviewCta, false)
+    + step(5, s5state, 'Publish the report', 'Makes it live to the leader. Until then they see only a holding message.', pubCta, false)
+    + step(6, s6state, 'Debrief complete', 'After the debrief meeting: emails ' + first + ' their results and opens their Executive Impact System access.', debriefCta, true);
 }
 
 // ── Tab: Report ───────────────────────────────────────────────────────────────
@@ -9111,20 +9132,6 @@ function renderReportTab() {
       <input type="checkbox" id="plan-sponsor-approval" ${d.plan_requires_sponsor_approval ? 'checked' : ''} onchange="toggleSponsorApproval(this.checked)" style="width:16px;height:16px;margin-top:1px;accent-color:var(--d-blue);">
       <span>Require the sponsor to review &amp; approve this leader's 90-day plan before it launches.<br><span style="color:var(--d-mid);font-size:12px;">When on, the plan appears in the sponsor's Decision Room as "awaiting approval," with Approve / Request-changes. Leave off for sponsors who don't review plans.</span></span>
     </label>
-  </div>
-  <div class="card" style="margin-top:16px;">
-    <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:4px;">Upload Final Report PDF</div>
-    <div style="font-size:12px;color:var(--d-mid);margin-bottom:14px;">Upload the finished PDF. Client can view it in their portal as soon as you finalize.</div>
-    ${d.report_pdf_url ? `<div class="dalert dalert-green" style="margin-bottom:12px;"><span class="dalert-icon">✓</span><div>Report on file — finalized ${diagFormatDate(d.report_finalized_at)}. <a href="${d.report_pdf_url}" target="_blank" style="color:var(--d-green);font-weight:700;">View PDF</a> — upload a new file below to replace it.</div></div>` : ''}
-    <div id="upload-report-msg" style="font-size:12px;margin-bottom:8px;display:none;"></div>
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-      <label style="display:inline-flex;align-items:center;gap:8px;padding:9px 18px;background:var(--d-light);border:1.5px solid var(--d-border);border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;color:var(--d-dark);">
-        Choose PDF
-        <input type="file" id="finalReportFile" accept=".pdf" style="display:none;" onchange="previewFinalReport(this)">
-      </label>
-      <span id="finalReportFilename" style="font-size:12px;color:var(--d-mid);">No file selected</span>
-      <button class="dbtn dbtn-primary" id="finalReportSaveBtn" style="display:none;" onclick="uploadFinalReport()">Upload &amp; Finalize Report</button>
-    </div>
   </div>`;
 }
 
@@ -11084,7 +11091,7 @@ async function uploadFinalReport() {
     pdfUrl      = j.publicUrl;
   } catch (e) {
     if (msg) { msg.style.display = 'block'; msg.style.color = 'var(--d-red)'; msg.textContent = 'Upload failed: ' + e.message; }
-    if (btn) { btn.disabled = false; btn.textContent = 'Upload & Finalize Report'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Upload PDF'; }
     return;
   }
 
@@ -11094,20 +11101,22 @@ async function uploadFinalReport() {
 
   if (upErr) {
     if (msg) { msg.style.display = 'block'; msg.style.color = 'var(--d-red)'; msg.textContent = 'Upload failed: ' + upErr.message; }
-    if (btn) { btn.disabled = false; btn.textContent = 'Upload & Finalize Report'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Upload PDF'; }
     return;
   }
 
-  const now = new Date().toISOString();
+  // Decoupled from publish: uploading only puts the PDF on file (report_pdf_url).
+  // It stays private — the leader/client don't see it until the coach hits Publish,
+  // which sets report_finalized_at. Only mirror to clients.diagnostic_report_url when
+  // the report is ALREADY published, so an early upload can't surface it anywhere.
+  await updateDiag({ report_pdf_url: pdfUrl });
 
-  await updateDiag({ report_pdf_url: pdfUrl, report_finalized_at: now, status: 'report_final' });
-
-  if (DIAG_SEL.client_id) {
+  if (DIAG_SEL.client_id && DIAG_SEL.report_finalized_at) {
     await cdUpdate('clients', { diagnostic_report_url: pdfUrl }, { eq: { id: DIAG_SEL.client_id } });
   }
 
   _finalReportFile = null;
-  if (msg) { msg.style.display = 'block'; msg.style.color = 'var(--d-green)'; msg.textContent = 'Report uploaded and finalized. Client can view it in their portal now.'; }
+  if (msg) { msg.style.display = 'block'; msg.style.color = 'var(--d-green)'; msg.textContent = DIAG_SEL.report_finalized_at ? 'PDF replaced. The leader now sees the updated report.' : 'PDF on file. It stays private until you publish.'; }
   if (btn) { btn.disabled = false; btn.style.display = 'none'; }
   const nameEl = document.getElementById('finalReportFilename');
   if (nameEl) nameEl.textContent = 'No file selected';
