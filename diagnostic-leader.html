@@ -151,10 +151,15 @@ input:focus,select:focus{outline:none;border-color:var(--blue);}
 <div class="page" id="screen-portal" style="display:none;">
 
   <!-- Welcome -->
-  <div style="margin-bottom:22px;">
-    <div style="font-size:13px;color:var(--mid);" id="portal-date"></div>
-    <div style="font-size:24px;font-weight:800;color:var(--blue);" id="portal-greeting">Welcome back.</div>
-    <div style="font-size:13px;color:var(--mid);" id="portal-title-org"></div>
+  <div style="margin-bottom:22px;display:flex;align-items:center;gap:16px;">
+    <div id="leaderAvatar" style="display:none;width:62px;height:62px;border-radius:50%;flex:0 0 auto;overflow:hidden;background:var(--blue);border:2px solid rgba(0,0,0,.06);box-shadow:0 1px 4px rgba(0,0,0,.12);">
+      <img id="leaderAvatarImg" src="" alt="" style="width:100%;height:100%;object-fit:cover;display:block;">
+    </div>
+    <div>
+      <div style="font-size:13px;color:var(--mid);" id="portal-date"></div>
+      <div style="font-size:24px;font-weight:800;color:var(--blue);" id="portal-greeting">Welcome back.</div>
+      <div style="font-size:13px;color:var(--mid);" id="portal-title-org"></div>
+    </div>
   </div>
 
   <!-- Top alert (context-sensitive) -->
@@ -389,6 +394,12 @@ function renderPortal() {
   document.getElementById('portal-greeting').textContent = `Welcome back, ${firstName}.`;
   document.getElementById('portal-title-org').textContent =
     [d.client_title, d.client_org].filter(Boolean).join(' · ');
+
+  // Leader profile photo (set by the leader or, ahead of time, by the coach).
+  if (d.avatar_url) {
+    const _av = document.getElementById('leaderAvatar'), _avi = document.getElementById('leaderAvatarImg');
+    if (_av && _avi) { _avi.src = d.avatar_url; _avi.alt = d.client_name || 'Profile photo'; _av.style.display = 'block'; }
+  }
 
   // Widen the page container when the report is ready — scores + cards need the room
   const WIDE_STATUSES = ['report_pending', 'report_final', 'debrief_complete', 'plan_active'];

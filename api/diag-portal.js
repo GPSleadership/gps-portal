@@ -274,6 +274,15 @@ export default async function handler(req, res) {
             if (orows[0] && orows[0].logo_url) diag.org_logo_url = orows[0].logo_url;
           } catch (_) { /* logo is optional */ }
         }
+        // Leader profile photo (from the linked client record) — shown in the portal
+        // header at any status, so a coach-set photo greets them the moment they log in.
+        if (diag.client_id) {
+          try {
+            const car = await sb(`/rest/v1/clients?id=eq.${encodeURIComponent(diag.client_id)}&select=avatar_url&limit=1`);
+            const carows = car.ok ? await car.json() : [];
+            if (carows[0] && carows[0].avatar_url) diag.avatar_url = carows[0].avatar_url;
+          } catch (_) { /* avatar is optional */ }
+        }
         // Client portal link — look up clients.token via diagnostics.client_id so the
         // leader page can show a "Open your 90-day plan" button pointing to client.html.
         // Only exposed once the debrief is done; before that the plan portal isn't relevant.

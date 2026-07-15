@@ -8342,6 +8342,22 @@ function renderOverviewTab() {
     <div class="card" style="margin-bottom:0;">
       <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:14px;">Coach Notes</div>
 
+      ${d.client_id ? `
+      <div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--d-border);">
+        <div style="font-size:11px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">Leader photo</div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:52px;height:52px;border-radius:50%;flex:0 0 auto;overflow:hidden;background:var(--d-blue);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;font-family:Montserrat,sans-serif;">
+            ${(DIAG_LINKED_CLIENT && DIAG_LINKED_CLIENT.avatar_url) ? `<img src="${DIAG_LINKED_CLIENT.avatar_url}" alt="" style="width:100%;height:100%;object-fit:cover;">` : (d.client_name||'?').trim().split(/\s+/).map(function(w){return w[0]||'';}).slice(0,2).join('').toUpperCase()}
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <label class="dbtn dbtn-outline dbtn-sm" style="cursor:pointer;">${(DIAG_LINKED_CLIENT && DIAG_LINKED_CLIENT.avatar_url) ? 'Change photo' : 'Upload photo'}<input type="file" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="uploadLeaderAvatar(this)"></label>
+            ${(DIAG_LINKED_CLIENT && DIAG_LINKED_CLIENT.avatar_url) ? `<button class="dbtn dbtn-outline dbtn-sm" style="color:#b91c1c;border-color:#e3b3b3;" onclick="removeLeaderAvatar()">Remove</button>` : ''}
+            <span id="diag-avatar-msg" style="font-size:11px;color:var(--d-mid);"></span>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--d-mid);margin-top:6px;">Appears in ${(d.client_name||'the leader').split(' ')[0]}&rsquo;s Executive Impact portal header &mdash; set it now so it&rsquo;s there when they first log in. PNG, JPG, or WebP.</div>
+      </div>` : ''}
+
       <div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--d-border);">
         <div style="font-size:11px;font-weight:700;color:var(--d-mid);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Engagement fee</div>
         <div style="display:flex;gap:8px;align-items:center;">
@@ -11155,6 +11171,39 @@ async function undoDebriefComplete() {
 // Unpublish a published report: clears report_finalized_at and drops the status below the
 // leader-visible threshold, so the leader immediately sees the "in review" holding state
 // again. The generated draft, PDF, and any review stay on file, so re-publishing is one click.
+// ── Coach-set leader profile photo ────────────────────────────────────────────
+// Uploads on the leader's behalf so their photo is in the Executive Impact portal
+// before they ever log in. Writes clients.avatar_url via the coach-gated endpoint.
+async function uploadLeaderAvatar(input) {
+  const file = input && input.files && input.files[0]; if (!file) return;
+  const msg = document.getElementById('diag-avatar-msg');
+  const setMsg = (t, err) => { if (msg) { msg.style.color = err ? 'var(--d-red)' : 'var(--d-mid)'; msg.textContent = t; } };
+  if (!/^image\/(png|jpe?g|webp)$/.test(file.type)) return setMsg('Use PNG, JPG, or WebP.', true);
+  if (file.size > 6 * 1024 * 1024) return setMsg('Please use an image under 6 MB.', true);
+  const clientId = DIAG_SEL && DIAG_SEL.client_id;
+  if (!clientId) { alert('No linked client to attach the photo to.'); return; }
+  setMsg('Uploading…');
+  try {
+    const dataUrl = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); });
+    const r = await coachData({ action: 'coach-set-avatar', client_id: clientId, image_data_url: dataUrl });
+    if (!r || !r.avatar_url) throw new Error((r && r.error) || 'upload failed');
+    if (DIAG_LINKED_CLIENT) DIAG_LINKED_CLIENT.avatar_url = r.avatar_url;
+    const lc = DIAG_CLIENTS.find(c => c.id === clientId); if (lc) lc.avatar_url = r.avatar_url;
+    renderOverviewTab();
+  } catch (e) { setMsg('Could not upload: ' + e.message, true); }
+}
+async function removeLeaderAvatar() {
+  const clientId = DIAG_SEL && DIAG_SEL.client_id; if (!clientId) return;
+  if (!confirm('Remove this leader’s photo?')) return;
+  try {
+    const r = await coachData({ action: 'coach-remove-avatar', client_id: clientId });
+    if (r && r.error) throw new Error(r.error);
+    if (DIAG_LINKED_CLIENT) DIAG_LINKED_CLIENT.avatar_url = null;
+    const lc = DIAG_CLIENTS.find(c => c.id === clientId); if (lc) lc.avatar_url = null;
+    renderOverviewTab();
+  } catch (e) { alert('Could not remove: ' + e.message); }
+}
+
 async function unpublishReport() {
   const d = DIAG_SEL; if (!d) return;
   if (!confirm('Unpublish ' + (d.client_name || 'this leader') + "'s report?\n\n" +

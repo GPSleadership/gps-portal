@@ -223,6 +223,40 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
+    // ── Leader profile photo (coach uploads on the leader's behalf) ─────────
+    // Same bucket/field the leader's own uploader uses (org-assets ·
+    // client-avatars/<id> · clients.avatar_url), so a coach-set photo shows up
+    // wherever the leader's own would — before they ever log in. Cache-busted so a
+    // replacement shows immediately (same lesson as the report PDF). Any coach session.
+    if (action === 'coach-set-avatar') {
+      const clientId = String(body.client_id || '');
+      if (!clientId) return res.status(400).json({ error: 'client_id required' });
+      const m = String(body.image_data_url || '').match(/^data:(image\/(png|jpeg|jpg|webp));base64,(.+)$/);
+      if (!m) return res.status(400).json({ error: 'Use a PNG, JPG, or WebP image.' });
+      const mime = m[1];
+      const ext  = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg';
+      const buf  = Buffer.from(m[3], 'base64');
+      if (buf.length > 6 * 1024 * 1024) return res.status(400).json({ error: 'Image is over 6 MB — please use a smaller one.' });
+      const path = `client-avatars/${clientId}.${ext}`;
+      const up = await fetch(`${SUPABASE_URL}/storage/v1/object/org-assets/${path}`, {
+        method: 'POST',
+        headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}`, 'Content-Type': mime, 'x-upsert': 'true' },
+        body: buf,
+      });
+      if (!up.ok) return res.status(502).json({ error: 'Photo upload failed.' });
+      const url = `${SUPABASE_URL}/storage/v1/object/public/org-assets/${path}?v=${Date.now()}`;
+      const pr = await sb(`/rest/v1/clients?id=eq.${encodeURIComponent(clientId)}`, 'PATCH', { avatar_url: url }, { Prefer: 'return=minimal' });
+      if (!pr.ok) return res.status(500).json({ error: 'Uploaded, but could not save it to the profile.' });
+      return res.status(200).json({ ok: true, avatar_url: url });
+    }
+    if (action === 'coach-remove-avatar') {
+      const clientId = String(body.client_id || '');
+      if (!clientId) return res.status(400).json({ error: 'client_id required' });
+      const pr = await sb(`/rest/v1/clients?id=eq.${encodeURIComponent(clientId)}`, 'PATCH', { avatar_url: null }, { Prefer: 'return=minimal' });
+      if (!pr.ok) return res.status(500).json({ error: 'Could not remove the photo.' });
+      return res.status(200).json({ ok: true });
+    }
+
     // ── Sponsor follow-along page controls (roadmap #4, Phase 2) ────────────
     // Coach authors the sponsor page's "From your coach" summary + "How you can
     // help" actions and sets the confidentiality mode. Any valid coach session
