@@ -324,8 +324,12 @@ async function init() {
 
   // Load diagnostic + raters by leader_token (server validates the token + touches last-used)
   LEADER_TOKEN = token;
+  // Coach preview: the "Preview [name]'s page" button appends &coach=<session>. Passed to
+  // the server so a signed-in coach can see the rendered scores before the report is
+  // released. A leader has no coach session, so this changes nothing for them.
+  const _coachSession = new URLSearchParams(window.location.search).get('coach') || undefined;
   let portal;
-  try { portal = await diagPortal('leader-get'); }
+  try { portal = await diagPortal('leader-get', { coach_session: _coachSession }); }
   catch (e) { showError(); return; }
   if (!portal || !portal.diagnostic) { showError(); return; }
   DIAGNOSTIC = portal.diagnostic;

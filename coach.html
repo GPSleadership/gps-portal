@@ -8983,7 +8983,7 @@ function renderReportTab() {
     </div>` : ''}
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
       ${done>=1 ? `<button class="dbtn dbtn-outline" onclick="viewCurrentScores()">📊 View current scores (numbers only)</button>` : ''}
-      ${d.leader_token ? `<a href="${DIAG_BASE_URL}/diagnostic-leader.html?token=${d.leader_token}&preview=debrief_complete" target="_blank" class="dbtn dbtn-outline">👁 Preview ${(d.client_name||'leader').split(' ')[0]}'s page (as debrief complete)</a>` : ''}
+      ${d.leader_token ? `<a href="${DIAG_BASE_URL}/diagnostic-leader.html?token=${d.leader_token}&preview=debrief_complete&coach=${encodeURIComponent(getCoachSessionToken())}" target="_blank" class="dbtn dbtn-outline">👁 Preview ${(d.client_name||'leader').split(' ')[0]}'s page (as debrief complete)</a>` : ''}
       ${d.report_generated_at ? `<button class="dbtn dbtn-outline" onclick="openResultsNarrativeEditor()">✍️ Edit results-page words</button>` : ''}
       <button class="dbtn dbtn-outline" onclick="openGroupLabelEditor()">🏷 Rename rater groups</button>
       <button class="dbtn dbtn-outline" onclick="openReportDocEditor()">🧱 Edit structured report (sections)</button>

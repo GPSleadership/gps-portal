@@ -61,6 +61,27 @@ Standard of record: **`Knowledge/GPS-Frameworks/Rater Confidentiality Standard.m
 | **P1-S3** | **Extending a survey notifies nobody.** The new button silently buys raters time they never learn about. Worse on cohorts like JMAA where `suppress_auto_reminders = true` (they use the consolidated nudge, which is *scheduled*, not automatic) — so an extended survey can close a second time with the outstanding raters never having heard a word. Caught only because Alex asked. Fix: on extend/reopen, offer to (a) send the per-leader reminder, or (b) schedule/queue a consolidated nudge for the cohort. Should be one checkbox in the extend modal. | S | ⏳ queued | Live: JMAA had `scheduled_nudges` last fired 2026-07-10; nothing queued for the 7/14 close until manually inserted |
 | **P2-S4** | **Reminder state is not reset on extend.** `reminder_1_sent_at` / `reminder_2_sent_at` are one-shot guards. A survey extended past its original close will never re-send R1/R2 to anyone who already got them. Decide: clear the stamps on extend, or add a third "extended" reminder. | S | ⏳ queued | `api/diagnostic.js:3698,3717` |
 
+### P1 — Report generation is a 4-minute blocking call (added 2026-07-14)
+
+| # | Item | Effort | Status | Evidence |
+|---|------|--------|--------|----------|
+| **P1-G1** | **"Failed to fetch" on report generation — false alarm on a real success.** `generate-report` is one synchronous HTTP call held open for up to 280s while Claude writes. Browsers/gateways cut the connection well before that, so the coach sees "Error generating report: Failed to fetch" **even though the server completed and wrote the draft** (confirmed live 2026-07-14: Jana Greene draft landed at 22:28:02 while the browser showed the error). Coach thinks it failed, re-clicks, wastes a generation. **Fix: make it async — POST starts the job + returns immediately; page polls `diagnostic_report_drafts` every few seconds and shows the draft when it appears. No long-held connection, no false error, coach can navigate away.** | M | ⏳ queued | Vercel logs all 200; draft row present; browser errored |
+
+### P1 — Report flow: preview must work, then gate publish behind it (added 2026-07-14)
+
+| # | Item | Effort | Status | Evidence |
+|---|------|--------|--------|----------|
+| **P1-P1** | **Coach preview showed no TP3 scores.** The leader page only attaches `scores_json` when the REAL status is `report_final`/`debrief_complete`/`plan_active`; `?preview=` overrides the layout client-side but the server still keyed off real status, so at `report_draft` the visual rendered empty. Fix: the preview link now carries the coach session (`&coach=<session>`); `diag-portal.js` verifies it and attaches scores for a signed-in coach preview only. Leaders have no coach session, so they still can't see scores early. | S | ✅ Done 2026-07-14 (uncommitted on branch) | `diag-portal.js:286`; Jana had `has_scores:true` but page blank |
+| **P1-P2** | **Redesign the report card into a gated sequential flow** (mockup approved 2026-07-14). One lit action at a time: **Generate → Preview (HARD GATE) → Publish**. Publish is impossible until the coach has previewed the rendered leader page. Regenerate moves state backward (un-previews, re-locks publish) — closes the bug where generating a new draft silently un-finalized a finalized report (hit Jana 2026-07-14). Secondary tools (edit sections, draft plan, rename groups) move to a quieter "also available" row. Confidentiality gate slots into Generate. **Decisions: hard gate; report flow only for now, recommend other areas (90-day activation, send-invites) after it's proven.** | M | ⏳ queued — next build | mockup approved |
+
+### P1 — LLM provider independence (added 2026-07-14, ALEX HIGH PRIORITY)
+
+**Alex's explicit strategic requirement: the system must not be locked to Anthropic. He needs to be able to swap the AI provider (OpenAI/Codex, Gemini, whatever comes next) with an API/config change, not a rewrite.**
+
+| # | Item | Effort | Status | Evidence |
+|---|------|--------|--------|----------|
+| **P1-L1** | **Anthropic is hardcoded in 10 call sites across 7 files** — `ask.js` (3), `coach-data.js` (2), `diagnostic.js` (1), `diag-portal.js` (1), `portal-data.js` (1), `testimonial.js` (1), `workshop-data.js` (1). Each hardcodes the URL, `x-api-key`, `anthropic-version`, request shape, and `.content[0].text` parsing. Swapping providers today = editing all 10. **Fix: one adapter `api/llm.js` exposing `llm({system,prompt,maxTokens,model})`; provider chosen by `LLM_PROVIDER` env var; provider-specific request/response shapes normalized inside. After: switch = one env var.** Prompts already live in `coach_prompts` (DB, not code) as of P1-R1, so prompts move with the provider too. | L | ⏳ **queued — HIGH PRIORITY, dedicated session** | grep 2026-07-14: 10 direct `api.anthropic.com/v1/messages` calls |
+
 ### P1 — Report generation → library prompts + in-house PDF (added 2026-07-14)
 
 | # | Item | Effort | Status | Evidence |

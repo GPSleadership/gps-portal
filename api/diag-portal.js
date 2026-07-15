@@ -11,12 +11,35 @@
 // POST /api/diag-portal  { action, token, ... }
 // ENV: SUPABASE_URL, SUPABASE_SECRET_KEY
 
+import crypto from 'crypto';
+
 const SUPABASE_URL    = process.env.SUPABASE_URL || 'https://pbnkefuqpoztcxfagiod.supabase.co';
 const SUPABASE_SECRET = process.env.SUPABASE_SECRET_KEY;
 const RESEND_API_KEY  = process.env.RESEND_API_KEY;
 const RESEND_FROM     = process.env.RESEND_FROM_EMAIL || 'noreply@portal.gpsleadership.org';
+const COACH_SESSION_SECRET = process.env.COACH_SESSION_SECRET;
 
 const enc = encodeURIComponent;
+
+// Verify a coach session token (same HMAC scheme as api/coach-data.js). Used ONLY to
+// unlock the coach's own preview of a leader page — never to grant write access here.
+// The leader page is token-gated for leaders; a leader has no coach session, so they
+// can never append ?preview= to see their scores before the report is released. Only a
+// signed-in coach can.
+function verifyCoachSession(token) {
+  if (!token || !COACH_SESSION_SECRET) return null;
+  const parts = String(token).split('.');
+  if (parts.length !== 2) return null;
+  const expected = Buffer.from(crypto.createHmac('sha256', COACH_SESSION_SECRET).update(parts[0]).digest())
+    .toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const a = Buffer.from(parts[1]), b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  let payload;
+  try { payload = JSON.parse(Buffer.from(parts[0].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString()); }
+  catch { return null; }
+  if (!payload || payload.role !== 'coach' || typeof payload.exp !== 'number' || payload.exp < Date.now()) return null;
+  return payload;
+}
 
 function sb(path, method = 'GET', body = null, extra = {}) {
   return fetch(SUPABASE_URL + path, {
@@ -280,10 +303,16 @@ export default async function handler(req, res) {
           diag._release_at = diag.report_release_at; // pass through so the page can show the date
           diag.status = 'report_pending';             // synthetic holding status
         }
-        // Attach the latest draft's numeric scores for any released state (including when
-        // the gate is active — preview mode needs these even while the leader cannot yet
-        // see them). Never exposes the AI narrative here.
-        if (['report_final','debrief_complete','plan_active'].includes(_statusForScores)) {
+        // Attach the latest draft's numeric scores for any released state.
+        //
+        // COACH PREVIEW: a signed-in coach previewing the leader page (the "Preview
+        // [name]'s page" button passes their coach session) can see scores as soon as a
+        // draft exists — BEFORE the report is released — so they can check the rendered
+        // page before making it live. A leader cannot do this: they have no coach session,
+        // so `isCoachPreview` is false for them and the released-status gate still applies.
+        const isCoachPreview = !!verifyCoachSession(body.coach_session);
+        const _scoresOK = isCoachPreview || ['report_final','debrief_complete','plan_active'].includes(_statusForScores);
+        if (_scoresOK) {
           try {
             const sr = await sb(`/rest/v1/diagnostic_report_drafts?diagnostic_id=eq.${diag.id}&select=scores_json,raw_markdown,generated_at&order=generated_at.desc&limit=1`);
             const srows = sr.ok ? await sr.json() : [];
