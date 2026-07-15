@@ -8919,6 +8919,87 @@ async function saveCustomQ(n) {
   }
 }
 
+// ── Gated report flow: Generate → Draft plan → Review → Publish ─────────────
+// One lit action at a time, each step unlocks the next. The HARD GATE: publish is
+// impossible until the coach has reviewed the rendered leader page. Review = seeing
+// the page + a deliberate confirm that stamps report_reviewed_at. Regenerating bumps
+// report_generated_at, which makes the review stale (reviewed_at must be NEWER than
+// generated_at) — so a new draft re-locks publish. Coach-facing UI only; the
+// underlying generate/preview/finalize actions are unchanged.
+async function markReportReviewed() {
+  const d = DIAG_SEL; if (!d) return;
+  if (!confirm("Confirm you've reviewed " + (d.client_name || 'this leader') + "'s rendered page and the report is ready.\n\nThis unlocks Publish. (Regenerating the report will require another review.)")) return;
+  try { await updateDiag({ report_reviewed_at: new Date().toISOString() }); await refreshSelected(); }
+  catch (e) { alert('Could not save: ' + e.message); }
+}
+
+function reportStepperHtml(d, done, canGenerate) {
+  const generated = !!d.report_generated_at;
+  const reviewed  = !!(d.report_reviewed_at && d.report_generated_at && new Date(d.report_reviewed_at) > new Date(d.report_generated_at));
+  const published = !!d.report_finalized_at;
+  const planDrafted = !!(d.wizard_prefill_data);
+  const first = (d.client_name || 'leader').split(' ')[0];
+  const previewUrl = d.leader_token
+    ? (DIAG_BASE_URL + '/diagnostic-leader.html?token=' + d.leader_token + '&preview=debrief_complete&coach=' + encodeURIComponent(getCoachSessionToken()))
+    : '';
+
+  // GPS executive baseline: navy #004369 = active, teal #01949A = done, muted = locked.
+  // No emoji. Colour encodes state only. One prominent action per step.
+  const NAVY = '#004369', TEAL = '#01949A', MUTE = '#8a97a6', LINE = '#e4e8ee';
+  const step = (n, state, title, sub, ctaHtml, isLastStep) => {
+    const isDone = state === 'done', isActive = state === 'active', isLocked = state === 'locked';
+    const numBorder = isDone ? TEAL : isActive ? NAVY : LINE;
+    const numBg = isDone ? TEAL : isActive ? NAVY : '#fff';
+    const numFg = (isDone || isActive) ? '#fff' : MUTE;
+    const badge = isDone ? '&#10003;' : String(n);           // clean check glyph, not emoji
+    const titleColor = isLocked ? MUTE : '#1b2a3a';
+    const pill = isActive && !isDone
+      ? '<span style="font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:' + NAVY + ';font-weight:700;">Now</span>'
+      : (isLocked ? '<span style="font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:' + MUTE + ';font-weight:700;">Locked</span>' : '');
+    const connector = isLastStep ? '' : '<div style="position:absolute;left:14px;top:30px;bottom:-14px;width:1.5px;background:' + (isDone ? TEAL : LINE) + ';"></div>';
+    return '<div style="position:relative;display:flex;gap:14px;align-items:flex-start;padding-bottom:14px;">'
+      + connector
+      + '<div style="position:relative;z-index:1;flex:0 0 29px;height:29px;border-radius:50%;border:1.5px solid ' + numBorder + ';background:' + numBg + ';color:' + numFg + ';display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;">' + badge + '</div>'
+      + '<div style="flex:1;min-width:0;padding-top:3px;">'
+      +   '<div style="display:flex;align-items:center;gap:10px;"><span style="font-weight:600;font-size:14px;color:' + titleColor + ';letter-spacing:-.01em;">' + title + '</span>' + pill + '</div>'
+      +   '<div style="font-size:12.5px;color:#6b7a8d;line-height:1.55;margin-top:3px;">' + sub + '</div>'
+      +   (ctaHtml ? '<div style="margin-top:11px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' + ctaHtml + '</div>' : '')
+      + '</div></div>';
+  };
+
+  const muted = (t) => '<span style="font-size:12px;color:' + MUTE + ';">' + t + '</span>';
+
+  // Step 1 — Generate
+  let s1state, s1cta;
+  if (!canGenerate) { s1state = 'active'; s1cta = muted('Waiting on 7 or more completed raters before the report can be generated.'); }
+  else if (!generated) { s1state = 'active'; s1cta = '<button class="dbtn dbtn-primary" onclick="generateReport(event)">Generate report</button>'; }
+  else { s1state = 'done'; s1cta = '<button class="dbtn dbtn-outline dbtn-sm" onclick="generateReport(event)">Regenerate</button>' + muted('Generated ' + diagFormatDate(d.report_generated_at) + '. Regenerating re-locks publish.'); }
+
+  // Step 2 — Draft 90-day plan (prefills the wizard). Part of the flow, not a hard gate.
+  let s2state, s2cta;
+  if (!generated) { s2state = 'locked'; s2cta = muted('Generate the report first.'); }
+  else if (!d.client_id) { s2state = 'active'; s2cta = muted('No linked client to pre-fill — link one on the client profile.'); }
+  else if (planDrafted) { s2state = 'done'; s2cta = '<button class="dbtn dbtn-outline dbtn-sm" onclick="openPlanPrefillEditor()">Edit drafted plan</button>'; }
+  else { s2state = 'active'; s2cta = '<button class="dbtn dbtn-primary" onclick="openPlanPrefillEditor()">Draft 90-day plan</button>'; }
+
+  // Step 3 — Review (HARD GATE). Preview the leader page + a deliberate confirm.
+  let s3state, s3cta;
+  if (!generated) { s3state = 'locked'; s3cta = muted('Generate the report first.'); }
+  else if (reviewed) { s3state = 'done'; s3cta = (previewUrl ? '<a class="dbtn dbtn-outline dbtn-sm" href="' + previewUrl + '" target="_blank">Re-open ' + first + "'s page</a>" : '') + muted('Reviewed ' + diagFormatDate(d.report_reviewed_at) + '.'); }
+  else { s3state = 'active'; s3cta = (previewUrl ? '<a class="dbtn dbtn-primary" href="' + previewUrl + '" target="_blank">Preview ' + first + "'s page</a>" : muted('No leader link on file.')) + '<button class="dbtn dbtn-outline" onclick="markReportReviewed()">I have reviewed it &mdash; unlock publish</button>'; }
+
+  // Step 4 — Publish (locked until reviewed).
+  let s4state, s4cta;
+  if (published) { s4state = 'done'; s4cta = '<span style="font-size:12px;color:' + TEAL + ';font-weight:600;">Published ' + diagFormatDate(d.report_finalized_at) + ' &mdash; live to ' + first + '.</span>'; }
+  else if (!reviewed) { s4state = 'locked'; s4cta = muted('Review the page first.'); }
+  else { s4state = 'active'; s4cta = '<button class="dbtn dbtn-gold" onclick="openReportPreview()">Publish report</button>' + muted('Makes it visible to ' + first + '.'); }
+
+  return step(1, s1state, 'Generate the report', 'Runs the analysis and writes the draft from the closed survey.', s1cta, false)
+    + step(2, s2state, 'Draft the 90-day plan', 'Pre-fills the leader&rsquo;s wizard. Do this before the debrief.', s2cta, false)
+    + step(3, s3state, 'Review ' + first + '&rsquo;s page', 'See exactly what the leader will see &mdash; scores, bars, report. Required before publishing.', s3cta, false)
+    + step(4, s4state, 'Publish the report', 'Makes it live to the leader. Until then they see only a holding message.', s4cta, true);
+}
+
 // ── Tab: Report ───────────────────────────────────────────────────────────────
 function renderReportTab() {
   const d = DIAG_SEL;
@@ -8931,20 +9012,18 @@ function renderReportTab() {
   const canOverride    = surveyUnlocked && done >= 3 && done < 7;
   rpt.innerHTML = `
   <div class="card">
-    <div style="font-size:13px;font-weight:700;color:var(--d-blue);margin-bottom:4px;">Report Generation</div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
-      <div style="font-size:22px;font-weight:800;color:${done>=7?'var(--d-green)':done>=3?'var(--d-amber)':'var(--d-red)'};">${done}</div>
-      <div style="font-size:12px;color:var(--d-mid);line-height:1.4;">of ${nonSelf.length} raters completed<br>
-        <span style="font-weight:700;color:${done>=7?'var(--d-green)':done>=3?'var(--d-amber)':'var(--d-red)'};">
-          ${done >= 7 ? '✓ Meets 7-rater minimum' : done >= 3 ? '⚠ Below 7-rater minimum' : '✗ Insufficient responses'}
-        </span>
+    <div style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--d-mid);margin-bottom:12px;">Report</div>
+    <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:16px;">
+      <div style="font-size:24px;font-weight:600;color:${done>=7?'#01949A':done>=3?'var(--d-amber)':'var(--d-red)'};">${done}</div>
+      <div style="font-size:12.5px;color:#6b7a8d;line-height:1.4;">of ${nonSelf.length} raters completed &middot;
+        <span style="font-weight:600;color:${done>=7?'#01949A':done>=3?'var(--d-amber)':'var(--d-red)'};">${done >= 7 ? 'meets the 7-rater minimum' : done >= 3 ? 'below the 7-rater minimum' : 'insufficient responses'}</span>
       </div>
     </div>
     ${!surveyUnlocked ? `<div class="dalert dalert-amber">
       <span class="dalert-icon">⏳</span>
       <div>The survey is still open, so finalizing and sending stay locked. ${done>=3 ? 'You can generate a private preview for your eyes only.' : 'Once 3+ responses are in, you can generate a private preview.'}</div>
     </div>${done>=3 ? `<div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-      <button class="dbtn dbtn-outline" onclick="generateReportPreview(event)">👁 Preview report now (private)</button>
+      <button class="dbtn dbtn-outline" onclick="generateReportPreview(event)">Preview report now (private)</button>
       ${d.report_preview_at ? `<button class="dbtn dbtn-outline" onclick="openReportPreview({preview:true})">Re-open last preview</button>` : ''}
       <span class="dhint" style="margin:0;">Based on the ${done} response${done===1?'':'s'} so far. Not visible to the leader or sponsor. Finalize stays locked until you close the survey.</span>
     </div>` : ''}` : !canGenerate ? `<div class="dalert dalert-amber">
@@ -8981,26 +9060,31 @@ function renderReportTab() {
       <div><strong>No portal link on file.</strong> This client doesn't have a portal access token yet. 
       The finalize step will fail until you generate one. Open the client profile → scroll to Portal Access → generate a link.</div>
     </div>` : ''}
-    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-      ${done>=1 ? `<button class="dbtn dbtn-outline" onclick="viewCurrentScores()">📊 View current scores (numbers only)</button>` : ''}
-      ${d.leader_token ? `<a href="${DIAG_BASE_URL}/diagnostic-leader.html?token=${d.leader_token}&preview=debrief_complete&coach=${encodeURIComponent(getCoachSessionToken())}" target="_blank" class="dbtn dbtn-outline">👁 Preview ${(d.client_name||'leader').split(' ')[0]}'s page (as debrief complete)</a>` : ''}
-      ${d.report_generated_at ? `<button class="dbtn dbtn-outline" onclick="openResultsNarrativeEditor()">✍️ Edit results-page words</button>` : ''}
-      <button class="dbtn dbtn-outline" onclick="openGroupLabelEditor()">🏷 Rename rater groups</button>
-      <button class="dbtn dbtn-outline" onclick="openReportDocEditor()">🧱 Edit structured report (sections)</button>
-      ${d.client_id ? `<button class="dbtn dbtn-outline" onclick="openPlanPrefillEditor()">🎯 Draft 90-day plan (prefill client)</button>` : ''}
-      <button class="dbtn dbtn-primary" ${canGenerate?'':'disabled'} onclick="generateReport(event)">
-        ⚙ Generate Draft Report (Claude)
-      </button>
-      ${canOverride && !d.report_generated_at ? `
-      <button class="dbtn dbtn-outline" style="border-color:var(--d-amber);color:var(--d-amber);" onclick="generateReportOverride()">
-        ⚠ Generate with ${done} Responses (Override)
-      </button>` : ''}
-      ${d.report_generated_at && !d.report_finalized_at ? `
-      <button class="dbtn dbtn-gold" onclick="openReportPreview()">👁 Preview &amp; Finalize Report</button>` : ''}
-      ${d.debrief_completed_at && !d.plan_locked_at ? `
-      <button class="dbtn dbtn-outline" style="color:#b91c1c;border-color:#b91c1c;" onclick="undoDebriefComplete()">↩ Undo Debrief Complete</button>` : d.debrief_completed_at ? '' : d.report_finalized_at ? `
-      ${DIAG_SEL.client_id ? `<button class="dbtn dbtn-gold" onclick="openActivateSprintModal()">▶ Activate 90-Day Sprint →</button>` : `<button class="dbtn dbtn-outline" onclick="markDebriefComplete()">Mark Debrief Complete →</button>`}` : ''}
-    </div>
+    ${surveyUnlocked ? `<div style="margin-top:6px;">${reportStepperHtml(d, done, canGenerate)}</div>` : ''}
+
+    ${canOverride && !d.report_generated_at ? `
+    <div style="margin-top:4px;margin-bottom:10px;">
+      <button class="dbtn dbtn-outline" style="border-color:var(--d-amber);color:var(--d-amber);" onclick="generateReportOverride()">⚠ Generate with only ${done} responses (override)</button>
+      <span class="dhint" style="margin-left:8px;">Below the 7-rater minimum — report quality will be limited.</span>
+    </div>` : ''}
+
+    ${d.report_finalized_at ? `
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--d-border);">
+      <div style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--d-mid);margin-bottom:10px;">After the debrief</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        ${d.debrief_completed_at && !d.plan_locked_at ? `<button class="dbtn dbtn-outline dbtn-sm" style="color:#b91c1c;border-color:#e3b3b3;" onclick="undoDebriefComplete()">Undo debrief complete</button>` : d.debrief_completed_at ? `<span style="font-size:12px;color:#01949A;font-weight:600;">Debrief complete &mdash; access granted.</span>` : (DIAG_SEL.client_id ? `<button class="dbtn dbtn-gold" onclick="openActivateSprintModal()">Activate 90-day sprint</button>` : `<button class="dbtn dbtn-outline" onclick="markDebriefComplete()">Mark debrief complete</button>`)}
+      </div>
+    </div>` : ''}
+
+    <details style="margin-top:16px;padding-top:14px;border-top:1px solid var(--d-border);">
+      <summary style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--d-mid);cursor:pointer;list-style:none;">Also available &mdash; editing tools</summary>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;">
+        ${done>=1 ? `<button class="dbtn dbtn-outline dbtn-sm" onclick="viewCurrentScores()">View current scores</button>` : ''}
+        ${d.report_generated_at ? `<button class="dbtn dbtn-outline dbtn-sm" onclick="openResultsNarrativeEditor()">Edit results-page words</button>` : ''}
+        <button class="dbtn dbtn-outline dbtn-sm" onclick="openGroupLabelEditor()">Rename rater groups</button>
+        <button class="dbtn dbtn-outline dbtn-sm" onclick="openReportDocEditor()">Edit report sections</button>
+      </div>
+    </details>
     <label style="display:flex;align-items:flex-start;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--d-border);font-size:13px;cursor:pointer;">
       <input type="checkbox" id="plan-sponsor-approval" ${d.plan_requires_sponsor_approval ? 'checked' : ''} onchange="toggleSponsorApproval(this.checked)" style="width:16px;height:16px;margin-top:1px;accent-color:var(--d-blue);">
       <span>Require the sponsor to review &amp; approve this leader's 90-day plan before it launches.<br><span style="color:var(--d-mid);font-size:12px;">When on, the plan appears in the sponsor's Decision Room as "awaiting approval," with Approve / Request-changes. Leave off for sponsors who don't review plans.</span></span>
