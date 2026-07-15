@@ -8969,30 +8969,46 @@ function reportStepperHtml(d, done, canGenerate) {
 
   const muted = (t) => '<span style="font-size:12px;color:' + MUTE + ';">' + t + '</span>';
 
-  // Step 1 — Generate
-  let s1state, s1cta;
-  if (!canGenerate) { s1state = 'active'; s1cta = muted('Waiting on 7 or more completed raters before the report can be generated.'); }
-  else if (!generated) { s1state = 'active'; s1cta = '<button class="dbtn dbtn-primary" onclick="generateReport(event)">Generate report</button>'; }
-  else { s1state = 'done'; s1cta = '<button class="dbtn dbtn-outline dbtn-sm" onclick="generateReport(event)">Regenerate</button>' + muted('Generated ' + diagFormatDate(d.report_generated_at) + '. Regenerating re-locks publish.'); }
+  // ── Strictly sequential: exactly ONE step is "Now". Earlier = done, later = locked.
+  // A report that was published implies it was reviewed (historically), so a report
+  // finalized before this feature existed shows the whole flow complete rather than a
+  // contradictory published-but-not-reviewed state.
+  const reviewedEff  = reviewed || published;
+  const planApplicable = !!d.client_id;
+  const planDone     = planDrafted || !planApplicable;    // not applicable => not a gate
+  let current;
+  if (!generated)        current = 1;
+  else if (!planDone)    current = 2;
+  else if (!reviewedEff) current = 3;
+  else if (!published)   current = 4;
+  else                   current = 5;                     // all complete
+  const st = (i) => i < current ? 'done' : (i === current ? 'active' : 'locked');
+  const s1state = st(1), s2state = st(2), s3state = st(3), s4state = st(4);
 
-  // Step 2 — Draft 90-day plan (prefills the wizard). Part of the flow, not a hard gate.
-  let s2state, s2cta;
-  if (!generated) { s2state = 'locked'; s2cta = muted('Generate the report first.'); }
-  else if (!d.client_id) { s2state = 'active'; s2cta = muted('No linked client to pre-fill — link one on the client profile.'); }
-  else if (planDrafted) { s2state = 'done'; s2cta = '<button class="dbtn dbtn-outline dbtn-sm" onclick="openPlanPrefillEditor()">Edit drafted plan</button>'; }
-  else { s2state = 'active'; s2cta = '<button class="dbtn dbtn-primary" onclick="openPlanPrefillEditor()">Draft 90-day plan</button>'; }
+  // Step 1 — Generate
+  let s1cta;
+  if (s1state === 'active' && !canGenerate) s1cta = muted('Waiting on 7 or more completed raters before the report can be generated.');
+  else if (s1state === 'active')            s1cta = '<button class="dbtn dbtn-primary" onclick="generateReport(event)">Generate report</button>';
+  else                                      s1cta = '<button class="dbtn dbtn-outline dbtn-sm" onclick="generateReport(event)">Regenerate</button>' + muted('Generated ' + diagFormatDate(d.report_generated_at) + '. Regenerating re-locks publish.');
+
+  // Step 2 — Draft 90-day plan (prefills the wizard).
+  let s2cta;
+  if (!planApplicable)          s2cta = muted('No linked client to pre-fill &mdash; link one on the client profile to draft a plan.');
+  else if (s2state === 'locked') s2cta = muted('Generate the report first.');
+  else if (s2state === 'done')   s2cta = '<button class="dbtn dbtn-outline dbtn-sm" onclick="openPlanPrefillEditor()">Edit drafted plan</button>';
+  else                           s2cta = '<button class="dbtn dbtn-primary" onclick="openPlanPrefillEditor()">Draft 90-day plan</button>';
 
   // Step 3 — Review (HARD GATE). Preview the leader page + a deliberate confirm.
-  let s3state, s3cta;
-  if (!generated) { s3state = 'locked'; s3cta = muted('Generate the report first.'); }
-  else if (reviewed) { s3state = 'done'; s3cta = (previewUrl ? '<a class="dbtn dbtn-outline dbtn-sm" href="' + previewUrl + '" target="_blank">Re-open ' + first + "'s page</a>" : '') + muted('Reviewed ' + diagFormatDate(d.report_reviewed_at) + '.'); }
-  else { s3state = 'active'; s3cta = (previewUrl ? '<a class="dbtn dbtn-primary" href="' + previewUrl + '" target="_blank">Preview ' + first + "'s page</a>" : muted('No leader link on file.')) + '<button class="dbtn dbtn-outline" onclick="markReportReviewed()">I have reviewed it &mdash; unlock publish</button>'; }
+  let s3cta;
+  if (s3state === 'locked')      s3cta = muted('Complete the step above first.');
+  else if (s3state === 'done')   s3cta = (previewUrl ? '<a class="dbtn dbtn-outline dbtn-sm" href="' + previewUrl + '" target="_blank">Re-open ' + first + "'s page</a>" : '') + muted(reviewed ? ('Reviewed ' + diagFormatDate(d.report_reviewed_at) + '.') : 'Reviewed at publish.');
+  else                           s3cta = (previewUrl ? '<a class="dbtn dbtn-primary" href="' + previewUrl + '" target="_blank">Preview ' + first + "'s page</a>" : muted('No leader link on file.')) + '<button class="dbtn dbtn-outline" onclick="markReportReviewed()">I have reviewed it &mdash; unlock publish</button>';
 
-  // Step 4 — Publish (locked until reviewed).
-  let s4state, s4cta;
-  if (published) { s4state = 'done'; s4cta = '<span style="font-size:12px;color:' + TEAL + ';font-weight:600;">Published ' + diagFormatDate(d.report_finalized_at) + ' &mdash; live to ' + first + '.</span>'; }
-  else if (!reviewed) { s4state = 'locked'; s4cta = muted('Review the page first.'); }
-  else { s4state = 'active'; s4cta = '<button class="dbtn dbtn-gold" onclick="openReportPreview()">Publish report</button>' + muted('Makes it visible to ' + first + '.'); }
+  // Step 4 — Publish.
+  let s4cta;
+  if (s4state === 'done')        s4cta = '<span style="font-size:12px;color:' + TEAL + ';font-weight:600;">Published ' + diagFormatDate(d.report_finalized_at) + ' &mdash; live to ' + first + '.</span>';
+  else if (s4state === 'locked') s4cta = muted('Review the page first.');
+  else                           s4cta = '<button class="dbtn dbtn-gold" onclick="openReportPreview()">Publish report</button>' + muted('Makes it visible to ' + first + '.');
 
   return step(1, s1state, 'Generate the report', 'Runs the analysis and writes the draft from the closed survey.', s1cta, false)
     + step(2, s2state, 'Draft the 90-day plan', 'Pre-fills the leader&rsquo;s wizard. Do this before the debrief.', s2cta, false)
