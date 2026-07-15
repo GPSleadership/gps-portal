@@ -1033,8 +1033,39 @@ function sponsorReadoutCards(m){
   var totalRaters=(dr?dr.n:0)+(other?other.n:0)+(sup?sup.n:0);
   var glance = 'Develop and monitor (90 days).';
   if(sup && sup.tp3!=null){ if(sup.tp3<=2.5) glance='Reset the role conversation.'; else if(sup.tp3<=2.9 && dr && dr.tp3>=4) glance='Develop and invest (90 days).'; }
-  var headline = (dr && sup) ? 'Strong with the team. A serious gap with you.' : 'The read across groups.';
-  var split = (dr && sup) ? (' -- the team rates them '+fnum(dr.tp3)+', you rate them '+fnum(sup.tp3)+'. That split is the story; the decision is yours.') : '.';
+  // Direction-aware gap story. The supervisor can be the HIGH rater (the gap is with the
+  // team/peers, and the supervisor's view may be a blind spot) or the LOW rater (a
+  // calibration question). The old copy hardcoded "a serious gap with you", which read
+  // exactly backwards whenever the supervisor rated ABOVE the team. Blend direct reports +
+  // peers into one team read so the peer signal isn't hidden behind the direct-report number.
+  var teamBlend = wmerge([dr, other]);
+  var teamLabel = (dr && other) ? 'their team and peers' : (dr ? 'their team' : (other ? 'their peers and colleagues' : 'their team'));
+  var headline, split;
+  var leverPhrase = 'closing the lowest dimensions shown below';
+  if(sup && sup.tp3!=null && teamBlend && teamBlend.tp3!=null){
+    var _gap = sup.tp3 - teamBlend.tp3;
+    var _sharp = '';
+    if(dr && other && dr.tp3!=null && other.tp3!=null){
+      if(other.tp3 <= dr.tp3 - 0.2)      _sharp = ' It is sharpest with peers and colleagues ('+fnum(other.tp3)+').';
+      else if(dr.tp3 <= other.tp3 - 0.2) _sharp = ' It is sharpest with '+first+"'s own team ("+fnum(dr.tp3)+').';
+    }
+    if(_gap >= 0.4){
+      headline = 'Your read is more favorable than the room’s.';
+      split    = ' -- you rate '+first+' '+fnum(sup.tp3)+', '+teamLabel+' rate '+first+' '+fnum(teamBlend.tp3)+'. The gap to close is with them, not with you.'+_sharp;
+      leverPhrase = 'closing the gap between how '+teamLabel+' experience '+first+' and the delivery you already see';
+    } else if(_gap <= -0.4){
+      headline = first+'’s team rates '+first+' higher than you do.';
+      split    = ' -- you rate '+first+' '+fnum(sup.tp3)+', '+teamLabel+' rate '+fnum(teamBlend.tp3)+'. Worth checking whether that is calibration, or something you see that they do not.';
+      leverPhrase = 'aligning your read with how the team experiences '+first;
+    } else {
+      headline = 'A consistent read across groups.';
+      split    = ' -- you and '+teamLabel+' land within '+fnum(Math.abs(_gap))+' of each other. The dimension story below is where to focus.';
+      leverPhrase = 'lifting the lowest dimensions shown below';
+    }
+  } else {
+    headline = 'The read across groups.';
+    split    = '.';
+  }
   var pa = r.plan_approval || {};
   var planStatus = pa.requires ? (pa.status==='approved'?'Approved':(pa.status==='changes_requested'?'Changes requested':'Awaiting review')) : 'In coaching plan';
   var succ = r.succession || {};
@@ -1125,7 +1156,7 @@ function sponsorReadoutCards(m){
       + '<div><div style="position:relative;width:300px;max-width:100%;height:300px;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);border:1px solid '+C.line+';border-radius:8px;overflow:hidden;">'+cells
       + '<div style="position:absolute;width:20px;height:20px;border-radius:50%;background:'+C.amberbar+';border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3);transform:translate(-50%,50%);z-index:5;left:'+xPct.toFixed(0)+'%;bottom:'+yPct.toFixed(0)+'%;" title="'+esc(first)+'"></div>'
       + '</div><div style="font-size:11px;color:'+C.mid+';font-weight:700;text-align:center;margin-top:6px;">Leadership effectiveness (TP3) →</div></div>'
-      + '<div style="flex:1;min-width:200px;font-size:13px;color:'+C.ink+';line-height:1.55;"><b style="color:'+C.navy+';">'+labels[2-rb][cb]+'.</b> Effectiveness '+fnum(xv)+' and bench '+fnum(yv)+' place '+esc(first)+' in this band. The lever that moves '+esc(first)+' up and to the right is the supervisor-trust gap. We show where '+esc(first)+' sits today and what would shift it; where you take it is your decision.</div>'
+      + '<div style="flex:1;min-width:200px;font-size:13px;color:'+C.ink+';line-height:1.55;"><b style="color:'+C.navy+';">'+labels[2-rb][cb]+'.</b> Effectiveness '+fnum(xv)+' and bench '+fnum(yv)+' place '+esc(first)+' in this band. The lever that moves '+esc(first)+' up and to the right is '+esc(leverPhrase)+'. We show where '+esc(first)+' sits today and what would shift it; where you take it is your decision.</div>'
       + '</div></div>';
   })();
 
