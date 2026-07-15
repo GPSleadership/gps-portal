@@ -901,6 +901,7 @@
     <div id="subnav-settings" class="section-subnav" style="display:none;">
       <div class="section-subtab active" id="sub-admins"   onclick="showSection('admins')">Admin Accounts</div>
       <div class="section-subtab"        id="sub-security" onclick="showSection('security')">Account &amp; Security</div>
+      <div class="section-subtab"        id="sub-reportflow" onclick="showSection('reportflow')">Report Flow</div>
     </div>
 
     <!-- ═══ ASK ALEX LOG SECTION ═══ -->
@@ -1101,6 +1102,21 @@ I'm taking part in a leadership assessment run by GPS Leadership Solutions. Thei
         </div>
       </div>
     </div><!-- /section-admins -->
+
+    <!-- ═══ REPORT FLOW SECTION ═══ -->
+    <div id="section-reportflow" style="display:none;">
+      <div class="toolbar" style="margin-bottom:16px;">
+        <div class="toolbar-title">Report Flow</div>
+      </div>
+      <div style="background:var(--white);border-radius:8px;padding:14px 18px;margin-bottom:16px;border-left:4px solid var(--navy);font-size:13px;color:var(--text);line-height:1.6;">
+        Controls which steps are <strong>required</strong> before a diagnostic report can be published. Turn a step off to make it <strong>optional</strong> — it still shows in the flow, but it won't block Publish. Reviewing the leader's page stays required, always.
+      </div>
+      <div style="background:var(--white);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06);overflow:hidden;">
+        <div id="reportFlowContent" style="padding:16px 18px;">
+          <div class="spinner"></div>
+        </div>
+      </div>
+    </div><!-- /section-reportflow -->
 
     <!-- ═══ ACCOUNT & SECURITY SECTION ═══ -->
     <div id="section-security" style="display:none;">
@@ -4503,7 +4519,7 @@ document.getElementById('addAdminModal').addEventListener('click', function(e) {
 let _currentSection = 'dashboard';
 
 // Refactored IA: 5 top-level groups, each mapping to one or more underlying sections.
-var GROUP_OF = { dashboard:'today', clients:'clients', insights:'insights', diagnostics:'diagteams', decisionroom:'diagteams', emails:'comms', messages:'comms', asklog:'comms', templates:'comms', accesshelp:'comms', admins:'settings', security:'settings', workshops:'workshops', organizations:'organizations', aistudio:'aistudio' };
+var GROUP_OF = { dashboard:'today', clients:'clients', insights:'insights', diagnostics:'diagteams', decisionroom:'diagteams', emails:'comms', messages:'comms', asklog:'comms', templates:'comms', accesshelp:'comms', admins:'settings', security:'settings', reportflow:'settings', workshops:'workshops', organizations:'organizations', aistudio:'aistudio' };
 var GROUP_DEFAULT = { today:'dashboard', clients:'clients', insights:'insights', diagteams:'diagnostics', comms:'emails', settings:'admins', workshops:'workshops', organizations:'organizations', aistudio:'aistudio' };
 function showGroup(group){ showSection(GROUP_DEFAULT[group] || 'dashboard'); }
 
@@ -4743,7 +4759,7 @@ function showSection(name, skipHooks) {
   _currentSection = name;
   try { localStorage.setItem('gps_coach_section', name); } catch (_) {}
   // Toggle the underlying content sections.
-  ['dashboard', 'clients', 'insights', 'emails', 'messages', 'asklog', 'templates', 'accesshelp', 'admins', 'security', 'diagnostics', 'decisionroom', 'workshops', 'organizations', 'aistudio'].forEach(s => {
+  ['dashboard', 'clients', 'insights', 'emails', 'messages', 'asklog', 'templates', 'accesshelp', 'admins', 'security', 'reportflow', 'diagnostics', 'decisionroom', 'workshops', 'organizations', 'aistudio'].forEach(s => {
     var sec = document.getElementById('section-' + s);
     if (sec) sec.style.display = s === name ? 'block' : 'none';
   });
@@ -4772,6 +4788,7 @@ function showSection(name, skipHooks) {
   if (name === 'asklog')      loadAskLog();
   if (name === 'messages')    loadCoachInbox();
   if (name === 'admins')      loadAdminAccounts();
+  if (name === 'reportflow')  loadReportFlowSettings();
   if (name === 'templates')   { loadEmailTemplates(); loadCcSettingsPanel(); loadRenewalConfigPanel(); }
   if (name === 'dashboard')   { _actionItemsLoaded = false; renderDiagHome(); refreshMsgBadge(); }
   if (name === 'diagnostics') { diagBoot(); renderDiagTable(); }
@@ -5478,6 +5495,54 @@ async function saveRenewalConfig(){
     await cdUpdate('renewal_config', vals, { eq:{ id:1 } });
     if (status) { status.style.color = 'var(--teal)'; status.textContent = '✓ Saved'; setTimeout(() => { if (status) status.textContent = ''; }, 3000); }
   } catch (e) { if (status) { status.style.color = 'var(--red)'; status.textContent = 'Error: ' + (e.message || 'save failed'); } }
+}
+
+// ── Report Flow settings (global gates for the diagnostic report stepper) ──────
+// REPORT_FLOW_CFG is read by reportStepperHtml when rendering the flow. Defaults to
+// current behavior (both required); loaded once in diagBoot from report_flow_settings.
+var REPORT_FLOW_CFG = { require_plan_draft: true, require_pdf_upload: true };
+async function loadReportFlowConfig(){
+  try {
+    const r = await cdSelect('report_flow_settings', { eq:{ id:1 }, limit:1 });
+    if (r && r[0]) REPORT_FLOW_CFG = {
+      require_plan_draft: r[0].require_plan_draft !== false,
+      require_pdf_upload: r[0].require_pdf_upload !== false,
+    };
+  } catch(_){}
+}
+async function loadReportFlowSettings(){
+  const box = document.getElementById('reportFlowContent'); if (!box) return;
+  await loadReportFlowConfig();
+  const cfg = REPORT_FLOW_CFG;
+  const row = (k,label,desc) =>
+    '<label style="display:flex;align-items:flex-start;gap:10px;padding:12px 0;border-top:1px solid var(--gray-200);font-size:13px;cursor:pointer;">'
+    + '<input type="checkbox" id="rf-'+k+'" '+(cfg[k]?'checked':'')+' style="width:16px;height:16px;margin-top:2px;accent-color:var(--navy);">'
+    + '<span><b>'+label+'</b><br><span style="color:var(--gray-600);font-size:12px;line-height:1.5;">'+desc+'</span></span></label>';
+  box.innerHTML =
+    '<div style="font-weight:800;color:var(--navy);font-size:14px;margin-bottom:2px;">Required steps before Publish</div>'
+    + '<div style="font-size:12px;color:var(--gray-600);margin-bottom:6px;line-height:1.5;">On = the step must be done before you can publish. Off = optional; it still appears in the flow but won\'t block Publish.</div>'
+    + row('require_pdf_upload','Require the report PDF on file','Coach must upload the finished PDF before publishing. Recommended while reports are built outside the system.')
+    + row('require_plan_draft','Require a drafted 90-day plan','Coach must draft the leader\'s plan before publishing. Turn off if you\'d rather draft it at or after the debrief.')
+    + '<div style="padding:12px 0 0;border-top:1px solid var(--gray-200);margin-top:4px;">'
+    +   '<span style="font-size:12px;color:var(--gray-600);">Reviewing the leader\'s page is always required and can\'t be turned off.</span>'
+    + '</div>'
+    + '<div style="margin-top:14px;"><button onclick="saveReportFlowSettings(event)" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;">Save report flow settings</button> <span id="rf-msg" style="font-size:12px;margin-left:8px;"></span></div>';
+}
+async function saveReportFlowSettings(e){
+  const btn = e ? e.currentTarget : null; if (btn) btn.disabled = true;
+  const msg = document.getElementById('rf-msg');
+  const payload = {
+    require_pdf_upload: document.getElementById('rf-require_pdf_upload').checked,
+    require_plan_draft: document.getElementById('rf-require_plan_draft').checked,
+    updated_at: new Date().toISOString(),
+  };
+  try {
+    await cdUpdate('report_flow_settings', payload, { eq:{ id:1 } });
+    REPORT_FLOW_CFG = { require_plan_draft: payload.require_plan_draft, require_pdf_upload: payload.require_pdf_upload };
+    if (msg) { msg.style.color = 'var(--teal)'; msg.textContent = 'Saved. New diagnostics and refreshed report tabs use these settings.'; }
+  } catch(err){
+    if (msg) { msg.style.color = 'var(--red)'; msg.textContent = 'Could not save: ' + err.message; }
+  } finally { if (btn) btn.disabled = false; }
 }
 
 async function loadCcSettingsPanel(){
@@ -7173,7 +7238,7 @@ const DIAG_BASE_URL = window.location.origin;
 async function diagBoot() {
   if (_diagBooted) return;
   _diagBooted = true;
-  await Promise.all([loadDiagnostics(), loadTeamReports()]);
+  await Promise.all([loadDiagnostics(), loadTeamReports(), loadReportFlowConfig()]);
   diagLoadClients();
 
   // Show/hide client link dropdown
@@ -8947,14 +9012,17 @@ function reportStepperHtml(d, done, canGenerate) {
   // No emoji. Colour encodes state only. One prominent action per step.
   const NAVY = '#004369', TEAL = '#01949A', MUTE = '#8a97a6', LINE = '#e4e8ee';
   const step = (n, state, title, sub, ctaHtml, isLastStep) => {
-    const isDone = state === 'done', isActive = state === 'active', isLocked = state === 'locked';
-    const numBorder = isDone ? TEAL : isActive ? NAVY : LINE;
+    // 'optional' = an admin-disabled gate that isn't done: shown, actionable, non-blocking.
+    const isDone = state === 'done', isActive = state === 'active', isLocked = state === 'locked', isOptional = state === 'optional';
+    const numBorder = isDone ? TEAL : isActive ? NAVY : MUTE;
     const numBg = isDone ? TEAL : isActive ? NAVY : '#fff';
     const numFg = (isDone || isActive) ? '#fff' : MUTE;
     const badge = isDone ? '&#10003;' : String(n);           // clean check glyph, not emoji
     const titleColor = isLocked ? MUTE : '#1b2a3a';
-    const pill = isActive && !isDone
+    const pill = isActive
       ? '<span style="font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:' + NAVY + ';font-weight:700;">Now</span>'
+      : isOptional
+      ? '<span style="font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:' + MUTE + ';font-weight:700;">Optional</span>'
       : (isLocked ? '<span style="font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:' + MUTE + ';font-weight:700;">Locked</span>' : '');
     const connector = isLastStep ? '' : '<div style="position:absolute;left:14px;top:30px;bottom:-14px;width:1.5px;background:' + (isDone ? TEAL : LINE) + ';"></div>';
     return '<div style="position:relative;display:flex;gap:14px;align-items:flex-start;padding-bottom:14px;">'
@@ -8973,12 +9041,18 @@ function reportStepperHtml(d, done, canGenerate) {
   // A report that was published implies it was reviewed (historically), so a report
   // finalized before this feature existed shows the whole flow complete rather than a
   // contradictory published-but-not-reviewed state.
+  // Admin-configurable gates (Settings → Report Flow). Off => that step is optional
+  // (still shown, still actionable, but it never blocks Publish).
+  const _cfg = (typeof REPORT_FLOW_CFG !== 'undefined') ? REPORT_FLOW_CFG : { require_plan_draft:true, require_pdf_upload:true };
+  const pdfGateOn  = _cfg.require_pdf_upload !== false;
+  const planGateOn = _cfg.require_plan_draft !== false;
+
   const reviewedEff  = reviewed || published;
   const debriefed    = !!d.debrief_completed_at;
   const pdfUploaded  = !!d.report_pdf_url;
-  const pdfDone      = pdfUploaded || published;          // publishing implies we're past upload
+  const pdfDone      = !pdfGateOn || pdfUploaded || published;          // gate off / uploaded / already published => not blocking
   const planApplicable = !!d.client_id;
-  const planDone     = planDrafted || !planApplicable || published;  // not-applicable OR already published => not a blocking gate
+  const planDone     = !planGateOn || planDrafted || !planApplicable || published;  // gate off / drafted / n-a / published => not blocking
   let current;
   if (!generated)        current = 1;
   else if (!pdfDone)     current = 2;
@@ -8989,6 +9063,11 @@ function reportStepperHtml(d, done, canGenerate) {
   else                   current = 7;                     // all complete
   const st = (i) => i < current ? 'done' : (i === current ? 'active' : 'locked');
   const s1state = st(1), s2state = st(2), s3state = st(3), s4state = st(4), s5state = st(5), s6state = st(6);
+
+  // A gate that's OFF and genuinely not-done should read "Optional", not a false check.
+  // (When it's done-because-published we keep the check — that's a real historical pass.)
+  const s2display = (!pdfGateOn && !pdfUploaded && !published && s2state === 'done') ? 'optional' : s2state;
+  const s3display = (!planGateOn && planApplicable && !planDrafted && !published && s3state === 'done') ? 'optional' : s3state;
 
   // Step 1 — Generate
   let genCta;
@@ -9010,14 +9089,15 @@ function reportStepperHtml(d, done, canGenerate) {
       + '<button class="dbtn dbtn-primary" id="finalReportSaveBtn" style="display:none;" onclick="uploadFinalReport()">Upload PDF</button>'
       + '<span id="upload-report-msg" style="font-size:12px;display:none;"></span>';
     if (pdfUploaded) pdfCta = '<a class="dbtn dbtn-outline dbtn-sm" href="' + d.report_pdf_url + '" target="_blank">View PDF</a>' + _picker;
-    else             pdfCta = _picker + muted('Upload the finished report PDF. It stays private until you publish.');
+    else             pdfCta = _picker + muted(s2display === 'optional' ? 'Optional &mdash; won&rsquo;t block publish. Stays private until you publish.' : 'Upload the finished report PDF. It stays private until you publish.');
   }
 
   // Step 3 — Draft 90-day plan (prefills the wizard).
   let planCta;
   if (!planApplicable)           planCta = muted('No linked client to pre-fill &mdash; link one on the client profile to draft a plan.');
   else if (s3state === 'locked') planCta = muted('Upload the report PDF first.');
-  else if (s3state === 'done')   planCta = '<button class="dbtn dbtn-outline dbtn-sm" onclick="openPlanPrefillEditor()">Edit drafted plan</button>';
+  else if (planDrafted)          planCta = '<button class="dbtn dbtn-outline dbtn-sm" onclick="openPlanPrefillEditor()">Edit drafted plan</button>';
+  else if (s3display === 'optional') planCta = '<button class="dbtn dbtn-outline dbtn-sm" onclick="openPlanPrefillEditor()">Draft 90-day plan</button>' + muted('Optional &mdash; won&rsquo;t block publish.');
   else                           planCta = '<button class="dbtn dbtn-primary" onclick="openPlanPrefillEditor()">Draft 90-day plan</button>';
 
   // Step 4 — Review (HARD GATE). Preview the leader page + a deliberate confirm.
@@ -9044,8 +9124,8 @@ function reportStepperHtml(d, done, canGenerate) {
   else                           debriefCta = '<button class="dbtn dbtn-primary" onclick="markDebriefComplete()">Mark debrief complete</button>' + muted('Emails ' + first + ' their results and opens their Executive Impact System access.');
 
   return step(1, s1state, 'Generate the report', 'Runs the analysis and writes the draft from the closed survey.', genCta, false)
-    + step(2, s2state, 'Upload the report PDF', 'Add the finished report PDF (the one you build in Claude). It stays private until you publish.', pdfCta, false)
-    + step(3, s3state, 'Draft the 90-day plan', 'Pre-fills the leader&rsquo;s wizard. Do this before the debrief.', planCta, false)
+    + step(2, s2display, 'Upload the report PDF', 'Add the finished report PDF (the one you build in Claude). It stays private until you publish.', pdfCta, false)
+    + step(3, s3display, 'Draft the 90-day plan', 'Pre-fills the leader&rsquo;s wizard. Do this before the debrief.', planCta, false)
     + step(4, s4state, 'Review ' + first + '&rsquo;s page', 'See exactly what the leader will see &mdash; scores, bars, report. Required before publishing.', reviewCta, false)
     + step(5, s5state, 'Publish the report', 'Makes it live to the leader. Until then they see only a holding message.', pubCta, false)
     + step(6, s6state, 'Debrief complete', 'After the debrief meeting: emails ' + first + ' their results and opens their Executive Impact System access.', debriefCta, true);
