@@ -14,5 +14,9 @@ create table if not exists report_flow_settings (
 
 insert into report_flow_settings (id) values (1) on conflict (id) do nothing;
 
+-- Lock down to match the rest of the schema (coach-only, served via service-key endpoints).
+-- RLS enabled + no policy blocks the public/anon API; the service role still bypasses it.
+alter table public.report_flow_settings enable row level security;
+
 -- ROLLBACK
 -- drop table if exists report_flow_settings;

@@ -9108,7 +9108,10 @@ function reportStepperHtml(d, done, canGenerate) {
 
   // Step 5 — Publish.
   let pubCta;
-  if (s5state === 'done')        pubCta = '<span style="font-size:12px;color:' + TEAL + ';font-weight:600;">Published ' + diagFormatDate(d.report_finalized_at) + ' &mdash; live to ' + first + '.</span>';
+  if (s5state === 'done') {
+    pubCta = '<span style="font-size:12px;color:' + TEAL + ';font-weight:600;">Published ' + diagFormatDate(d.report_finalized_at) + ' &mdash; live to ' + first + '.</span>';
+    if (!d.debrief_completed_at) pubCta += '<button class="dbtn dbtn-outline dbtn-sm" style="color:#b91c1c;border-color:#e3b3b3;" onclick="unpublishReport()">Unpublish</button>';
+  }
   else if (s5state === 'locked') pubCta = muted('Review the page first.');
   else                           pubCta = '<button class="dbtn dbtn-gold" onclick="openReportPreview()">Publish report</button>' + muted('Makes it visible to ' + first + '.');
 
@@ -10310,10 +10313,43 @@ function showConfidentialityGate(conf, msg, onProceed) {
   if (px) px.onclick = function() { close(); onProceed(); };
 }
 
+// ── Report-generation progress overlay ────────────────────────────────────────
+// The generate call is a multi-minute analysis + write. Without a visible signal
+// the page looks frozen. Show a blocking overlay with a spinner + rotating status
+// so the coach (or EA) knows it's working. Removed on success/error.
+var _genProgTimer = null;
+function showGenProgress() {
+  hideGenProgress();
+  var ov = document.createElement('div');
+  ov.id = 'gen-progress-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(11,26,42,.55);z-index:10001;display:flex;align-items:center;justify-content:center;';
+  ov.innerHTML =
+    '<div style="background:#fff;border-radius:14px;padding:30px 34px;max-width:420px;width:calc(100% - 40px);box-shadow:0 12px 48px rgba(0,0,0,.28);text-align:center;">'
+    + '<div class="spinner" style="margin:0 auto 18px;"></div>'
+    + '<div style="font-family:Montserrat,sans-serif;font-size:16px;font-weight:800;color:#004369;margin-bottom:8px;">Generating the report</div>'
+    + '<div id="gen-progress-msg" style="font-size:13.5px;color:#40525f;line-height:1.5;min-height:38px;">Reading the survey responses&hellip;</div>'
+    + '<div style="font-size:12px;color:#8a97a6;margin-top:14px;">This can take a couple of minutes. Keep this tab open &mdash; it&rsquo;s working.</div>'
+    + '</div>';
+  document.body.appendChild(ov);
+  var msgs = ['Reading the survey responses…','Weighing each rater group…','Scoring Trust, Proactivity, and Productivity…','Finding the gaps and the strengths…','Writing the draft narrative…','Polishing the language…','Almost there — finalizing the draft…'];
+  var i = 0;
+  _genProgTimer = setInterval(function(){
+    i = Math.min(i + 1, msgs.length - 1);
+    var el = document.getElementById('gen-progress-msg');
+    if (el) el.textContent = msgs[i];
+  }, 6000);
+}
+function hideGenProgress() {
+  if (_genProgTimer) { clearInterval(_genProgTimer); _genProgTimer = null; }
+  var ov = document.getElementById('gen-progress-overlay');
+  if (ov) ov.remove();
+}
+
 async function generateReport(e, ack) {
   const btn = e ? e.currentTarget : null;
   if (btn) { btn.disabled = true; btn.textContent = '⚙ Generating…'; }
-  const reset = function() { if (btn) { btn.disabled = false; btn.textContent = '⚙ Generate Draft Report (Claude)'; } };
+  const reset = function() { hideGenProgress(); if (btn) { btn.disabled = false; btn.textContent = '⚙ Generate Draft Report (Claude)'; } };
+  showGenProgress();
   try {
     const resp = await fetch('/api/diagnostic?action=generate-report', {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -10326,11 +10362,12 @@ async function generateReport(e, ack) {
       return;
     }
     if (!resp.ok) throw new Error(await resp.text());
+    hideGenProgress();
     await updateDiag({ status: 'report_draft', report_generated_at: new Date().toISOString() });
     await refreshSelected();
   } catch(ex) {
     reset();
-    alert('Error generating report: ' + ex.message);
+    alert('The report is taking longer than this page can wait.\n\nIt often finishes on the server anyway — give it about a minute, then refresh. If the draft has appeared, you\'re all set. If not, click Generate again.\n\n(' + ex.message + ')');
   }
 }
 
@@ -11113,6 +11150,20 @@ async function undoDebriefComplete() {
   if (!confirm('Undo debrief complete?\n\nThis will reset the status back to "Report Finalized" and clear the debrief timestamp. Use this only if you clicked it by mistake — no emails will be sent.')) return;
   await updateDiag({ status: 'report_final', debrief_completed_at: null });
   await refreshSelected();
+}
+
+// Unpublish a published report: clears report_finalized_at and drops the status below the
+// leader-visible threshold, so the leader immediately sees the "in review" holding state
+// again. The generated draft, PDF, and any review stay on file, so re-publishing is one click.
+async function unpublishReport() {
+  const d = DIAG_SEL; if (!d) return;
+  if (!confirm('Unpublish ' + (d.client_name || 'this leader') + "'s report?\n\n" +
+    'The leader will no longer be able to open it — they\'ll see the "in review" holding message until you publish again. The draft and PDF stay on file.\n\n' +
+    '(A results email that already went out can\'t be recalled.)')) return;
+  try {
+    await updateDiag({ report_finalized_at: null, status: (d.report_generated_at ? 'report_draft' : 'survey_closed') });
+    await refreshSelected();
+  } catch (e) { alert('Could not unpublish: ' + e.message); }
 }
 
 async function lockPlan() {
