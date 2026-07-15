@@ -11189,10 +11189,16 @@ async function uploadFinalReport() {
   // It stays private — the leader/client don't see it until the coach hits Publish,
   // which sets report_finalized_at. Only mirror to clients.diagnostic_report_url when
   // the report is ALREADY published, so an early upload can't surface it anywhere.
-  await updateDiag({ report_pdf_url: pdfUrl });
+  // Cache-bust: the object always lives at the same path (<id>/report.pdf), so a REPLACE
+  // overwrites it at an identical URL. Supabase's CDN + the browser cache that URL
+  // (cache-control max-age=3600), so a replaced report keeps showing the OLD file. Stamp
+  // a version query onto the stored URL every upload so a replacement gets a fresh address.
+  const bustedUrl = pdfUrl + (pdfUrl.indexOf('?') === -1 ? '?' : '&') + 'v=' + Date.now();
+
+  await updateDiag({ report_pdf_url: bustedUrl });
 
   if (DIAG_SEL.client_id && DIAG_SEL.report_finalized_at) {
-    await cdUpdate('clients', { diagnostic_report_url: pdfUrl }, { eq: { id: DIAG_SEL.client_id } });
+    await cdUpdate('clients', { diagnostic_report_url: bustedUrl }, { eq: { id: DIAG_SEL.client_id } });
   }
 
   _finalReportFile = null;
