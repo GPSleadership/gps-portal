@@ -8978,7 +8978,7 @@ function reportStepperHtml(d, done, canGenerate) {
   const pdfUploaded  = !!d.report_pdf_url;
   const pdfDone      = pdfUploaded || published;          // publishing implies we're past upload
   const planApplicable = !!d.client_id;
-  const planDone     = planDrafted || !planApplicable;    // not applicable => not a gate
+  const planDone     = planDrafted || !planApplicable || published;  // not-applicable OR already published => not a blocking gate
   let current;
   if (!generated)        current = 1;
   else if (!pdfDone)     current = 2;
