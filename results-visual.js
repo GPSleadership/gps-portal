@@ -276,8 +276,8 @@
       sowhat = '<div class="sowhat"><b>So what this means:</b> '+_rvEsc(N.sowhat)+'</div>';
     } else if(lowG && lowG.tp3!=null && lowG.tp3<4){
       const _sowhatText = isSup
-        ? "Only your direct reports are at or above the 4.0 standard. Your colleagues, supervisor, and self-assessment all fall below it — the people above and around you don't yet have the same confidence your team does. That gap is the work."
-        : 'Your '+(topG?topG.label:'strongest group')+' rates you highest, but your '+lowG.label+' experiences you differently. The work is closing that distance.';
+        ? 'The gap is with the person you report to. Your supervisor rates you lowest ('+_rvFmt(lowG.tp3)+') — below how your team and colleagues see you. When your manager’s read is the low outlier, closing that specific relationship is the work.'
+        : 'Your '+(topG?topG.label:'strongest group')+' rates you highest, but your '+lowG.label+' experience you differently. The work is closing that distance.';
       sowhat = '<div class="sowhat"><b>So what this means:</b> '+_sowhatText+'</div>';
     } else if(tier==='strong'){
       sowhat = '<div class="sowhat"><b>So what this means:</b> your groups see you consistently at the standard — the conversation is about more scope, not repair.</div>';
@@ -344,7 +344,7 @@
         <h2>Self vs. others</h2>
         <div class="vs"><span style="color:var(--rvmid)">Your self-rating (TP3)</span><b class="${_rvCls(selfTp3)}">${_rvFmt(selfTp3)} / 5</b></div>
         <div class="vs"><span style="color:var(--rvmid)">How others rate you (TP3)</span><b class="${_rvCls(tp3)}">${_rvFmt(tp3)} / 5</b></div>
-        <div class="vsnote">${selfTp3<tp3?'Others rate you a bit higher overall':'You rate yourself a bit higher than others do'}${lowG?` — but your ${lowG.label} ${lowG.k==='supervisor'?'is the exception, especially on trust':'sees it differently'}.`:'.'}</div>
+        <div class="vsnote">${selfTp3<tp3?'Others rate you a bit higher overall':'You rate yourself a bit higher than others do'}${lowG?` — but your ${lowG.label} ${lowG.k==='supervisor'?'is the exception, especially on trust':'see it differently'}.`:'.'}</div>
       </div>` : '';
     const prep = `
       <div class="prep" id="rv-debrief-prep">

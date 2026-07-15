@@ -10459,8 +10459,8 @@ function openResultsNarrativeEditor(){
   let _sowhatAuto='';
   if(_lowG&&_lowG.tp3!=null&&_lowG.tp3<4){
     _sowhatAuto=_isSup
-      ?"Only your direct reports are at or above the 4.0 standard. Your colleagues, supervisor, and self-assessment all fall below it -- that gap is the work."
-      :'Your '+(_topG?_topG.label:'strongest group')+' rates you highest, but your '+_lowG.label+' experiences you differently. The work is closing that distance.';
+      ?'The gap is with the person you report to. Your supervisor rates you lowest ('+_nfmt(_lowG.tp3)+') -- below how your team and colleagues see you. When your manager’s read is the low outlier, closing that specific relationship is the work.'
+      :'Your '+(_topG?_topG.label:'strongest group')+' rates you highest, but your '+_lowG.label+' experience you differently. The work is closing that distance.';
   } else if(_tier==='strong'){
     _sowhatAuto='Your groups see you consistently at the standard -- the conversation is about more scope, not repair.';
   }
