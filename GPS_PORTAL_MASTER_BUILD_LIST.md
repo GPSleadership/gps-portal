@@ -127,6 +127,10 @@ ACCEPTANCE: seed 3 test clients — self-service active (debrief done, no pay), 
 - **Restore mobile wizard step context** — at ≤480px all step labels hide (`client.html:417`); keep one persistent "Step N of 7 · <label>" line. — S
 - **`business_outcome_goal` leaks to client browser** (UI-only gate) — return an explicit column allowlist from `get-client.js:463`. — S
 
+### P2 — Show the uploaded report's file name (added 2026-07-15, Alex)
+
+After uploading a report PDF, the upload card / step 2 shows only "Report on file" — not the actual file name. Alex: "we should be able to see the name of the report once it's uploaded… that would help me so I'd know what's being shown versus clicking into it each time." Store the original filename on upload (`_finalReportFile.name` → new `report_pdf_filename` column, or reuse a field) and display it next to "View PDF" / "Replace PDF" in the stepper's step 2. Small. — S
+
 ### P2 — Coaching-side (coach console) page-by-page UX + visual pass (added 2026-07-14, Alex)
 
 Alex has spent his polish budget on the *client* side; the *coaching* side (`coach.html` and the coach-facing tabs/modals) now needs the same treatment. Go page by page / tab by tab through the coach console and make each screen clean, executive-grade, visually consistent, and — above all — **intuitive enough that a new admin (his EA) can operate it without being walked through**. Not just Alex's muscle memory.
