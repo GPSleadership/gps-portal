@@ -8974,6 +8974,7 @@ function reportStepperHtml(d, done, canGenerate) {
   // finalized before this feature existed shows the whole flow complete rather than a
   // contradictory published-but-not-reviewed state.
   const reviewedEff  = reviewed || published;
+  const debriefed    = !!d.debrief_completed_at;
   const planApplicable = !!d.client_id;
   const planDone     = planDrafted || !planApplicable;    // not applicable => not a gate
   let current;
@@ -8981,9 +8982,10 @@ function reportStepperHtml(d, done, canGenerate) {
   else if (!planDone)    current = 2;
   else if (!reviewedEff) current = 3;
   else if (!published)   current = 4;
-  else                   current = 5;                     // all complete
+  else if (!debriefed)   current = 5;
+  else                   current = 6;                     // all complete
   const st = (i) => i < current ? 'done' : (i === current ? 'active' : 'locked');
-  const s1state = st(1), s2state = st(2), s3state = st(3), s4state = st(4);
+  const s1state = st(1), s2state = st(2), s3state = st(3), s4state = st(4), s5state = st(5);
 
   // Step 1 — Generate
   let s1cta;
@@ -9010,10 +9012,22 @@ function reportStepperHtml(d, done, canGenerate) {
   else if (s4state === 'locked') s4cta = muted('Review the page first.');
   else                           s4cta = '<button class="dbtn dbtn-gold" onclick="openReportPreview()">Publish report</button>' + muted('Makes it visible to ' + first + '.');
 
+  // Step 5 — Debrief complete. Opens the leader's Executive Impact System access
+  // and sends their results email. Done at or right after the debrief meeting.
+  let s5cta;
+  if (s5state === 'locked')      s5cta = muted('Publish the report first.');
+  else if (s5state === 'done') {
+    s5cta = '<span style="font-size:12px;color:' + TEAL + ';font-weight:600;">Debrief complete ' + diagFormatDate(d.debrief_completed_at) + ' &mdash; ' + first + ' now has access.</span>';
+    if (planApplicable)     s5cta += '<button class="dbtn dbtn-outline dbtn-sm" onclick="openActivateSprintModal()">Activate paid 90-day sprint</button>';
+    if (!d.plan_locked_at)  s5cta += '<button class="dbtn dbtn-outline dbtn-sm" style="color:#b91c1c;border-color:#e3b3b3;" onclick="undoDebriefComplete()">Undo</button>';
+  }
+  else                           s5cta = '<button class="dbtn dbtn-primary" onclick="markDebriefComplete()">Mark debrief complete</button>' + muted('Emails ' + first + ' their results and opens their Executive Impact System access.');
+
   return step(1, s1state, 'Generate the report', 'Runs the analysis and writes the draft from the closed survey.', s1cta, false)
     + step(2, s2state, 'Draft the 90-day plan', 'Pre-fills the leader&rsquo;s wizard. Do this before the debrief.', s2cta, false)
     + step(3, s3state, 'Review ' + first + '&rsquo;s page', 'See exactly what the leader will see &mdash; scores, bars, report. Required before publishing.', s3cta, false)
-    + step(4, s4state, 'Publish the report', 'Makes it live to the leader. Until then they see only a holding message.', s4cta, true);
+    + step(4, s4state, 'Publish the report', 'Makes it live to the leader. Until then they see only a holding message.', s4cta, false)
+    + step(5, s5state, 'Debrief complete', 'After the debrief meeting: emails ' + first + ' their results and opens their Executive Impact System access.', s5cta, true);
 }
 
 // ── Tab: Report ───────────────────────────────────────────────────────────────
@@ -9082,14 +9096,6 @@ function renderReportTab() {
     <div style="margin-top:4px;margin-bottom:10px;">
       <button class="dbtn dbtn-outline" style="border-color:var(--d-amber);color:var(--d-amber);" onclick="generateReportOverride()">⚠ Generate with only ${done} responses (override)</button>
       <span class="dhint" style="margin-left:8px;">Below the 7-rater minimum — report quality will be limited.</span>
-    </div>` : ''}
-
-    ${d.report_finalized_at ? `
-    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--d-border);">
-      <div style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--d-mid);margin-bottom:10px;">After the debrief</div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-        ${d.debrief_completed_at && !d.plan_locked_at ? `<button class="dbtn dbtn-outline dbtn-sm" style="color:#b91c1c;border-color:#e3b3b3;" onclick="undoDebriefComplete()">Undo debrief complete</button>` : d.debrief_completed_at ? `<span style="font-size:12px;color:#01949A;font-weight:600;">Debrief complete &mdash; access granted.</span>` : (DIAG_SEL.client_id ? `<button class="dbtn dbtn-gold" onclick="openActivateSprintModal()">Activate 90-day sprint</button>` : `<button class="dbtn dbtn-outline" onclick="markDebriefComplete()">Mark debrief complete</button>`)}
-      </div>
     </div>` : ''}
 
     <details style="margin-top:16px;padding-top:14px;border-top:1px solid var(--d-border);">

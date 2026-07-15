@@ -124,6 +124,15 @@ ACCEPTANCE: seed 3 test clients — self-service active (debrief done, no pay), 
 - **Restore mobile wizard step context** — at ≤480px all step labels hide (`client.html:417`); keep one persistent "Step N of 7 · <label>" line. — S
 - **`business_outcome_goal` leaks to client browser** (UI-only gate) — return an explicit column allowlist from `get-client.js:463`. — S
 
+### P2 — Coaching-side (coach console) page-by-page UX + visual pass (added 2026-07-14, Alex)
+
+Alex has spent his polish budget on the *client* side; the *coaching* side (`coach.html` and the coach-facing tabs/modals) now needs the same treatment. Go page by page / tab by tab through the coach console and make each screen clean, executive-grade, visually consistent, and — above all — **intuitive enough that a new admin (his EA) can operate it without being walked through**. Not just Alex's muscle memory.
+
+- Run **both** skills together on each screen: `ux-experience-auditor` (clarity, task flow, "what do I do next," error/empty states) **and** `gps-visual-conversion` (visual craft, hierarchy, spacing, colour restraint, premium feel). Recommend-only; implement via `gps-portal-safe-build`.
+- Cover every coach surface: client list / dashboard, the diagnostic tabs (Overview, Raters, Survey Status, Questions, **Report** — just redesigned, Emails), the Coaching Sessions card, Activate-sprint + debrief flow, sponsor/Decision-Room controls, AI Studio / prompt library, messages, profile/settings, and all modals.
+- Bias to **simple**: fewer buttons visible at once, one obvious next action per screen, plain labels over jargon, consistent button styling, no orphaned/legacy controls. Target reader = a competent EA on day one.
+- Deliverable per screen: scored rubric + before/after mock + prioritized fix list, folded back into this Master Build List by priority. — L (multi-session; schedule it)
+
 ### P1/P2 — Reliability batch (next 30 days) — extends the June 24 Reliability path
 
 - **Email failure handling** — failed Resend drafts stay `scheduled`, retry every 15 min forever, no cap/alert. Stamp `last_error`/`attempts`, alert after N, pin FROM domain. — M
