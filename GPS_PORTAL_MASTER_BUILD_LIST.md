@@ -76,15 +76,24 @@ Standard of record: **`Knowledge/GPS-Frameworks/Rater Confidentiality Standard.m
 **(1) VISIBILITY: the leader sees NOTHING (no report card, no PDF, no scores) until status = `report_final` (= Publish). Before that (`report_draft`) they see only "Your report is being finalized by Alex." — even if the PDF is already uploaded and the draft generated. Gated on STATUS, not file existence (`diagnostic-leader.html:768`). The COACH preview (coach-session) sees everything in the review step — asymmetric by design. Today's preview-scores fix completes the coach side.**
 **(2) ACCESS: leader cannot enter the Executive Impact System until `is_active_coaching` (set only by Activate, gated on debrief_completed_at). Prefill writes wizard data WITHOUT granting access.** Decisions: hard gate; report flow only for now, recommend other areas (send-invites) after it's proven. | M | ⏳ queued — next build | mockup approved; access gate at `client.html:3577`, `activate-sprint.js` |
 
-### P1 — PRODUCT DECISION: self-service vs coached access are currently welded (added 2026-07-14)
+### P1 — Two-tier access: self-service (debrief) vs coached (paid) (added 2026-07-14) — DECIDED, SPEC LOCKED
 
-**Open product-model question Alex raised. Do NOT build until the model is decided.**
+**Alex DECIDED the model 2026-07-14 — not an open question. Build it (fresh session — access-control, test before merge).**
 
-Alex's mental model: after the debrief there are TWO outcomes — (a) **self-service**: leader gets Executive Impact System access and runs the 90-day plan themselves (paid for the system, not for coaching); (b) **coached**: leader pays Alex → the paid 90-day sprint (sessions, pulse cadence).
+THE MODEL — two independent 90-day clocks:
+- **Debrief complete → self-service Executive Impact System access, 90 days from the debrief date.** Automatic, no payment. Leader can run the 90-day plan themselves in the system.
+- **Within 7 days** of debrief → leader can buy discounted coaching.
+- **They pay → Alex clicks Activate → coaching 90-day clock starts from the ACTIVATION date** (pay on day 6 → coaching runs 90 days from day 6). Coaching layers on top of self-service access.
 
-**Current reality (verified 2026-07-14):** these are ONE switch. Executive Impact System access is gated on `is_coaching_client` (`client.html:3577`), which turns true only via **Activate 90-Day Sprint** (`activate-sprint.js` sets `in_coaching_program` + `is_active_coaching` + `coaching_sessions_enabled` + program dates together). Marking the debrief complete grants NO access on its own. There is no self-service-access-without-coaching path.
+CURRENT REALITY (verified 2026-07-14): access + coaching are ONE switch. `client.html:3577` gates entry on `is_coaching_client`, set ONLY by Activate (`activate-sprint.js`). Debrief-complete grants no access. No self-service path exists yet. **Confirmed: all JMAA leaders already have client records (`diagnostics.client_id` populated), so NO account provisioning needed — this is flags + clocks + gate logic.**
 
-**To build the two-tier model:** debrief → fork into (self-service: grant system access, no coaching turn-on) vs (coached: full Activate). Requires deciding what a self-service leader gets and how they pay — tangled with the deferred pricing/credit work (standard vs pro, self-service vs coached also surfaced there). Fresh session; answer "what does self-service include + how do they pay" first, then the access split follows. | L | ⏳ **queued — product decision first, then build**
+BUILD (exact):
+1. **Migration:** add `clients.system_access_start_date` + `system_access_end_date` (the self-service clock; distinct from existing `coaching_program_start/end_date`).
+2. **Debrief-complete action** (`markDebriefComplete` / server): set `system_access_start_date = debrief date`, `system_access_end_date = +90 days`. Automatic.
+3. **client.html access gate (~3577):** grant entry if `today ≤ system_access_end_date` (self-service active) OR `is_coaching_client`. Self-service gets wizard + 90-day plan; coaching-only features (sessions, pulse cadence, coach messaging) STAY gated on the coaching flags.
+4. **Activate:** unchanged — sets coaching flags + coaching clock from activation date, on top.
+5. **Preserve the two invariants above** (visibility until publish; no early access).
+ACCEPTANCE: seed 3 test clients — self-service active (debrief done, no pay), coaching active, expired self-service window — verify each sees the right portal state on preview BEFORE merge. Ties into deferred pricing/credit work (the 7-day discount window is the same credit window). | M | ⏳ **queued — next focused build**
 
 ### P1 — LLM provider independence (added 2026-07-14, ALEX HIGH PRIORITY)
 
