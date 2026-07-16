@@ -10792,9 +10792,15 @@ async function savePlanPrefill(e){
   if(!obj.suggested.goal90){ alert('Add a 90-day goal before saving (the wizard keys off it).'); if(btn){ btn.disabled=false; btn.textContent='Save & prefill client'; } return; }
   try{
     await cdUpdate('diagnostics',{ wizard_prefill_data: obj },{ eq:{ id:d.id } });
-    PLAN_PREFILL=obj; alert('Saved. The client will see this plan pre-filled (and editable) when they open their plan.');
-  }catch(ex){ alert('Could not save: '+ex.message); }
-  if(btn){ btn.disabled=false; btn.textContent='Save & prefill client'; }
+    PLAN_PREFILL=obj;
+    if (DIAG_SEL) DIAG_SEL.wizard_prefill_data = obj;          // stepper sees the plan as drafted immediately
+    const _ov=document.getElementById('pp-overlay'); if(_ov) _ov.remove();
+    await refreshSelected();                                    // reload + re-render → Review unlocks now, no hard refresh
+    alert('Saved. The client will see this plan pre-filled (and editable) when they open their plan.');
+  }catch(ex){
+    alert('Could not save: '+ex.message);
+    if(btn){ btn.disabled=false; btn.textContent='Save & prefill client'; }
+  }
 }
 
 // Numbers-only scores view. Computes the TP3 averages from responses in the browser —
