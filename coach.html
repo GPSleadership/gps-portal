@@ -4755,7 +4755,29 @@ async function sendNewClientMessage(){
   }
 }
 
-function showSection(name, skipHooks) {
+// ── Coach dashboard history: the Back button returns to the previous section (or
+// the person you had open) instead of leaving the dashboard entirely. Every section
+// switch and every opened diagnostic gets a browser-history entry; popstate restores
+// it without pushing a new one. First view of the session replaces the base entry.
+function _coachPushNav(sec, diag, fromHistory){
+  if (fromHistory) return;
+  var cur = history.state && history.state.coachNav;
+  if (cur && cur.sec === sec && (cur.diag || null) === (diag || null)) return;
+  var st  = { coachNav: { sec: sec, diag: diag || null } };
+  var url = location.pathname + location.search + '#' + (diag ? ('diag/' + diag) : sec);
+  try { if (cur) history.pushState(st, '', url); else history.replaceState(st, '', url); } catch (_) {}
+}
+window.addEventListener('popstate', function (e) {
+  var s = e.state && e.state.coachNav;
+  if (!s) return;                       // no in-app state → let the browser leave
+  if (s.diag && typeof openDiag === 'function') {
+    showSection('diagnostics', true, true);   // show the section without re-running loaders
+    openDiag(s.diag, true);
+  } else if (typeof showSection === 'function') {
+    showSection(s.sec || 'dashboard', false, true);
+  }
+});
+function showSection(name, skipHooks, _fromHistory) {
   _currentSection = name;
   try { localStorage.setItem('gps_coach_section', name); } catch (_) {}
   // Toggle the underlying content sections.
@@ -4781,6 +4803,7 @@ function showSection(name, skipHooks) {
   // skipHooks: caller will render its own content into the section (e.g. the
   // Add-Sponsor / Add-Team forms). Without this guard, drRender() races the
   // caller's render and the all-teams list overwrites the form.
+  _coachPushNav(name, null, _fromHistory);   // history entry for the back button
   if (skipHooks) return;
   if (name === 'decisionroom') drRender();
   if (name === 'workshops')   wsRender();
@@ -8147,7 +8170,7 @@ function renderDiagTable() {
 }
 
 // ── Open Detail ───────────────────────────────────────────────────────────────
-async function openDiag(id) {
+async function openDiag(id, _fromHistory) {
   DIAG_SEL = ALL_DIAGS.find(d => d.id === id);
   if (!DIAG_SEL) return;
   DIAG_LINKED_CLIENT = DIAG_SEL.client_id
@@ -8169,6 +8192,7 @@ async function openDiag(id) {
   renderReportTab();
   renderEmailsTab();
   showDiagView('detail');
+  _coachPushNav('diagnostics', id, _fromHistory);   // history entry so Back returns to this person
 
   document.querySelectorAll('#view-diag-detail .dtab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('#view-diag-detail .dtab-pane').forEach(p => p.classList.remove('active'));
