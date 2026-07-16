@@ -201,6 +201,30 @@ export default async function handler(req, res) {
   // Permanent deletion of core records: owner only (assistants run ops, not nukes).
   const OWNER_ONLY_DELETE = new Set(['clients', 'diagnostics', 'teams', 'workshops', 'diagnostic_team_reports', 'diagnostic_raters', 'diagnostic_responses']);
 
+  // ── Message channels: 'coach' (Alex's confidential 1:1) vs 'admin' (coordinator/EA).
+  //   READ:  owner sees both; assistant sees 'admin' only, unless their account has
+  //          can_read_coach_messages = true (owner grants this in Admin Accounts).
+  //   WRITE: owner may post to either; assistant posts to 'admin' only — even a
+  //          read-permitted assistant never posts AS the coach.
+  //   START: owner's new messages open the 'coach' channel; assistant's open 'admin'.
+  let _asstCanReadCoach = null;
+  async function asstCanReadCoach() {
+    if (isOwner) return true;
+    if (_asstCanReadCoach !== null) return _asstCanReadCoach;
+    _asstCanReadCoach = false;
+    if (senderAid != null) {
+      try {
+        const r = await sb(`/rest/v1/admin_accounts?id=eq.${encodeURIComponent(senderAid)}&select=can_read_coach_messages&limit=1`);
+        const row = (r.ok ? await r.json() : [])[0];
+        _asstCanReadCoach = !!(row && row.can_read_coach_messages);
+      } catch (_) { _asstCanReadCoach = false; }
+    }
+    return _asstCanReadCoach;
+  }
+  async function readableChannels() { return (isOwner || await asstCanReadCoach()) ? ['coach', 'admin'] : ['admin']; }
+  const writableChannels = () => isOwner ? ['coach', 'admin'] : ['admin'];
+  const startChannel = () => isOwner ? 'coach' : 'admin';
+
   try {
     const action = body.action;
 
@@ -523,7 +547,7 @@ export default async function handler(req, res) {
     // ── Dedicated: admin_accounts (passwords always hashed) ─────────────────
     if (action === 'admin-list') {
       // Assistants may view the team list (read-only); only owners can modify it.
-      const r = await sb('/rest/v1/admin_accounts?select=id,name,email,role,is_active,created_at&order=created_at.asc');
+      const r = await sb('/rest/v1/admin_accounts?select=id,name,email,role,is_active,can_read_coach_messages,created_at&order=created_at.asc');
       const rows = r.ok ? await r.json() : [];
       return res.status(200).json({ ok: true, admins: rows, viewerLvl: lvl });  // never returns password
     }
@@ -544,6 +568,7 @@ export default async function handler(req, res) {
       if (body.email != null) patch.email = String(body.email).toLowerCase();
       if (body.is_active != null) patch.is_active = !!body.is_active;
       if (body.role != null) patch.role = (body.role === 'owner') ? 'owner' : 'assistant';
+      if (body.can_read_coach_messages != null) patch.can_read_coach_messages = !!body.can_read_coach_messages;
       if (body.password) patch.password = hashPassword(body.password);
       const r = await sb(`/rest/v1/admin_accounts?id=eq.${encodeURIComponent(body.id)}`, 'PATCH', patch, { Prefer: 'return=minimal' });
       if (!r.ok) return res.status(500).json({ error: 'Could not update admin' });
@@ -636,7 +661,8 @@ export default async function handler(req, res) {
 
     // ── Contact Your Coach: inbox list (conversations + needs-reply/overdue) ──
     if (action === 'coach-msg-inbox') {
-      const cr = await sb('/rest/v1/coach_conversations?select=id,client_id,status,last_message_at&order=last_message_at.desc.nullslast');
+      const _rc = await readableChannels();   // 'coach'/'admin' this session may see
+      const cr = await sb(`/rest/v1/coach_conversations?select=id,client_id,status,last_message_at,channel&channel=in.(${_rc.join(',')})&order=last_message_at.desc.nullslast`);
       const convs = cr.ok ? await cr.json() : [];
       if (!convs.length) return res.status(200).json({ ok: true, conversations: [] });
       const cids = [...new Set(convs.map(c => c.client_id))];
@@ -656,6 +682,7 @@ export default async function handler(req, res) {
         const cl = cmap[c.client_id] || {};
         return {
           id: c.id, client_id: c.client_id, client_name: cl.name || '(unknown)',
+          channel: c.channel || 'coach',
           organization: cl.organization || '', status: c.status, last_message_at: c.last_message_at,
           last_preview: last ? String(last.message_text || '').slice(0, 140) : '',
           last_sender: last ? last.sender_role : null,
@@ -670,6 +697,11 @@ export default async function handler(req, res) {
     if (action === 'coach-msg-thread') {
       const cid = body.conversation_id;
       if (!cid) return res.status(400).json({ error: 'conversation_id required' });
+      // Channel gate: an assistant can't open the coach's confidential thread.
+      const _gcr = await sb(`/rest/v1/coach_conversations?id=eq.${encodeURIComponent(cid)}&select=channel&limit=1`);
+      const _gconv = (_gcr.ok ? await _gcr.json() : [])[0];
+      const _grc = await readableChannels();
+      if (_gconv && !_grc.includes(_gconv.channel || 'coach')) return res.status(403).json({ error: 'You do not have access to this thread.' });
       const mr = await sb(`/rest/v1/coach_messages?conversation_id=eq.${encodeURIComponent(cid)}&select=id,sender_role,sender_name,message_type,message_text,created_at,read_by_coach,read_by_client,attachment_url,attachment_name,attachment_size,attachment_type&order=created_at.asc`);
       const messages = mr.ok ? await withSignedAttachments(await mr.json()) : [];
       await sb(`/rest/v1/coach_messages?conversation_id=eq.${encodeURIComponent(cid)}&sender_role=eq.client&read_by_coach=eq.false`, 'PATCH', { read_by_coach: true }, { Prefer: 'return=minimal' }).catch(() => {});
@@ -766,9 +798,11 @@ export default async function handler(req, res) {
       const hasAtt = !!(body.attachment && body.attachment.data);
       if (!cid || (!text && !hasAtt)) return res.status(400).json({ error: 'conversation_id and a message or file are required' });
       if (text.length > 5000) return res.status(400).json({ error: 'Message is too long (5000 character max).' });
-      const cr = await sb(`/rest/v1/coach_conversations?id=eq.${encodeURIComponent(cid)}&select=id,client_id&limit=1`);
+      const cr = await sb(`/rest/v1/coach_conversations?id=eq.${encodeURIComponent(cid)}&select=id,client_id,channel&limit=1`);
       const conv = (cr.ok ? await cr.json() : [])[0];
       if (!conv) return res.status(404).json({ error: 'Conversation not found' });
+      // Channel gate: an assistant may only post in the 'admin' thread, never as the coach.
+      if (!writableChannels().includes(conv.channel || 'coach')) return res.status(403).json({ error: 'You cannot reply in this thread.' });
       const now = new Date().toISOString();
       let att = null;
       if (hasAtt) { att = await uploadMsgAttachment(cid, body.attachment); if (att && att.error) return res.status(400).json({ error: att.error }); }
@@ -824,13 +858,17 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'That client is not a coaching client and cannot receive portal messages. Email them directly instead.' });
       }
       const now = new Date().toISOString();
-      const cr = await sb(`/rest/v1/coach_conversations?client_id=eq.${encodeURIComponent(targetClient)}&select=id&order=last_message_at.desc.nullslast&limit=1`);
+      // Channel: an explicit body.channel (if the sender may write it) else the sender's
+      // own channel (owner→coach, assistant→admin). Assistants can't force the coach channel.
+      let _startChan = (body.channel === 'admin' || body.channel === 'coach') ? body.channel : startChannel();
+      if (!writableChannels().includes(_startChan)) _startChan = startChannel();
+      const cr = await sb(`/rest/v1/coach_conversations?client_id=eq.${encodeURIComponent(targetClient)}&channel=eq.${_startChan}&select=id&limit=1`);
       const convs = cr.ok ? await cr.json() : [];
       let cid = convs[0] && convs[0].id;
       if (cid) {
         await sb(`/rest/v1/coach_conversations?id=eq.${encodeURIComponent(cid)}`, 'PATCH', { status: 'waiting_on_client', last_message_at: now, updated_at: now }, { Prefer: 'return=minimal' });
       } else {
-        const insC = await sb('/rest/v1/coach_conversations', 'POST', { client_id: targetClient, status: 'waiting_on_client', last_message_at: now }, { Prefer: 'return=representation' });
+        const insC = await sb('/rest/v1/coach_conversations', 'POST', { client_id: targetClient, channel: _startChan, status: 'waiting_on_client', last_message_at: now }, { Prefer: 'return=representation' });
         if (!insC.ok) { const d = await insC.json().catch(() => ({})); return res.status(500).json({ error: 'Could not start conversation', detail: d }); }
         const rows = await insC.json(); cid = (Array.isArray(rows) ? rows[0] : rows).id;
       }

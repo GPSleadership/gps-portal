@@ -2549,6 +2549,10 @@
       Use this space to send questions or updates between sessions. I respond within one business day.
       For emergencies or urgent safety issues, use your company channels, not this portal.
     </p>
+    <div style="display:flex;gap:8px;margin:0 0 12px;">
+      <button type="button" id="chTab-coach" onclick="switchCoachChannel('coach')" style="border:1px solid #1A3D6E;background:#1A3D6E;color:#fff;border-radius:999px;padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Coach &middot; private</button>
+      <button type="button" id="chTab-admin" onclick="switchCoachChannel('admin')" style="border:1px solid #d5dbe2;background:#fff;color:#5a6b76;border-radius:999px;padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Admin</button>
+    </div>
     <div id="coachThread" style="background:#fff;border:1px solid #e2e2e2;border-radius:12px;padding:16px;min-height:160px;display:flex;flex-direction:column;overflow-x:hidden;max-width:100%;">
       <div style="margin:auto;color:#999;font-size:13px;">Loading…</div>
     </div>
@@ -2765,12 +2769,25 @@ function clearCoachUnread() {
   const tab = document.getElementById('tabCoach');
   if (tab) tab.querySelectorAll('.coach-unread-dot').forEach(function (e) { e.remove(); });
 }
+// Two separate threads: the private Coach 1:1, and the Admin (coordinator) channel.
+var _coachChannel = 'coach';
+function _styleChTab(el, active) {
+  if (!el) return;
+  el.style.cssText = 'border:1px solid ' + (active ? '#1A3D6E' : '#d5dbe2') + ';background:' + (active ? '#1A3D6E' : '#fff') + ';color:' + (active ? '#fff' : '#5a6b76') + ';border-radius:999px;padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;';
+}
+function switchCoachChannel(ch) {
+  _coachChannel = (ch === 'admin') ? 'admin' : 'coach';
+  _styleChTab(document.getElementById('chTab-coach'), _coachChannel === 'coach');
+  _styleChTab(document.getElementById('chTab-admin'), _coachChannel === 'admin');
+  var ack = document.getElementById('coachAck'); if (ack) ack.style.display = 'none';
+  loadCoachThread();
+}
 async function loadCoachThread() {
   const thread = document.getElementById('coachThread');
   if (!thread) return;
   thread.innerHTML = '<div style="margin:auto;color:#999;font-size:13px;">Loading…</div>';
   let data;
-  try { data = await portalData('coach-thread-get'); }
+  try { data = await portalData('coach-thread-get', { channel: _coachChannel }); }
   catch (e) { thread.innerHTML = '<div style="margin:auto;color:#b00;font-size:13px;">Could not load messages. Please try again.</div>'; return; }
   if (!data.eligible) {
     thread.innerHTML = '<div style="margin:auto;color:#999;font-size:13px;text-align:center;">Direct messaging is available for active coaching clients.</div>';
@@ -2782,7 +2799,7 @@ function renderCoachThread(messages) {
   const thread = document.getElementById('coachThread');
   if (!thread) return;
   if (!messages.length) {
-    thread.innerHTML = '<div style="margin:auto;color:#999;font-size:13px;text-align:center;">No messages yet. Send your coach a question or update below.</div>';
+    thread.innerHTML = '<div style="margin:auto;color:#999;font-size:13px;text-align:center;">' + (_coachChannel === 'admin' ? 'No messages yet. Reach the admin team for scheduling and logistics below.' : 'No messages yet. Send your coach a private question or update below.') + '</div>';
     return;
   }
   thread.innerHTML = messages.map(function (m) {
@@ -2834,11 +2851,11 @@ async function sendCoachMessage() {
   if (!text && !att) { ta.focus(); return; }
   btn.disabled = true; const orig = btn.textContent; btn.textContent = 'Sending…';
   try {
-    await portalData('coach-message-send', { message_text: text, message_type: sel.value, attachment: att });
+    await portalData('coach-message-send', { message_text: text, message_type: sel.value, attachment: att, channel: _coachChannel });
     ta.value = '';
     const _cf = document.getElementById('coachMsgFile'); if (_cf) _cf.value = '';
     const _cc = document.getElementById('coachMsgChip'); if (_cc) _cc.textContent = '';
-    if (ack) { ack.textContent = 'Got it — Alex usually replies within one business day.'; ack.style.color = '#0F6E56'; ack.style.background = '#E1F5EE'; ack.style.display = 'block'; }
+    if (ack) { ack.textContent = _coachChannel === 'admin' ? 'Sent — the admin team will follow up.' : 'Got it — Alex usually replies within one business day.'; ack.style.color = '#0F6E56'; ack.style.background = '#E1F5EE'; ack.style.display = 'block'; }
     await loadCoachThread();
   } catch (e) {
     if (ack) { ack.textContent = 'Message could not be sent. Please try again.'; ack.style.color = '#b00'; ack.style.background = '#fdecec'; ack.style.display = 'block'; }

@@ -180,9 +180,15 @@ function computeMilestoneState(client, bookingUrl) {
   function phase(days, goalText, celebratedAt) {
     const targetDate = new Date(start.getTime() + days * DAY);
     const hasMetric = (target != null && current != null && !Number.isNaN(target) && !Number.isNaN(current));
-    const hit = hasMetric && current >= target;
+    // The checkpoint must actually have arrived before we treat the metric as a
+    // milestone "hit". A leader can beat their proxy metric in week one; that does
+    // NOT mean the 30-/90-day goal is achieved, and celebrating early reads as false.
+    // Gate every hit/miss/celebration on the target date being reached.
+    const reached = day_n >= days;
+    const metricMet = hasMetric && current >= target;
+    const hit = metricMet && reached;
     const past = now > targetDate;
-    const missed = hasMetric && !hit && past;
+    const missed = hasMetric && !metricMet && past;
     const celebrated = !!celebratedAt;
     const variant = hit ? (now <= targetDate ? 'on_time' : 'recovery') : (missed ? 'miss' : null);
     // In-portal reminder window: exact T-5 and day-of (matches the email cadence),
@@ -533,15 +539,18 @@ export default async function handler(req, res) {
       // and never see message rows. Scoped strictly to this client's conversation.
       case 'coach-thread-get': {
         if (!isCoachingClient(client)) return res.status(200).json({ ok: true, eligible: false });
-        const cr = await sb(`/rest/v1/coach_conversations?client_id=eq.${clientId}&select=id,status,last_message_at&order=last_message_at.desc.nullslast&limit=1`);
+        // Two separate threads: 'coach' (confidential 1:1) and 'admin' (coordinator).
+        // Client picks which to read; each is its own conversation.
+        const chan = (body.channel === 'admin') ? 'admin' : 'coach';
+        const cr = await sb(`/rest/v1/coach_conversations?client_id=eq.${clientId}&channel=eq.${chan}&select=id,status,last_message_at,channel&limit=1`);
         const convs = cr.ok ? await cr.json() : [];
         const conv = convs[0] || null;
-        if (!conv) return res.status(200).json({ ok: true, eligible: true, conversation: null, messages: [] });
+        if (!conv) return res.status(200).json({ ok: true, eligible: true, channel: chan, conversation: null, messages: [] });
         const mr = await sb(`/rest/v1/coach_messages?conversation_id=eq.${conv.id}&select=id,sender_role,sender_name,message_type,message_text,created_at,read_by_client,attachment_url,attachment_name,attachment_size,attachment_type&order=created_at.asc`);
         const messages = mr.ok ? await withSignedAttachments(await mr.json()) : [];
-        // Mark coach replies as read by the client now that they're being viewed.
+        // Mark coach/admin replies as read by the client now that they're being viewed.
         await sb(`/rest/v1/coach_messages?conversation_id=eq.${conv.id}&sender_role=eq.coach&read_by_client=eq.false`, 'PATCH', { read_by_client: true }, { Prefer: 'return=minimal' }).catch(() => {});
-        return res.status(200).json({ ok: true, eligible: true, conversation: conv, messages });
+        return res.status(200).json({ ok: true, eligible: true, channel: chan, conversation: conv, messages });
       }
 
       // ── Contact Your Coach: unread coach-message count (no mutation) ────────
@@ -568,15 +577,17 @@ export default async function handler(req, res) {
         const msgType = COACH_MSG_TYPES.has(body.message_type) ? body.message_type : 'quick_question';
         const now = new Date().toISOString();
 
-        // Reuse the client's latest conversation (reopen if it was closed) so the
-        // thread stays continuous; create one only if none exists.
-        const cr = await sb(`/rest/v1/coach_conversations?client_id=eq.${clientId}&select=id&order=last_message_at.desc.nullslast&limit=1`);
+        // Recipient channel: 'coach' (confidential 1:1) or 'admin' (coordinator).
+        const chan = (body.channel === 'admin') ? 'admin' : 'coach';
+        // Reuse this client's conversation ON THIS CHANNEL (reopen if closed) so each
+        // thread stays continuous; create one only if none exists for that channel.
+        const cr = await sb(`/rest/v1/coach_conversations?client_id=eq.${clientId}&channel=eq.${chan}&select=id&limit=1`);
         const convs = cr.ok ? await cr.json() : [];
         let convId = convs[0] && convs[0].id;
         if (convId) {
           await sb(`/rest/v1/coach_conversations?id=eq.${convId}`, 'PATCH', { status: 'open', last_message_at: now, updated_at: now }, { Prefer: 'return=minimal' });
         } else {
-          const ins = await sb('/rest/v1/coach_conversations', 'POST', { client_id: clientId, status: 'open', last_message_at: now }, { Prefer: 'return=representation' });
+          const ins = await sb('/rest/v1/coach_conversations', 'POST', { client_id: clientId, channel: chan, status: 'open', last_message_at: now }, { Prefer: 'return=representation' });
           if (!ins.ok) { const d = await ins.json().catch(() => ({})); return res.status(500).json({ error: 'Could not start conversation', detail: d }); }
           const rows = await ins.json();
           convId = (Array.isArray(rows) ? rows[0] : rows).id;
