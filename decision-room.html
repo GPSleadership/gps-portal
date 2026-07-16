@@ -461,6 +461,8 @@ function renderTeam(){
   // (i.e. after the debrief, ~day 30) — no empty card at a first debrief. Approvals
   // sits after Recommendations: make the case, then ask for the commitment.
   html += renderSnapshot(t);
+  html += renderSponsorSelf(DATA.sponsor_self);   // sponsor's own data — dormant until server sets it (their diagnostic complete)
+  html += renderMirror(DATA.sponsor_mirror);      // supervisor-vs-composite reflexive lens — dormant until server sets it
   html += renderMomentum(members);
   html += renderThemes(t.themes);
   html += renderIntentImpact(t.intent_impact);
@@ -660,6 +662,68 @@ function renderMomentum(members){
     + '<div class="vb-arrow">'+arrow+' '+(delta>=0?'+':'')+delta.toFixed(1)+'</div>'
     + '<div class="vb"><div class="vb-num">'+mo.cur.toFixed(1)+'</div><div class="vb-lbl">Now</div></div></div>'
     + '<div class="sb-summary">Across '+mo.n+' leader'+(mo.n===1?'':'s')+' in active 90-day plans, stakeholder ratings are '+dir+' since baseline (Avg '+mo.base.toFixed(1)+' &rarr; '+mo.cur.toFixed(1)+'). This is what moves between diagnostics. The TP3 scores re-measure only with a new diagnostic.</div></div>';
+}
+
+// ── Sponsor's OWN leadership (the "one page" ask) ─────────────────────────────
+// Shown only when the sponsor is themselves a rated leader whose diagnostic is
+// complete — the server sets DATA.sponsor_self then, and leaves it null otherwise,
+// so this renders nothing (and changes nothing) until that data exists. Confidential
+// to the sponsor; never blended into the team composite above.
+//   DATA.sponsor_self = { name, tp3, trust, proactivity, productivity, bench,
+//                         report_url, pdf_url } | null
+function renderSponsorSelf(s){
+  if(!s || s.tp3==null) return '';
+  function col(v){ return v==null?'#7a8a95':(v>=4?'#01949A':(v>=3?'#C8962F':'#DB1F48')); }
+  function num(v){ return (v==null||isNaN(v))?'--':Number(v).toFixed(2); }
+  function bar(label,v){ var w=v==null?0:Math.max(3,Math.min(100,(v-1)/4*100));
+    return '<div style="display:grid;grid-template-columns:118px 1fr 44px;align-items:center;gap:10px;margin:8px 0;">'
+      +'<div style="font-size:12.5px;font-weight:600;color:#1B2A3A;">'+label+'</div>'
+      +'<div style="height:9px;background:#eef1f4;border-radius:5px;position:relative;overflow:hidden;"><div style="position:absolute;left:0;top:0;bottom:0;width:'+w+'%;background:'+col(v)+';border-radius:5px;"></div></div>'
+      +'<div style="font-size:13px;font-weight:800;text-align:right;color:'+col(v)+';">'+num(v)+'</div></div>'; }
+  var links='';
+  if(s.report_url) links+='<a href="'+esc(s.report_url)+'" target="_blank" style="display:inline-block;background:#004369;color:#fff;text-decoration:none;border-radius:8px;font-size:13px;font-weight:700;padding:9px 16px;">Open my full report</a>';
+  if(s.pdf_url)    links+=' <a href="'+esc(s.pdf_url)+'" target="_blank" style="display:inline-block;color:#01949A;font-weight:800;text-decoration:none;font-size:13px;padding:9px 6px;">&#8681; Download PDF</a>';
+  return '<div class="card" style="border-top:4px solid #004369;">'
+    +'<div class="card-head"><div><div class="card-title"><span class="dot"></span>Your leadership</div>'
+    +'<div class="card-sub">Your own diagnostic &mdash; right here, so you don\'t go anywhere else. This is you, kept separate from the team read below.</div></div>'
+    +'<span style="font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#C8962F;background:#FDF6EC;border:1px solid #eaddc0;border-radius:20px;padding:2px 10px;white-space:nowrap;">Yours only &middot; confidential</span></div>'
+    +'<div style="display:flex;align-items:baseline;gap:10px;margin:2px 0 12px;"><div style="font-family:Georgia,serif;font-size:30px;font-weight:700;color:'+col(s.tp3)+';">'+num(s.tp3)+'</div><div style="font-size:12.5px;color:#5F6B7A;">Your TP3 Index &middot; 1&ndash;5</div></div>'
+    +bar('Trust',s.trust)+bar('Proactivity',s.proactivity)+bar('Productivity',s.productivity)+(s.bench!=null?bar('Bench strength',s.bench):'')
+    +(links?'<div style="margin-top:12px;">'+links+'</div>':'')
+    +'</div>';
+}
+
+// ── The mirror — how the sponsor's own read connects to the team ──────────────
+// Surfaces where the sponsor's OWN (supervisor) ratings diverge hardest from the
+// composite — their own data, so no confidentiality wall to breach. Framed as
+// debrief openings, never verdicts; the sharp version is delivered live by the coach.
+// Ends with a soft, personal-sprint conversation-opener (distinct from the team CTA).
+//   DATA.sponsor_mirror = { connections:[ {title, teamLabel, teamVal, selfLabel,
+//                           selfVal, read, ask} ], sprint_cta_url } | null
+function renderMirror(m){
+  if(!m || !m.connections || !m.connections.length) return '';
+  function num(v){ return (v==null||isNaN(v))?'--':Number(v).toFixed(1); }
+  var rows=m.connections.map(function(c){
+    return '<div style="background:#fff;border:1px solid #E6EBF0;border-left:4px solid #01949A;border-radius:10px;padding:14px 16px;margin:12px 0;">'
+      +(c.title?'<div style="font-weight:800;color:#0b3a4a;font-size:13px;margin-bottom:5px;">'+esc(c.title)+'</div>':'')
+      +'<div style="font-size:12px;color:#5F6B7A;margin-bottom:6px;"><b style="color:#1B2A3A;">'+esc(c.teamLabel||'Team')+':</b> '+num(c.teamVal)+' &nbsp;&middot;&nbsp; <b style="color:#1B2A3A;">'+esc(c.selfLabel||'Your own read')+':</b> '+num(c.selfVal)+'</div>'
+      +(c.read?'<div style="font-size:13.5px;color:#26333d;">'+esc(c.read)+'</div>':'')
+      +(c.ask?'<div style="font-size:12.5px;color:#0b3a4a;font-style:italic;margin-top:7px;">'+esc(c.ask)+'</div>':'')
+      +'</div>';
+  }).join('');
+  var cta = m.sprint_cta_url
+    ? '<div style="background:#fff;border-top:4px solid #C8962F;border:1px solid #E6EBF0;border-radius:10px;padding:14px 16px;margin-top:14px;">'
+      +'<div style="font-weight:800;color:#004369;font-size:13.5px;margin-bottom:4px;">Lead from the front</div>'
+      +'<div style="font-size:12.5px;color:#5F6B7A;margin-bottom:10px;">A CEO who gets coached first earns the right to send the team into it. The fastest way to move the team is to move the thing they mirror.</div>'
+      +'<a href="'+esc(m.sprint_cta_url)+'" style="display:inline-block;background:#004369;color:#fff;text-decoration:none;border-radius:8px;font-size:13px;font-weight:700;padding:9px 16px;">Let&rsquo;s talk about your sprint &rarr;</a>'
+      +'<div style="font-size:11px;color:#8a97a6;margin-top:8px;">Your sprint &middot; separate from your team\'s &middot; we shape it together in the debrief.</div></div>'
+    : '';
+  return '<div class="card" style="background:linear-gradient(180deg,#f4f9fb,#eef5f8);border:1px solid #d5e6ec;">'
+    +'<div class="card-head"><div><div class="card-title"><span class="dot"></span>The mirror &mdash; how this connects to your team</div>'
+    +'<div class="card-sub">Where your own read diverges hardest from everyone else\'s. These are openings for the debrief, not verdicts &mdash; we work them live.</div></div></div>'
+    +rows+cta
+    +'<div style="background:#004369;color:#eaf2f7;border-radius:10px;padding:12px 15px;font-size:12.5px;margin-top:12px;"><b style="color:#fff;">How to read this:</b> none of it is a scorecard on you. It\'s the leverage &mdash; the few places where a shift in how you lead moves the whole team at once.</div>'
+    +'</div>';
 }
 
 function renderThemes(th){
