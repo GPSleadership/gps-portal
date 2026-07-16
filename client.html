@@ -8260,7 +8260,15 @@ function emailHistItem(i, btn) {
   qaEmailAnswer((entry.question_text || '').trim(), qaPlainAnswer(entry.response_text), btn);
 }
 
-function showPortalTab(tab) {
+// ── Portal tab history: the back button returns to the previous tab instead of
+// leaving the portal (or reloading). Each tab switch gets its own history entry;
+// popstate re-shows the tab without pushing a new one.
+var _currentPortalTab = null;
+window.addEventListener('popstate', function (e) {
+  var t = (e.state && e.state.portalTab) || (location.hash || '').replace(/^#/, '') || null;
+  if (t) showPortalTab(t, true);
+});
+function showPortalTab(tab, _fromHistory) {
   // Locked tabs: visible to everyone, but access-gated.
   if (tab === 'coach' && !(currentClient && currentClient.is_coaching_client)) {
     alert('Contact Your Coach is part of an active 1:1 coaching engagement. To work with Alex directly, reach out to team@gpsleadership.org.');
@@ -8360,6 +8368,20 @@ function showPortalTab(tab) {
     }
   }
   updateReportReadyBanner(tab);
+
+  // Give this tab a browser-history entry so "back" returns here. The early returns
+  // above (locked tabs, terms modal) skip this, since no real navigation happened.
+  if (!_fromHistory && tab !== _currentPortalTab) {
+    try {
+      var _st  = { portalTab: tab };
+      var _url = location.pathname + location.search + '#' + tab;
+      // First view of the session replaces the base entry; later switches push,
+      // so back walks the tabs the user actually visited.
+      if (history.state && history.state.portalTab) history.pushState(_st, '', _url);
+      else history.replaceState(_st, '', _url);
+    } catch (_e) {}
+  }
+  _currentPortalTab = tab;
 }
 
 function activateQATab() {
