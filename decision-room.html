@@ -455,16 +455,21 @@ function renderTeam(){
     document.getElementById('view').innerHTML = html;
     return;
   }
-  html += renderApprovals(members);
+  // Order (2026-07-15, Alex): open with the read, then patterns, then behaviours,
+  // then the people, then talent/risk, THEN the decision zone (recommendations →
+  // approvals). Momentum is data-gated and only appears once there's pulse data
+  // (i.e. after the debrief, ~day 30) — no empty card at a first debrief. Approvals
+  // sits after Recommendations: make the case, then ask for the commitment.
   html += renderSnapshot(t);
   html += renderMomentum(members);
   html += renderThemes(t.themes);
   html += renderIntentImpact(t.intent_impact);
   html += renderSSC(t.start_stop_continue);
   html += renderRoster(members);
-  if(DATA.show_succession!==false) html += renderTeamSuccession(members);
   if(DATA.show_succession!==false) html += renderTalentGrid(members);
+  if(DATA.show_succession!==false) html += renderTeamSuccession(members);
   html += renderRecs(DATA.recommendations||[]);
+  html += renderApprovals(members);
   html += renderSignals(DATA.signals||[]);
   html += renderTeamReport(DATA.team_report);
   html += renderSprintCta(DATA.sprint_cta_url);
@@ -646,7 +651,9 @@ function teamMomentum(members){
 function renderMomentum(members){
   var head='<div class="card-head"><div class="card-title"><span class="dot"></span>Team Stakeholder Momentum</div></div>';
   var mo=teamMomentum(members);
-  if(!mo) return '<div class="card">'+head+'<div class="empty">No active 90-day plans on this team yet, so there is nothing moving to track yet.</div></div>';
+  // Data-gated: no active plans / no pulse data yet (e.g. at a first debrief) → don't
+  // render the section at all. It appears on its own once pulses start landing (~day 30).
+  if(!mo) return '';
   var delta=mo.cur-mo.base, dir=(delta>0.05)?'up':((delta<-0.05)?'down':'flat'), cls=(mo.cur>=4?'p-green':(mo.cur>=3?'p-amber':'p-red')), arrow=(dir==='up'?'&uarr;':(dir==='down'?'&darr;':'&rarr;'));
   return '<div class="card progress '+cls+'">'+head
     + '<div class="verdict-bigrow"><div class="vb"><div class="vb-num">'+mo.base.toFixed(1)+'</div><div class="vb-lbl">Baseline</div></div>'
