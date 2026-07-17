@@ -170,6 +170,10 @@ async function visionGate(text) {
 // on/before target date = on-time; after = recovery; window below target & past = miss.
 function computeMilestoneState(client, bookingUrl, checkins) {
   const MIN_OBS = 2;
+  // A week AT OR ABOVE target counts as 100% and no more — over-delivering one week
+  // can never offset a light/zero week. "Reached" = the capped-credit average clears
+  // this consistency bar (0.9 = at target in essentially every recent week). Tunable.
+  const CONSISTENCY_THRESHOLD = 0.9;
   const startStr = client.coaching_program_start_date || client.plan_start_date || null;
   const sponsored = client.sponsor_outcome_focus === true;
   const inCoaching = !!(client.in_coaching_program || client.is_active_coaching || client.coaching_sessions_enabled);
@@ -180,11 +184,17 @@ function computeMilestoneState(client, bookingUrl, checkins) {
   const now = new Date();
   const DAY = 86400000;
   const day_n = Math.max(0, Math.floor((now - start) / DAY));
-  const target  = client.metric_target  != null ? Number(client.metric_target)  : null;
-  const current = client.metric_current != null ? Number(client.metric_current) : null;
+  const target   = client.metric_target   != null ? Number(client.metric_target)   : null;
+  const current  = client.metric_current  != null ? Number(client.metric_current)  : null;
+  const baseline = client.metric_baseline != null ? Number(client.metric_baseline) : 0;
   const todayOnly = new Date(now.toISOString().slice(0, 10) + 'T00:00:00Z');
 
-  // Recent-window average of the self-reported metric. Only check-ins with a numeric
+  // Per-week credit toward the goal, CAPPED at 100%: a week over target counts the
+  // same as a week exactly at target, so a big week can't paper over light/zero weeks.
+  const denom = (target != null && target > baseline) ? (target - baseline) : null;
+  const weekCredit = v => denom ? Math.min(Math.max((v - baseline) / denom, 0), 1) : (v >= target ? 1 : 0);
+
+  // Recent-window consistency of the self-reported metric. Only check-ins with a numeric
   // metric AND a week number count (so we can bound to the checkpoint window).
   const series = (Array.isArray(checkins) ? checkins : [])
     .filter(c => c && c.metric_value != null && Number.isFinite(Number(c.metric_value)) && Number.isFinite(Number(c.week_number)))
@@ -193,8 +203,10 @@ function computeMilestoneState(client, bookingUrl, checkins) {
   function windowAvg(days, windowSize) {
     const checkpointWeek = Math.ceil(days / 7);
     const inWindow = series.filter(p => p.week <= checkpointWeek).slice(-windowSize);
-    if (inWindow.length < MIN_OBS) return { n: inWindow.length, avg: null };
-    return { n: inWindow.length, avg: inWindow.reduce((s, p) => s + p.val, 0) / inWindow.length };
+    if (inWindow.length < MIN_OBS) return { n: inWindow.length, avg: null, consistency: null };
+    const avg = inWindow.reduce((s, p) => s + p.val, 0) / inWindow.length;                 // raw (context only)
+    const consistency = inWindow.reduce((s, p) => s + weekCredit(p.val), 0) / inWindow.length; // 0–1, capped
+    return { n: inWindow.length, avg, consistency };
   }
 
   function phase(days, goalText, celebratedAt) {
@@ -202,11 +214,11 @@ function computeMilestoneState(client, bookingUrl, checkins) {
     const windowSize = days <= 30 ? 3 : 4;
     const w = windowAvg(days, windowSize);
     // Enough data to judge, and a real target to judge against.
-    const hasData = (target != null && !Number.isNaN(target) && w.avg != null);
-    // Gate on the checkpoint date arriving AND on the sustained window average — not
-    // a one-week spike, and never early.
+    const hasData = (target != null && !Number.isNaN(target) && w.consistency != null);
+    // Gate on the checkpoint date arriving AND on capped-credit consistency — not a
+    // one-week spike, and never early.
     const reached = day_n >= days;
-    const metricMet = hasData && w.avg >= target;
+    const metricMet = hasData && w.consistency >= CONSISTENCY_THRESHOLD;
     const hit = metricMet && reached;
     const past = now > targetDate;
     const missed = hasData && !metricMet && past;
@@ -229,6 +241,7 @@ function computeMilestoneState(client, bookingUrl, checkins) {
       metric_current: current,
       metric_target: target,
       metric_window_avg: w.avg != null ? Math.round(w.avg * 100) / 100 : null,
+      metric_consistency: w.consistency != null ? Math.round(w.consistency * 100) / 100 : null,
       metric_window_n: w.n,
       hit,
       missed,

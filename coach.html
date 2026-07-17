@@ -6533,12 +6533,12 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
     <div style="margin-top:18px;background:white;border:1px solid var(--gray-200);border-radius:8px;padding:16px 18px;">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);margin-bottom:8px;">Stakeholder Pulse Cadence</div>
       <p style="font-size:12px;color:var(--gray-700);margin:0 0 10px;line-height:1.6;">
-        How often stakeholders are re-surveyed during the sprint. Pulses send on weekdays only, anchored to the plan start date, at day 30 / 45 / 90 (sent about a week early to absorb response lag). The leader's own weekly check-in is unaffected.
+        How often stakeholders are re-surveyed during the sprint. Pulses send on weekdays only, anchored to the plan start date, at day 30 / 60 / 90 (sent about a week early to absorb response lag). The leader's own weekly check-in is unaffected.
       </p>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <select id="pulse-tier-${clientId}" style="font-size:13px;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-family:'Open Sans',sans-serif;color:var(--navy);">
-          ${_pcOpt('aggressive', 'Aggressive — 3 pulses (day 30 / 45 / 90)')}
-          ${_pcOpt('light', 'Light — 2 pulses (day 45 / 90)')}
+          ${_pcOpt('aggressive', 'Aggressive — 3 pulses (day 30 / 60 / 90)')}
+          ${_pcOpt('light', 'Light — 2 pulses (day 60 / 90)')}
           ${_pcOpt('off', 'Off — no stakeholder pulses')}
         </select>
         <button onclick="applyPulseCadence('${clientId}')" style="font-size:13px;background:var(--teal);color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-weight:700;">Apply cadence</button>
@@ -6810,7 +6810,7 @@ async function toggleShowSessionsToLeader(clientId, on){
 }
 
 // Set a client's stakeholder-pulse cadence tier and (re)schedule this sprint's
-// pulses. Aggressive = 3 pulses (day 30/45/90); Light = 2 (day 45/90); Off = none.
+// pulses. Aggressive = 3 pulses (day 30/60/90); Light = 2 (day 60/90); Off = none.
 async function applyPulseCadence(clientId){
   const sel = document.getElementById('pulse-tier-' + clientId);
   if (!sel) return;
@@ -11072,7 +11072,7 @@ async function openActivateSprintModal(){
     +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:6px;">'
     +'<div style="font-family:Montserrat,sans-serif;font-size:17px;font-weight:800;color:#004369;">Activate 90-Day Sprint — '+esc(d.client_name||'')+'</div>'
     +'<button onclick="gpsRemove(\'as-overlay\')" style="background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#888;">&times;</button></div>'
-    +'<div style="font-size:12px;color:#5a6b76;margin-bottom:14px;">Converts the debrief into an active coaching sprint: turns on the weekly check-in, creates Sprint 1, sends the baseline stakeholder survey, schedules the pulse cadence (Aggressive — day 30 / 45 / 90, weekdays), and emails the welcome.</div>'
+    +'<div style="font-size:12px;color:#5a6b76;margin-bottom:14px;">Converts the debrief into an active coaching sprint: turns on the weekly check-in, creates Sprint 1, sends the baseline stakeholder survey, schedules the pulse cadence (Aggressive — day 30 / 60 / 90, weekdays), and emails the welcome.</div>'
     +'<div style="display:flex;gap:12px;flex-wrap:wrap;">'
     +'<div style="flex:1;min-width:150px;"><label style="display:block;font-weight:700;color:#004369;font-size:12px;margin-bottom:4px;">Sprint start</label><input id="as-start" type="date" value="'+today+'" onchange="asSyncEnd()" style="width:100%;border:1px solid #d3dde3;border-radius:8px;padding:8px 10px;font-size:12.5px;box-sizing:border-box;"></div>'
     +'<div style="flex:1;min-width:150px;"><label style="display:block;font-weight:700;color:#004369;font-size:12px;margin-bottom:4px;">Sprint end (auto +90d)</label><input id="as-end" type="date" value="'+end90+'" style="width:100%;border:1px solid #d3dde3;border-radius:8px;padding:8px 10px;font-size:12.5px;box-sizing:border-box;"></div>'

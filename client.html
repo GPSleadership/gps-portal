@@ -5400,7 +5400,22 @@ function renderPortal(client, checkins) {
   const target   = parseFloat(client.metric_target) || 0;
   const current  = parseFloat(client.metric_current) || baseline;
   const range    = target - baseline;
-  const progress = range !== 0 ? Math.min(Math.max(((current - baseline) / range) * 100, 0), 100) : 0;
+  // Consistency = average of the last up-to-3 weekly credits, each CAPPED at 100% of
+  // target (mirrors the server rule). A spike week can't offset a light one — this is
+  // what actually counts toward the goal, so it never reads as "100%" off one big week.
+  const _mvals = (Array.isArray(checkins) ? checkins.slice() : [])
+    .filter(c => c && c.metric_value != null && !isNaN(parseFloat(c.metric_value)) && Number.isFinite(Number(c.week_number)))
+    .sort((a, b) => Number(a.week_number) - Number(b.week_number))
+    .slice(-3)
+    .map(c => parseFloat(c.metric_value));
+  const _denom = range > 0 ? range : null;
+  const consistency = (_mvals.length >= 2 && _denom)
+    ? _mvals.reduce((s, v) => s + Math.min(Math.max((v - baseline) / _denom, 0), 1), 0) / _mvals.length
+    : null;
+  const consistencyPct = consistency != null ? Math.round(consistency * 100) : null;
+  const progress = consistency != null
+    ? consistencyPct
+    : (range !== 0 ? Math.min(Math.max(((current - baseline) / range) * 100, 0), 100) : 0);
 
   // Pillar class
   const pillarClass = 'pillar-' + (client.tp3_pillar || 'trust').toLowerCase();
@@ -5578,17 +5593,17 @@ function renderPortal(client, checkins) {
       <div class="metric-section">
         <div class="metric-label">${client.metric_name || 'Metric'}</div>
         <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;">
-          <div class="metric-current">${current}</div>
-          <div style="font-size:13px;color:var(--gray-600);">current</div>
+          <div class="metric-current">${consistencyPct != null ? consistencyPct + '%' : current}</div>
+          <div style="font-size:13px;color:var(--gray-600);">${consistencyPct != null ? 'on target · recent weeks' : 'current'}</div>
         </div>
         <div class="metric-bar-track">
           <div class="metric-bar-fill" style="width:${progress}%"></div>
         </div>
         <div class="metric-numbers" style="margin-top:4px;">
           <span>Baseline: ${baseline}</span>
-          <span>${progress > 0 ? Math.round(progress) + '% of target' : 'Baseline set'}</span>
-          <span>Target: ${target}</span>
+          <span>Target: ${target}/wk</span>
         </div>
+        ${consistencyPct != null ? `<div style="font-size:11px;color:var(--gray-500);margin-top:8px;line-height:1.5;">Latest check-in: ${current}. A week at or above target counts as 100% &mdash; going big one week doesn&rsquo;t offset a light week, so it&rsquo;s steady, repeated weeks that move this.</div>` : ''}
       </div>
       </div><!-- /plan-detail -->
     </div>

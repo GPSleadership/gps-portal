@@ -4,15 +4,22 @@
 // action=schedule-pulses) and start-sprint.js (renewal / sprint 2+).
 //
 // Cadence tiers (clients.pulse_cadence_tier):
-//   aggressive → 3 pulses  (day30 + day45 + day90)   — Sprint 1 window
-//   light      → 2 pulses  (day45 + day90)           — renewal default
+//   aggressive → 3 pulses  (day30 + day60 + day90)   — Sprint 1 window
+//   light      → 2 pulses  (day60 + day90)           — renewal default
 //   off        → 0 pulses  (leader-only)
 //
-// Outward labels are 30/45/90; internal send offsets are day 21/45/80 from the
+// Outward labels are 30/60/90; internal send offsets are day 21/53/80 from the
 // sprint anchor (sent ~1 week early to absorb response lag so reads land by the
-// 30/90 marks). Any send that falls on a weekend is shifted to the next Monday,
+// 30/60/90 marks). Any send that falls on a weekend is shifted to the next Monday,
 // and the time of day is pinned to 13:00 UTC (9am ET) so pulses only go out on
 // business days during working hours.
+//
+// CADENCE HISTORY: the mid-pulse moved from day45 → day60 on 2026-07-16 (per the
+// Measurement Architecture decision — 45 was too early for perception to register).
+// The legacy `day45` checkpoint is kept RECOGNIZED (offsets + cancellation) so any
+// pulse already scheduled or sent under the old cadence still resolves — but NEW
+// scheduling uses day60. Never rename day45 in the DB; checkpoint values are free
+// text and non-normalized (`day45`/`45-day` coexist in historical rows).
 //
 // This module never touches the `baseline` checkpoint — baseline is the coach's
 // manual "before" send and is scheduled separately.
@@ -21,15 +28,18 @@ const SUPABASE_URL    = process.env.SUPABASE_URL    || 'https://pbnkefuqpoztcxfa
 const SUPABASE_SECRET = process.env.SUPABASE_SECRET_KEY;
 
 // Outward checkpoint label → internal day offset from the sprint anchor date.
-const PULSE_OFFSETS = { day30: 21, day45: 45, day90: 80 };
+// day60 is the current mid-pulse (send ~day 53 so the read lands near day 60).
+// day45 is legacy — kept so historical schedules still resolve; not scheduled anymore.
+const PULSE_OFFSETS = { day30: 21, day45: 45, day60: 53, day90: 80 };
 
-// Every pulse checkpoint this module manages, in send order.
-const PULSE_CHECKPOINTS = ['day30', 'day45', 'day90'];
+// Every pulse checkpoint this module manages/recognizes, in send order.
+// Includes legacy day45 so cancellation + cleanup still find old rows.
+const PULSE_CHECKPOINTS = ['day30', 'day45', 'day60', 'day90'];
 
-// Which checkpoints each tier schedules.
+// Which checkpoints each tier schedules (current cadence: 30/60/90).
 const TIER_CHECKPOINTS = {
-  aggressive: ['day30', 'day45', 'day90'],
-  light:      ['day45', 'day90'],
+  aggressive: ['day30', 'day60', 'day90'],
+  light:      ['day60', 'day90'],
   off:        []
 };
 
@@ -81,7 +91,7 @@ async function schedulePulses({ client_id, tier, anchorDate, currentSprint }) {
 
   // Which pulse checkpoints already went out this sprint? Don't re-send those.
   const sentRes = await sbFetch(
-    `/rest/v1/survey_tokens?client_id=eq.${client_id}&sprint_number=eq.${sprintNum}&checkpoint=in.(day30,day45,day90)&select=checkpoint`
+    `/rest/v1/survey_tokens?client_id=eq.${client_id}&sprint_number=eq.${sprintNum}&checkpoint=in.(day30,day45,day60,day90)&select=checkpoint`
   );
   const sentRows = sentRes.ok ? await sentRes.json() : [];
   const alreadySent = new Set((sentRows || []).map(r => r.checkpoint));
@@ -122,7 +132,7 @@ async function schedulePulses({ client_id, tier, anchorDate, currentSprint }) {
 // Cancel all remaining UNSENT pulse schedules for a client (used by auto-taper).
 async function cancelRemainingPulses(client_id) {
   await sbFetch(
-    `/rest/v1/survey_schedules?client_id=eq.${client_id}&checkpoint=in.(day30,day45,day90)&sent_at=is.null`,
+    `/rest/v1/survey_schedules?client_id=eq.${client_id}&checkpoint=in.(day30,day45,day60,day90)&sent_at=is.null`,
     'DELETE', null, { Prefer: 'return=minimal' }
   );
 }

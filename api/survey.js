@@ -132,8 +132,9 @@ function generateToken() {
 function buildSendSubjectLine(clientName, checkpoint) {
   const first = clientName.split(' ')[0];
   if (checkpoint === 'baseline') return `${first} would value your candid feedback`;
-  if (checkpoint === 'day30')   return `Quick mid-point check-in for ${first}`;
+  if (checkpoint === 'day30')   return `Quick early check-in for ${first}`;
   if (checkpoint === 'day45')   return `A quick pulse on ${first}'s progress`;
+  if (checkpoint === 'day60')   return `A quick pulse on ${first}'s progress`;
   return `Final 90-day feedback for ${first}`;
 }
 
@@ -204,7 +205,7 @@ function buildSendEmailHtml(stakeholderName, clientName, checkpoint, priorityBeh
       ${p(`Your numeric rating will be visible to both ${clientFirst} and their coach. For any written comments, you can again choose whether they are shared with both or only with the coach.`)}
       ${p(`${clientFirst} and their coach are copied here so everyone knows this request was sent. Your responses are still used for development, not formal evaluation.`)}
       ${p(`Thank you again for your support and candor.`)}`;
-  } else if (checkpoint === 'day45') {
+  } else if (checkpoint === 'day45' || checkpoint === 'day60') {
     body = `
       ${p(`Hi ${stakeholderName},`)}
       ${p(`${clientFirst} is partway through a 90-day leadership sprint focused on:`)}
@@ -358,11 +359,11 @@ async function maybeAutoTaper(client_id, sprintNumber) {
     if (activeCount < 2) return; // not enough raters to judge "across raters"
     const quorum = Math.max(2, Math.ceil(activeCount / 2));
 
-    const rRes = await sbFetch(`/rest/v1/survey_responses?client_id=eq.${client_id}&sprint_number=eq.${sprintNumber}&checkpoint=in.(day30,day45,day90)&select=checkpoint,score`);
+    const rRes = await sbFetch(`/rest/v1/survey_responses?client_id=eq.${client_id}&sprint_number=eq.${sprintNumber}&checkpoint=in.(day30,day45,day60,day90)&select=checkpoint,score`);
     if (!rRes.ok) return;
     const responses = await rRes.json();
 
-    const order = ['day30', 'day45', 'day90'];
+    const order = ['day30', 'day45', 'day60', 'day90'];
     const byCp = {};
     for (const r of (responses || [])) {
       (byCp[r.checkpoint] = byCp[r.checkpoint] || []).push(Number(r.score));
@@ -389,7 +390,7 @@ async function maybeAutoTaper(client_id, sprintNumber) {
 // recent measured pulse. Returns '' for the first pulse or when data is thin.
 async function buildProgressNote(client_id, sprintNumber, checkpoint, clientFirst) {
   try {
-    if (checkpoint !== 'day45' && checkpoint !== 'day90') return '';
+    if (checkpoint !== 'day45' && checkpoint !== 'day60' && checkpoint !== 'day90') return '';
     const rRes = await sbFetch(`/rest/v1/survey_responses?client_id=eq.${client_id}&sprint_number=eq.${sprintNumber}&select=checkpoint,score`);
     if (!rRes.ok) return '';
     const responses = await rRes.json();
@@ -399,7 +400,7 @@ async function buildProgressNote(client_id, sprintNumber, checkpoint, clientFirs
     };
     const baseline = avgOf('baseline');
     // Most recent prior pulse before the one being sent now.
-    const priorOrder = checkpoint === 'day90' ? ['day45', 'day30'] : ['day30'];
+    const priorOrder = checkpoint === 'day90' ? ['day60', 'day45', 'day30'] : ['day30'];
     let latest = null;
     for (const cp of priorOrder) { const v = avgOf(cp); if (v != null) { latest = v; break; } }
     if (baseline == null || latest == null) return '';
@@ -418,7 +419,7 @@ async function handleSend(req, res) {
     const { client_id, checkpoint = 'baseline', password } = req.body;
     if (!client_id) return res.status(400).json({ error: 'client_id is required' });
 
-    const validCheckpoints = ['baseline', 'day30', 'day45', 'day90'];
+    const validCheckpoints = ['baseline', 'day30', 'day45', 'day60', 'day90'];
     if (!validCheckpoints.includes(checkpoint)) {
       return res.status(400).json({ error: 'checkpoint must be baseline, day30, or day90' });
     }
@@ -549,7 +550,7 @@ async function handleScheduleSend(req, res) {
   try {
     const { client_id, checkpoint = 'baseline', scheduled_at, password } = req.body || {};
     if (!client_id) return res.status(400).json({ error: 'client_id is required' });
-    const validCheckpoints = ['baseline', 'day30', 'day45', 'day90'];
+    const validCheckpoints = ['baseline', 'day30', 'day45', 'day60', 'day90'];
     if (!validCheckpoints.includes(checkpoint)) return res.status(400).json({ error: 'invalid checkpoint' });
     const authOk = !!verifyCoachSession(req.body.session);
     if (!authOk) return res.status(401).json({ error: 'Not authorized' });

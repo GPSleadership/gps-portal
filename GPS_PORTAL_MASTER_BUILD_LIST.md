@@ -69,15 +69,30 @@ Standard of record: **`Knowledge/GPS-Frameworks/Rater Confidentiality Standard.m
 | **P0-CEL1a** | **Immediate mitigation + reset (done):** stamped `celebrated_30_at = now()` on Sergio + David to take the live false message down under the old code; after the fix went live, reset both `celebrated_30_at`+`celebrated_90_at` → null so genuine checkpoints celebrate (David's real day-30 is 2026-07-19). Verified null 2026-07-16. | S | ✅ Done 2026-07-16 | SQL run 2026-07-16 |
 | **P1-CEL2** | **Deploy path: GitHub outage broke auto-deploy 2026-07-16.** GitHub's webhook to Vercel stopped firing (Vercel showed a "GitHub Outage" banner) so pushes to `main` did not build. Worked around with `npx vercel --prod` (deploys the local tree directly, bypasses GitHub). Until GitHub recovers, deploy with `vercel --prod`, not by pushing. When the outage clears, confirm Settings → Git reconnected so auto-deploy resumes. | — | ⏳ watch — use CLI until GitHub recovers | Vercel banner + `list_deployments` showed no build for 5bf2be7/3aefc85 |
 
+### P1 — AI kill-switch: admin toggles for every AI feature (added 2026-07-16, Alex — "do soon")
+
+**Why:** Alex does not want the practice locked into AI. If AI cost spikes, a provider degrades, or a client requires it off, he needs to disable specific AI features from the admin side and fall back to an analog/manual path — per feature, not all-or-nothing. This is a strategic hedge, not a nicety. Long-term / sub-coach resilience.
+
+**Design:** one `ai_feature_flags` config table (singleton or per-feature rows), an `aiEnabled(feature)` helper each call site checks, and a graceful **analog fallback** per feature (manual entry, skip the step, or a templated non-AI version) — never a hard error when a feature is off. Admin toggles live in coach.html Settings, owner-only, logged. Default all ON.
+
+**AI call sites to wrap (verified 2026-07-16 — 8 endpoints):**
+
+| # | Item | Effort | Status | Evidence |
+|---|------|--------|--------|----------|
+| **P1-AI1** | Audit + confirm the exact user-facing feature behind each AI endpoint and design its analog fallback: `ask.js` (Ask Alex Q&A), `diagnostic.js` (report generation + question/G2 generation), `diag-portal.js` (leader diagnostic view), `portal-data.js` (vision specificity gate), `coach-data.js`, `workshop-data.js`, `testimonial.js`, `health.js` (provider ping — infra, not a user feature). | M | ⏳ **queued — do soon** | grep of `api/` for provider/model calls, 2026-07-16 |
+| **P1-AI2** | `ai_feature_flags` table + `aiEnabled(feature)` helper + per-feature analog fallback wired into each call site above. | M | ⏳ queued | — |
+| **P1-AI3** | Admin toggle panel (coach.html Settings, owner-only, logged) — per-feature on/off, with a short "what happens when off" note each. | S | ⏳ queued | — |
+
 ### P1 — Measurement architecture rebuild (started 2026-07-16, Council-reviewed)
 
 Decision + Council rationale in the vault decision note. Architecture: **30-day = self-report (sustained behavior average); 60-day = blended, directional; 90-day = decisive on stakeholder trust vs a target set at plan-time.** Cadence moves 30/45/90 → **30/60/90**. Feedforward rater question added at baseline + 60 + 90. Ship via `gps-portal-safe-build`; deploy with `vercel --prod` while the GitHub outage persists.
 
 | # | Item | Effort | Status | Evidence |
 |---|------|--------|--------|----------|
-| **P1-M1** | **Sustained-average achievement rule.** `computeMilestoneState` now judges a goal "reached" on the average of the recent check-in window (30-day = last 3 weekly check-ins to the checkpoint; 90-day = last 4), requiring >= 2 observations, never a single-week `metric_current` snapshot. Gated on the checkpoint date (P0-CEL1). Verified: Sergio 0/5/20 → avg 8.3 → no false hit; spike-then-drop → no hit; sustained → hit. | S | ✅ Done 2026-07-16 (portal-data.js, node --check OK) | logic unit-tested; awaiting deploy |
+| **P1-M1** | **Sustained + capped-consistency achievement rule.** `computeMilestoneState` judges "reached" on the recent check-in window (30-day = last 3, 90-day = last 4, >= 2 obs), never a single `metric_current` snapshot, gated on the checkpoint date (P0-CEL1). **Capping (added 2026-07-16, Alex's catch):** each week's credit = `clamp((v-baseline)/(target-baseline),0,1)` — a week ≥ target = 100%, no more — averaged, must clear `CONSISTENCY_THRESHOLD` (0.9). A spike week can't offset light/zero weeks. Verified: Sergio 0/5/20 → 50% no-hit; 30/0/0 → 33% no-hit; 10/10/8 → 93% hit; 10/0/10 → 67% no-hit; 20/20/20 → 100% hit. `metric_consistency` added to payload. | S | ✅ Done 2026-07-16 (portal-data.js, node --check OK) | logic unit-tested; awaiting deploy |
 | **P1-M1a** | Follow-up: align `send-reminders.js` milestone `hit` (line 343, single-snapshot `current>=target`) with the sustained-average rule — currently it can only wrongly *suppress a day-of nudge* on a spike (never a false celebration; celebration is in-portal only). Needs a per-client check-in fetch in the cron. | S | ⏳ queued | send-reminders.js:343 |
-| **P1-M1b** | Follow-up: the plan-card progress display in `client.html` still shows raw `metric_current` vs target ("100% of target" for Sergio's 20/10). Consider showing the sustained window average so the progress bar and the (no) celebration don't visually contradict. | S | ⏳ queued | client.html plan card |
+| **P1-M1b** | Plan-card now leads with **capped on-target consistency %** (each week ≤100%), bar + headline, latest value kept as context + a "one big week doesn't offset a light week" note. Sergio: 50% (not the misleading 83%/100%). Falls back to raw `current` when <2 metric check-ins. Matches the server rule. | S | ✅ Done 2026-07-16 (client.html, JS sweep OK) | client.html plan card |
+| **P1-M2** | **Cadence 30/45/90 → 30/60/90 (additive).** `pulse-schedule.js`: `day60` offset 53, tiers now aggressive=[30,60,90]/light=[60,90], legacy `day45` kept recognized for cancel/cleanup (never renamed — checkpoint strings are non-normalized). `survey.js`: subject/body/progress-note/taper/validCheckpoints all handle `day60` (and still `day45`). `coach.html`: cadence-picker + activate copy say 30/60/90. Verified: scheduler emits day60@offset53, node --check + JS sweep clean. Coach stakeholder grid still shows baseline/30/90 (mid-pulse surfaced to coach in Phase 3). | M | ✅ Done 2026-07-16 (awaiting deploy) | pulse-schedule.js, survey.js, coach.html |
 
 ### P1 — Report generation is a 4-minute blocking call (added 2026-07-14)
 
