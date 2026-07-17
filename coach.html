@@ -6572,7 +6572,53 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
       <div id="pulse-target-status-${clientId}" style="font-size:12px;color:var(--navy);margin-top:8px;"></div>
     </div>`;
 
+  // ── Coaching Moment: deterministic per-leader brief (Phase 5, part 1) ───────
+  // Assembles the facts a coach (or sub-coach) needs to walk into the conversation
+  // prepared: where stakeholders sit vs baseline + target, and the forward
+  // suggestions they gave. Facts + decision are deterministic (no AI). Coach-only.
+  const _cmAvg = cp => { const a = (responsesByCheckpoint[cp] || []).map(r => Number(r.score)).filter(v => !isNaN(v)); return a.length ? { n: a.length, avg: a.reduce((x,y)=>x+y,0)/a.length } : { n: 0, avg: null }; };
+  const _cmBase   = _cmAvg('baseline');
+  const _cmLatest = [['Day 90','day90'],['Day 60','day60'],['Day 45','day45'],['Day 30','day30']]
+      .map(([lab,cp]) => ({ lab, n: _cmAvg(cp).n, avg: _cmAvg(cp).avg }))
+      .find(o => o.avg != null) || null;
+  const _cmTarget = _pcClient.pulse_target_90 != null ? Number(_pcClient.pulse_target_90) : null;
+  const _cmFeed   = (rawResponses || []).filter(r => r.feedforward && String(r.feedforward).trim()).map(r => String(r.feedforward).trim());
+  let coachingMomentHtml = '';
+  if (_cmBase.avg != null || _cmLatest || _cmTarget != null || _cmFeed.length) {
+    const _mv = (_cmBase.avg != null && _cmLatest && _cmLatest.avg != null)
+      ? `Stakeholders moved from <strong>${_cmBase.avg.toFixed(1)}</strong> (baseline) to <strong>${_cmLatest.avg.toFixed(1)}</strong> at ${_cmLatest.lab} (${_cmLatest.n} rater${_cmLatest.n===1?'':'s'}).`
+      : (_cmBase.avg != null ? `Baseline stakeholder average is <strong>${_cmBase.avg.toFixed(1)}</strong>; no follow-up pulse in yet.`
+        : (_cmLatest ? `Latest stakeholder average is <strong>${_cmLatest.avg.toFixed(1)}</strong> at ${_cmLatest.lab}.` : 'No stakeholder pulse data yet.'));
+    let _tv = '';
+    if (_cmTarget != null) {
+      const _d90 = _cmAvg('day90');
+      if (_d90.avg != null && _d90.n >= 3) _tv = _d90.avg >= _cmTarget
+        ? `90-day target ${_cmTarget.toFixed(1)} — <strong style="color:#0F6E56;">reached</strong> (${_d90.avg.toFixed(1)}, ${_d90.n} raters).`
+        : `90-day target ${_cmTarget.toFixed(1)} — <strong style="color:#C0392B;">not yet</strong> (${_d90.avg.toFixed(1)}, ${_d90.n} raters).`;
+      else if (_d90.avg != null) _tv = `90-day target ${_cmTarget.toFixed(1)} — day-90 read has only ${_d90.n} rater${_d90.n===1?'':'s'} (need 3 to call it).`;
+      else _tv = `90-day target set at ${_cmTarget.toFixed(1)}; day-90 pulse not in yet.`;
+    } else {
+      _tv = 'No 90-day stakeholder target set yet — set one below so the 90-day goal can register.';
+    }
+    const _ff = _cmFeed.length
+      ? `<div style="margin-top:10px;"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--teal);margin-bottom:5px;">What stakeholders suggested (feedforward)</div>${_cmFeed.slice(0,5).map(t => `<div style="font-size:12.5px;color:var(--text);line-height:1.5;padding:5px 10px;background:#fff;border-left:3px solid #C9A84C;border-radius:0 5px 5px 0;margin-bottom:5px;">${escHtml(t)}</div>`).join('')}${_cmFeed.length>5?`<div style="font-size:11px;color:var(--gray-600);">+ ${_cmFeed.length-5} more in the responses below.</div>`:''}</div>`
+      : '';
+    const _consider = _cmFeed.length
+      ? 'Consider: pick one feedforward theme with the leader and have them close the loop directly with those stakeholders — that follow-up is what actually moves the score.'
+      : (_cmTarget == null ? 'Consider: set the 90-day target below so the outcome can be measured, then brief the leader on the baseline read.'
+        : 'Consider: brief the leader on where stakeholders currently rate them and what to keep doing.');
+    coachingMomentHtml = `
+      <div style="background:#eef6f5;border:1px solid #cfe6e2;border-radius:8px;padding:14px 16px;margin-bottom:16px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);margin-bottom:8px;">Coaching Moment</div>
+        <div style="font-size:13px;color:var(--text);line-height:1.6;">${_mv}</div>
+        <div style="font-size:13px;color:var(--text);line-height:1.6;margin-top:4px;">${_tv}</div>
+        ${_ff}
+        <div style="font-size:12.5px;color:var(--navy);line-height:1.55;margin-top:10px;font-style:italic;">${_consider}</div>
+      </div>`;
+  }
+
   el.innerHTML = `
+    ${coachingMomentHtml}
     ${scoreboardHtml}
     <div style="margin-bottom:12px;${scoreboardHtml ? 'margin-top:18px;' : ''}">${badgeHtml}</div>
     <div id="sh-list-${clientId}">${listHtml}</div>
