@@ -277,6 +277,13 @@
       <textarea id="openResponseField" placeholder="Your answer…"></textarea>
     </div>
 
+    <!-- Feedforward card (baseline + day60 + day90 — hidden at day30) -->
+    <div class="card" id="feedforwardCard">
+      <div class="section-label" id="feedforwardLabel">Thinking ahead, what is one specific thing this leader could start doing, or do more of, to strengthen this?</div>
+      <div class="section-hint">A concrete, doable suggestion for the weeks ahead — this goes to their coach to help guide the work, not a grade on the past.</div>
+      <textarea id="feedforwardField" placeholder="One thing they could do going forward…"></textarea>
+    </div>
+
     <!-- Comments card (all checkpoints) -->
     <div class="card">
       <div class="section-label">Additional comments <span style="font-weight:400;color:var(--gray-600);">(optional)</span></div>
@@ -440,6 +447,17 @@ function buildSurvey() {
     }
   }
 
+  // Feedforward — forward-looking suggestion, shown at baseline + 60 + 90, hidden at day30.
+  const ffCard = document.getElementById('feedforwardCard');
+  if (ffCard) {
+    if (checkpoint === 'day30') {
+      ffCard.style.display = 'none';
+    } else {
+      const ffLabel = document.getElementById('feedforwardLabel');
+      if (ffLabel) ffLabel.innerHTML = `Thinking ahead, what is one specific thing <strong>${clientFirst}</strong> could start doing, or do more of, over the next few weeks to strengthen this?`;
+    }
+  }
+
   show('surveyForm');
 }
 
@@ -481,6 +499,8 @@ async function submitSurvey() {
     ? (document.getElementById('openResponseField').value.trim() || null)
     : null;
   const comments      = document.getElementById('commentsField').value.trim() || null;
+  const ffEl          = document.getElementById('feedforwardField');
+  const feedforward   = (checkpoint !== 'day30' && ffEl) ? (ffEl.value.trim() || null) : null;
 
   try {
     const res = await fetch('/api/survey?action=submit', {
@@ -495,6 +515,7 @@ async function submitSurvey() {
         score:                     selectedScore,
         open_response:             openResponse,
         comments,
+        feedforward,
         comments_visible_to_client: commentsVisible
       })
     });

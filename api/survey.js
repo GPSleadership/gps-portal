@@ -800,7 +800,7 @@ async function handleSubmit(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { token, client_id, stakeholder_id, checkpoint, score, open_response, comments, comments_visible_to_client } = req.body;
+    const { token, client_id, stakeholder_id, checkpoint, score, open_response, comments, comments_visible_to_client, feedforward } = req.body;
 
     if (!token || !client_id || !stakeholder_id || !checkpoint || score == null) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -825,6 +825,7 @@ async function handleSubmit(req, res) {
       sprint_number: tokenRecord.sprint_number || 1,
       open_response: open_response || null,
       comments:      comments      || null,
+      feedforward:   (feedforward && String(feedforward).trim()) ? String(feedforward).trim().slice(0, 1000) : null,
       comments_visible_to_client: comments_visible_to_client !== false
     }, { 'Prefer': 'return=minimal' });
 

@@ -6221,7 +6221,7 @@ async function loadStakeholderData(clientId) {
 
   const [stakeholders, responses, tokens] = await Promise.all([
     cdSelect('stakeholders', { eq: { client_id: clientId }, order: { col: 'created_at', asc: true } }),
-    cdSelect('survey_responses', { eq: { client_id: clientId }, order: { col: 'submitted_at', asc: true }, select: 'stakeholder_id,checkpoint,score,open_response,comments,comments_visible_to_client,submitted_at' }),
+    cdSelect('survey_responses', { eq: { client_id: clientId }, order: { col: 'submitted_at', asc: true }, select: 'stakeholder_id,checkpoint,score,open_response,comments,feedforward,comments_visible_to_client,submitted_at' }),
     cdSelect('survey_tokens', { eq: { client_id: clientId }, select: 'id,checkpoint,is_used,stakeholder_id,non_response_flagged,reminder_1_sent_at,reminder_2_sent_at,reminder_3_sent_at,sent_at' }),
   ]);
 
@@ -6238,8 +6238,8 @@ async function loadStakeholderData(clientId) {
 function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpoint, tokens, rawResponses) {
   const activeStakeholders = stakeholders.filter(s => s.is_active);
   const canAddMore         = activeStakeholders.length < 8;
-  const checkpoints        = ['baseline', 'day30', 'day90'];
-  const cpLabels           = { baseline: 'Baseline', day30: 'Day 30', day90: 'Day 90' };
+  const checkpoints        = ['baseline', 'day30', 'day45', 'day60', 'day90'];
+  const cpLabels           = { baseline: 'Baseline', day30: 'Day 30', day45: 'Day 45', day60: 'Day 60', day90: 'Day 90' };
   const baselineTokens     = tokens.filter(t => t.checkpoint === 'baseline');
   const baselineResponses  = (responsesByCheckpoint['baseline'] || []).length;
 
@@ -6431,6 +6431,7 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
       const items  = [];
       cpRows.forEach(r => {
         if (r.open_response) items.push({ text: r.open_response, type: 'observation', visible: true });
+        if (r.feedforward)   items.push({ text: r.feedforward, type: 'feedforward', visible: true });
         if (r.comments)      items.push({ text: r.comments, type: 'comment', visible: !!r.comments_visible_to_client });
       });
       if (!items.length) return;
@@ -6439,7 +6440,7 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
         ${items.map(item => `
           <div style="background:var(--gray-100);border-left:3px solid ${item.visible ? 'var(--teal)' : '#C9A84C'};border-radius:0 5px 5px 0;padding:8px 12px;margin-bottom:6px;font-size:13px;color:var(--text);line-height:1.55;">
             <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);margin-bottom:4px;">
-              ${item.type === 'observation' ? 'Key Observation' : 'Comment'} · ${item.visible ? '👁 Visible to client' : '🔒 Coach only'}
+              ${item.type === 'observation' ? 'Key Observation' : item.type === 'feedforward' ? 'Feedforward · one thing to do next' : 'Comment'} · ${item.visible ? '👁 Visible to client' : '🔒 Coach only'}
             </div>
             ${escHtml(item.text)}
           </div>`).join('')}
