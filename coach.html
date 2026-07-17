@@ -902,6 +902,7 @@
       <div class="section-subtab active" id="sub-admins"   onclick="showSection('admins')">Admin Accounts</div>
       <div class="section-subtab"        id="sub-security" onclick="showSection('security')">Account &amp; Security</div>
       <div class="section-subtab"        id="sub-reportflow" onclick="showSection('reportflow')">Report Flow</div>
+      <div class="section-subtab"        id="sub-aicontrols" onclick="showSection('aicontrols')">AI Controls</div>
     </div>
 
     <!-- ═══ ASK ALEX LOG SECTION ═══ -->
@@ -1117,6 +1118,21 @@ I'm taking part in a leadership assessment run by GPS Leadership Solutions. Thei
         </div>
       </div>
     </div><!-- /section-reportflow -->
+
+    <!-- ═══ AI CONTROLS SECTION ═══ -->
+    <div id="section-aicontrols" style="display:none;">
+      <div class="toolbar" style="margin-bottom:16px;">
+        <div class="toolbar-title">AI Controls</div>
+      </div>
+      <div style="background:var(--white);border-radius:8px;padding:14px 18px;margin-bottom:16px;border-left:4px solid var(--navy);font-size:13px;color:var(--text);line-height:1.6;">
+        One place to turn each AI feature in the Executive Impact System on or off. Turn a feature <strong>off</strong> and it stops calling AI and falls back to a manual/analog path — never an error. Use this if AI cost spikes, a provider has issues, or a client needs it off. Owner only.
+      </div>
+      <div style="background:var(--white);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06);overflow:hidden;">
+        <div id="aiControlsContent" style="padding:16px 18px;">
+          <div class="spinner"></div>
+        </div>
+      </div>
+    </div><!-- /section-aicontrols -->
 
     <!-- ═══ ACCOUNT & SECURITY SECTION ═══ -->
     <div id="section-security" style="display:none;">
@@ -4815,6 +4831,7 @@ function showSection(name, skipHooks, _fromHistory) {
   if (name === 'messages')    loadCoachInbox();
   if (name === 'admins')      loadAdminAccounts();
   if (name === 'reportflow')  loadReportFlowSettings();
+  if (name === 'aicontrols')  loadAiControls();
   if (name === 'templates')   { loadEmailTemplates(); loadCcSettingsPanel(); loadRenewalConfigPanel(); }
   if (name === 'dashboard')   { _actionItemsLoaded = false; renderDiagHome(); refreshMsgBadge(); }
   if (name === 'diagnostics') { diagBoot(); renderDiagTable(); }
@@ -5521,6 +5538,38 @@ async function saveRenewalConfig(){
     await cdUpdate('renewal_config', vals, { eq:{ id:1 } });
     if (status) { status.style.color = 'var(--teal)'; status.textContent = '✓ Saved'; setTimeout(() => { if (status) status.textContent = ''; }, 3000); }
   } catch (e) { if (status) { status.style.color = 'var(--red)'; status.textContent = 'Error: ' + (e.message || 'save failed'); } }
+}
+
+// ── AI Controls (central kill-switch dashboard) ────────────────────────────
+// AI_ENFORCED lists the features whose endpoints already honor the flag. As each
+// remaining AI endpoint is wired (P1-AI2), add it here so its row reads "Live".
+const AI_ENFORCED = { coaching_brief: true };
+async function loadAiControls(){
+  const el = document.getElementById('aiControlsContent');
+  if (!el) return;
+  el.innerHTML = '<div class="spinner"></div>';
+  let flags = [];
+  try { const r = await coachData({ action: 'ai-flags-list' }); flags = r.flags || []; }
+  catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px;">Could not load AI settings: ' + (e.message || '') + '</div>'; return; }
+  if (!flags.length) { el.innerHTML = '<div style="color:var(--gray-600);font-size:13px;">No AI features registered.</div>'; return; }
+  el.innerHTML = flags.map(f => {
+    const on = f.enabled !== false;
+    const enforced = !!AI_ENFORCED[f.feature];
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 4px;border-bottom:1px solid var(--gray-100);">'
+      + '<div style="min-width:0;">'
+      +   '<div style="font-weight:700;color:var(--navy);font-size:13px;">' + escHtml(f.label || f.feature) + '</div>'
+      +   '<div style="font-size:11px;color:var(--gray-600);margin-top:2px;">' + (enforced ? 'Live — this toggle takes effect immediately.' : 'Toggle saved; enforcement lands with the next update.') + '</div>'
+      + '</div>'
+      + '<label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;white-space:nowrap;">'
+      +   '<span style="font-size:12px;font-weight:700;color:' + (on ? '#0F6E56' : 'var(--gray-600)') + ';">' + (on ? 'On' : 'Off') + '</span>'
+      +   '<input type="checkbox" ' + (on ? 'checked' : '') + ' onchange="saveAiFlag(\'' + f.feature + '\', this.checked)" style="width:18px;height:18px;cursor:pointer;">'
+      + '</label>'
+      + '</div>';
+  }).join('');
+}
+async function saveAiFlag(feature, enabled){
+  try { await coachData({ action: 'ai-flag-set', feature, enabled }); if (typeof toast === 'function') toast('AI feature turned ' + (enabled ? 'on' : 'off') + '.'); loadAiControls(); }
+  catch (e) { alert(e.message || 'Could not update.'); loadAiControls(); }
 }
 
 // ── Report Flow settings (global gates for the diagnostic report stepper) ──────
@@ -6379,8 +6428,9 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
       const scores = scoreMap[s.id] || {};
       const base   = scores['baseline'];
       const d45    = scores['day30'];
+      const d60    = scores['day60'] ?? scores['day45'];
       const d90    = scores['day90'];
-      const latest = d90 ?? d45 ?? null;
+      const latest = d90 ?? d60 ?? d45 ?? null;
       const isSB   = isSupervisorOrBoard(s);
       const rowStyle = isSB
         ? 'background:#faf5ff;'
@@ -6392,6 +6442,7 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
         </td>
         <td>${scoreBadge(base)}</td>
         <td>${scoreBadge(d45)}</td>
+        <td>${scoreBadge(d60)}</td>
         <td>${scoreBadge(d90)}</td>
         <td>${changeBadge(base, latest)}</td>
       </tr>`;
@@ -6403,8 +6454,9 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
         <td style="font-weight:700;color:var(--navy);font-size:11px;text-transform:uppercase;letter-spacing:0.4px;">Peer Avg</td>
         <td>${scoreBadge(peerAvg['baseline'])}</td>
         <td>${scoreBadge(peerAvg['day30'])}</td>
+        <td>${scoreBadge(peerAvg['day60'])}</td>
         <td>${scoreBadge(peerAvg['day90'])}</td>
-        <td>${changeBadge(peerAvg['baseline'], peerAvg['day90'] ?? peerAvg['day30'])}</td>
+        <td>${changeBadge(peerAvg['baseline'], peerAvg['day90'] ?? peerAvg['day60'] ?? peerAvg['day30'])}</td>
       </tr>` : '';
 
     // Supervisor/Board alert
@@ -6458,6 +6510,7 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
                 <th>Stakeholder</th>
                 <th>Baseline</th>
                 <th>Day 30</th>
+                <th>Day 60</th>
                 <th>Day 90</th>
                 <th>Change</th>
               </tr>

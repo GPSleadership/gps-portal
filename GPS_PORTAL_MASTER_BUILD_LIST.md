@@ -86,8 +86,9 @@ Standard of record: **`Knowledge/GPS-Frameworks/Rater Confidentiality Standard.m
 | # | Item | Effort | Status | Evidence |
 |---|------|--------|--------|----------|
 | **P1-AI1** | Audit + confirm the exact user-facing feature behind each AI endpoint and design its analog fallback: `ask.js` (Ask Alex Q&A), `diagnostic.js` (report generation + question/G2 generation), `diag-portal.js` (leader diagnostic view), `portal-data.js` (vision specificity gate), `coach-data.js`, `workshop-data.js`, `testimonial.js`, `health.js` (provider ping — infra, not a user feature). | M | ⏳ **queued — do soon** | grep of `api/` for provider/model calls, 2026-07-16 |
-| **P1-AI2** | `ai_feature_flags` table + `aiEnabled(feature)` helper + per-feature analog fallback wired into each call site above. | M | ⏳ queued | — |
-| **P1-AI3** | Admin toggle panel (coach.html Settings, owner-only, logged) — per-feature on/off, with a short "what happens when off" note each. | S | ⏳ queued | — |
+| **P1-AI2** | `ai_feature_flags` table (v103) + `enabled` check pattern. **coaching_brief WIRED** (coach-data.js gates + analog fallback). **Remaining retrofit:** wire `ask_alex`, `report_generation`, `question_generation`, `vision_gate`, `workshop_ai`, `testimonial_ai`, `diagnostic_summary` at their AI call sites (each: read flag → analog fallback when off). Add each to `AI_ENFORCED` in coach.html as wired so its dashboard row reads "Live". | M | 🔧 in progress (1 of 8 wired) | v103; coach-data.js |
+| **P1-AI3** | **Central AI Controls dashboard** ✅ Done 2026-07-17 — coach.html Settings → **AI Controls** subtab, owner-only, lists all 8 AI features with on/off toggles (via `ai-flags-list`/`ai-flag-set`), each row shows Live vs "enforcement rolling out". This is Alex's "one place to govern every AI function." All 8 flags seeded. | M | ✅ Done 2026-07-17 (awaiting deploy) | coach.html |
+| **P1-M6** | **Perception Scoreboard: add Day 60 column** (coach.html) — header + per-stakeholder rows + peer-average row now show Baseline / Day 30 / Day 60 / Day 90; change uses latest of 90→60→30. Matches the 30/60/90 cadence. JS sweep clean. | S | ✅ Done 2026-07-17 | coach.html scoreboard |
 
 ### P1 — Measurement architecture rebuild (started 2026-07-16, Council-reviewed)
 
