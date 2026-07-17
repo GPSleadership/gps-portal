@@ -160,10 +160,16 @@ async function visionGate(text) {
 
 // Milestone + celebration state for the 30- and 90-day goals. Computed here so the
 // dates and "on-time vs recovery" call are trustworthy (never client date math).
-// Reward-timing rule (locked): a hit ON/BEFORE the target date is on-time; a hit
-// AFTER it is recovery (still celebrated); target passed with value < target is a
-// miss (day-of reflection only — no false celebration).
-function computeMilestoneState(client, bookingUrl) {
+//
+// Achievement rule (locked 2026-07-16): a goal is "reached" only when the leader's
+// SUSTAINED average across the recent check-in window is at or above target — never
+// a single-week spike (a leader can beat a proxy metric once and it means nothing).
+// Windows: 30-day = the last 3 weekly check-ins up to the checkpoint; 90-day = the
+// last 4. At least MIN_OBS check-ins with a metric are required, or we can't judge it
+// (no celebration, no "miss"). And nothing counts before the checkpoint date arrives.
+// on/before target date = on-time; after = recovery; window below target & past = miss.
+function computeMilestoneState(client, bookingUrl, checkins) {
+  const MIN_OBS = 2;
   const startStr = client.coaching_program_start_date || client.plan_start_date || null;
   const sponsored = client.sponsor_outcome_focus === true;
   const inCoaching = !!(client.in_coaching_program || client.is_active_coaching || client.coaching_sessions_enabled);
@@ -177,18 +183,33 @@ function computeMilestoneState(client, bookingUrl) {
   const target  = client.metric_target  != null ? Number(client.metric_target)  : null;
   const current = client.metric_current != null ? Number(client.metric_current) : null;
   const todayOnly = new Date(now.toISOString().slice(0, 10) + 'T00:00:00Z');
+
+  // Recent-window average of the self-reported metric. Only check-ins with a numeric
+  // metric AND a week number count (so we can bound to the checkpoint window).
+  const series = (Array.isArray(checkins) ? checkins : [])
+    .filter(c => c && c.metric_value != null && Number.isFinite(Number(c.metric_value)) && Number.isFinite(Number(c.week_number)))
+    .map(c => ({ week: Number(c.week_number), val: Number(c.metric_value) }))
+    .sort((a, b) => a.week - b.week);
+  function windowAvg(days, windowSize) {
+    const checkpointWeek = Math.ceil(days / 7);
+    const inWindow = series.filter(p => p.week <= checkpointWeek).slice(-windowSize);
+    if (inWindow.length < MIN_OBS) return { n: inWindow.length, avg: null };
+    return { n: inWindow.length, avg: inWindow.reduce((s, p) => s + p.val, 0) / inWindow.length };
+  }
+
   function phase(days, goalText, celebratedAt) {
     const targetDate = new Date(start.getTime() + days * DAY);
-    const hasMetric = (target != null && current != null && !Number.isNaN(target) && !Number.isNaN(current));
-    // The checkpoint must actually have arrived before we treat the metric as a
-    // milestone "hit". A leader can beat their proxy metric in week one; that does
-    // NOT mean the 30-/90-day goal is achieved, and celebrating early reads as false.
-    // Gate every hit/miss/celebration on the target date being reached.
+    const windowSize = days <= 30 ? 3 : 4;
+    const w = windowAvg(days, windowSize);
+    // Enough data to judge, and a real target to judge against.
+    const hasData = (target != null && !Number.isNaN(target) && w.avg != null);
+    // Gate on the checkpoint date arriving AND on the sustained window average — not
+    // a one-week spike, and never early.
     const reached = day_n >= days;
-    const metricMet = hasMetric && current >= target;
+    const metricMet = hasData && w.avg >= target;
     const hit = metricMet && reached;
     const past = now > targetDate;
-    const missed = hasMetric && !metricMet && past;
+    const missed = hasData && !metricMet && past;
     const celebrated = !!celebratedAt;
     const variant = hit ? (now <= targetDate ? 'on_time' : 'recovery') : (missed ? 'miss' : null);
     // In-portal reminder window: exact T-5 and day-of (matches the email cadence),
@@ -207,6 +228,8 @@ function computeMilestoneState(client, bookingUrl) {
       plan: client.start_behavior || null,
       metric_current: current,
       metric_target: target,
+      metric_window_avg: w.avg != null ? Math.round(w.avg * 100) / 100 : null,
+      metric_window_n: w.n,
       hit,
       missed,
       celebrated,
@@ -389,18 +412,19 @@ export default async function handler(req, res) {
           sb(`/rest/v1/renewal_config?id=eq.1&select=discovery_call_url,booking_url&limit=1`),
         ]);
         const j = async (r) => (r.ok ? await r.json() : []);
+        const ckRows = await j(ck);
         const clientRows = await j(cl);
         const rcRows = await j(rc);
         // Non-coached celebration CTA → discovery call (swappable), else booking_url.
         const bookingUrl = (rcRows[0] && (rcRows[0].discovery_call_url || rcRows[0].booking_url)) || null;
         return res.status(200).json({
           ok: true,
-          checkins: await j(ck),
+          checkins: ckRows,
           survey_responses: await j(sr),
           survey_tokens: await j(st),
           self_checks: await j(sc),
           stakeholders: await j(sh),
-          milestone: clientRows[0] ? computeMilestoneState(clientRows[0], bookingUrl) : null,
+          milestone: clientRows[0] ? computeMilestoneState(clientRows[0], bookingUrl, ckRows) : null,
         });
       }
 
