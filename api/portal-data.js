@@ -168,7 +168,7 @@ async function visionGate(text) {
 // last 4. At least MIN_OBS check-ins with a metric are required, or we can't judge it
 // (no celebration, no "miss"). And nothing counts before the checkpoint date arrives.
 // on/before target date = on-time; after = recovery; window below target & past = miss.
-function computeMilestoneState(client, bookingUrl, checkins) {
+function computeMilestoneState(client, bookingUrl, checkins, surveyResponses) {
   const MIN_OBS = 2;
   // A week AT OR ABOVE target counts as 100% and no more — over-delivering one week
   // can never offset a light/zero week. "Reached" = the capped-credit average clears
@@ -209,19 +209,44 @@ function computeMilestoneState(client, bookingUrl, checkins) {
     return { n: inWindow.length, avg, consistency };
   }
 
+  // ── 90-day STAKEHOLDER outcome (decisive) ──────────────────────────────────
+  // The 90-day goal is judged on how STAKEHOLDERS now rate the leader, not the
+  // leader's self-report: the day-90 pulse average vs the coach-set target, with a
+  // MIN-N quorum so one or two voices can't decide it (validity + confidentiality).
+  // A null target means the gate isn't armed yet → no celebration (never a false one).
+  const MIN_RATERS = 3;
+  const pulseTarget = client.pulse_target_90 != null ? Number(client.pulse_target_90) : null;
+  function pulseAvg(cp) {
+    const s = (Array.isArray(surveyResponses) ? surveyResponses : [])
+      .filter(r => r && r.checkpoint === cp && r.score != null && Number.isFinite(Number(r.score)))
+      .map(r => Number(r.score));
+    return s.length ? { n: s.length, avg: s.reduce((a, b) => a + b, 0) / s.length } : { n: 0, avg: null };
+  }
+  const _pulseBase = pulseAvg('baseline');
+  const _pulse90   = pulseAvg('day90');
+  const stakeholderArmed   = pulseTarget != null;
+  const stakeholderQuorum  = _pulse90.n >= MIN_RATERS;
+  const stakeholderReached = stakeholderArmed && stakeholderQuorum && _pulse90.avg != null && _pulse90.avg >= pulseTarget;
+
   function phase(days, goalText, celebratedAt) {
     const targetDate = new Date(start.getTime() + days * DAY);
     const windowSize = days <= 30 ? 3 : 4;
     const w = windowAvg(days, windowSize);
     // Enough data to judge, and a real target to judge against.
     const hasData = (target != null && !Number.isNaN(target) && w.consistency != null);
-    // Gate on the checkpoint date arriving AND on capped-credit consistency — not a
-    // one-week spike, and never early.
+    // Gate on the checkpoint date arriving AND the achievement rule. 30-day = self-
+    // report (capped consistency). 90-day = DECISIVE on stakeholders when a target is
+    // armed; otherwise the 90-day gate isn't set up and does not fire on self-report.
     const reached = day_n >= days;
-    const metricMet = hasData && w.consistency >= CONSISTENCY_THRESHOLD;
+    // The 90-day is ALWAYS decided by stakeholders — if no target is armed, it simply
+    // does not fire (the coach hasn't set it up yet), never a self-report fallback.
+    const stakeholderGate = (days === 90);
+    const metricMet = stakeholderGate ? stakeholderReached : (hasData && w.consistency >= CONSISTENCY_THRESHOLD);
     const hit = metricMet && reached;
     const past = now > targetDate;
-    const missed = hasData && !metricMet && past;
+    const missed = stakeholderGate
+      ? (stakeholderArmed && stakeholderQuorum && !stakeholderReached && past)
+      : (hasData && !metricMet && past);
     const celebrated = !!celebratedAt;
     const variant = hit ? (now <= targetDate ? 'on_time' : 'recovery') : (missed ? 'miss' : null);
     // In-portal reminder window: exact T-5 and day-of (matches the email cadence),
@@ -243,6 +268,12 @@ function computeMilestoneState(client, bookingUrl, checkins) {
       metric_window_avg: w.avg != null ? Math.round(w.avg * 100) / 100 : null,
       metric_consistency: w.consistency != null ? Math.round(w.consistency * 100) / 100 : null,
       metric_window_n: w.n,
+      gate: (days === 90 && stakeholderArmed) ? 'stakeholder' : 'self_report',
+      stakeholder_target:        days === 90 ? pulseTarget : null,
+      stakeholder_baseline_avg:  days === 90 && _pulseBase.avg != null ? Math.round(_pulseBase.avg * 100) / 100 : null,
+      stakeholder_day90_avg:     days === 90 && _pulse90.avg  != null ? Math.round(_pulse90.avg  * 100) / 100 : null,
+      stakeholder_n:             days === 90 ? _pulse90.n : null,
+      stakeholder_quorum_met:    days === 90 ? stakeholderQuorum : null,
       hit,
       missed,
       celebrated,
@@ -421,11 +452,12 @@ export default async function handler(req, res) {
           sb(`/rest/v1/survey_tokens?client_id=eq.${clientId}&select=checkpoint,non_response_flagged,is_used`),
           sb(`/rest/v1/self_checks?client_id=eq.${clientId}&select=checkpoint,q1_score,q2_score,q3_response,submitted_at`),
           sb(`/rest/v1/stakeholders?client_id=eq.${clientId}&is_active=eq.true&select=id,name,email,relationship,is_supervisor,is_board_member,confirmed_at,created_at&order=created_at.asc`),
-          sb(`/rest/v1/clients?id=eq.${clientId}&select=coaching_program_start_date,plan_start_date,metric_target,metric_current,goal_30_day,goal_90_day,goal_statement,start_behavior,sponsor_outcome_focus,preferred_name,celebrated_30_at,celebrated_90_at,in_coaching_program,is_active_coaching,coaching_sessions_enabled&limit=1`),
+          sb(`/rest/v1/clients?id=eq.${clientId}&select=coaching_program_start_date,plan_start_date,metric_target,metric_baseline,metric_current,goal_30_day,goal_90_day,goal_statement,start_behavior,sponsor_outcome_focus,preferred_name,celebrated_30_at,celebrated_90_at,in_coaching_program,is_active_coaching,coaching_sessions_enabled,pulse_target_90&limit=1`),
           sb(`/rest/v1/renewal_config?id=eq.1&select=discovery_call_url,booking_url&limit=1`),
         ]);
         const j = async (r) => (r.ok ? await r.json() : []);
         const ckRows = await j(ck);
+        const srRows = await j(sr);
         const clientRows = await j(cl);
         const rcRows = await j(rc);
         // Non-coached celebration CTA → discovery call (swappable), else booking_url.
@@ -433,11 +465,11 @@ export default async function handler(req, res) {
         return res.status(200).json({
           ok: true,
           checkins: ckRows,
-          survey_responses: await j(sr),
+          survey_responses: srRows,
           survey_tokens: await j(st),
           self_checks: await j(sc),
           stakeholders: await j(sh),
-          milestone: clientRows[0] ? computeMilestoneState(clientRows[0], bookingUrl, ckRows) : null,
+          milestone: clientRows[0] ? computeMilestoneState(clientRows[0], bookingUrl, ckRows, srRows) : null,
         });
       }
 

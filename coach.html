@@ -6547,6 +6547,30 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
       <div id="pulse-cadence-status-${clientId}" style="font-size:12px;color:var(--navy);margin-top:8px;"></div>
     </div>`;
 
+  // ── 90-day stakeholder target (coach-owned, approve + lock) — Phase 3 ───────
+  const _ptBaseVals = (rawResponses || []).filter(r => r.checkpoint === 'baseline' && r.score != null).map(r => Number(r.score)).filter(v => !isNaN(v));
+  const _ptBaseAvg  = _ptBaseVals.length ? (_ptBaseVals.reduce((a, b) => a + b, 0) / _ptBaseVals.length) : null;
+  const _ptRec      = _ptBaseAvg != null ? Math.min(5, Math.round((_ptBaseAvg + 0.5) * 10) / 10) : null;
+  const _ptCur      = _pcClient.pulse_target_90 != null ? Number(_pcClient.pulse_target_90) : null;
+  const _ptLockedAt = _pcClient.pulse_target_90_locked_at;
+  const _ptLockedBy = _pcClient.pulse_target_90_locked_by;
+  const _ptDefault  = _ptCur != null ? _ptCur : (_ptRec != null ? _ptRec : 4.0);
+  const pulseTargetHtml = `
+    <div style="margin-top:14px;background:white;border:1px solid var(--gray-200);border-radius:8px;padding:16px 18px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);margin-bottom:8px;">90-Day Stakeholder Target</div>
+      <p style="font-size:12px;color:var(--gray-700);margin:0 0 10px;line-height:1.6;">
+        The average stakeholder pulse rating (1–5) the leader must reach at day 90 for the goal to count as reached — decided by stakeholders, not self-report, and it needs at least 3 raters. ${_ptBaseAvg != null ? `Baseline pulse average is <strong>${_ptBaseAvg.toFixed(1)}</strong>, so the recommended target is <strong>${_ptRec.toFixed(1)}</strong> (+0.5).` : 'Recommendation appears once the baseline pulse comes in (baseline + 0.5).'}
+      </p>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input type="number" id="pulse-target-${clientId}" min="1" max="5" step="0.1" value="${_ptDefault.toFixed(1)}" style="width:80px;font-size:14px;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;color:var(--navy);">
+        <span style="font-size:12px;color:var(--gray-600);">/ 5.0</span>
+        <button onclick="savePulseTarget('${clientId}')" style="font-size:13px;background:var(--navy);color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-weight:700;">${_ptCur != null ? 'Update &amp; lock' : 'Approve &amp; lock'}</button>
+        ${_ptCur != null ? `<button onclick="clearPulseTarget('${clientId}')" style="font-size:12px;background:none;border:1px solid var(--gray-300);color:var(--gray-700);border-radius:6px;padding:7px 12px;cursor:pointer;">Clear</button>` : ''}
+      </div>
+      ${_ptCur != null && _ptLockedAt ? `<p style="font-size:12px;color:#0F6E56;margin:10px 0 0;line-height:1.6;">Locked at <strong>${_ptCur.toFixed(1)}</strong> by ${esc(_ptLockedBy || 'a coach')} on ${new Date(_ptLockedAt).toLocaleDateString()}.</p>` : ''}
+      <div id="pulse-target-status-${clientId}" style="font-size:12px;color:var(--navy);margin-top:8px;"></div>
+    </div>`;
+
   el.innerHTML = `
     ${scoreboardHtml}
     <div style="margin-bottom:12px;${scoreboardHtml ? 'margin-top:18px;' : ''}">${badgeHtml}</div>
@@ -6570,6 +6594,7 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
     </div>` : ''}
     <div id="sh-sched-${clientId}" style="margin-top:6px;font-size:12px;"></div>
     ${pulseCadenceHtml}
+    ${pulseTargetHtml}
     ${addFormHtml}
     <div id="obs-measure-${clientId}" style="margin-top:18px;"></div>
   `;
@@ -6830,6 +6855,39 @@ async function applyPulseCadence(clientId){
   } catch (e) {
     if (statusEl) statusEl.textContent = "Could not apply: " + e.message;
     else alert("Could not apply: " + e.message);
+  }
+}
+
+// Approve + lock the 90-day stakeholder target (coach-owned; the leader never sets
+// the bar their own raters judge them against). The server stamps who/when — the
+// audit trail that makes handing an engagement to a sub-coach trustworthy.
+async function savePulseTarget(clientId){
+  const inp = document.getElementById('pulse-target-' + clientId);
+  const statusEl = document.getElementById('pulse-target-status-' + clientId);
+  const t = parseFloat(inp && inp.value);
+  if (!(t >= 1 && t <= 5)) { if (statusEl) { statusEl.style.color = 'var(--red)'; statusEl.textContent = 'Enter a target between 1.0 and 5.0.'; } return; }
+  if (!confirm('Lock the 90-day stakeholder target at ' + t.toFixed(1) + ' / 5?\n\nThis is the bar the leader must clear at day 90 (needs at least 3 raters). You can update it later; every change is logged.')) return;
+  if (statusEl) { statusEl.style.color = 'var(--navy)'; statusEl.textContent = 'Saving…'; }
+  try {
+    const j = await coachData({ action: 'set-pulse-target', client_id: clientId, target: t });
+    allClients = allClients.map(c => c.id === clientId ? { ...c, pulse_target_90: j.target, pulse_target_90_locked_at: j.locked_at, pulse_target_90_locked_by: j.locked_by } : c);
+    if (statusEl) { statusEl.style.color = '#0F6E56'; statusEl.textContent = 'Locked at ' + Number(j.target).toFixed(1) + ' by ' + (j.locked_by || 'you') + '.'; }
+    if (typeof toast === 'function') toast('90-day target locked at ' + Number(j.target).toFixed(1) + '.');
+  } catch (e) {
+    if (statusEl) { statusEl.style.color = 'var(--red)'; statusEl.textContent = e.message || 'Could not save.'; }
+  }
+}
+async function clearPulseTarget(clientId){
+  if (!confirm('Clear the 90-day stakeholder target?\n\nThe 90-day goal will not register as reached until a target is set again.')) return;
+  const statusEl = document.getElementById('pulse-target-status-' + clientId);
+  try {
+    await coachData({ action: 'set-pulse-target', client_id: clientId, clear: true });
+    allClients = allClients.map(c => c.id === clientId ? { ...c, pulse_target_90: null, pulse_target_90_locked_at: null, pulse_target_90_locked_by: null } : c);
+    if (statusEl) { statusEl.style.color = 'var(--navy)'; statusEl.textContent = 'Target cleared.'; }
+    if (typeof toast === 'function') toast('90-day target cleared.');
+  } catch (e) {
+    if (statusEl) { statusEl.style.color = 'var(--red)'; statusEl.textContent = e.message || 'Could not clear.'; }
+    else alert(e.message || 'Could not clear.');
   }
 }
 

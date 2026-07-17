@@ -281,6 +281,31 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
+    // ── 90-day stakeholder target: approve + lock (Phase 3) ─────────────────
+    // The coach owns this number (the leader must not set the bar their own raters
+    // judge them against). Locking stamps who/when — the audit trail that makes
+    // delegating an engagement to a sub-coach trustworthy. Any valid coach may set it.
+    if (action === 'set-pulse-target') {
+      const clientId = String(body.client_id || '');
+      if (!clientId) return res.status(400).json({ error: 'client_id required' });
+      if (body.clear === true) {
+        const pr = await sb(`/rest/v1/clients?id=eq.${encodeURIComponent(clientId)}`, 'PATCH',
+          { pulse_target_90: null, pulse_target_90_locked_at: null, pulse_target_90_locked_by: null },
+          { Prefer: 'return=minimal' });
+        if (!pr.ok) return res.status(500).json({ error: 'Could not clear the target.' });
+        return res.status(200).json({ ok: true, cleared: true });
+      }
+      const t = Number(body.target);
+      if (!Number.isFinite(t) || t < 1 || t > 5) return res.status(400).json({ error: 'Target must be a number between 1.0 and 5.0.' });
+      const rounded = Math.round(t * 100) / 100;
+      const nowIso = new Date().toISOString();
+      const pr = await sb(`/rest/v1/clients?id=eq.${encodeURIComponent(clientId)}`, 'PATCH',
+        { pulse_target_90: rounded, pulse_target_90_locked_at: nowIso, pulse_target_90_locked_by: senderName },
+        { Prefer: 'return=minimal' });
+      if (!pr.ok) return res.status(500).json({ error: 'Could not save the target.' });
+      return res.status(200).json({ ok: true, target: rounded, locked_by: senderName, locked_at: nowIso });
+    }
+
     // ── Sponsor follow-along page controls (roadmap #4, Phase 2) ────────────
     // Coach authors the sponsor page's "From your coach" summary + "How you can
     // help" actions and sets the confidentiality mode. Any valid coach session
