@@ -69,6 +69,13 @@ Standard of record: **`Knowledge/GPS-Frameworks/Rater Confidentiality Standard.m
 | **P0-CEL1a** | **Immediate mitigation + reset (done):** stamped `celebrated_30_at = now()` on Sergio + David to take the live false message down under the old code; after the fix went live, reset both `celebrated_30_at`+`celebrated_90_at` → null so genuine checkpoints celebrate (David's real day-30 is 2026-07-19). Verified null 2026-07-16. | S | ✅ Done 2026-07-16 | SQL run 2026-07-16 |
 | **P1-CEL2** | **Deploy path: GitHub outage broke auto-deploy 2026-07-16.** GitHub's webhook to Vercel stopped firing (Vercel showed a "GitHub Outage" banner) so pushes to `main` did not build. Worked around with `npx vercel --prod` (deploys the local tree directly, bypasses GitHub). Until GitHub recovers, deploy with `vercel --prod`, not by pushing. When the outage clears, confirm Settings → Git reconnected so auto-deploy resumes. | — | ⏳ watch — use CLI until GitHub recovers | Vercel banner + `list_deployments` showed no build for 5bf2be7/3aefc85 |
 
+### P3 — DB hygiene from the 2026-07-17 system audit (defer; all INFO/WARN, pre-existing)
+
+| # | Item | Effort | Status | Evidence |
+|---|------|--------|--------|----------|
+| **P3-DB1** | Function `public.capture_bad_outbox_item` has a mutable `search_path` (advisor WARN `function_search_path_mutable`). Set `search_path` explicitly. Low risk, pre-existing. | S | ⏳ later | security advisor 2026-07-17 |
+| **P3-DB2** | Unindexed foreign keys (`survey_responses.token_id`, `sponsors.linked_client_id`, `email_drafts.diagnostic_id`, a few workshop tables) + several unused indexes. All INFO; immaterial at current row counts. Revisit if a query slows. | S | ⏳ later | performance advisor 2026-07-17 |
+
 ### P1 — Multi-file message attachments (added 2026-07-17, Alex — "relatively soon")
 
 | # | Item | Effort | Status | Evidence |
