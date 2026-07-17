@@ -306,6 +306,59 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, target: rounded, locked_by: senderName, locked_at: nowIso });
     }
 
+    // ── AI feature flags (the kill-switch) — owner reads/toggles ─────────────
+    if (action === 'ai-flags-list') {
+      const r = await sb('/rest/v1/ai_feature_flags?select=feature,enabled,label&order=feature.asc');
+      const flags = r.ok ? await r.json() : [];
+      return res.status(200).json({ ok: true, flags });
+    }
+    if (action === 'ai-flag-set') {
+      if (!isOwner) return res.status(403).json({ error: 'Only an owner can change AI settings.' });
+      const feature = String(body.feature || '');
+      if (!feature) return res.status(400).json({ error: 'feature required' });
+      const enabled = !!body.enabled;
+      const up = await sb('/rest/v1/ai_feature_flags', 'POST',
+        { feature, enabled, updated_at: new Date().toISOString() },
+        { Prefer: 'resolution=merge-duplicates,return=minimal' });
+      if (!up.ok) return res.status(500).json({ error: 'Could not update the AI setting.' });
+      return res.status(200).json({ ok: true, feature, enabled });
+    }
+
+    // ── AI coaching talking-track draft (Phase 5 pt.2), gated by the flag ────
+    // If the feature is OFF (or no API key), return the analog fallback — the coach
+    // just uses the deterministic Coaching Moment brief. Never a hard error.
+    if (action === 'coaching-brief-draft') {
+      const fr = await sb('/rest/v1/ai_feature_flags?feature=eq.coaching_brief&select=enabled&limit=1');
+      const frow = fr.ok ? (await fr.json())[0] : null;
+      const aiOn = (!frow || frow.enabled !== false) && !!process.env.ANTHROPIC_API_KEY;
+      if (!aiOn) return res.status(200).json({ ok: true, ai_disabled: true, draft: null });
+
+      const f = body.facts || {};
+      const name     = String(f.name || 'the leader').slice(0, 80);
+      const behavior = String(f.behavior || '').slice(0, 400);
+      const ffList   = Array.isArray(f.feedforward) ? f.feedforward.slice(0, 8).map(s => String(s).slice(0, 400)) : [];
+      const factsText = [
+        `Leader: ${name}.`,
+        behavior ? `Focus behavior: ${behavior}.` : '',
+        (f.baseline != null && f.latest != null) ? `Stakeholder pulse moved from ${f.baseline} (baseline) to ${f.latest} at ${f.latest_label || 'the latest pulse'}.` : (f.baseline != null ? `Baseline stakeholder pulse average: ${f.baseline}.` : ''),
+        (f.target != null) ? `90-day stakeholder target: ${f.target}.` : 'No 90-day target set yet.',
+        (f.day90_avg != null) ? `Day-90 stakeholder average: ${f.day90_avg} (${f.day90_n || 0} raters).` : '',
+        ffList.length ? `Feedforward suggestions from stakeholders:\n- ${ffList.join('\n- ')}` : 'No feedforward suggestions yet.'
+      ].filter(Boolean).join('\n');
+
+      const sys = `You are drafting PRIVATE talking points for an executive coach (GPS Leadership Solutions) preparing to debrief a leader. Use Marshall Goldsmith's stakeholder-centered, Feedforward approach: focus forward, be specific and practical, no fluff. Write 3-5 short talking points the coach can use: (1) acknowledge the stakeholder movement honestly, (2) pick ONE or two feedforward items worth focusing on, (3) name any gap between effort and how stakeholders rate them, (4) prompt the leader to follow up DIRECTLY with those stakeholders — that follow-up is what moves the score. Rules: use ONLY the facts given, never invent data or numbers; if a suggestion names another person, describe the behavior without repeating that name; under 180 words; plain text, short lines, no headers.`;
+
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-6', max_tokens: 700, system: sys, messages: [{ role: 'user', content: 'Facts:\n' + factsText }] })
+      });
+      if (!resp.ok) { const t = await resp.text().catch(() => ''); return res.status(502).json({ error: 'AI draft failed', detail: t.slice(0, 200) }); }
+      const data = await resp.json();
+      const draft = (data && data.content && data.content[0] && data.content[0].text) ? data.content[0].text.trim() : '';
+      return res.status(200).json({ ok: true, draft });
+    }
+
     // ── Sponsor follow-along page controls (roadmap #4, Phase 2) ────────────
     // Coach authors the sponsor page's "From your coach" summary + "How you can
     // help" actions and sets the confidentiality mode. Any valid coach session

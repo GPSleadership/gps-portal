@@ -6607,6 +6607,18 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
       ? 'Consider: pick one feedforward theme with the leader and have them close the loop directly with those stakeholders — that follow-up is what actually moves the score.'
       : (_cmTarget == null ? 'Consider: set the 90-day target below so the outcome can be measured, then brief the leader on the baseline read.'
         : 'Consider: brief the leader on where stakeholders currently rate them and what to keep doing.');
+    // Stash the structured facts so the AI-draft button can send them without re-parsing HTML.
+    window.__cmFacts = window.__cmFacts || {};
+    window.__cmFacts[clientId] = {
+      name: (_pcClient.name || '').split(' ')[0] || 'the leader',
+      baseline:     _cmBase.avg != null ? Number(_cmBase.avg.toFixed(1)) : null,
+      latest:       (_cmLatest && _cmLatest.avg != null) ? Number(_cmLatest.avg.toFixed(1)) : null,
+      latest_label: _cmLatest ? _cmLatest.lab : null,
+      target:       _cmTarget,
+      day90_avg:    _cmAvg('day90').avg != null ? Number(_cmAvg('day90').avg.toFixed(1)) : null,
+      day90_n:      _cmAvg('day90').n,
+      feedforward:  _cmFeed.slice(0, 8)
+    };
     coachingMomentHtml = `
       <div style="background:#eef6f5;border:1px solid #cfe6e2;border-radius:8px;padding:14px 16px;margin-bottom:16px;">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--teal);margin-bottom:8px;">Coaching Moment</div>
@@ -6614,6 +6626,11 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
         <div style="font-size:13px;color:var(--text);line-height:1.6;margin-top:4px;">${_tv}</div>
         ${_ff}
         <div style="font-size:12.5px;color:var(--navy);line-height:1.55;margin-top:10px;font-style:italic;">${_consider}</div>
+        <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <button onclick="draftCoachingBrief('${clientId}')" style="font-size:12px;background:var(--navy);color:#fff;border:none;border-radius:6px;padding:7px 13px;cursor:pointer;font-weight:700;">✦ Draft talking track (AI)</button>
+          <a href="#" class="owner-only" onclick="toggleCoachingAi(event)" style="font-size:11px;color:var(--gray-600);">AI drafting settings</a>
+        </div>
+        <div id="coaching-brief-${clientId}" style="margin-top:10px;"></div>
       </div>`;
   }
 
@@ -6924,6 +6941,35 @@ async function savePulseTarget(clientId){
     if (statusEl) { statusEl.style.color = 'var(--red)'; statusEl.textContent = e.message || 'Could not save.'; }
   }
 }
+// AI talking-track draft (Phase 5 pt.2) — grounded in the Coaching Moment facts.
+// The server gates this on the ai_feature_flags kill-switch; if off, it returns the
+// analog fallback (the coach uses the deterministic brief). Never auto-sent to anyone.
+async function draftCoachingBrief(clientId){
+  const out = document.getElementById('coaching-brief-' + clientId);
+  const facts = (window.__cmFacts && window.__cmFacts[clientId]) || {};
+  if (out) out.innerHTML = '<div style="font-size:12px;color:var(--gray-600);">Drafting…</div>';
+  try {
+    const j = await coachData({ action: 'coaching-brief-draft', client_id: clientId, facts });
+    if (j.ai_disabled) { if (out) out.innerHTML = '<div style="font-size:12px;color:var(--gray-600);font-style:italic;">AI drafting is off. Use the Coaching Moment above and your own read.</div>'; return; }
+    const txt = (j.draft || '').trim();
+    if (out) out.innerHTML = txt
+      ? '<div style="background:#fff;border:1px solid var(--gray-200);border-left:3px solid var(--navy);border-radius:0 6px 6px 0;padding:12px 14px;font-size:13px;color:var(--text);line-height:1.6;white-space:pre-wrap;">' + escHtml(txt) + '<div style="margin-top:8px;font-size:10.5px;color:var(--gray-500);">AI-drafted from the facts above — review before using. Not sent to anyone.</div></div>'
+      : '<div style="font-size:12px;color:var(--gray-600);">No draft returned.</div>';
+  } catch (e) { if (out) out.innerHTML = '<div style="font-size:12px;color:var(--red);">' + (e.message || 'Could not draft.') + '</div>'; }
+}
+// Owner-only kill-switch for the AI drafting feature.
+async function toggleCoachingAi(ev){
+  if (ev) ev.preventDefault();
+  try {
+    const r = await coachData({ action: 'ai-flags-list' });
+    const flag = (r.flags || []).find(f => f.feature === 'coaching_brief');
+    const on = !flag || flag.enabled !== false;
+    if (!confirm('AI talking-track drafting is currently ' + (on ? 'ON' : 'OFF') + '.\n\n' + (on ? 'Turn it OFF? The Coaching Moment brief stays; only the AI draft button is disabled.' : 'Turn it ON?'))) return;
+    await coachData({ action: 'ai-flag-set', feature: 'coaching_brief', enabled: !on });
+    if (typeof toast === 'function') toast('AI drafting turned ' + (!on ? 'on' : 'off') + '.');
+  } catch (e) { alert(e.message || 'Could not change the AI setting.'); }
+}
+
 async function clearPulseTarget(clientId){
   if (!confirm('Clear the 90-day stakeholder target?\n\nThe 90-day goal will not register as reached until a target is set again.')) return;
   const statusEl = document.getElementById('pulse-target-status-' + clientId);
