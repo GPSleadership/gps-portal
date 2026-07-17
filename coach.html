@@ -6392,6 +6392,10 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
   let scoreboardHtml = '';
 
   if (hasScores && activeStakeholders.length > 0) {
+    // Scoreboard columns follow the cadence tier: aggressive shows Day 30 too;
+    // light/off omit it (their pulses are Baseline / Day 60 / Day 90).
+    const _sbTier = (allClients.find(c => c.id === clientId) || {}).pulse_cadence_tier || 'light';
+    const showD30 = _sbTier === 'aggressive';
     const peerStakeholders   = activeStakeholders.filter(s => !isSupervisorOrBoard(s));
     const supBoardStakeholders = activeStakeholders.filter(s => isSupervisorOrBoard(s));
 
@@ -6441,7 +6445,7 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
           ${nonResponseMap[s.id] ? `<span style="font-size:9px;color:#856404;"> ⚠</span>` : ''}
         </td>
         <td>${scoreBadge(base)}</td>
-        <td>${scoreBadge(d45)}</td>
+        ${showD30 ? `<td>${scoreBadge(d45)}</td>` : ''}
         <td>${scoreBadge(d60)}</td>
         <td>${scoreBadge(d90)}</td>
         <td>${changeBadge(base, latest)}</td>
@@ -6453,7 +6457,7 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
       <tr style="border-top:2px solid var(--gray-300);background:var(--light-sand);">
         <td style="font-weight:700;color:var(--navy);font-size:11px;text-transform:uppercase;letter-spacing:0.4px;">Peer Avg</td>
         <td>${scoreBadge(peerAvg['baseline'])}</td>
-        <td>${scoreBadge(peerAvg['day30'])}</td>
+        ${showD30 ? `<td>${scoreBadge(peerAvg['day30'])}</td>` : ''}
         <td>${scoreBadge(peerAvg['day60'])}</td>
         <td>${scoreBadge(peerAvg['day90'])}</td>
         <td>${changeBadge(peerAvg['baseline'], peerAvg['day90'] ?? peerAvg['day60'] ?? peerAvg['day30'])}</td>
@@ -6509,7 +6513,7 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
               <tr>
                 <th>Stakeholder</th>
                 <th>Baseline</th>
-                <th>Day 30</th>
+                ${showD30 ? '<th>Day 30</th>' : ''}
                 <th>Day 60</th>
                 <th>Day 90</th>
                 <th>Change</th>
