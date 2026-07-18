@@ -521,16 +521,19 @@
          min-height:0 lets the flex:1 content shrink to the body and scroll internally.
          min-width:0 stops a wide child (the check-in table) from stretching the whole
          column past the phone width and dragging everything off-screen. */
-      .profile-body { flex-direction: column; min-width: 0; }
+      #clientProfileOverlay { overflow-x: hidden; }
+      .profile-body { flex-direction: column; min-width: 0; max-width: 100vw; }
       .profile-sidenav { display: none; }
       .profile-nav-select { display: block; }
-      .profile-content { min-height: 0; min-width: 0; padding: 18px 16px; overflow-wrap: anywhere; }
-      /* The wide check-in history table keeps a readable width and SCROLLS sideways
-         inside its wrapper, instead of crushing every column to fit the phone. */
-      .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--border); border-radius: 8px; }
-      /* Give the table a genuinely readable width so columns aren't crushed; the wrapper
-         scrolls it sideways. Keep headers on one line so they don't stack into letters. */
-      .history-table { min-width: 860px; }
+      .profile-content { min-height: 0; min-width: 0; max-width: 100vw; padding: 18px 16px; overflow-wrap: anywhere; }
+      /* iOS Safari doesn't always honor min-width:0 on flex items, so a wide child (the
+         check-in table) can still stretch the column. Hard-cap every card to the content
+         width so nothing pushes the page past the phone. */
+      .profile-content > * { max-width: 100%; box-sizing: border-box; }
+      /* The check-in table SCROLLS sideways inside its own box — explicit width:100% so
+         iOS contains it rather than propagating the table's width to the page. */
+      .table-scroll { display: block; width: 100%; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--border); border-radius: 8px; }
+      .history-table { min-width: 600px; }
       .history-table th { white-space: nowrap; }
     }
 
