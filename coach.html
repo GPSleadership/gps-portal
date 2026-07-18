@@ -259,8 +259,8 @@
     .plan-field .val  { font-size: 13px; font-weight: 600; color: var(--navy); }
 
     .metric-bar-wrap { background: var(--light-teal); border-radius: 6px; padding: 12px 16px; margin-bottom: 12px; }
-    .metric-bar-track { background: var(--gray-300); height: 10px; border-radius: 5px; overflow: hidden; margin: 6px 0; }
-    .metric-bar-fill  { height: 100%; background: linear-gradient(to right, var(--teal), var(--navy)); border-radius: 5px; }
+    .metric-bar-track { background: var(--surface-2); height: 10px; border-radius: 5px; overflow: hidden; margin: 6px 0; }
+    .metric-bar-fill  { height: 100%; background: linear-gradient(to right, var(--teal), var(--navy)); border-radius: 5px; transition: width .4s ease; }
     .metric-nums { display: flex; justify-content: space-between; font-size: 11px; color: var(--gray-600); }
 
     .history-table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -798,12 +798,12 @@
   </div>
   <div class="profile-body">
     <div class="profile-sidenav">
-      <div class="profile-nav-item active" id="profNav-summary"     onclick="switchProfileNav('summary')">📊 Summary</div>
-      <div class="profile-nav-item"        id="profNav-diagnostics"  onclick="switchProfileNav('diagnostics')">🔬 Diagnostics &amp; Reports</div>
-      <div class="profile-nav-item"        id="profNav-plan"         onclick="switchProfileNav('plan')">🎯 Coaching Plan</div>
-      <div class="profile-nav-item"        id="profNav-progress"     onclick="switchProfileNav('progress')">✅ Progress &amp; Check-ins</div>
-      <div class="profile-nav-item"        id="profNav-surveys"      onclick="switchProfileNav('surveys')">👥 Stakeholders &amp; Surveys</div>
-      <div class="profile-nav-item"        id="profNav-admin"        onclick="switchProfileNav('admin')">⚙️ Admin &amp; Links</div>
+      <div class="profile-nav-item active" id="profNav-summary"     onclick="switchProfileNav('summary')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><line x1="6" y1="20" x2="6" y2="14"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="10"/></svg>Summary</div>
+      <div class="profile-nav-item"        id="profNav-diagnostics"  onclick="switchProfileNav('diagnostics')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Diagnostics &amp; Reports</div>
+      <div class="profile-nav-item"        id="profNav-plan"         onclick="switchProfileNav('plan')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.6"/></svg>Coaching Plan</div>
+      <div class="profile-nav-item"        id="profNav-progress"     onclick="switchProfileNav('progress')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Progress &amp; Check-ins</div>
+      <div class="profile-nav-item"        id="profNav-surveys"      onclick="switchProfileNav('surveys')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Stakeholders &amp; Surveys</div>
+      <div class="profile-nav-item"        id="profNav-admin"        onclick="switchProfileNav('admin')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>Admin &amp; Links</div>
     </div>
     <div class="profile-content" id="profileContent">
     </div>
@@ -2772,16 +2772,13 @@ function renderProfileSection(section, client, checkins) {
     const engBg = isCoaching ? 'var(--teal)' : (engLabel === 'Workshop only' ? '#6b21a8' : '#1565c0');
     const askAlex30 = client.ask_alex_total_questions || 0;
 
-    // Header card
+    // Slim status strip. Identity (avatar / name / org / title) already lives in the
+    // profile header bar above, so this row shows only what that bar doesn't: the
+    // engagement type and the focus pillar. Avoids the duplicated identity card.
     const headerCard = `
-      <div style="background:white;border-radius:8px;padding:20px 22px;box-shadow:0 1px 4px rgba(0,0,0,0.06);margin-bottom:18px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-        <div style="width:54px;height:54px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Montserrat',sans-serif;font-size:20px;font-weight:800;flex-shrink:0;">${esc(initials)}</div>
-        <div style="flex:1;min-width:200px;">
-          <div style="font-family:'Montserrat',sans-serif;font-size:18px;font-weight:800;color:var(--navy);">${esc(client.name || 'Client')}</div>
-          <div style="font-size:13px;color:var(--gray-600);margin-top:2px;">${[client.organization, client.title].filter(Boolean).map(esc).join(' · ') || '—'}</div>
-          ${client.tp3_pillar ? `<div style="margin-top:6px;"><span class="pillar-badge pillar-${pillarKey}">${esc(client.tp3_pillar)}</span> <span style="font-size:11px;color:var(--gray-600);">focus pillar</span></div>` : ''}
-        </div>
-        <span style="background:${engBg};color:#fff;font-size:11px;font-weight:700;padding:5px 12px;border-radius:14px;white-space:nowrap;">${engLabel}</span>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:20px;">
+        <span style="background:${engBg};color:#fff;font-size:11px;font-weight:700;padding:6px 14px;border-radius:14px;white-space:nowrap;">${engLabel}</span>
+        ${client.tp3_pillar ? `<span class="pillar-badge pillar-${pillarKey}">${esc(client.tp3_pillar)}</span><span style="font-size:12px;color:var(--text-muted);">focus pillar</span>` : ''}
       </div>`;
 
     // Current sprint snapshot (4 stat tiles)
