@@ -504,21 +504,21 @@
       font-family:'Montserrat',sans-serif;font-size:16px;font-weight:800;
       color:var(--navy);margin-bottom:20px;
     }
-    /* Mobile: the fixed 210px sidebar would eat half a phone screen, so it becomes a
-       horizontal scrolling tab strip with a bottom-border active indicator (same pattern
-       as the diagnostic tab strip). Alex runs the console from his phone. */
+    /* Section dropdown — hidden on desktop (the left sidebar is the nav there). */
+    .profile-nav-select {
+      display:none; width:100%; padding:13px 44px 13px 16px; font-size:15px; font-weight:700;
+      color:var(--navy); background:#fff; border:none; border-bottom:1px solid var(--gray-200);
+      font-family:'Open Sans',sans-serif; cursor:pointer; -webkit-appearance:none; appearance:none;
+      background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23004369' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+      background-repeat:no-repeat; background-position:right 16px center;
+    }
+    /* Mobile: the fixed 210px sidebar eats half a phone screen. Replace it with a
+       full-width dropdown at the top so the content gets the entire page width.
+       (Alex runs the console from his phone.) */
     @media (max-width: 680px) {
       .profile-body { flex-direction: column; overflow: visible; }
-      .profile-sidenav {
-        width: 100%; display: flex; gap: 4px; overflow-x: auto; padding: 6px 8px;
-        border-right: none; border-bottom: 1px solid var(--gray-200);
-        -webkit-overflow-scrolling: touch;
-      }
-      .profile-nav-item {
-        white-space: nowrap; padding: 9px 12px; border-right: none;
-        border-bottom: 3px solid transparent; border-radius: 6px;
-      }
-      .profile-nav-item.active { border-right-color: transparent; border-bottom-color: var(--teal); }
+      .profile-sidenav { display: none; }
+      .profile-nav-select { display: block; }
       .profile-content { padding: 18px 16px; }
     }
 
@@ -813,6 +813,14 @@
     </div>
     <button class="profile-back-btn" onclick="openSmsComposer(currentProfileClientId)" title="Send this client a text message">Send text</button>
   </div>
+  <select class="profile-nav-select" id="profileNavSelect" aria-label="Profile section" onchange="switchProfileNav(this.value)">
+    <option value="summary">Summary</option>
+    <option value="diagnostics">Diagnostics &amp; Reports</option>
+    <option value="plan">Coaching Plan</option>
+    <option value="progress">Progress &amp; Check-ins</option>
+    <option value="surveys">Stakeholders &amp; Surveys</option>
+    <option value="admin">Admin &amp; Links</option>
+  </select>
   <div class="profile-body">
     <div class="profile-sidenav">
       <div class="profile-nav-item active" id="profNav-summary"     onclick="switchProfileNav('summary')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><line x1="6" y1="20" x2="6" y2="14"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="10"/></svg>Summary</div>
@@ -2650,6 +2658,8 @@ function switchProfileNav(section) {
   document.querySelectorAll('.profile-nav-item').forEach(el => el.classList.remove('active'));
   const navEl = document.getElementById('profNav-' + section);
   if (navEl) navEl.classList.add('active');
+  const _navSel = document.getElementById('profileNavSelect');
+  if (_navSel && _navSel.value !== section) _navSel.value = section;
   const client = allClients.find(c => c.id === currentProfileClientId);
   if (!client) return;
   const checkins = allCheckins.filter(c => c.client_id === currentProfileClientId).sort((a,b) => a.week_number - b.week_number);
