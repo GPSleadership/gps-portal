@@ -28,6 +28,18 @@ async function sb(path, method = 'GET', body = null, extra = {}) {
   return r;
 }
 
+// AI kill-switch (coach Settings → AI Controls). Missing/unreadable row = ON (fail-open)
+// so a flags glitch never silently disables a paid feature; only an explicit
+// enabled=false turns a feature OFF, and callers then use an analog fallback path.
+async function aiFeatureEnabled(feature) {
+  try {
+    const r = await sb(`/rest/v1/ai_feature_flags?feature=eq.${encodeURIComponent(feature)}&select=enabled&limit=1`);
+    if (!r.ok) return true;
+    const row = (await r.json())[0];
+    return !row || row.enabled !== false;
+  } catch (_) { return true; }
+}
+
 async function authClient(token) {
   if (!token) return null;
   const r = await sb(
@@ -56,6 +68,9 @@ function verifyCoachSession(token) {
 }
 
 async function extractBenefitSentence(testimonialResponses) {
+  const FALLBACK = 'get much clearer on where my leadership was the bottleneck and what to do about it';
+  // Kill-switch: when testimonial AI is off, use the generic benefit line (analog fallback).
+  if (!(await aiFeatureEnabled('testimonial_ai'))) return FALLBACK;
   const combined = Object.values(testimonialResponses).filter(Boolean).join(' | ');
   try {
     const r = await fetch('https://api.anthropic.com/v1/messages', {

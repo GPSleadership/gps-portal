@@ -5561,9 +5561,19 @@ async function saveRenewalConfig(){
 }
 
 // ── AI Controls (central kill-switch dashboard) ────────────────────────────
-// AI_ENFORCED lists the features whose endpoints already honor the flag. As each
-// remaining AI endpoint is wired (P1-AI2), add it here so its row reads "Live".
-const AI_ENFORCED = { coaching_brief: true };
+// AI_ENFORCED lists the features whose endpoints already honor the flag. All eight AI
+// features are now wired to their server-side kill-switch (P1-AI2, 2026-07-17): turning
+// one off makes its endpoint fall back to an analog path instead of calling the model.
+const AI_ENFORCED = {
+  coaching_brief:      true,  // AI talking-track draft (coach-data.js)
+  ask_alex:            true,  // leader Q&A + wizard prefill (ask.js)
+  vision_gate:         true,  // vision specificity gate (portal-data.js + diag-portal.js)
+  testimonial_ai:      true,  // benefit-sentence extraction (testimonial.js)
+  workshop_ai:         true,  // workshop question/summary/recap helpers (workshop-data.js)
+  question_generation: true,  // diagnostic G1/G2 question generation (diagnostic.js)
+  report_generation:   true,  // diagnostic report / section / plan / team report (diagnostic.js)
+  diagnostic_summary:  true   // Decision-Room content + recommendations (diagnostic.js)
+};
 async function loadAiControls(){
   const el = document.getElementById('aiControlsContent');
   if (!el) return;

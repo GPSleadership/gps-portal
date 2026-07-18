@@ -212,6 +212,18 @@ const SUCCESSION_COLS = new Set([
   'self_successor_candidates', 'self_successor_development_actions',
 ]);
 
+// AI kill-switch (coach Settings → AI Controls). Missing/unreadable row = ON (fail-open)
+// so a flags glitch never silently disables a feature; only an explicit enabled=false
+// turns a feature OFF, and callers then fall back to an analog path (never a hard error).
+async function aiFeatureEnabled(feature) {
+  try {
+    const r = await sb(`/rest/v1/ai_feature_flags?feature=eq.${encodeURIComponent(feature)}&select=enabled&limit=1`);
+    if (!r.ok) return true;
+    const row = (await r.json())[0];
+    return !row || row.enabled !== false;
+  } catch (_) { return true; }
+}
+
 // AI specificity gate for the leader's three-year vision (Project #2, Phase B).
 // IDENTICAL criteria to portal-data.js visionGate so a vision captured here in the
 // diagnostic passes the same bar the portal enforces later. PASS only if it describes
@@ -221,6 +233,8 @@ const SUCCESSION_COLS = new Set([
 async function visionGate(text) {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return { pass: true, nudge: '' };
+  // Kill-switch: when the vision gate is off, accept the vision as-is (analog = no AI check).
+  if (!(await aiFeatureEnabled('vision_gate'))) return { pass: true, nudge: '' };
   const model = process.env.CLAUDE_FAST || 'claude-haiku-4-5-20251001';
   const sys = `You gate a leadership "vision" statement for specificity. PASS only if ALL are true: (a) it describes a future STATE of the person's team, organization, or leadership — NOT a personal credential, title, certification, or a single task; (b) it names at least one OBSERVABLE behavior or outcome (what people would do, see, or experience); (c) it is more than a single noun or bare phrase. FAIL examples: "Get PMP certified", "Become VP", "A great team", "Better communication". Respond with ONLY compact JSON: {"pass": true|false, "nudge": "<one warm, specific coaching sentence telling them exactly what observable part to add — only when pass is false>"}.`;
   try {

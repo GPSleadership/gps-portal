@@ -1232,10 +1232,28 @@ Format: Return ONLY the question text. No preamble, no explanation, no quotation
 Example output (do not copy this — write something specific to the input):
 Alex demonstrates the leadership behaviors required to transition the business from an operator-led model to a team-led model.`;
 
+// AI kill-switch (coach Settings → AI Controls). Missing/unreadable row = ON (fail-open)
+// so a flags glitch never silently disables a paid feature; only an explicit enabled=false
+// turns a feature OFF. When off, coach-side generators return a graceful ai_disabled signal
+// (HTTP 200) instead of erroring, and the coach authors that content manually.
+async function aiFeatureEnabled(feature) {
+  try {
+    const r = await sb(`/rest/v1/ai_feature_flags?feature=eq.${encodeURIComponent(feature)}&select=enabled&limit=1`);
+    if (!r.ok) return true;
+    const row = (await r.json())[0];
+    return !row || row.enabled !== false;
+  } catch (_) { return true; }
+}
+function aiDisabledResponse(res, feature) {
+  return res.status(200).json({ ok: false, ai_disabled: true, feature,
+    error: 'This AI feature is turned off in Settings → AI Controls. Author this manually, or turn it back on.' });
+}
+
 async function handleGenerateQuestion(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!verifyCoachSession(req.body?.session)) return res.status(401).json({ error: 'Unauthorized' }); // P0-4 2026-07-01
   if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured' });
+  if (!(await aiFeatureEnabled('question_generation'))) return aiDisabledResponse(res, 'question_generation');
 
   const { diagnostic_id } = req.body || {};
   if (!diagnostic_id) return res.status(400).json({ error: 'diagnostic_id is required' });
@@ -1334,6 +1352,7 @@ async function handleGenerateG2Question(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!verifyCoachSession(req.body?.session)) return res.status(401).json({ error: 'Unauthorized' }); // P0-4 2026-07-01
   if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured' });
+  if (!(await aiFeatureEnabled('question_generation'))) return aiDisabledResponse(res, 'question_generation');
 
   const { diagnostic_id } = req.body || {};
   if (!diagnostic_id) return res.status(400).json({ error: 'diagnostic_id is required' });
@@ -2362,6 +2381,7 @@ async function handleGenerateReport(req, res) {
   // Coach-session gate: this endpoint returns a report built from the leader's
   // private self-assessment + coaching/interview notes — never expose it anon.
   if (!verifyCoachSession(req.body?.session)) return res.status(401).json({ error: 'Unauthorized' });
+  if (!(await aiFeatureEnabled('report_generation'))) return aiDisabledResponse(res, 'report_generation');
 
   const { diagnostic_id } = req.body || {};
   if (!diagnostic_id) return res.status(400).json({ error: 'diagnostic_id is required' });
@@ -3182,6 +3202,7 @@ async function handleGenerateReportSection(req, res) {
   const { diagnostic_id, section_key, session } = req.body || {};
   if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
   if (!diagnostic_id || !section_key) return res.status(400).json({ error: 'diagnostic_id and section_key required' });
+  if (!(await aiFeatureEnabled('report_generation'))) return aiDisabledResponse(res, 'report_generation');
   const meta = REPORT_SECTIONS.find(function(s){ return s.key === section_key; }) || { key:section_key, title:section_key };
   try {
     const dr = await sb(`/rest/v1/diagnostics?id=eq.${encodeURIComponent(diagnostic_id)}&select=client_name,client_title,report_doc`);
@@ -3238,6 +3259,7 @@ async function handleGeneratePlanPrefill(req, res) {
   const { diagnostic_id, session } = req.body || {};
   if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
   if (!diagnostic_id) return res.status(400).json({ error: 'diagnostic_id required' });
+  if (!(await aiFeatureEnabled('report_generation'))) return aiDisabledResponse(res, 'report_generation');
   try {
     const dr = await sb(`/rest/v1/diagnostics?id=eq.${encodeURIComponent(diagnostic_id)}&select=client_name,client_title,report_doc`);
     const diag = (await dr.json())[0] || {};
@@ -3366,6 +3388,7 @@ function parseJsonLoose(raw) {
 async function handleGenerateDRContent(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
+  if (!(await aiFeatureEnabled('diagnostic_summary'))) return aiDisabledResponse(res, 'diagnostic_summary');
 
   const { team_id, session } = req.body || {};
   if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
@@ -3568,6 +3591,7 @@ Output ONLY a JSON object, no prose, no markdown, no code fences:
 async function handleGenerateRecommendations(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
+  if (!(await aiFeatureEnabled('diagnostic_summary'))) return aiDisabledResponse(res, 'diagnostic_summary');
   const { team_id, session } = req.body || {};
   if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
   if (!team_id) return res.status(400).json({ error: 'team_id required' });
@@ -4402,6 +4426,7 @@ async function handleImportSurveyData(req, res) {
 async function handleGenerateTeamReport(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
+  if (!(await aiFeatureEnabled('report_generation'))) return aiDisabledResponse(res, 'report_generation');
   // Coach-session gate: this endpoint now feeds coaching + interview notes into the
   // prompt, so it must never be reachable anonymously.
   if (!verifyCoachSession(req.body?.session)) return res.status(401).json({ error: 'Unauthorized' });

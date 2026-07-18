@@ -20,6 +20,20 @@ async function getClientByToken(token) {
   const rows = await r.json();
   return Array.isArray(rows) && rows[0] ? rows[0] : null;
 }
+// AI kill-switch (coach Settings → AI Controls). Missing/unreadable row = ON (fail-open)
+// so a flags glitch never silently disables a paid feature; only an explicit enabled=false
+// turns a feature OFF, and callers then fall back to an analog path (never a hard error).
+async function aiFeatureEnabled(feature) {
+  try {
+    if (!SUPABASE_SECRET) return true;
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/ai_feature_flags?feature=eq.${encodeURIComponent(feature)}&select=enabled&limit=1`,
+      { headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}` } });
+    if (!r.ok) return true;
+    const row = (await r.json())[0];
+    return !row || row.enabled !== false;
+  } catch (_) { return true; }
+}
+
 // Count today's Ask Alex calls for a client (server-side rate limit).
 async function countAskToday(clientId) {
   const start = new Date().toISOString().slice(0, 10) + 'T00:00:00Z';
@@ -329,6 +343,8 @@ export default async function handler(req, res) {
       const { goal90, goal30, pillar } = req.body;
       if (!goal90) return res.status(400).json({ error: 'goal90 required' });
       if (!(await getClientByToken(req.body.token))) return res.status(401).json({ error: 'Invalid or missing token' });
+      // Kill-switch: when Ask Alex is off, skip the AI prefill — the wizard falls back to manual entry.
+      if (!(await aiFeatureEnabled('ask_alex'))) return res.status(200).json({ ai_disabled: true });
 
       const prefillPrompt = `You are helping a leader build a 90-day LEADERSHIP development plan. All suggestions must be written in FIRST PERSON using "I" — never "you" or "they".
 
@@ -440,6 +456,16 @@ Return ONLY valid JSON, no markdown, ASCII only:
     if (askClient.ask_alex_enabled === false) return res.status(403).json({ error: 'Ask Alex is not enabled for your account' });
     if ((await countAskToday(askClient.id)) >= ASK_DAILY_CAP) {
       return res.status(429).json({ error: "You've reached today's question limit. Please try again tomorrow." });
+    }
+
+    // ── Kill-switch: Ask Alex off → graceful, human-facing fallback (no AI call) ─
+    // Return an Anthropic-shaped payload so the chat renders it normally, pointing the
+    // leader to the analog path: their weekly check-in and a direct message to the coach.
+    if (!(await aiFeatureEnabled('ask_alex'))) {
+      res.setHeader('Access-Control-Allow-Origin', PORTAL_ORIGIN);
+      const msg = 'Ask Alex is turned off right now. In the meantime, use your weekly check-in, or send your coach a direct message from the Messages tab — that goes straight to a person.';
+      const payload = { guidance: msg, next_step: '', tools: [], handoff: '', escalation: false, vision_proposal: '' };
+      return res.status(200).json({ content: [{ type: 'text', text: JSON.stringify(payload) }] });
     }
 
     // ── Call Anthropic ──────────────────────────────────────────────────────

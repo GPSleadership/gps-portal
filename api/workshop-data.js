@@ -182,9 +182,23 @@ async function notifySurveyDispatched(workshop, phase, sent, sampleHtml) {
   try { await sendEmailMulti(to, `[Sent] ${workshop.title} — ${phase}-survey went out to ${sent}`, html); } catch (e) {}
 }
 
+// AI kill-switch (coach Settings → AI Controls). Missing/unreadable row = ON (fail-open)
+// so a flags glitch never silently disables a paid feature; only an explicit enabled=false
+// turns a feature OFF. When off, the AI helpers surface a clear message and the coach
+// writes the questions / summary / recap manually (the analog path).
+async function aiFeatureEnabled(feature) {
+  try {
+    const r = await sb(`/rest/v1/ai_feature_flags?feature=eq.${enc(feature)}&select=enabled&limit=1`);
+    if (!r.ok) return true;
+    const row = (await r.json())[0];
+    return !row || row.enabled !== false;
+  } catch (_) { return true; }
+}
+
 // ── Anthropic call → returns text ────────────────────────────────────────────
 async function claude(model, system, userText, maxTokens = 1200) {
   if (!ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY not set');
+  if (!(await aiFeatureEnabled('workshop_ai'))) throw new Error('Workshop AI helpers are turned off (Settings → AI Controls). Add or edit this content manually.');
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
