@@ -111,9 +111,56 @@ async function signMsgAttachment(path) {
   } catch (_) { return null; }
 }
 // Attach signed download URLs to a message list (mutates each row: adds attachment_download).
+// Upload up to 5 files for one message. Returns { uploaded:[...] } or { error }.
+async function uploadMsgAttachments(convId, arr) {
+  const list = Array.isArray(arr) ? arr.filter(a => a && a.data).slice(0, 5) : [];
+  const out = [];
+  for (const att of list) {
+    const r = await uploadMsgAttachment(convId, att);
+    if (r && r.error) return { error: r.error };
+    if (r) out.push(r);
+  }
+  return { uploaded: out };
+}
+async function fetchMsgAttachments(messageIds) {
+  const ids = (messageIds || []).filter(Boolean);
+  if (!ids.length) return {};
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/message_attachments?message_id=in.(${ids.map(encodeURIComponent).join(',')})&select=message_id,path,name,size,type&order=created_at.asc`, {
+      headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}` },
+    });
+    if (!r.ok) return {};
+    const rows = await r.json();
+    const byMsg = {};
+    for (const a of rows) { (byMsg[a.message_id] = byMsg[a.message_id] || []).push(a); }
+    return byMsg;
+  } catch (_) { return {}; }
+}
+async function insertMsgAttachments(messageId, uploaded) {
+  if (!messageId || !uploaded || !uploaded.length) return;
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/message_attachments`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify(uploaded.map(a => ({ message_id: messageId, path: a.path, name: a.name, size: a.size, type: a.type }))),
+    });
+  } catch (_) { /* best-effort; the message itself already sent */ }
+}
+// Attach signed download URLs. Sets msg.attachments = [{name,size,type,download}] from the
+// child table when present, else from the legacy single-attachment columns.
 async function withSignedAttachments(messages) {
+  const byMsg = await fetchMsgAttachments(messages.map(m => m && m.id));
   for (const msg of messages) {
-    if (msg && msg.attachment_url) msg.attachment_download = await signMsgAttachment(msg.attachment_url);
+    if (!msg) continue;
+    const child = byMsg[msg.id] || [];
+    const atts = [];
+    if (child.length) {
+      for (const a of child) atts.push({ name: a.name, size: a.size, type: a.type, download: await signMsgAttachment(a.path) });
+    } else if (msg.attachment_url) {
+      atts.push({ name: msg.attachment_name, size: msg.attachment_size, type: msg.attachment_type, download: await signMsgAttachment(msg.attachment_url) });
+    }
+    msg.attachments = atts;
+    msg.attachment_download = (atts[0] && atts[0].download) || null;
   }
   return messages;
 }
@@ -640,7 +687,8 @@ export default async function handler(req, res) {
       case 'coach-message-send': {
         if (!isCoachingClient(client)) return res.status(403).json({ error: 'Messaging is available to active coaching clients only.' });
         const text = (body.message_text || '').toString().trim();
-        const hasAtt = !!(body.attachment && body.attachment.data);
+        const attInput = (Array.isArray(body.attachments) && body.attachments.length) ? body.attachments : (body.attachment ? [body.attachment] : []);
+        const hasAtt = attInput.some(a => a && a.data);
         if (!text && !hasAtt) return res.status(400).json({ error: 'Add a message or a file.' });
         if (text.length > 5000) return res.status(400).json({ error: 'Message is too long (5000 character max).' });
         const msgType = COACH_MSG_TYPES.has(body.message_type) ? body.message_type : 'quick_question';
@@ -662,19 +710,19 @@ export default async function handler(req, res) {
           convId = (Array.isArray(rows) ? rows[0] : rows).id;
         }
 
-        let att = null;
+        let uploaded = [];
         if (hasAtt) {
-          att = await uploadMsgAttachment(convId, body.attachment);
-          if (att && att.error) return res.status(400).json({ error: att.error });
+          const u = await uploadMsgAttachments(convId, attInput);
+          if (u.error) return res.status(400).json({ error: u.error });
+          uploaded = u.uploaded;
         }
         const mr = await sb('/rest/v1/coach_messages', 'POST', {
           conversation_id: convId, client_id: clientId, sender_role: 'client',
           message_type: msgType, message_text: text, read_by_coach: false, read_by_client: true, created_at: now,
-          attachment_url: att ? att.path : null, attachment_name: att ? att.name : null,
-          attachment_size: att ? att.size : null, attachment_type: att ? att.type : null,
         }, { Prefer: 'return=representation' });
         if (!mr.ok) { const d = await mr.json().catch(() => ({})); return res.status(500).json({ error: 'Could not send message', detail: d }); }
         const saved = await mr.json();
+        await insertMsgAttachments((Array.isArray(saved) ? saved[0] : saved)?.id, uploaded);
 
         // ── Notify Alex by email — non-blocking, never breaks the client send ──
         if (RESEND_API_KEY) {

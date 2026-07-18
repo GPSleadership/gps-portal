@@ -4651,7 +4651,7 @@ async function openCoachConversation(convId){
         + '<button onclick="document.getElementById(\'msgReplyText\').value=\'\';document.getElementById(\'msgDraftIndicator\').style.display=\'none\';" style="background:none;border:none;color:#8a97a0;font-size:11px;cursor:pointer;padding:0;white-space:nowrap;">Clear</button>'
       + '</div>'
       + '<textarea id="msgReplyText" rows="3" placeholder="Write your reply…" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #ccc;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;"></textarea>'
-      + '<input type="file" id="msgReplyFile" style="display:none" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.webp,.gif,.txt,.csv" onchange="msgPickFile(\'msgReplyFile\',\'msgReplyChip\')">'
+      + '<input type="file" id="msgReplyFile" multiple style="display:none" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.webp,.gif,.txt,.csv" onchange="msgPickFile(\'msgReplyFile\',\'msgReplyChip\')">'
       + '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:8px;">'
         + '<div style="display:flex;align-items:center;gap:8px;min-width:0;">'
           + '<button type="button" title="Attach a file" onclick="document.getElementById(\'msgReplyFile\').click()" style="background:none;border:1px solid #dbe3e6;border-radius:7px;padding:6px 11px;cursor:pointer;font-size:15px;line-height:1;color:#5a6b76;">&#128206;</button>'
@@ -4683,10 +4683,26 @@ async function loadMsgDraft(convId) {
 // ── Message attachment helpers (shared by composer + thread render) ───────────
 function msgPickFile(inputId, chipId){
   var inp = document.getElementById(inputId), chip = document.getElementById(chipId);
-  var f = inp && inp.files && inp.files[0];
-  if (!f){ if(chip) chip.textContent=''; return; }
-  if (f.size > 10*1024*1024){ alert('That file is over 10 MB — please choose a smaller one.'); inp.value=''; if(chip) chip.textContent=''; return; }
-  if (chip) chip.innerHTML = '&#128206; ' + esc(f.name||'file') + ' <a href="javascript:void(0)" onclick="document.getElementById(\''+inputId+'\').value=\'\';document.getElementById(\''+chipId+'\').textContent=\'\';" style="color:#DB1F48;text-decoration:none;font-weight:700;margin-left:5px;">&#10005;</a>';
+  var files = inp && inp.files ? Array.prototype.slice.call(inp.files) : [];
+  if (!files.length){ if(chip) chip.textContent=''; return; }
+  if (files.length > 5){ alert('You can attach up to 5 files at a time.'); inp.value=''; if(chip) chip.textContent=''; return; }
+  var tooBig = files.filter(function(f){ return f.size > 10*1024*1024; });
+  if (tooBig.length){ alert('Each file must be under 10 MB. "'+(tooBig[0].name||'file')+'" is too large.'); inp.value=''; if(chip) chip.textContent=''; return; }
+  var names = files.map(function(f){ return esc(f.name||'file'); }).join(', ');
+  if (chip) chip.innerHTML = '&#128206; ' + files.length + ' file' + (files.length>1?'s':'') + ': ' + names
+    + ' <a href="javascript:void(0)" onclick="document.getElementById(\''+inputId+'\').value=\'\';document.getElementById(\''+chipId+'\').textContent=\'\';" style="color:#DB1F48;text-decoration:none;font-weight:700;margin-left:5px;">&#10005;</a>';
+}
+function msgReadFiles(inputId){
+  var inp = document.getElementById(inputId);
+  var files = inp && inp.files ? Array.prototype.slice.call(inp.files).slice(0,5) : [];
+  return Promise.all(files.map(function(f){
+    return new Promise(function(resolve){
+      var fr = new FileReader();
+      fr.onload = function(){ resolve({ name: f.name, type: f.type || 'application/octet-stream', data: fr.result }); };
+      fr.onerror = function(){ resolve(null); };
+      fr.readAsDataURL(f);
+    });
+  })).then(function(arr){ return arr.filter(Boolean); });
 }
 function msgReadFile(inputId){
   return new Promise(function(resolve){
@@ -4699,24 +4715,28 @@ function msgReadFile(inputId){
   });
 }
 function msgAttachmentCard(m, mine){
-  if (!m || !m.attachment_name) return '';
-  var url = m.attachment_download || '';
-  var s = m.attachment_size ? (m.attachment_size > 1048576 ? (m.attachment_size/1048576).toFixed(1)+' MB' : Math.max(1, Math.round(m.attachment_size/1024))+' KB') : '';
-  return '<div style="max-width:80%;'+(mine?'margin-left:auto;':'margin-right:auto;')+'margin-bottom:3px;">'
-    + '<a href="'+esc(url)+'" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:9px;text-decoration:none;background:#fff;border:1px solid #dbe3e6;border-radius:10px;padding:9px 11px;">'
-      + '<span style="font-size:18px;line-height:1;">&#128196;</span>'
-      + '<span style="min-width:0;"><span style="display:block;font-size:12.5px;font-weight:700;color:#004369;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(m.attachment_name)+'</span>'
-        + '<span style="font-size:11px;color:#8a97a0;">'+(s?esc(s)+' &middot; ':'')+'Download</span></span>'
-    + '</a></div>';
+  var atts = (m && Array.isArray(m.attachments) && m.attachments.length) ? m.attachments
+           : (m && m.attachment_name ? [{ name:m.attachment_name, size:m.attachment_size, type:m.attachment_type, download:m.attachment_download }] : []);
+  if (!atts.length) return '';
+  return atts.map(function(a){
+    var url = a.download || '';
+    var s = a.size ? (a.size > 1048576 ? (a.size/1048576).toFixed(1)+' MB' : Math.max(1, Math.round(a.size/1024))+' KB') : '';
+    return '<div style="max-width:80%;'+(mine?'margin-left:auto;':'margin-right:auto;')+'margin-bottom:3px;">'
+      + '<a href="'+esc(url)+'" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:9px;text-decoration:none;background:#fff;border:1px solid #dbe3e6;border-radius:10px;padding:9px 11px;">'
+        + '<span style="font-size:18px;line-height:1;">&#128196;</span>'
+        + '<span style="min-width:0;"><span style="display:block;font-size:12.5px;font-weight:700;color:#004369;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(a.name||'file')+'</span>'
+          + '<span style="font-size:11px;color:#8a97a0;">'+(s?esc(s)+' &middot; ':'')+'Download</span></span>'
+      + '</a></div>';
+  }).join('');
 }
 async function sendCoachReply(convId){
   var ta = document.getElementById('msgReplyText'), btn = document.getElementById('msgReplyBtn');
   var text = (ta.value||'').trim();
-  var att = await msgReadFile('msgReplyFile');
-  if(!text && !att){ ta.focus(); return; }
+  var atts = await msgReadFiles('msgReplyFile');
+  if(!text && !atts.length){ ta.focus(); return; }
   btn.disabled = true; var orig = btn.textContent; btn.textContent = 'Sending…';
   try {
-    await coachData({ action:'coach-msg-reply', conversation_id: convId, message_text: text, attachment: att });
+    await coachData({ action:'coach-msg-reply', conversation_id: convId, message_text: text, attachments: atts });
     await loadCoachInbox();
     await openCoachConversation(convId);
   } catch(e){

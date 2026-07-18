@@ -100,9 +100,57 @@ async function signMsgAttachment(path) {
     return j && j.signedURL ? `${SUPABASE_URL}/storage/v1${j.signedURL}` : null;
   } catch (_) { return null; }
 }
+// Upload up to 5 files for one message. Returns { uploaded:[...] } or { error }.
+async function uploadMsgAttachments(convId, arr) {
+  const list = Array.isArray(arr) ? arr.filter(a => a && a.data).slice(0, 5) : [];
+  const out = [];
+  for (const att of list) {
+    const r = await uploadMsgAttachment(convId, att);
+    if (r && r.error) return { error: r.error };
+    if (r) out.push(r);
+  }
+  return { uploaded: out };
+}
+async function fetchMsgAttachments(messageIds) {
+  const ids = (messageIds || []).filter(Boolean);
+  if (!ids.length) return {};
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/message_attachments?message_id=in.(${ids.map(encodeURIComponent).join(',')})&select=message_id,path,name,size,type&order=created_at.asc`, {
+      headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}` },
+    });
+    if (!r.ok) return {};
+    const rows = await r.json();
+    const byMsg = {};
+    for (const a of rows) { (byMsg[a.message_id] = byMsg[a.message_id] || []).push(a); }
+    return byMsg;
+  } catch (_) { return {}; }
+}
+async function insertMsgAttachments(messageId, uploaded) {
+  if (!messageId || !uploaded || !uploaded.length) return;
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/message_attachments`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify(uploaded.map(a => ({ message_id: messageId, path: a.path, name: a.name, size: a.size, type: a.type }))),
+    });
+  } catch (_) { /* best-effort; the message itself already sent */ }
+}
+// Attach signed download URLs. Sets msg.attachments = [{name,size,type,download}] from
+// the child table when present, else from the legacy single-attachment columns. Keeps
+// msg.attachment_download populated for any older client still reading it.
 async function withSignedAttachments(messages) {
+  const byMsg = await fetchMsgAttachments(messages.map(m => m && m.id));
   for (const msg of messages) {
-    if (msg && msg.attachment_url) msg.attachment_download = await signMsgAttachment(msg.attachment_url);
+    if (!msg) continue;
+    const child = byMsg[msg.id] || [];
+    const atts = [];
+    if (child.length) {
+      for (const a of child) atts.push({ name: a.name, size: a.size, type: a.type, download: await signMsgAttachment(a.path) });
+    } else if (msg.attachment_url) {
+      atts.push({ name: msg.attachment_name, size: msg.attachment_size, type: msg.attachment_type, download: await signMsgAttachment(msg.attachment_url) });
+    }
+    msg.attachments = atts;
+    msg.attachment_download = (atts[0] && atts[0].download) || null;
   }
   return messages;
 }
@@ -873,7 +921,8 @@ export default async function handler(req, res) {
       // attributed to whoever is signed in.
       const cid  = body.conversation_id;
       const text = (body.message_text || '').toString().trim();
-      const hasAtt = !!(body.attachment && body.attachment.data);
+      const attInput = (Array.isArray(body.attachments) && body.attachments.length) ? body.attachments : (body.attachment ? [body.attachment] : []);
+      const hasAtt = attInput.some(a => a && a.data);
       if (!cid || (!text && !hasAtt)) return res.status(400).json({ error: 'conversation_id and a message or file are required' });
       if (text.length > 5000) return res.status(400).json({ error: 'Message is too long (5000 character max).' });
       const cr = await sb(`/rest/v1/coach_conversations?id=eq.${encodeURIComponent(cid)}&select=id,client_id,channel&limit=1`);
@@ -882,16 +931,15 @@ export default async function handler(req, res) {
       // Channel gate: an assistant may only post in the 'admin' thread, never as the coach.
       if (!writableChannels().includes(conv.channel || 'coach')) return res.status(403).json({ error: 'You cannot reply in this thread.' });
       const now = new Date().toISOString();
-      let att = null;
-      if (hasAtt) { att = await uploadMsgAttachment(cid, body.attachment); if (att && att.error) return res.status(400).json({ error: att.error }); }
+      let uploaded = [];
+      if (hasAtt) { const u = await uploadMsgAttachments(cid, attInput); if (u.error) return res.status(400).json({ error: u.error }); uploaded = u.uploaded; }
       const ins = await sb('/rest/v1/coach_messages', 'POST', {
         conversation_id: cid, client_id: conv.client_id, sender_role: 'coach',
         sender_name: senderName, sender_admin_id: senderAid,
         message_type: 'progress_update', message_text: text, read_by_coach: true, read_by_client: false, created_at: now,
-        attachment_url: att ? att.path : null, attachment_name: att ? att.name : null,
-        attachment_size: att ? att.size : null, attachment_type: att ? att.type : null,
-      }, { Prefer: 'return=minimal' });
+      }, { Prefer: 'return=representation' });
       if (!ins.ok) { const d = await ins.json().catch(() => ({})); return res.status(500).json({ error: 'Could not send reply', detail: d }); }
+      const _rmsg = (await ins.json())[0]; await insertMsgAttachments(_rmsg && _rmsg.id, uploaded);
       const newStatus = ['open', 'waiting_on_client', 'closed'].includes(body.status) ? body.status : 'waiting_on_client';
       await sb(`/rest/v1/coach_conversations?id=eq.${encodeURIComponent(cid)}`, 'PATCH', { status: newStatus, last_message_at: now, updated_at: now }, { Prefer: 'return=minimal' });
       // Best-effort email to the client (non-blocking).
@@ -925,7 +973,8 @@ export default async function handler(req, res) {
       // Owner or assistant may start a message; attributed to whoever is signed in.
       const targetClient = body.client_id;
       const text = (body.message_text || '').toString().trim();
-      const hasAtt = !!(body.attachment && body.attachment.data);
+      const attInput = (Array.isArray(body.attachments) && body.attachments.length) ? body.attachments : (body.attachment ? [body.attachment] : []);
+      const hasAtt = attInput.some(a => a && a.data);
       if (!targetClient || (!text && !hasAtt)) return res.status(400).json({ error: 'client_id and a message or file are required' });
       if (text.length > 5000) return res.status(400).json({ error: 'Message is too long (5000 character max).' });
       // Only coaching clients have the in-portal messaging channel — guard server-side.
@@ -950,16 +999,15 @@ export default async function handler(req, res) {
         if (!insC.ok) { const d = await insC.json().catch(() => ({})); return res.status(500).json({ error: 'Could not start conversation', detail: d }); }
         const rows = await insC.json(); cid = (Array.isArray(rows) ? rows[0] : rows).id;
       }
-      let attS = null;
-      if (hasAtt) { attS = await uploadMsgAttachment(cid, body.attachment); if (attS && attS.error) return res.status(400).json({ error: attS.error }); }
+      let uploadedS = [];
+      if (hasAtt) { const u = await uploadMsgAttachments(cid, attInput); if (u.error) return res.status(400).json({ error: u.error }); uploadedS = u.uploaded; }
       const insM = await sb('/rest/v1/coach_messages', 'POST', {
         conversation_id: cid, client_id: targetClient, sender_role: 'coach',
         sender_name: senderName, sender_admin_id: senderAid,
         message_type: 'progress_update', message_text: text, read_by_coach: true, read_by_client: false, created_at: now,
-        attachment_url: attS ? attS.path : null, attachment_name: attS ? attS.name : null,
-        attachment_size: attS ? attS.size : null, attachment_type: attS ? attS.type : null,
-      }, { Prefer: 'return=minimal' });
+      }, { Prefer: 'return=representation' });
       if (!insM.ok) { const d = await insM.json().catch(() => ({})); return res.status(500).json({ error: 'Could not send message', detail: d }); }
+      const _smsg = (await insM.json())[0]; await insertMsgAttachments(_smsg && _smsg.id, uploadedS);
       try {
         const clr = await sb(`/rest/v1/clients?id=eq.${encodeURIComponent(targetClient)}&select=name,email,token&limit=1`);
         const cl = (clr.ok ? await clr.json() : [])[0];
