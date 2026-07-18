@@ -35,3 +35,12 @@ merge to `main`. Never edit `main` directly. Run the JS syntax sweep before stag
 Any page a prospect, sponsor, client, or rater loads must retry transient failures on its
 critical load, isolate secondary widgets so one failure can't blank the page, and never
 auto-retry a submit. (Full standard is in the `gps-portal-safe-build` skill.)
+
+## Colors: use brand tokens, never hardcode hex
+Every color must be a CSS variable from **`BRAND_TOKENS.md`** (the single source of truth). Never
+write a raw hex like `#004369` in markup, styles, or JS-built style strings — use `var(--navy)`,
+`var(--text-muted)`, etc. If a genuinely new color is unavoidable: add it to `:root`, name it
+semantically, document it in `BRAND_TOKENS.md`, then use the var. Before staging any HTML, run
+`python3 scripts/color-guard.py <file>.html` — it flags any new raw hex you introduced (the ratchet
+that keeps us from drifting back to 245 near-identical colors). This is why the token work exists;
+don't undo it one hardcoded color at a time.

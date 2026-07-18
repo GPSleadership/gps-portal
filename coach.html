@@ -45,6 +45,7 @@
       --ok:         #2e7d32;  /* success / complete (green) */
       --warn:       #e65100;  /* warning (orange) */
       --err:        #dc2626;  /* error red (distinct from brand --red) */
+      --slate-2:    #8a99a0;  /* muted grey-slate — unifies 4 near-identical typos (#8a99a0/#8a97a0/#8a98a0/#8a97a6) */
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Open Sans', sans-serif; background: var(--gray-100); color: var(--text); min-height: 100vh; }
@@ -924,7 +925,7 @@
       <div class="card">
         <div class="card-title">Ask Alex Log</div>
         <p style="font-size:13px;color:#566;margin:4px 0 16px;max-width:680px;">What your clients are actually asking the in-portal assistant. Use it to spot coaching themes and to turn real questions into content.</p>
-        <div id="askLogBody"><div style="color:#8a97a0;font-size:13px;padding:18px 0;">Loading…</div></div>
+        <div id="askLogBody"><div style="color:var(--slate-2);font-size:13px;padding:18px 0;">Loading…</div></div>
       </div>
     </div>
 
@@ -4628,7 +4629,7 @@ function renderCoachInbox(){
     if(c.unread) badges += '<span style="background:#1A3D6E;color:#fff;border-radius:9px;padding:1px 7px;font-size:10.5px;font-weight:700;margin-left:6px;">'+c.unread+'</span>';
     return '<div onclick="openCoachConversation(\''+c.id+'\')" style="padding:12px 14px;border-bottom:1px solid var(--surface-2);cursor:pointer;'+(active?'background:#eef6f5;':'')+'">'
       + '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><span style="font-weight:700;color:var(--navy);font-size:13px;">'+esc(c.client_name)+'</span>'+chanChip+'</span><span style="white-space:nowrap;">'+badges+'</span></div>'
-      + '<div style="font-size:11px;color:#8a97a0;margin-top:2px;">'+esc(c.organization||'')+(c.organization?' · ':'')+msgStatusLabel(c.status)+' · '+msgFmtTime(c.last_message_at)+'</div>'
+      + '<div style="font-size:11px;color:var(--slate-2);margin-top:2px;">'+esc(c.organization||'')+(c.organization?' · ':'')+msgStatusLabel(c.status)+' · '+msgFmtTime(c.last_message_at)+'</div>'
       + '<div style="font-size:12px;color:var(--text-muted);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+(c.last_sender==='coach'?esc((c.last_sender_name||'You')+': '):'')+esc(c.last_preview||'')+'</div>'
       + '</div>';
   }).join('');
@@ -4649,11 +4650,11 @@ async function openCoachConversation(convId){
     var label = mine ? '' : msgTypeLabel(m.message_type)+' · ';
     var textBubble = (m.message_text && m.message_text.trim()) ? '<div style="max-width:80%;padding:9px 13px;border-radius:11px;'+bubble+'font-size:13px;line-height:1.5;margin-bottom:3px;word-wrap:break-word;overflow-wrap:anywhere;">'+esc(m.message_text||'').replace(/\n/g,'<br>')+'</div>' : '';
     return textBubble + msgAttachmentCard(m, mine)
-      + '<div style="font-size:10.5px;color:#8a97a0;margin:0 3px 11px;text-align:'+(mine?'right':'left')+';">'+who+' · '+label+msgFmtTime(m.created_at)+'</div>';
-  }).join('') || '<div style="color:#8a97a0;font-size:13px;text-align:center;padding:20px 0;">No messages.</div>';
+      + '<div style="font-size:10.5px;color:var(--slate-2);margin:0 3px 11px;text-align:'+(mine?'right':'left')+';">'+who+' · '+label+msgFmtTime(m.created_at)+'</div>';
+  }).join('') || '<div style="color:var(--slate-2);font-size:13px;text-align:center;padding:20px 0;">No messages.</div>';
   pane.innerHTML =
     '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;border-bottom:1px solid var(--surface-2);padding-bottom:10px;margin-bottom:12px;">'
-    + '<div><span style="font-weight:800;color:var(--navy);font-size:15px;">'+esc(conv.client_name||'Client')+'</span> <span style="font-size:12px;color:#8a97a0;">'+esc(conv.organization||'')+'</span></div>'
+    + '<div><span style="font-weight:800;color:var(--navy);font-size:15px;">'+esc(conv.client_name||'Client')+'</span> <span style="font-size:12px;color:var(--slate-2);">'+esc(conv.organization||'')+'</span></div>'
     + '<select id="msgStatusSel" onchange="setCoachConvStatus(\''+convId+'\', this.value)" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;">'
       + ['open','waiting_on_client','closed'].map(function(s){ return '<option value="'+s+'"'+(conv.status===s?' selected':'')+'>'+msgStatusLabel(s)+'</option>'; }).join('')
     + '</select></div>'
@@ -4662,7 +4663,7 @@ async function openCoachConversation(convId){
       + '<div id="msgDraftIndicator" style="display:none;align-items:center;gap:8px;margin-bottom:8px;padding:6px 10px;background:#f0f9f9;border:1px solid #b2dfdb;border-radius:6px;font-size:11.5px;color:var(--text-muted);">'
         + '<span style="background:var(--teal);color:#fff;border-radius:4px;padding:1px 7px;font-size:10px;font-weight:700;letter-spacing:0.3px;white-space:nowrap;">AI DRAFT</span>'
         + '<span style="flex:1;">Edit before sending.</span>'
-        + '<button onclick="document.getElementById(\'msgReplyText\').value=\'\';document.getElementById(\'msgDraftIndicator\').style.display=\'none\';" style="background:none;border:none;color:#8a97a0;font-size:11px;cursor:pointer;padding:0;white-space:nowrap;">Clear</button>'
+        + '<button onclick="document.getElementById(\'msgReplyText\').value=\'\';document.getElementById(\'msgDraftIndicator\').style.display=\'none\';" style="background:none;border:none;color:var(--slate-2);font-size:11px;cursor:pointer;padding:0;white-space:nowrap;">Clear</button>'
       + '</div>'
       + '<textarea id="msgReplyText" rows="3" placeholder="Write your reply…" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #ccc;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;"></textarea>'
       + '<input type="file" id="msgReplyFile" multiple style="display:none" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.webp,.gif,.txt,.csv" onchange="msgPickFile(\'msgReplyFile\',\'msgReplyChip\')">'
@@ -4739,7 +4740,7 @@ function msgAttachmentCard(m, mine){
       + '<a href="'+esc(url)+'" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:9px;text-decoration:none;background:#fff;border:1px solid var(--border);border-radius:10px;padding:9px 11px;">'
         + '<span style="font-size:18px;line-height:1;">&#128196;</span>'
         + '<span style="min-width:0;"><span style="display:block;font-size:12.5px;font-weight:700;color:var(--navy);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(a.name||'file')+'</span>'
-          + '<span style="font-size:11px;color:#8a97a0;">'+(s?esc(s)+' &middot; ':'')+'Download</span></span>'
+          + '<span style="font-size:11px;color:var(--slate-2);">'+(s?esc(s)+' &middot; ':'')+'Download</span></span>'
       + '</a></div>';
   }).join('');
 }
@@ -4786,7 +4787,7 @@ function openNewClientMessage(preselectId){
     + '<select id="nm-client" style="width:100%;padding:8px 10px;border:1px solid #d3dde3;border-radius:8px;font-size:13px;margin-bottom:12px;box-sizing:border-box;background:#fff;">'+opts+'</select>'
     + '<label style="display:block;font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:4px;">Message</label>'
     + '<textarea id="nm-text" rows="5" placeholder="Write your message…" style="width:100%;padding:10px 12px;border:1px solid #d3dde3;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;"></textarea>'
-    + '<div style="font-size:11.5px;color:#8a98a0;margin-top:6px;">They will see it in their portal under Contact Your Coach, and get an email notification.</div>'
+    + '<div style="font-size:11.5px;color:var(--slate-2);margin-top:6px;">They will see it in their portal under Contact Your Coach, and get an email notification.</div>'
     + '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;"><button class="dbtn dbtn-outline" onclick="gpsRemove(\'nm-overlay\')">Cancel</button>'
     + '<button class="dbtn dbtn-primary" id="nm-send" onclick="sendNewClientMessage()">Send message</button></div></div>';
   document.body.appendChild(ov);
@@ -4878,7 +4879,7 @@ function showSection(name, skipHooks, _fromHistory) {
 async function loadAskLog() {
   var body = document.getElementById('askLogBody');
   if (!body) return;
-  body.innerHTML = '<div style="color:#8a97a0;font-size:13px;padding:18px 0;">Loading…</div>';
+  body.innerHTML = '<div style="color:var(--slate-2);font-size:13px;padding:18px 0;">Loading…</div>';
   var data;
   try { data = await coachData({ action: 'ask-alex-log' }); }
   catch (e) { body.innerHTML = '<div style="color:var(--err);font-size:13px;padding:12px 0;">' + esc(e.message) + '</div>'; return; }
@@ -4899,7 +4900,7 @@ async function loadAskLog() {
 
   var listHtml;
   if (!recent.length) {
-    listHtml = '<div style="color:#8a97a0;font-size:13px;padding:12px 0;">No questions logged yet.</div>';
+    listHtml = '<div style="color:var(--slate-2);font-size:13px;padding:12px 0;">No questions logged yet.</div>';
   } else {
     listHtml = '<div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:10px;">Recent questions</div>'
       + recent.map(function(r){
@@ -4907,8 +4908,8 @@ async function loadAskLog() {
           try { when = new Date(r.asked_at).toLocaleDateString(undefined,{month:'short',day:'numeric'}) + ', ' + new Date(r.asked_at).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}); } catch(_) {}
           return '<div style="border:1px solid var(--surface-2);border-radius:10px;padding:12px 14px;margin-bottom:10px;">'
             + '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px;">'
-            + '<span style="font-size:12.5px;font-weight:700;color:var(--navy);">' + esc(r.client_name) + (r.organization ? ' <span style="font-weight:400;color:#8a97a0;">· ' + esc(r.organization) + '</span>' : '') + '</span>'
-            + '<span style="font-size:11px;color:#8a97a0;white-space:nowrap;">' + when + '</span>'
+            + '<span style="font-size:12.5px;font-weight:700;color:var(--navy);">' + esc(r.client_name) + (r.organization ? ' <span style="font-weight:400;color:var(--slate-2);">· ' + esc(r.organization) + '</span>' : '') + '</span>'
+            + '<span style="font-size:11px;color:var(--slate-2);white-space:nowrap;">' + when + '</span>'
             + '</div>'
             + '<div style="font-size:13.5px;color:#1a2730;line-height:1.5;">' + esc(r.question) + '</div>'
             + (r.response_preview ? '<div style="font-size:12px;color:#6b7a83;line-height:1.45;margin-top:6px;border-top:1px dashed var(--surface-2);padding-top:6px;"><span style="color:var(--teal);font-weight:700;">Alex:</span> ' + esc(r.response_preview) + '…</div>' : '')
@@ -5036,12 +5037,12 @@ function ciRangeControl(){
   var custom = ciRange.mode === 'custom'
     ? '<span style="display:inline-flex;align-items:center;gap:6px;margin-left:6px;">'
       + '<input type="date" id="ciRangeFrom" value="'+(ciRange.from||'')+'" onchange="ciSetCustomRange()" style="padding:4px 7px;border:1px solid #cfd6d8;border-radius:6px;font-size:12px;">'
-      + '<span style="color:#8a99a0;font-size:12px;">to</span>'
+      + '<span style="color:var(--slate-2);font-size:12px;">to</span>'
       + '<input type="date" id="ciRangeTo" value="'+(ciRange.to||'')+'" onchange="ciSetCustomRange()" style="padding:4px 7px;border:1px solid #cfd6d8;border-radius:6px;font-size:12px;">'
       + '</span>'
     : '';
   return '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:12px;">'
-    + '<span style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#8a99a0;font-weight:700;margin-right:2px;">Period</span>'
+    + '<span style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--slate-2);font-weight:700;margin-right:2px;">Period</span>'
     + btns + custom + '</div>';
 }
 
@@ -5177,7 +5178,7 @@ async function renderCoachInsights(){
     var lastAct = m.lastActiveDays==null ? '—' : m.lastActiveDays+'d';
     var nm = esc(c.name||'Unnamed'); var org = esc(c.organization||c.org||'');
     return '<tr style="border-top:1px solid #e6ecee;">'
-      + '<td style="padding:9px 10px;"><a href="#" onclick="event.preventDefault();showSection(\'clients\');openClientProfile(\''+c.id+'\')" style="color:var(--navy);font-weight:700;text-decoration:none;">'+nm+'</a><div style="font-size:11px;color:#8a99a0;">'+org+'</div></td>'
+      + '<td style="padding:9px 10px;"><a href="#" onclick="event.preventDefault();showSection(\'clients\');openClientProfile(\''+c.id+'\')" style="color:var(--navy);font-weight:700;text-decoration:none;">'+nm+'</a><div style="font-size:11px;color:var(--slate-2);">'+org+'</div></td>'
       + '<td style="padding:9px 10px;font-size:12px;color:var(--text-muted);">'+(m.week?('Wk '+m.week):'—')+'</td>'
       + '<td style="padding:9px 10px;">'+ciPill(m.health)+(m.progressPending?' <span title="Progress vs plan pending — no plan metrics" style="color:#c9a227;font-size:11px;">⧗</span>':'')+'</td>'
       + '<td style="padding:9px 10px;">'+renewal+'</td>'
@@ -5228,7 +5229,7 @@ async function renderCoachInsights(){
 
   var headerBar = '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">'
     + '<div style="font-family:Montserrat,sans-serif;font-size:20px;font-weight:800;color:var(--navy);">Coach Insights</div>'
-    + '<div style="font-size:11px;color:#8a99a0;">Read-only · health updates on load · session attendance & MRR pending data</div>'
+    + '<div style="font-size:11px;color:var(--slate-2);">Read-only · health updates on load · session attendance & MRR pending data</div>'
     + '</div>';
 
   host.innerHTML = headerBar + ciRangeControl() + strip + tiles + funnel + alerts + table
@@ -5252,16 +5253,16 @@ function ciShowRenewals(kind){
       + '<td style="padding:8px;font-size:12px;color:var(--text-muted);">'+esc(it.org||'—')+'</td>'
       + '<td style="padding:8px;font-size:12px;text-align:center;font-weight:700;white-space:nowrap;color:'+(it.endDays<=30?'var(--red)':it.endDays<=60?'#f9a825':'var(--navy)')+';">'+it.endDays+'d</td>'
       + '<td style="padding:8px;font-size:12px;text-align:center;font-weight:700;color:'+healthColor(it.health)+';">'+it.health+'</td>'
-      + '<td style="padding:8px;font-size:11px;color:#8a99a0;">'+esc(it.reason||'')+'</td></tr>';
+      + '<td style="padding:8px;font-size:11px;color:var(--slate-2);">'+esc(it.reason||'')+'</td></tr>';
   }).join('') : '<tr><td colspan="5" style="padding:14px;color:var(--text-faint);font-size:13px;">None right now.</td></tr>';
   ov.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:640px;width:100%;max-height:85vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);">'
     + '<div style="background:#04243a;color:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;"><div><div style="font-weight:800;font-family:Montserrat,sans-serif;">'+title+'</div><div style="font-size:12px;color:#9fc0d0;margin-top:3px;">'+esc(sub)+'</div></div><button onclick="gpsRemove(\'ciRenewalsOverlay\')" style="background:none;border:none;color:#fff;font-size:24px;cursor:pointer;line-height:1;">&times;</button></div>'
     + '<div style="padding:14px 18px;"><table style="width:100%;border-collapse:collapse;"><thead><tr style="text-align:left;">'
-    + '<th style="padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#8a99a0;">Client</th>'
-    + '<th style="padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#8a99a0;">Org</th>'
-    + '<th style="padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#8a99a0;text-align:center;">Renews</th>'
-    + '<th style="padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#8a99a0;text-align:center;">Health</th>'
-    + '<th style="padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#8a99a0;">Why</th>'
+    + '<th style="padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--slate-2);">Client</th>'
+    + '<th style="padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--slate-2);">Org</th>'
+    + '<th style="padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--slate-2);text-align:center;">Renews</th>'
+    + '<th style="padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--slate-2);text-align:center;">Health</th>'
+    + '<th style="padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--slate-2);">Why</th>'
     + '</tr></thead><tbody>'+rows+'</tbody></table></div></div>';
   document.body.appendChild(ov);
 }
@@ -5285,7 +5286,7 @@ function ciShowRevenue(){
   var itemRows = R.items.length ? R.items.map(function(it){
     return '<tr style="border-top:1px solid var(--surface-2);"><td style="padding:7px 8px;font-size:12px;color:var(--navy);font-weight:600;">'+esc(it.label)+'</td>'
       + '<td style="padding:7px 8px;font-size:12px;color:var(--text-muted);">'+esc(it.org||'—')+'</td>'
-      + '<td style="padding:7px 8px;font-size:11px;color:#8a99a0;">'+esc(it.type)+'</td>'
+      + '<td style="padding:7px 8px;font-size:11px;color:var(--slate-2);">'+esc(it.type)+'</td>'
       + '<td style="padding:7px 8px;font-size:12px;text-align:right;font-weight:700;color:var(--navy);white-space:nowrap;">'+fmt(it.amount)+'</td></tr>';
   }).join('') : '<tr><td colspan="4" style="padding:14px;color:var(--text-faint);font-size:13px;">No fees captured yet. Add fees on each engagement to populate this.</td></tr>';
   ov.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:620px;width:100%;max-height:85vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);">'
@@ -5306,7 +5307,7 @@ function ciTile(label, val, color, sub){
     + '<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">'+label+'</div>'
     + '<div style="font-size:26px;font-weight:800;color:'+color+';font-family:Montserrat,sans-serif;line-height:1;">'+val+'</div>'
     + '<div style="height:4px;background:'+color+';border-radius:3px;margin:8px 0 6px;"></div>'
-    + '<div style="font-size:11px;color:#8a99a0;">'+sub+'</div></div>';
+    + '<div style="font-size:11px;color:var(--slate-2);">'+sub+'</div></div>';
 }
 function ciTilePending(label, sub){
   return '<div style="background:#fbfbf9;border:1px dashed #d5d9da;border-radius:10px;padding:14px 16px;">'
@@ -9319,7 +9320,7 @@ function reportStepperHtml(d, done, canGenerate) {
 
   // GPS executive baseline: navy var(--navy) = active, teal var(--teal) = done, muted = locked.
   // No emoji. Colour encodes state only. One prominent action per step.
-  const NAVY = 'var(--navy)', TEAL = 'var(--teal)', MUTE = '#8a97a6', LINE = '#e4e8ee';
+  const NAVY = 'var(--navy)', TEAL = 'var(--teal)', MUTE = 'var(--slate-2)', LINE = '#e4e8ee';
   const step = (n, state, title, sub, ctaHtml, isLastStep) => {
     // 'optional' = an admin-disabled gate that isn't done: shown, actionable, non-blocking.
     const isDone = state === 'done', isActive = state === 'active', isLocked = state === 'locked', isOptional = state === 'optional';
@@ -10637,7 +10638,7 @@ function showGenProgress() {
     + '<div class="spinner" style="margin:0 auto 18px;"></div>'
     + '<div style="font-family:Montserrat,sans-serif;font-size:16px;font-weight:800;color:var(--navy);margin-bottom:8px;">Generating the report</div>'
     + '<div id="gen-progress-msg" style="font-size:13.5px;color:#40525f;line-height:1.5;min-height:38px;">Reading the survey responses&hellip;</div>'
-    + '<div style="font-size:12px;color:#8a97a6;margin-top:14px;">This can take a couple of minutes. Keep this tab open &mdash; it&rsquo;s working.</div>'
+    + '<div style="font-size:12px;color:var(--slate-2);margin-top:14px;">This can take a couple of minutes. Keep this tab open &mdash; it&rsquo;s working.</div>'
     + '</div>';
   document.body.appendChild(ov);
   var msgs = ['Reading the survey responses…','Weighing each rater group…','Scoring Trust, Proactivity, and Productivity…','Finding the gaps and the strengths…','Writing the draft narrative…','Polishing the language…','Almost there — finalizing the draft…'];
@@ -10921,7 +10922,7 @@ function renderReportDocEditor(){
     +'<div style="display:flex;align-items:center;gap:12px;margin:12px 0 2px;flex-wrap:wrap;">'
     +'<button class="dbtn dbtn-primary" id="rd-gen-all" onclick="genAllReportSections(event)">⚡ Generate full report</button>'
     +'<label style="font-size:11.5px;color:var(--text-muted);display:inline-flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="rd-gen-empty-only"> Only blank sections</label>'
-    +'<span style="font-size:11.5px;color:#8a98a0;">Drafts each section from the diagnostic data, in order. Review, then Save all sections.</span>'
+    +'<span style="font-size:11.5px;color:var(--slate-2);">Drafts each section from the diagnostic data, in order. Review, then Save all sections.</span>'
     +'</div>'
     +rows
     +'<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;position:sticky;bottom:-1px;background:#fff;padding:10px 0;border-top:1px solid var(--surface-2);">'
@@ -13825,7 +13826,7 @@ function drEditSponsor(linkId){
     +'<div style="padding:18px 22px;border-bottom:1px solid var(--gray-200);display:flex;justify-content:space-between;align-items:center;"><div style="font-family:Montserrat,sans-serif;font-weight:800;color:var(--navy);font-size:17px;">Edit sponsor</div><div id="drspe_x" style="cursor:pointer;font-size:18px;color:#888;">✕</div></div>'
     +'<div style="padding:20px 22px;">'
     +'<div style="margin-bottom:14px;"><label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:4px;">Confidentiality</label><select id="drspe_conf" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;"><option value="progress"'+(link.confidentiality_mode==='progress'?' selected':'')+'>Process only — engagement status, no results yet (reveal later)</option><option value="standard"'+(link.confidentiality_mode==='standard'?' selected':'')+'>Standard — sponsor can open individual reports</option><option value="private"'+(link.confidentiality_mode==='private'?' selected':'')+'>Private — individual scores hidden; team patterns only</option></select></div>'
-    +'<div style="margin-bottom:14px;"><label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:4px;">Sponsor debrief date</label><input type="date" id="drspe_debrief" value="'+(link.sponsor_debrief_date||'')+'" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;"><div style="font-size:11px;color:#8a97a0;margin-top:4px;">The full report auto-reveals to this sponsor the day before this date. Leave blank to control the reveal manually.</div></div>'
+    +'<div style="margin-bottom:14px;"><label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:4px;">Sponsor debrief date</label><input type="date" id="drspe_debrief" value="'+(link.sponsor_debrief_date||'')+'" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;"><div style="font-size:11px;color:var(--slate-2);margin-top:4px;">The full report auto-reveals to this sponsor the day before this date. Leave blank to control the reveal manually.</div></div>'
     +'<div><label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:6px;">Who do they supervise on this team?</label>'+memRows+'</div>'
     +'<div id="drspe_err" style="color:var(--err);font-size:12px;margin-top:8px;"></div>'
     +'</div>'
