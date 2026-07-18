@@ -1028,6 +1028,65 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, conversation_id: cid });
     }
 
+    // ── Send a renewal / re-up payment link to the client by email ────────────
+    // Coach picks a term; we email the client the matching pay-to-continue link so
+    // they can renew without the coach leaving the dashboard. Links come from
+    // renewal_config (continuation_flex/titan) or a custom link the coach pastes.
+    // We never handle payment — the client pays through the external link.
+    if (action === 'send-renewal-link') {
+      const clientId = String(body.client_id || '');
+      if (!clientId) return res.status(400).json({ error: 'client_id required' });
+      const term = ['flex', 'titan', 'custom'].includes(body.term) ? body.term : 'flex';
+      const note = String(body.note || '').slice(0, 1500);
+      const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+      // Resolve the payment link + a human label for the term.
+      let link = '', termLabel = '';
+      if (term === 'custom') {
+        link = String(body.custom_url || '').trim();
+        termLabel = 'the plan we discussed';
+        if (!/^https?:\/\/\S+$/i.test(link)) return res.status(400).json({ error: 'Enter a valid payment link (https://…).' });
+      } else {
+        const rc = await sb('/rest/v1/renewal_config?id=eq.1&select=continuation_flex_url,continuation_titan_url&limit=1');
+        const cfg = (rc.ok ? await rc.json() : [])[0] || {};
+        if (term === 'titan') { link = cfg.continuation_titan_url || ''; termLabel = 'quarterly coaching continuation'; }
+        else { link = cfg.continuation_flex_url || ''; termLabel = 'monthly coaching continuation'; }
+        if (!link) return res.status(500).json({ error: 'No payment link is set for that term yet. Add it in your renewal settings.' });
+      }
+
+      // Client email.
+      const clr = await sb(`/rest/v1/clients?id=eq.${encodeURIComponent(clientId)}&select=name,email&limit=1`);
+      const cl = (clr.ok ? await clr.json() : [])[0];
+      if (!cl) return res.status(404).json({ error: 'Client not found' });
+      if (!cl.email) return res.status(400).json({ error: 'This client has no email on file, so they can\'t be sent a link.' });
+      if (!RESEND_API_KEY) return res.status(500).json({ error: 'Email is not configured (RESEND_API_KEY missing).' });
+
+      const first = (cl.name || 'there').split(' ')[0];
+      const intro = note
+        ? `<p style="line-height:1.6;">${esc(note).replace(/\n/g, '<br>')}</p>`
+        : `<p style="line-height:1.6;">It's been a real pleasure working with you. When you're ready to keep the momentum going, you can set up your ${esc(termLabel)} below.</p>`;
+      const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1a1a1a;">`
+        + `<p>Hi ${esc(first)},</p>`
+        + intro
+        + `<p style="margin:26px 0;"><a href="${esc(link)}" style="background:#01949A;color:#fff;text-decoration:none;padding:13px 26px;border-radius:8px;font-weight:700;">Continue coaching →</a></p>`
+        + `<p style="font-size:13px;color:#666;">Or copy this link: <a href="${esc(link)}" style="color:#004369;">${esc(link)}</a></p>`
+        + `<p style="font-size:13px;color:#666;">— ${esc(senderFirst || 'Alex')}, GPS Leadership Solutions</p></div>`;
+
+      const er = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: `${senderName} - GPS Leadership <${RESEND_FROM}>`,
+          to: [cl.email],
+          reply_to: senderEmail,
+          subject: 'Continue your coaching with GPS Leadership',
+          html,
+        }),
+      });
+      if (!er.ok) { const t = await er.text().catch(() => ''); return res.status(502).json({ error: 'Could not send the email.', detail: t.slice(0, 200) }); }
+      return res.status(200).json({ ok: true, sent_to: cl.email });
+    }
+
     // ── Contact Your Coach: change conversation status (owner only) ───────────
     if (action === 'coach-msg-status') {
       if (!isOwner) return ownerOnly();

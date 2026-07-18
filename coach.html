@@ -2599,6 +2599,36 @@ function closeClientProfile() {
   currentProfileClientId = null;
 }
 
+// ── Renewal / re-up: email the client a pay-to-continue link ────────────────
+function reupTermChange(id) {
+  var t = (document.getElementById('reup-term-' + id) || {}).value;
+  var u = document.getElementById('reup-url-' + id);
+  if (u) u.style.display = (t === 'custom') ? 'block' : 'none';
+}
+async function sendRenewalLink(id) {
+  var term   = (document.getElementById('reup-term-' + id) || {}).value || 'flex';
+  var custom = ((document.getElementById('reup-url-' + id)  || {}).value || '').trim();
+  var note   = ((document.getElementById('reup-note-' + id) || {}).value || '').trim();
+  var btn = document.getElementById('reup-btn-' + id);
+  var msg = document.getElementById('reup-msg-' + id);
+  if (term === 'custom' && !/^https?:\/\/\S+$/i.test(custom)) {
+    if (msg) { msg.style.color = 'var(--red)'; msg.textContent = 'Enter a valid payment link.'; }
+    return;
+  }
+  var orig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  if (msg) { msg.style.color = 'var(--gray-600)'; msg.textContent = ''; }
+  try {
+    var r = await coachData({ action: 'send-renewal-link', client_id: id, term: term, custom_url: custom, note: note });
+    if (msg) { msg.style.color = 'var(--ok)'; msg.textContent = '✓ Sent to ' + (r.sent_to || 'the client') + '.'; }
+    var nt = document.getElementById('reup-note-' + id); if (nt) nt.value = '';
+  } catch (e) {
+    if (msg) { msg.style.color = 'var(--red)'; msg.textContent = (e && e.message) || 'Could not send.'; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = orig; }
+  }
+}
+
 // ── Ad-hoc SMS composer (coach → one client) ────────────────────────────────
 // Text a single opted-in client a custom message. Gated: only enabled when the
 // client opted in AND has a mobile number. Sends via coach-data send-client-sms.
@@ -3127,6 +3157,25 @@ function renderProfileSection(section, client, checkins) {
           <input type="checkbox" ${client.show_sessions_to_leader ? 'checked' : ''} onchange="toggleShowSessionsToLeader('${client.id}', this.checked)" style="width:16px;height:16px;margin-top:1px;accent-color:var(--navy);">
           <span>Show a momentum view to the leader<br><span style="font-size:12px;color:var(--gray-600);">They see phase + encouragement only — never the raw count, sessions remaining, or a renewal prompt.</span></span>
         </label>`}
+      </div>` : ''}
+      ${(client.in_coaching_program || client.is_active_coaching || client.coaching_sessions_enabled) ? `
+      <div class="detail-section" style="margin-top:20px;">
+        <h4>Renewal / Re-up</h4>
+        <p style="font-size:12px;color:var(--gray-600);margin-bottom:10px;">Email ${esc((client.name||'the client').split(' ')[0])} a pay-to-continue link — they pay directly through it, nothing else to do on your end.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+          <select id="reup-term-${client.id}" onchange="reupTermChange('${client.id}')" style="padding:8px 10px;border:1px solid var(--gray-300);border-radius:6px;font-size:13px;color:var(--navy);font-family:'Open Sans',sans-serif;">
+            <option value="flex">Monthly continuation</option>
+            <option value="titan">Quarterly continuation</option>
+            <option value="custom">Custom link…</option>
+          </select>
+          <input id="reup-url-${client.id}" type="url" placeholder="https://…payment link" style="display:none;flex:1;min-width:200px;padding:8px 10px;border:1px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;">
+        </div>
+        <textarea id="reup-note-${client.id}" rows="3" placeholder="Optional note (e.g. It's been great working together — ready to keep going?)" style="width:100%;padding:9px 11px;border:1px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;box-sizing:border-box;margin-bottom:10px;"></textarea>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <button onclick="sendRenewalLink('${client.id}')" id="reup-btn-${client.id}" style="padding:8px 18px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">Send renewal link</button>
+          <span id="reup-msg-${client.id}" style="font-size:12px;"></span>
+        </div>
+        <p style="font-size:11px;color:var(--gray-600);margin-top:8px;">Sends to ${client.email ? esc(client.email) : '<span style="color:var(--warn);">no email on file</span>'}. Links come from your renewal settings.</p>
       </div>` : ''}
       <div class="detail-section" id="sponsorPanel-${client.id}"></div>
       <div class="detail-section" style="margin-top:20px;">
