@@ -518,11 +518,16 @@
     @media (max-width: 680px) {
       /* Column stack, but KEEP the body height-constrained (no overflow:visible, or the
          body grows past the screen and the content gets clipped/pushed out of view).
-         min-height:0 lets the flex:1 content shrink to the body and scroll internally. */
-      .profile-body { flex-direction: column; }
+         min-height:0 lets the flex:1 content shrink to the body and scroll internally.
+         min-width:0 stops a wide child (the check-in table) from stretching the whole
+         column past the phone width and dragging everything off-screen. */
+      .profile-body { flex-direction: column; min-width: 0; }
       .profile-sidenav { display: none; }
       .profile-nav-select { display: block; }
-      .profile-content { min-height: 0; padding: 18px 16px; }
+      .profile-content { min-height: 0; min-width: 0; padding: 18px 16px; overflow-wrap: anywhere; }
+      /* The wide check-in history table scrolls inside its own box instead of pushing
+         the page width out. Any other table in the profile gets the same treatment. */
+      .profile-content table { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
     }
 
     /* ── DASHBOARD SECTION ── */
