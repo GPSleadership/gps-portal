@@ -504,6 +504,23 @@
       font-family:'Montserrat',sans-serif;font-size:16px;font-weight:800;
       color:var(--navy);margin-bottom:20px;
     }
+    /* Mobile: the fixed 210px sidebar would eat half a phone screen, so it becomes a
+       horizontal scrolling tab strip with a bottom-border active indicator (same pattern
+       as the diagnostic tab strip). Alex runs the console from his phone. */
+    @media (max-width: 680px) {
+      .profile-body { flex-direction: column; overflow: visible; }
+      .profile-sidenav {
+        width: 100%; display: flex; gap: 4px; overflow-x: auto; padding: 6px 8px;
+        border-right: none; border-bottom: 1px solid var(--gray-200);
+        -webkit-overflow-scrolling: touch;
+      }
+      .profile-nav-item {
+        white-space: nowrap; padding: 9px 12px; border-right: none;
+        border-bottom: 3px solid transparent; border-radius: 6px;
+      }
+      .profile-nav-item.active { border-right-color: transparent; border-bottom-color: var(--teal); }
+      .profile-content { padding: 18px 16px; }
+    }
 
     /* ── DASHBOARD SECTION ── */
     .dash-stats { display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px; }
