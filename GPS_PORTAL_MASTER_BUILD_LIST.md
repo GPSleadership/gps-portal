@@ -210,6 +210,8 @@ Alex has spent his polish budget on the *client* side; the *coaching* side (`coa
 
 **📱 MOBILE-FIRST IS A HARD REQUIREMENT ON EVERY ITEM BELOW** (Alex, 2026-07-18) — he runs the console from his phone on the go (pushing sends, reading data). Every coaching-side change must be verified on a phone frame (use the built-in Mobile Preview), not just desktop. "Works on desktop" is not done. This applies to all P1-UX / P2-UX items and the Assessments split.
 
+**✅ BATCH 1 built + preview-verified 2026-07-18** (branch `coach-nav-batch1`, mobile-checked via DOM flex-wrap): Messages promoted to top-level tab (P1-UX2 ✅); Communication group retired, Email Log/Ask Alex Log/Access & IT + Templates moved into Settings (P1-UX1 ✅); Workshops/Assessments split into two filtered sub-tabs — step 1 of P2-UX9 ✅; loud red Delete on Workshops quieted to outline (P1-UX8 ✅, Workshops side; Teams side was already outline). **Deferred:** P1-UX3 group descriptors (only works as desktop tooltip; belongs in the P2 mobile-friendly tab-bar redesign). Awaiting Alex's merge to main.
+
 **✅ IA-level review done 2026-07-18** (GPS Tech/Portal Agent) — full writeup in `COACHING_SIDE_REVIEW_2026-07-18.md` (Tool Creation folder). Scores: Admin/Coach UX **B–**, Visual **B–** (provisional, needs live-session look), Technical/long-term **C+**. Root problem is findability, not features: **9 top-level groups / 17 destinations**, inconsistent nav depth (6 groups jump to a page, 3 open a second sub-tab row), and 3 miscategorized items. Fix items broken out below. Page-by-page visual pass (the original L-scope above) still stands as a follow-on once the IA is simplified.
 
 | # | Item | Effort | Status | Evidence |
