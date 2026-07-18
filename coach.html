@@ -527,8 +527,11 @@
       .profile-content { min-height: 0; min-width: 0; padding: 18px 16px; overflow-wrap: anywhere; }
       /* The wide check-in history table keeps a readable width and SCROLLS sideways
          inside its wrapper, instead of crushing every column to fit the phone. */
-      .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-      .history-table { min-width: 560px; }
+      .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--border); border-radius: 8px; }
+      /* Give the table a genuinely readable width so columns aren't crushed; the wrapper
+         scrolls it sideways. Keep headers on one line so they don't stack into letters. */
+      .history-table { min-width: 860px; }
+      .history-table th { white-space: nowrap; }
     }
 
     /* ── DASHBOARD SECTION ── */
