@@ -516,10 +516,13 @@
        full-width dropdown at the top so the content gets the entire page width.
        (Alex runs the console from his phone.) */
     @media (max-width: 680px) {
-      .profile-body { flex-direction: column; overflow: visible; }
+      /* Column stack, but KEEP the body height-constrained (no overflow:visible, or the
+         body grows past the screen and the content gets clipped/pushed out of view).
+         min-height:0 lets the flex:1 content shrink to the body and scroll internally. */
+      .profile-body { flex-direction: column; }
       .profile-sidenav { display: none; }
       .profile-nav-select { display: block; }
-      .profile-content { padding: 18px 16px; }
+      .profile-content { min-height: 0; padding: 18px 16px; }
     }
 
     /* ── DASHBOARD SECTION ── */
