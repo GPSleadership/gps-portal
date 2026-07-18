@@ -868,7 +868,7 @@
       <div class="section-tab"        id="grp-clients"   onclick="showGroup('clients')">Clients</div>
       <div class="section-tab"        id="grp-insights"  onclick="showGroup('insights')">Insights</div>
       <div class="section-tab"        id="grp-diagteams" onclick="showGroup('diagteams')">Diagnostics &amp; Teams</div>
-      <div class="section-tab"        id="grp-comms"     onclick="showGroup('comms')">Communication</div>
+      <div class="section-tab"        id="grp-messages"  onclick="showGroup('messages')" title="Direct messages with your leaders">Messages <span id="msgNavBadge" style="display:none;background:#C0392B;color:#fff;border-radius:9px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:4px;">0</span></div>
       <div class="section-tab"        id="grp-workshops" onclick="showGroup('workshops')">Workshops &amp; Assessments</div>
       <div class="section-tab"        id="grp-organizations" onclick="showGroup('organizations')">Organizations</div>
       <div class="section-tab owner-only" id="grp-aistudio"  onclick="showGroup('aistudio')">AI Studio</div>
@@ -891,18 +891,20 @@
       <div class="section-subtab active" id="sub-diagnostics"   onclick="showSection('diagnostics')">Leader Diagnostics</div>
       <div class="section-subtab"        id="sub-decisionroom"  onclick="showSection('decisionroom')">Teams (Decision Room)</div>
     </div>
-    <div id="subnav-comms" class="section-subnav" style="display:none;">
-      <div class="section-subtab active" id="sub-emails"    onclick="showSection('emails')">Email Log</div>
-      <div class="section-subtab"        id="sub-messages"  onclick="showSection('messages')">Client Messages <span id="msgNavBadge" style="display:none;background:#C0392B;color:#fff;border-radius:9px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:4px;">0</span></div>
-      <div class="section-subtab"        id="sub-asklog"    onclick="showSection('asklog')">Ask Alex Log</div>
-      <div class="section-subtab"        id="sub-templates" onclick="showSection('templates')">Templates &amp; Automation</div>
-      <div class="section-subtab"        id="sub-accesshelp" onclick="showSection('accesshelp')">Access &amp; IT</div>
+    <div id="subnav-workshops" class="section-subnav" style="display:none;">
+      <div class="section-subtab active" id="sub-ws-workshops"   onclick="wsSetKind('workshop')">Workshops</div>
+      <div class="section-subtab"        id="sub-ws-assessments" onclick="wsSetKind('assessment')">Assessments</div>
     </div>
     <div id="subnav-settings" class="section-subnav" style="display:none;">
-      <div class="section-subtab active" id="sub-admins"   onclick="showSection('admins')">Admin Accounts</div>
-      <div class="section-subtab"        id="sub-security" onclick="showSection('security')">Account &amp; Security</div>
+      <div class="section-subtab active" id="sub-admins"    onclick="showSection('admins')">Admin Accounts</div>
+      <div class="section-subtab"        id="sub-security"  onclick="showSection('security')">Account &amp; Security</div>
+      <div class="section-subtab"        id="sub-templates" onclick="showSection('templates')">Templates &amp; Automation</div>
       <div class="section-subtab"        id="sub-reportflow" onclick="showSection('reportflow')">Report Flow</div>
       <div class="section-subtab"        id="sub-aicontrols" onclick="showSection('aicontrols')">AI Controls</div>
+      <span style="align-self:center;color:#cbd5e1;padding:0 4px;font-weight:700;">·</span>
+      <div class="section-subtab"        id="sub-emails"    onclick="showSection('emails')">Email Log</div>
+      <div class="section-subtab"        id="sub-asklog"    onclick="showSection('asklog')">Ask Alex Log</div>
+      <div class="section-subtab"        id="sub-accesshelp" onclick="showSection('accesshelp')">Access &amp; IT</div>
     </div>
 
     <!-- ═══ ASK ALEX LOG SECTION ═══ -->
@@ -4535,8 +4537,8 @@ document.getElementById('addAdminModal').addEventListener('click', function(e) {
 let _currentSection = 'dashboard';
 
 // Refactored IA: 5 top-level groups, each mapping to one or more underlying sections.
-var GROUP_OF = { dashboard:'today', clients:'clients', insights:'insights', diagnostics:'diagteams', decisionroom:'diagteams', emails:'comms', messages:'comms', asklog:'comms', templates:'comms', accesshelp:'comms', admins:'settings', security:'settings', reportflow:'settings', workshops:'workshops', organizations:'organizations', aistudio:'aistudio' };
-var GROUP_DEFAULT = { today:'dashboard', clients:'clients', insights:'insights', diagteams:'diagnostics', comms:'emails', settings:'admins', workshops:'workshops', organizations:'organizations', aistudio:'aistudio' };
+var GROUP_OF = { dashboard:'today', clients:'clients', insights:'insights', diagnostics:'diagteams', decisionroom:'diagteams', messages:'messages', emails:'settings', asklog:'settings', templates:'settings', accesshelp:'settings', admins:'settings', security:'settings', reportflow:'settings', aicontrols:'settings', workshops:'workshops', organizations:'organizations', aistudio:'aistudio' };
+var GROUP_DEFAULT = { today:'dashboard', clients:'clients', insights:'insights', diagteams:'diagnostics', messages:'messages', settings:'admins', workshops:'workshops', organizations:'organizations', aistudio:'aistudio' };
 function showGroup(group){ showSection(GROUP_DEFAULT[group] || 'dashboard'); }
 
 // ── Client Messages (Contact Your Coach — coach side) ───────────────────────
@@ -4826,12 +4828,12 @@ function showSection(name, skipHooks, _fromHistory) {
   });
   // Light up the parent group tab.
   var grp = GROUP_OF[name] || 'today';
-  ['today', 'clients', 'insights', 'diagteams', 'comms', 'settings', 'workshops', 'organizations', 'aistudio'].forEach(g => {
+  ['today', 'clients', 'insights', 'diagteams', 'messages', 'settings', 'workshops', 'organizations', 'aistudio'].forEach(g => {
     var t = document.getElementById('grp-' + g);
     if (t) t.classList.toggle('active', g === grp);
   });
   // Show only the active group's sub-tab bar; mark the active sub-tab.
-  ['diagteams', 'comms', 'settings'].forEach(g => {
+  ['diagteams', 'settings', 'workshops'].forEach(g => {
     var sn = document.getElementById('subnav-' + g);
     if (sn) sn.style.display = (g === grp) ? 'flex' : 'none';
   });
@@ -13967,18 +13969,27 @@ async function drSendSponsor(sponsorId){
       catch(e2){ c.innerHTML='<div style="padding:24px;color:#dc2626;">Could not load workshops: '+esc(e2.message)+'</div>'; return; }
     }
     await loadOrgs();
-    var rows=WS.list.map(function(w){ return '<tr style="border-top:1px solid #dbe3e6;"><td style="padding:11px 10px;font-weight:700;color:#004369;cursor:pointer;" onclick="wsOpen(\''+w.id+'\')">'+esc(w.title)+'</td><td style="padding:11px 10px;color:#5a6b76;cursor:pointer;" onclick="wsOpen(\''+w.id+'\')">'+esc(w.client_org_name||'—')+'</td><td style="padding:11px 10px;color:#5a6b76;cursor:pointer;" onclick="wsOpen(\''+w.id+'\')">'+fmtDate(w.debrief_date||w.workshop_date)+'</td><td style="padding:11px 10px;cursor:pointer;" onclick="wsOpen(\''+w.id+'\')"><span style="font-size:11px;font-weight:700;background:#E8F7F7;color:#004369;padding:2px 9px;border-radius:20px;">'+esc(w.status||'setup')+'</span>'+(w.engagement_kind==='assessment'?' <span style="font-size:11px;font-weight:700;background:#F7F4EE;color:#004369;border:1px solid #dbe3e6;padding:2px 9px;border-radius:20px;">Assessment</span>':'')+(w.is_demo?' <span style="font-size:11px;font-weight:700;background:#fde8ec;color:#DB1F48;padding:2px 9px;border-radius:20px;">DEMO</span>':'')+'</td><td style="padding:8px 10px;white-space:nowrap;">'+btn('wsArch_'+w.id,'Archive','ghost')+btn('wsDel_'+w.id,'Delete','danger')+'</td></tr>'; }).join('');
-    c.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;"><div style="font-family:Montserrat,sans-serif;font-size:18px;font-weight:800;color:#004369;">Workshops &amp; Assessments</div><div>'+btn('wsNew','+ New workshop')+btn('wsNewA','+ New assessment')+'</div></div>'+
+    var __wk=(WS.kind==='assessment')?'assessment':'workshop'; var __isA=(__wk==='assessment');
+    var flist=WS.list.filter(function(w){ return ((w.engagement_kind==='assessment')?'assessment':'workshop')===__wk; });
+    var rows=flist.map(function(w){ return '<tr style="border-top:1px solid #dbe3e6;"><td style="padding:11px 10px;font-weight:700;color:#004369;cursor:pointer;" onclick="wsOpen(\''+w.id+'\')">'+esc(w.title)+'</td><td style="padding:11px 10px;color:#5a6b76;cursor:pointer;" onclick="wsOpen(\''+w.id+'\')">'+esc(w.client_org_name||'—')+'</td><td style="padding:11px 10px;color:#5a6b76;cursor:pointer;" onclick="wsOpen(\''+w.id+'\')">'+fmtDate(w.debrief_date||w.workshop_date)+'</td><td style="padding:11px 10px;cursor:pointer;" onclick="wsOpen(\''+w.id+'\')"><span style="font-size:11px;font-weight:700;background:#E8F7F7;color:#004369;padding:2px 9px;border-radius:20px;">'+esc(w.status||'setup')+'</span>'+(w.engagement_kind==='assessment'?' <span style="font-size:11px;font-weight:700;background:#F7F4EE;color:#004369;border:1px solid #dbe3e6;padding:2px 9px;border-radius:20px;">Assessment</span>':'')+(w.is_demo?' <span style="font-size:11px;font-weight:700;background:#fde8ec;color:#DB1F48;padding:2px 9px;border-radius:20px;">DEMO</span>':'')+'</td><td style="padding:8px 10px;white-space:nowrap;">'+btn('wsArch_'+w.id,'Archive','ghost')+'<button id="wsDel_'+w.id+'" title="Delete permanently" style="padding:6px 12px;margin-left:6px;border:1px solid #f3b4c0;background:#fff;border-radius:6px;font-size:12px;cursor:pointer;color:#DB1F48;">Delete</button>'+'</td></tr>'; }).join('');
+    c.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;"><div style="font-family:Montserrat,sans-serif;font-size:18px;font-weight:800;color:#004369;">'+(__isA?'Assessments':'Workshops')+'</div><div>'+(__isA?btn('wsNewA','+ New assessment'):btn('wsNew','+ New workshop'))+'</div></div>'+
       '<div style="background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);padding:12px 14px;margin-bottom:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;"><label style="font-size:12px;font-weight:700;color:#5a6b76;">Sponsor "Schedule a call" link</label><input id="wsCtaUrl" type="text" placeholder="https://…booking link" style="flex:1;min-width:240px;padding:8px 10px;border:1.5px solid #dbe3e6;border-radius:7px;font-size:13px;">'+btn('wsCtaSave','Save link','ghost')+'<span id="wsCtaOut" style="font-size:12px;color:#5a6b76;"></span></div>'+
-      '<div style="background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);overflow:hidden;">'+(WS.list.length?'<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#F7F4EE;text-align:left;color:#5a6b76;font-size:11px;text-transform:uppercase;letter-spacing:.4px;"><th style="padding:10px;">Title</th><th style="padding:10px;">Org</th><th style="padding:10px;">Date</th><th style="padding:10px;">Status</th><th style="padding:10px;"></th></tr></thead><tbody>'+rows+'</tbody></table>':'<div style="padding:30px;text-align:center;color:#5a6b76;">No active engagements. Click <strong>New workshop</strong> or <strong>New assessment</strong>.</div>')+'</div>';
-    document.getElementById('wsNew').onclick=function(){ wsNewForm('workshop'); };
+      '<div style="background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);overflow:hidden;">'+(flist.length?'<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#F7F4EE;text-align:left;color:#5a6b76;font-size:11px;text-transform:uppercase;letter-spacing:.4px;"><th style="padding:10px;">Title</th><th style="padding:10px;">Org</th><th style="padding:10px;">Date</th><th style="padding:10px;">Status</th><th style="padding:10px;"></th></tr></thead><tbody>'+rows+'</tbody></table>':'<div style="padding:30px;text-align:center;color:#5a6b76;">No active '+(__isA?'assessments':'workshops')+' yet. Click <strong>'+(__isA?'+ New assessment':'+ New workshop')+'</strong>.</div>')+'</div>';
+    var nw=document.getElementById('wsNew'); if(nw) nw.onclick=function(){ wsNewForm('workshop'); };
     var na=document.getElementById('wsNewA'); if(na) na.onclick=function(){ wsNewForm('assessment'); };
     (async function(){ try{ var r=await coachData({action:'get-setting',key:'workshop_cta_url'}); var el2=document.getElementById('wsCtaUrl'); if(el2&&r&&r.value) el2.value=r.value; }catch(e){} })();
     document.getElementById('wsCtaSave').onclick=async function(){ var out=document.getElementById('wsCtaOut'); out.textContent='Saving…'; try{ await coachData({action:'set-setting',key:'workshop_cta_url',value:document.getElementById('wsCtaUrl').value.trim()}); out.textContent='Saved.'; }catch(e){ out.textContent=e.message; } };
-    WS.list.forEach(function(w){
+    flist.forEach(function(w){
       var ab=document.getElementById('wsArch_'+w.id); if(ab) ab.onclick=function(e){ e.stopPropagation(); wsArchive(w.id,w.title); };
       var db=document.getElementById('wsDel_'+w.id); if(db) db.onclick=function(e){ e.stopPropagation(); wsDeleteEngagement(w.id,w.title); };
     });
+  };
+  window.wsSetKind=function(k){
+    WS.kind=(k==='assessment')?'assessment':'workshop';
+    var a=document.getElementById('sub-ws-workshops'), b=document.getElementById('sub-ws-assessments');
+    if(a) a.classList.toggle('active', WS.kind==='workshop');
+    if(b) b.classList.toggle('active', WS.kind==='assessment');
+    wsRender();
   };
   async function wsArchive(id,title){ if(!confirm('Archive "'+title+'"? It will no longer appear in the active list.')) return; try{ await wsData('archive-engagement',{workshop_id:id}); wsRender(); }catch(e){ toast(e.message); } }
   async function wsDeleteEngagement(id,title){ if(!confirm('Permanently delete "'+title+'" and all its data? This cannot be undone.')) return; if(!confirm('Are you absolutely sure? This is permanent.')) return; try{ await wsData('delete-engagement',{workshop_id:id}); wsRender(); }catch(e){ toast(e.message); } }
