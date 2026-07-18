@@ -525,9 +525,10 @@
       .profile-sidenav { display: none; }
       .profile-nav-select { display: block; }
       .profile-content { min-height: 0; min-width: 0; padding: 18px 16px; overflow-wrap: anywhere; }
-      /* The wide check-in history table scrolls inside its own box instead of pushing
-         the page width out. Any other table in the profile gets the same treatment. */
-      .profile-content table { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      /* The wide check-in history table keeps a readable width and SCROLLS sideways
+         inside its wrapper, instead of crushing every column to fit the phone. */
+      .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .history-table { min-width: 560px; }
     }
 
     /* ── DASHBOARD SECTION ── */
@@ -2510,7 +2511,7 @@ function renderClientCard(client, checkins) {
     </div>` : `<p style="color:var(--gray-600);font-size:13px;font-style:italic;">Client has not yet submitted their plan (Form B).</p>`;
 
   const historyRows = checkins.length > 0 ? `
-    <table class="history-table">
+    <div class="table-scroll"><table class="history-table">
       <thead><tr><th>Week</th><th>Date</th><th>Metric</th><th>Follow-Through</th><th>Action</th><th>Notes</th><th>Session</th></tr></thead>
       <tbody>
         ${[...checkins].reverse().map(c => {
@@ -2529,7 +2530,7 @@ function renderClientCard(client, checkins) {
           </tr>`;
         }).join('')}
       </tbody>
-    </table>` : `<p style="color:var(--gray-600);font-size:13px;font-style:italic;">No check-ins submitted yet.</p>`;
+    </table></div>` : `<p style="color:var(--gray-600);font-size:13px;font-style:italic;">No check-ins submitted yet.</p>`;
 
   return `
     <div class="client-card ${pillarClass} ${!client.is_active ? 'inactive' : ''}" id="card-${client.id}" style="${cleanupMode && cleanupSelected.has(client.id) ? 'outline:2px solid var(--teal);' : ''}">
@@ -2725,7 +2726,7 @@ function renderProfileSection(section, client, checkins) {
     </div>` : `<p style="color:var(--gray-600);font-size:13px;font-style:italic;">Client has not yet submitted their plan (Form B).</p>`;
 
   const historyRows = checkins.length > 0 ? `
-    <table class="history-table">
+    <div class="table-scroll"><table class="history-table">
       <thead><tr><th>Week</th><th>Date</th><th>Metric</th><th>Follow-Through</th><th>Action</th><th>Notes</th><th>Session</th></tr></thead>
       <tbody>
         ${[...checkins].reverse().map(c => {
@@ -2744,7 +2745,7 @@ function renderProfileSection(section, client, checkins) {
           </tr>`;
         }).join('')}
       </tbody>
-    </table>` : `<p style="color:var(--gray-600);font-size:13px;font-style:italic;">No check-ins submitted yet.</p>`;
+    </table></div>` : `<p style="color:var(--gray-600);font-size:13px;font-style:italic;">No check-ins submitted yet.</p>`;
 
   const portalURL = `${PORTAL_BASE_URL}?token=${client.token}`;
 
