@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="index,follow" />
+  <title>SMS / Text Messaging Program — GPS Leadership Solutions</title>
+  <style>
+    :root{
+      --navy:#004369; --teal:#01949A; --red:#DB1F48; --text:#1a2733;
+      --muted:#5a6b76; --border:#dbe3e6; --bg:#f5f7f8; --surface:#ffffff; --sand:#F7F4EE;
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;font-family:'Open Sans',Segoe UI,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;}
+    .top{background:var(--navy);color:#fff;padding:20px 22px;}
+    .top .wrap{max-width:760px;margin:0 auto;display:flex;align-items:center;gap:12px;}
+    .top .logo{font-family:Montserrat,Arial,sans-serif;font-weight:800;font-size:18px;letter-spacing:.3px;}
+    .bar{height:5px;background:linear-gradient(to right,var(--navy),var(--teal),var(--red));}
+    .wrap{max-width:760px;margin:0 auto;padding:0 22px;}
+    main{padding:34px 0 60px;}
+    h1{font-family:Montserrat,Arial,sans-serif;color:var(--navy);font-size:26px;margin:0 0 6px;}
+    h2{font-family:Montserrat,Arial,sans-serif;color:var(--navy);font-size:17px;margin:30px 0 10px;}
+    .lede{color:var(--muted);font-size:15px;margin:0 0 8px;}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:22px 24px;margin:18px 0;box-shadow:0 1px 4px rgba(0,0,0,.05);}
+    ul{padding-left:20px;margin:8px 0;}
+    li{margin:6px 0;}
+    a{color:var(--teal);font-weight:600;}
+    /* Faithful reproduction of the in-portal opt-in control */
+    .optin{background:var(--sand);border:1px solid var(--border);border-radius:10px;padding:18px 20px;display:flex;gap:12px;align-items:flex-start;}
+    .optin input{width:20px;height:20px;margin-top:3px;flex-shrink:0;accent-color:var(--navy);}
+    .optin .lbl strong{display:block;color:var(--navy);font-size:15px;margin-bottom:4px;}
+    .optin .lbl{font-size:13.5px;color:var(--text);}
+    .note{font-size:13px;color:var(--muted);margin-top:10px;}
+    .kv{font-size:14px;}
+    .kv b{color:var(--navy);}
+    footer{border-top:1px solid var(--border);padding:22px;color:var(--muted);font-size:13px;text-align:center;background:var(--surface);}
+    .steps{counter-reset:s;list-style:none;padding-left:0;}
+    .steps li{counter-increment:s;position:relative;padding-left:34px;margin:10px 0;}
+    .steps li::before{content:counter(s);position:absolute;left:0;top:0;width:24px;height:24px;background:var(--teal);color:#fff;border-radius:50%;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;}
+  </style>
+</head>
+<body>
+  <div class="top"><div class="wrap"><span class="logo">GPS Leadership Solutions</span></div></div>
+  <div class="bar"></div>
+
+  <main>
+    <div class="wrap">
+      <h1>SMS / Text Messaging Program</h1>
+      <p class="lede">Program name: <b>GPS Leadership Solutions Coaching Reminders</b> — a transactional, account-related text program for enrolled coaching clients.</p>
+
+      <div class="card">
+        <h2 style="margin-top:0;">About us &amp; this program</h2>
+        <p>GPS Leadership Solutions LLC provides executive leadership coaching to leaders of operations-heavy, multi-location businesses. Clients who are actively enrolled in a coaching engagement can choose to receive text-message check-in reminders that support their 90-day coaching plan.</p>
+        <p class="kv"><b>Message types:</b> weekly coaching check-in reminders, milestone reminders, and related account notifications tied to the client's coaching program. This is not a marketing program.</p>
+      </div>
+
+      <div class="card">
+        <h2 style="margin-top:0;">How clients opt in (consent flow)</h2>
+        <p>Consent is <b>opt-in and voluntary</b>. Consent to receive text messages is <b>not a condition of purchasing</b> any product or service. A client provides consent inside their secure GPS Leadership client portal:</p>
+        <ol class="steps">
+          <li>The client logs in to their coaching portal and opens <b>Profile → Preferences</b>.</li>
+          <li>They enter their mobile phone number.</li>
+          <li>They check the SMS consent box — <b>unchecked by default</b> — shown below, then save. Active consent is required; nothing is pre-selected.</li>
+        </ol>
+
+        <p style="font-weight:700;color:var(--navy);margin:18px 0 8px;">The exact opt-in checkbox and consent language clients see:</p>
+        <div class="optin">
+          <input type="checkbox" disabled aria-hidden="true" />
+          <span class="lbl">
+            <strong>Text me my coaching check-in reminders</strong>
+            I agree to receive recurring SMS check-in reminders from GPS Leadership Solutions at the mobile number above. Message frequency varies. Message and data rates may apply. Reply STOP to cancel, HELP for help. Consent is not a condition of purchase. See our <a href="https://gpsleadership.org/gps-privacy-policy/" target="_blank" rel="noopener">Privacy Policy</a> and <a href="https://gpsleadership.org/terms-conditions/" target="_blank" rel="noopener">SMS Terms</a>.
+          </span>
+        </div>
+        <p class="note">This control appears in the client's private coaching portal (behind their individual login), which is why this public page reproduces it exactly so it can be reviewed. The checkbox is never pre-checked; the client must actively check it and save.</p>
+      </div>
+
+      <div class="card">
+        <h2 style="margin-top:0;">Message frequency, rates, and opt-out</h2>
+        <ul>
+          <li><b>Message frequency</b> varies based on the client's coaching activity.</li>
+          <li><b>Message and data rates may apply.</b> Your mobile carrier's standard rates apply. GPS Leadership Solutions does not charge for the messages.</li>
+          <li><b>Opt out at any time</b> by replying <b>STOP</b> to any message. You will receive one confirmation message and then no further messages unless you opt in again.</li>
+          <li>For help, reply <b>HELP</b> to any message, or email <a href="mailto:team@gpsleadership.org">team@gpsleadership.org</a>.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2 style="margin-top:0;">Privacy</h2>
+        <p>We do <b>not</b> sell, rent, or share your mobile phone number, SMS opt-in consent, or the contents of your text messages with any third parties or affiliates for their marketing or promotional purposes. Mobile information is used only to operate our own SMS program and is shared solely with the service providers that help deliver those messages on our behalf.</p>
+        <p class="kv">Full details: <a href="https://gpsleadership.org/gps-privacy-policy/" target="_blank" rel="noopener">Privacy Policy</a> · <a href="https://gpsleadership.org/terms-conditions/" target="_blank" rel="noopener">SMS Terms &amp; Conditions</a></p>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    GPS Leadership Solutions LLC · 3618 Felmore Ct, Woodbridge, VA 22193 · <a href="mailto:team@gpsleadership.org">team@gpsleadership.org</a>
+  </footer>
+</body>
+</html>

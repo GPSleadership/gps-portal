@@ -55,6 +55,10 @@
     {
       "source": "/recover",
       "destination": "/recover.html"
+    },
+    {
+      "source": "/sms",
+      "destination": "/sms.html"
     }
   ],
   "crons": [
