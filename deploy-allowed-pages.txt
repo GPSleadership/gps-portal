@@ -23,6 +23,7 @@ omb-interpersonal-communication-results.html
 omb-message-clarity-results.html
 omb-speaking-confidently-results.html
 recover.html
+sms.html
 sponsor-hub.html
 sponsor.html
 survey.html
