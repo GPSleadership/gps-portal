@@ -424,6 +424,32 @@ export default async function handler(req, res) {
         if (updates.plan_submitted_at) updates.allow_plan_edit = false;
         const r = await sb(`/rest/v1/clients?id=eq.${clientId}`, 'PATCH', updates, { Prefer: 'return=minimal' });
         if (!r.ok) { const detail = await r.json().catch(() => ({})); return res.status(500).json({ error: 'Update failed', detail }); }
+
+        // One-time SMS opt-in confirmation. When a client turns text reminders ON
+        // (in the plan wizard's final step or their profile) and we have a valid
+        // number, send the "you're now subscribed" message exactly once. Deduped via
+        // sms_welcome_sent_at (server-only). No-ops cleanly until the Twilio env vars +
+        // campaign approval are live (smsConfigured() === false). Never fails the save.
+        if (updates.sms_opt_in === true) {
+          try {
+            const chk = await sb(`/rest/v1/clients?id=eq.${clientId}&select=phone,sms_opt_in,sms_welcome_sent_at&limit=1`);
+            const row = (await chk.json().catch(() => []))[0] || {};
+            if (row.sms_opt_in && row.phone && !row.sms_welcome_sent_at) {
+              const { sendSms, smsConfigured } = require('./twilio-sms');
+              if (smsConfigured()) {
+                const sent = await sendSms({
+                  to: row.phone,
+                  body: "GPS Leadership Solutions: You're now subscribed to coaching check-in reminders. Message frequency varies. Msg & data rates may apply. Reply HELP for help, STOP to cancel.",
+                });
+                if (sent.ok) {
+                  await sb(`/rest/v1/clients?id=eq.${clientId}`, 'PATCH',
+                    { sms_welcome_sent_at: new Date().toISOString() }, { Prefer: 'return=minimal' });
+                }
+              }
+            }
+          } catch (_) { /* non-blocking: an SMS hiccup never breaks the profile/plan save */ }
+        }
+
         return res.status(200).json({ ok: true });
       }
 

@@ -487,3 +487,12 @@ _These open items lived only in the old backlog; pulled in here so nothing is lo
   columns (don't trust numbering), "Self" row identifies the leader, map the 1–5 items + 1–10 overall
   impact, capture START/STOP/CONTINUE verbatims. Store and chart, clearly labeled as a prior/different
   instrument.
+
+### P1 — SMS opt-in in the plan wizard (added 2026-07-19, Alex — during Twilio A2P go-live)
+| ID | Item | Effort | Status | Evidence |
+|---|---|---|---|---|
+| **P1-SMS1** | **Text-reminder opt-in as the final step of the 90-Day Plan wizard.** Clients weren't going to detour into their profile to add a phone number, so the opt-in now lives where they already are — the last block on the wizard's Review step (Step 7): "One last thing — want text reminders?" checkbox + mobile field, verbatim consent language. Feeds the existing `update-client` save (`phone`, `sms_opt_in`). Server (`portal-data.js update-client`) fires the one-time "you're now subscribed" confirmation SMS when `sms_opt_in` flips ON with a valid number — deduped via new `clients.sms_welcome_sent_at` (migration v106, applied to prod), gated on `smsConfigured()` so it no-ops until Twilio env vars + campaign approval are live. Compliant with the registered web-form opt-in (self-serve consent, not coach-entered). node --check + JS sweep clean. **Post-deploy:** test on preview with a TEST client, confirm no send until env/campaign live; after campaign approval, confirm one confirmation text fires and never re-fires. | M | ⏳ Built 2026-07-19 — on branch, awaiting preview test + merge | client.html (wizS7 + wizValidate + wizLockIn), api/portal-data.js, supabase-migration-v106 |
+
+**Dependency:** P1-SMS1's confirmation send + all reminder SMS stay dormant until **task #102** (Twilio API key + Vercel env vars: TWILIO_ACCOUNT_SID / API_KEY_SID / API_KEY_SECRET / MESSAGING_SERVICE_SID) is done AND the A2P campaign (submitted 2026-07-19, in review) is approved.
+
+**Eligibility gate (added same session):** the phone prompt shows ONLY to paid relationships — active coaching clients (`in_coaching_program / is_active_coaching / coaching_sessions_enabled`) or paid diagnostic clients (has a diagnostic AND not `is_workshop_participant` AND `account_type !== "trial"`). Free workshop + trial guests never see it and can never carry an opt-in through the wizard (fails closed). Gated in `initWizard` (`wizPlan.smsEligible`), `wizS7`, `wizValidate(7)`, and `wizLockIn`.

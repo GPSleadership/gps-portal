@@ -3900,6 +3900,11 @@ function initWizard(client) {
     stakeholders: (wizIsEdit ? [] : (p?.suggested?.stakeholders || []).map(s => ({ ...s, fromDiag: true }))),
     reward30:   wizIsEdit ? (client.reward_30_day || '') : '',
     reward90:   wizIsEdit ? (client.reward_90_day || '') : '',
+    // Text-reminder opt-in (final Review step). Prefill from the client's saved
+    // profile so re-editing a plan reflects their current choice. The confirmation
+    // SMS fires server-side only when this flips ON with a valid number (deduped).
+    phone:      client.phone || '',
+    smsOptIn:   !!client.sms_opt_in,
     // Default to today; never prefill a past date (a stale stored date confuses on re-edit).
     startDate:  (client.plan_start_date && client.plan_start_date >= today) ? client.plan_start_date : today,
     timezone:   client.timezone || 'America/New_York',
@@ -3908,6 +3913,16 @@ function initWizard(client) {
     weakest,
     keyTheme:   p?.key_theme || '',
   };
+
+  // Text-reminder eligibility: only people who PAID for an ongoing relationship get
+  // the phone prompt — active coaching clients, or paid diagnostic clients. Free
+  // workshop guests and trial participants never see it (we didn't earn the right to
+  // text them). Fail closed: anyone we can't positively confirm is excluded, and an
+  // ineligible client can never carry an opt-in through the wizard.
+  wizPlan.smsEligible =
+       !!(client.in_coaching_program || client.is_active_coaching || client.coaching_sessions_enabled)
+    || (!!p && !client.is_workshop_participant && client.account_type !== 'trial');
+  if (!wizPlan.smsEligible) wizPlan.smsOptIn = false;
 
   // Build shell for wizard
   document.getElementById('mainContent').innerHTML = `
@@ -4591,12 +4606,54 @@ function wizS7() {
     </div>
     <div style="background:var(--light-teal);border:1px solid #a7f3d0;border-radius:8px;padding:13px 15px;font-size:13px;color:#1a1a1a;margin-bottom:16px;line-height:1.6;">
       <strong>After you lock in:</strong> Your plan is saved. Alex gets notified. At day 30 and day 90, your stakeholders receive a short 2-question survey automatically.
-    </div>`;
+    </div>
+    ${wizPlan.smsEligible ? `
+    <div class="card" style="border-top:4px solid var(--navy);">
+      <div class="wiz-step-badge">One last thing</div>
+      <div class="card-title">Want text reminders?</div>
+      <div class="card-subtitle">Accountability is easier when the nudge finds you. Turn this on and we'll text you occasional check-in reminders tied to this plan — the kind that keep week 8 from quietly slipping.</div>
+      <label style="display:flex;gap:11px;align-items:flex-start;background:var(--sand,#f7f4ee);border:1px solid var(--gray-200,#e5e7eb);border-radius:10px;padding:14px 15px;cursor:pointer;">
+        <input type="checkbox" id="wizSmsOptIn" ${wizPlan.smsOptIn ? 'checked' : ''} onchange="wizSmsToggle()" style="width:20px;height:20px;margin-top:2px;flex-shrink:0;accent-color:var(--navy);">
+        <span style="font-size:13.5px;color:#1a1a1a;line-height:1.55;">
+          <strong style="display:block;color:var(--navy);margin-bottom:3px;">Yes, text me my coaching check-in reminders</strong>
+          I agree to receive recurring SMS check-in reminders from GPS Leadership Solutions at the mobile number below. Message frequency varies. Message and data rates may apply. Reply STOP to cancel, HELP for help. Consent is not a condition of anything — you can skip this and nothing changes. See our <a href="https://gpsleadership.org/gps-privacy-policy/" target="_blank" rel="noopener">Privacy Policy</a> and <a href="https://gpsleadership.org/terms-conditions/" target="_blank" rel="noopener">SMS Terms</a>.
+        </span>
+      </label>
+      <div id="wizSmsPhoneWrap" style="margin-top:12px;${wizPlan.smsOptIn ? '' : 'display:none;'}">
+        <label class="wiz-label" for="wizSmsPhone" style="display:block;font-size:13px;font-weight:600;color:var(--gray-700,#374151);margin-bottom:5px;">Mobile number</label>
+        <input type="tel" id="wizSmsPhone" inputmode="tel" autocomplete="tel" placeholder="(555) 123-4567" value="${wizEsc(wizPlan.phone || '')}" oninput="wizPlan.phone=this.value" style="width:100%;max-width:280px;padding:11px 13px;border:1px solid var(--gray-300,#d1d5db);border-radius:8px;font-size:15px;">
+        <div style="font-size:12px;color:var(--gray-500,#6b7280);margin-top:6px;">U.S. mobile number. Standard message &amp; data rates may apply.</div>
+      </div>
+    </div>` : ''}`;
+}
+
+// Show/hide the phone field as the text-reminder box is toggled on the Review step.
+function wizSmsToggle() {
+  const on   = !!document.getElementById('wizSmsOptIn')?.checked;
+  wizPlan.smsOptIn = on;
+  const wrap = document.getElementById('wizSmsPhoneWrap');
+  if (wrap) wrap.style.display = on ? '' : 'none';
+  if (on) { const el = document.getElementById('wizSmsPhone'); if (el) el.focus(); }
 }
 
 // ── Validate & save per step ───────────────────────────────────────────────
 function wizValidate(step) {
   wizClearError();
+  if (step === 7) {
+    // Final Review — capture the text-reminder choice. If they opted in, a valid
+    // US mobile number is required; if not, we don't touch their saved number.
+    if (!wizPlan.smsEligible) { wizPlan.smsOptIn = false; return true; } // no SMS prompt for unpaid guests
+    const optEl = document.getElementById('wizSmsOptIn');
+    const phEl  = document.getElementById('wizSmsPhone');
+    wizPlan.smsOptIn = !!(optEl && optEl.checked);
+    if (phEl) wizPlan.phone = phEl.value;
+    if (wizPlan.smsOptIn) {
+      const digits = String(wizPlan.phone || '').replace(/\D/g, '');
+      const ok = digits.length === 10 || (digits.length === 11 && digits[0] === '1');
+      if (!ok) { wizShowError('Enter a valid U.S. mobile number, or uncheck text reminders.'); return false; }
+    }
+    return true;
+  }
   if (step === 0) {
     const tzEl = document.getElementById('wizTimezone');
     if (tzEl) wizPlan.timezone = tzEl.value;
@@ -4778,6 +4835,13 @@ async function wizLockIn() {
     plan_submitted_at: new Date().toISOString(),
     allow_plan_edit:   false,
     timezone:          p.timezone,
+
+    // Text reminders (final Review step) — ONLY for paid clients (coaching or paid
+    // diagnostic). For unpaid guests we don't touch sms_opt_in/phone at all. When
+    // eligible, only write the phone if they gave one, so opting out never wipes a
+    // number saved elsewhere. Server sends the one-time opt-in confirmation when
+    // sms_opt_in flips ON with a valid number.
+    ...(p.smsEligible ? { sms_opt_in: !!p.smsOptIn, ...(p.smsOptIn && p.phone ? { phone: p.phone } : {}) } : {}),
 
     behavior_1:        p.behavior1,
     behavior_2:        p.behavior2 || null,
