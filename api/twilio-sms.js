@@ -17,10 +17,15 @@ const API_KEY_SID    = process.env.TWILIO_API_KEY_SID;
 const API_KEY_SECRET = process.env.TWILIO_API_KEY_SECRET;
 const MSG_SVC_SID    = process.env.TWILIO_MESSAGING_SERVICE_SID;
 
-// True only when every credential is present. Callers use this to no-op cleanly
-// (for example on preview before the env vars are set, or before campaign approval).
+// True only when every credential is present AND the master go-live switch is on.
+// SMS_LIVE must equal 'true' — it is the single switch Alex flips in Vercel only
+// AFTER the A2P campaign is APPROVED. Until then every send path (opt-in confirmation,
+// weekly reminders, ad-hoc coach texts) no-ops cleanly, so nothing is submitted to
+// Twilio to fail against an unregistered campaign (and no dedupe stamps get burned on
+// a send that never really went out). Callers use this to no-op safely.
 function smsConfigured() {
-  return !!(ACCOUNT_SID && API_KEY_SID && API_KEY_SECRET && MSG_SVC_SID);
+  return !!(ACCOUNT_SID && API_KEY_SID && API_KEY_SECRET && MSG_SVC_SID)
+      && process.env.SMS_LIVE === 'true';
 }
 
 // Best-effort E.164 formatting for US/CA numbers. Returns null if we can't be
