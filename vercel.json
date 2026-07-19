@@ -109,6 +109,10 @@
     {
       "path": "/api/synthetic-check",
       "schedule": "15 8 * * *"
+    },
+    {
+      "path": "/api/sponsor-sequence",
+      "schedule": "0 13 * * *"
     }
   ],
   "headers": [

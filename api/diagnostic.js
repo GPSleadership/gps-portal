@@ -4800,12 +4800,22 @@ async function handleGenerateEmailDrafts(req, res) {
       'E7':  { days: 10, hour: 14 },
     };
 
-    // ── 6. Delete existing drafts ────────────────────────────────────────────
-    await sb('/rest/v1/email_drafts?diagnostic_id=eq.' + encodeURIComponent(diagnostic_id), 'DELETE');
+    // ── 6. Delete existing AI-sequence drafts only ───────────────────────────
+    // Scoped to the E-keys this handler manages AND not-yet-sent, so it never wipes
+    // the templated auto emails (report_ready_auto / debrief_followup_auto), the
+    // consolidated sponsor roster, or any already-sent history.
+    await sb('/rest/v1/email_drafts?diagnostic_id=eq.' + encodeURIComponent(diagnostic_id) +
+             '&email_key=in.(E1,E1b,E2,E3,E4,E5,E6,E7)&status=neq.sent', 'DELETE');
 
     // ── 7. Build and insert new rows ─────────────────────────────────────────
+    // Leader pre/post (E1/E1b) are now templated auto emails (handleScheduleDebriefEmails);
+    // sponsor pre-debrief (E2) is the consolidated roster (api/sponsor-sequence.js). Only the
+    // coach-controlled offer sequence (E3-E7) is stored from the AI draft now.
     var now = new Date().toISOString();
-    var rows = parsed.emails.map(function(e) {
+    var OFFER_KEYS = ['E3', 'E4', 'E5', 'E6', 'E7'];
+    var rows = parsed.emails.filter(function(e) {
+      return OFFER_KEYS.indexOf(String(e.email_key || '').trim().toUpperCase()) >= 0;
+    }).map(function(e) {
       var key = String(e.email_key || '').trim().toUpperCase().replace('1B', '1b').replace(/^E1B$/, 'E1b');
       var isLeader = ['E1', 'E1b'].includes(key);
       var off = OFFSETS[key];
@@ -5008,48 +5018,28 @@ async function handleScheduleDebriefEmails(req, res) {
         status: 'scheduled',
       });
       created.push('report_ready_auto');
-    }
 
-    // ── Sponsor emails (per sponsor_teams row with a sponsor_debrief_date) ──
-    const stR = await sb(`/rest/v1/sponsor_teams?diagnostic_id=eq.${enc(diagnostic_id)}&sponsor_debrief_date=not.is.null&select=sponsor_id,sponsor_debrief_date`);
-    const stRows = await stR.json();
-    for (const st of (Array.isArray(stRows) ? stRows : [])) {
-      if (!st.sponsor_debrief_date) continue;
-      const spR = await sb(`/rest/v1/sponsors?id=eq.${enc(st.sponsor_id)}&select=id,name,email,sponsor_token&limit=1`);
-      const sp = (await spR.json())[0];
-      if (!sp || !sp.email) continue;
-
-      const spts = st.sponsor_debrief_date.split('-');
-      const drLink = `${PORTAL_BASE}/decision-room.html?token=${enc(sp.sponsor_token)}`;
-
-      // Review request: noon ET day before their meeting
-      const reviewAt = new Date(Date.UTC(+spts[0], +spts[1]-1, +spts[2]-1, 16, 0, 0)).toISOString();
+      // ── Leader post-debrief follow-up (5pm ET = 21:00 UTC on the debrief day) ──
+      const followUpAt = new Date(Date.UTC(+pts[0], +pts[1]-1, +pts[2], 21, 0, 0)).toISOString();
       await upsertDraft({
-        email_key: `sponsor_review_auto_${sp.id}`,
+        email_key: 'debrief_followup_auto',
         sequence: 'auto',
-        subject: `Please review ${diag.client_name}'s 90-day plan before our meeting`,
-        body: `Hi ${sp.name},\n\nJust a heads-up before tomorrow's meeting. ${diag.client_name}'s 90-day development plan is ready for your review in the Decision Room:\n\n${drLink}\n\nYou can approve the plan, back specific recommendations, or request any changes — all before we sit down.\n\nSee you tomorrow.`,
-        to_name: sp.name,
-        to_email: sp.email,
-        scheduled_for: reviewAt,
+        subject: `Thank you for today, ${firstName}`,
+        body: `Hi ${firstName},\n\nThank you for the conversation today. We covered a lot, and the themes we landed on are the right ones to build from.\n\nThe next step is the 90-day sprint: this is how you take what came out of the diagnostic and turn it into a concrete development plan with real coaching support behind it. I will be in touch with the details.\n\nIf anything came up after we talked that you want to add, just reply here.`,
+        to_name: client.name || '',
+        to_email: client.email,
+        scheduled_for: followUpAt,
         status: 'scheduled',
       });
-      created.push(`sponsor_review_auto_${sp.id}`);
-
-      // Day-of reminder: 8am ET = 12:00 UTC
-      const dayOfAt = new Date(Date.UTC(+spts[0], +spts[1]-1, +spts[2], 12, 0, 0)).toISOString();
-      await upsertDraft({
-        email_key: `sponsor_day_of_auto_${sp.id}`,
-        sequence: 'auto',
-        subject: `Today: ${diag.client_name}'s leadership development review`,
-        body: `Hi ${sp.name},\n\nJust a quick reminder — we're meeting today to discuss ${diag.client_name}'s development plan.\n\n${drLink}\n\nLooking forward to it.`,
-        to_name: sp.name,
-        to_email: sp.email,
-        scheduled_for: dayOfAt,
-        status: 'scheduled',
-      });
-      created.push(`sponsor_day_of_auto_${sp.id}`);
+      created.push('debrief_followup_auto');
     }
+
+    // ── Sponsor pre-debrief is now the CONSOLIDATED roster ────────────────────
+    // Superseded by api/sponsor-sequence.js, which sends ONE roster email per sponsor
+    // (all their leaders + debrief dates) instead of per-leader sponsor emails. The old
+    // per-diagnostic sponsor_review_auto / sponsor_day_of_auto block is removed here to
+    // prevent duplicate sponsor sends. (It also queried a non-existent
+    // sponsor_teams.diagnostic_id column, so it had been silently doing nothing anyway.)
 
     return res.status(200).json({ ok: true, created });
   } catch (e) {
