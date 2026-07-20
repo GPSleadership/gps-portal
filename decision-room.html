@@ -124,6 +124,12 @@
   .ssc-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; } @media (max-width:680px){ .ssc-grid { grid-template-columns:1fr; } } .ssc-col { border:1px solid var(--gray-200); border-radius:8px; padding:13px 15px; } .ssc-head { font-family:'Montserrat',sans-serif; font-weight:800; font-size:12px; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:9px; } .ssc-start { color:var(--proactivity); } .ssc-stop { color:var(--red); } .ssc-continue { color:var(--teal); }
   .ii-note { font-size:12px; color:var(--gray-600); line-height:1.5; margin-bottom:12px; } .ii-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:10px; } @media (max-width:680px){ .ii-row { grid-template-columns:1fr; } } .ii-cell { font-size:13px; line-height:1.5; border-radius:8px; padding:11px 13px; } .ii-intent { background:var(--light-teal); } .ii-impact { background:#fff6e8; } .ii-tag { display:block; font-family:'Montserrat',sans-serif; font-size:9.5px; font-weight:800; text-transform:uppercase; letter-spacing:0.4px; color:var(--teal); margin-bottom:4px; } .ii-tag-impact { color:#b9770e; }
   .conf-banner { background:#eef2f7; border:1px solid #d4dde8; border-left:4px solid var(--navy); border-radius:8px; padding:12px 15px; margin-bottom:16px; font-size:12.5px; line-height:1.5; color:var(--navy-dark); } .conf-note { font-size:12.5px; line-height:1.55; color:var(--navy-dark); } .lim-move { font-size:13.5px; font-weight:600; color:var(--navy-dark); margin-bottom:11px; }
+  .g9-info { position:relative; display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:50%; border:1.2px solid #9aa5ad; color:var(--gray-600); font-size:10px; font-weight:700; font-style:italic; font-family:Georgia,'Times New Roman',serif; cursor:help; margin-left:8px; vertical-align:middle; }
+  .g9-info .g9-info-pop { display:none; position:absolute; top:23px; left:0; z-index:60; width:300px; background:#fff; border:1px solid var(--gray-200); border-radius:9px; box-shadow:0 8px 28px rgba(0,0,0,.18); padding:14px 16px; font-size:12px; line-height:1.5; color:var(--navy-dark); font-weight:400; font-style:normal; text-transform:none; letter-spacing:0; text-align:left; }
+  .g9-info:hover .g9-info-pop, .g9-info:focus .g9-info-pop { display:block; }
+  .g9-info-pop b { color:var(--navy); } .g9-info-pop em { color:var(--teal); font-style:normal; font-weight:700; }
+  @media (max-width:720px){ .g9-info .g9-info-pop { left:auto; right:0; width:270px; } }
+  .g9-badge { position:absolute; top:-3px; right:-3px; width:14px; height:14px; border-radius:50%; background:#e8a13a; color:#fff; font-size:9px; font-weight:800; display:flex; align-items:center; justify-content:center; border:1.5px solid #fff; font-family:'Montserrat',sans-serif; }
   .gate-card { background:#fff; border-radius:10px; box-shadow:0 2px 12px rgba(0,0,0,.07); border-top:4px solid var(--red); padding:30px 28px; max-width:680px; margin:8px auto 0; } .gate-lock { font-family:'Montserrat',sans-serif; font-weight:800; font-size:11px; text-transform:uppercase; letter-spacing:0.6px; color:var(--red); } .gate-title { font-family:'Montserrat',sans-serif; font-weight:800; font-size:22px; color:var(--navy); margin:6px 0 8px; } .gate-sub { font-size:13.5px; line-height:1.6; color:var(--gray-600); margin-bottom:18px; } .gate-list { display:flex; flex-direction:column; gap:10px; } .gate-row { display:flex; align-items:center; justify-content:space-between; gap:12px; border:1px solid var(--gray-200); border-left:4px solid var(--productivity); border-radius:8px; padding:13px 16px; } .gate-name { font-family:'Montserrat',sans-serif; font-weight:700; font-size:14px; color:var(--navy); } .gate-role { font-size:12px; color:var(--gray-600); margin-top:2px; }
   .empty { font-size:13px; color:var(--gray-600); font-style:italic; padding:8px 0; }
   .loading { text-align:center; padding:60px 20px; color:var(--gray-600); }
@@ -804,14 +810,35 @@ function renderTeamSuccession(members){
 }
 
 function renderTalentGrid(members){
-  var head='<div class="card-head"><div><div class="card-title"><span class="dot"></span>Talent &amp; Readiness Grid</div><div class="card-sub">Up = readiness for more · across = how they are landing now</div></div></div>';
-  var ms=members.filter(function(m){ return m.report_json && m.report_json.succession; });
+  // ── ⓘ methodology tooltip. Describes exactly what the two axes are built from, so a
+  //    skeptic can see the work. Copy mirrors the council spec + the agreed authority line.
+  var infoPop='<span class="g9-info" tabindex="0" role="button" aria-label="How this grid is built">i'
+    +'<span class="g9-info-pop">'
+      +'<b>How this grid is built</b>'
+      +'<div style="margin-top:6px;"><em>Across — performance today:</em> how the people around them rate their trust, execution, and overall impact right now, from stakeholders — not a self-assessment.</div>'
+      +'<div style="margin-top:6px;"><em>Up — readiness to carry more:</em> whether the organization scales <i>through</i> this leader or <i>depends on</i> them. Built from four things we already ask about — whether the team runs and keeps growing without them, whether they anticipate and drive change, whether they develop a bench, and how closely their self-view matches how others see them.</div>'
+      +'<div style="margin-top:6px;">We weight bench and forward drive most heavily because across 300+ interviews with executive leaders and CEOs, and years inside operations-heavy businesses, those signals separate leaders who scale with the business from leaders who become the bottleneck — more than tenure, title, or raw impact today.</div>'
+      +'<div style="margin-top:6px;color:var(--gray-600);">The <b style="color:#c8891f;">!</b> badge marks a leader who rates themselves higher than their stakeholders do (a blind-spot flag). A dashed ring means the raters disagree — treat that placement as soft.</div>'
+    +'</span></span>';
+  var head='<div class="card-head"><div><div class="card-title"><span class="dot"></span>Talent &amp; Readiness Grid'+infoPop+'</div><div class="card-sub">Up = readiness to carry more · across = how they are landing now</div></div></div>';
+  // Show any leader we can place: needs a closed-diagnostic readiness score OR the
+  // legacy succession block (fallback for older records that predate the readiness axis).
+  var ms=members.filter(function(m){ return (m.readiness && m.readiness.surveyClosed && m.readiness.score!=null) || (m.report_json && m.report_json.succession); });
   if(!ms.length) return '';
-  function rRow(m){ var lvl=(m.report_json&&m.report_json.readinessLevel)||'developing'; return lvl==='ready'?2:(lvl==='not_ready'?0:1); }
-  // The 9-box is a point-in-time DIAGNOSTIC read (perception from the 14-Day Diagnostic).
-  // It uses the diagnostic TP3 rater average ONLY — never the coaching-pulse scoreboard —
-  // so a stray or early stakeholder pulse can't move a leader's placement. (The pulse
-  // signal lives in Team Stakeholder Momentum, which is separate.)
+
+  // ── VERTICAL axis (readiness). Transparent composite computed server-side from items
+  //    already in the survey: bench/development (F1,F2,C5,A4) + forward-drive (B1-B4,B6).
+  //    The self-awareness gap is a VISIBLE FLAG, not part of this score. Falls back to the
+  //    old AI-inferred readinessLevel only when a leader has no readiness score yet.
+  function readyScore(m){ return (m.readiness && m.readiness.surveyClosed && m.readiness.score!=null) ? m.readiness.score : null; }
+  function rRow(m){
+    var v=readyScore(m);
+    if(v!=null) return v<3?0:(v<4?1:2);
+    var lvl=(m.report_json&&m.report_json.readinessLevel)||'developing';
+    return lvl==='ready'?2:(lvl==='not_ready'?0:1);
+  }
+  // ── HORIZONTAL axis (performance now). Diagnostic TP3 rater average ONLY — never the
+  //    coaching-pulse scoreboard — so a stray early pulse can't move a placement.
   function diagStanding(m){
     if(m.selfVsRaters && m.selfVsRaters.tp3){
       var tp=m.selfVsRaters.tp3;
@@ -823,18 +850,24 @@ function renderTalentGrid(members){
   function tone(r,c){ var s=r+c; return s>=3?'g9-green':(s===2?'g9-amber':'g9-red'); }
   var cells=[[[],[],[]],[[],[],[]],[[],[],[]]];
   ms.forEach(function(m){ cells[rRow(m)][sCol(m)].push(m); });
-  var rowLabel={2:'Ready',1:'Developing',0:'Not ready'};
-  // Float each chip HORIZONTALLY by how far its actual TP3 standing sits into its band,
-  // so a leader near the next boundary reads as near it (not just lined up in the box).
-  // Margins (14%–86%) keep even a perfect score off the hard edge/corner. Chips in the
-  // same cell are spread vertically so they never stack on top of each other. (Vertical
-  // is only declutter — readiness itself is the 3-level row, not a continuous value.)
+  var rowLabel={2:'Ready',1:'Developing',0:'Emerging'};
+  // Float each chip by BOTH real values: horizontally by TP3 standing, vertically by the
+  // readiness score within its band — so a leader near a boundary reads as near it. Margins
+  // (14%-86%) keep even a perfect score off the hard edge. When several chips share a cell,
+  // a small radial nudge keeps them from stacking without meaningfully moving the position.
   function standFrac(m, c){
     var v = diagStanding(m);
     if(v==null) return 0.5;
     var lo = c===0?1:(c===1?3:4), hi = c===0?3:(c===1?4:5);
     var f = (v-lo)/(hi-lo); return f<0?0:(f>1?1:f);
   }
+  function readyFrac(m, r){
+    var v = readyScore(m);
+    if(v==null) return 0.5;
+    var lo = r===0?1:(r===1?3:4), hi = r===0?3:(r===1?4:5);
+    var f = (v-lo)/(hi-lo); return f<0?0:(f>1?1:f);
+  }
+  var anyOver=false, anySplit=false;
   var grid='<div class="grid9">';
   for(var r=2;r>=0;r--){
     grid+='<div class="grid9-axisY">'+rowLabel[r]+'</div>';
@@ -842,18 +875,34 @@ function renderTalentGrid(members){
       var list=cells[r][c].slice().sort(function(a,b){ return standFrac(a,c)-standFrac(b,c); });
       var n=list.length;
       var chips=list.map(function(m,i){
-        var left=(14 + standFrac(m,c)*72).toFixed(1);
-        var top =(n<=1?50:(24 + (i/(n-1))*52)).toFixed(1);
-        var v=diagStanding(m);
-        var ttl=(m.name||m.role)+(v!=null?(' · '+(Math.round(v*100)/100).toFixed(2)):'');
-        return '<span class="grid-chip" style="position:absolute;left:'+left+'%;top:'+top+'%;transform:translate(-50%,-50%);box-shadow:0 1px 3px rgba(0,0,0,.18);" title="'+esc(ttl)+'">'+esc(initials(m.name||m.role))+'</span>';
+        var left = 14 + standFrac(m,c)*72;
+        var top  = 14 + (1-readyFrac(m,r))*72;   // invert: higher readiness = higher up
+        if(n>1){ var ang=(i/n)*Math.PI*2; left+=Math.cos(ang)*6; top+=Math.sin(ang)*6; }
+        left=Math.max(8,Math.min(92,left)).toFixed(1);
+        top =Math.max(8,Math.min(92,top)).toFixed(1);
+        var v=diagStanding(m), rv=readyScore(m);
+        var sa=m.readiness&&m.readiness.selfAwareness, ag=m.readiness&&m.readiness.agreement;
+        var parts=[(m.name||m.role)];
+        if(rv!=null) parts.push('readiness '+(Math.round(rv*100)/100).toFixed(2));
+        if(v!=null)  parts.push('impact now '+(Math.round(v*100)/100).toFixed(2));
+        var badge='', extra='';
+        if(sa && sa.overRates){ anyOver=true; parts.push('over-rates self by '+(Math.round((sa.delta||0)*100)/100).toFixed(2)); badge='<span class="g9-badge">!</span>'; }
+        if(ag && ag.split){ anySplit=true; parts.push('raters split'); extra='border:2px dashed rgba(255,255,255,.92);'; }
+        return '<span class="grid-chip" style="position:absolute;left:'+left+'%;top:'+top+'%;transform:translate(-50%,-50%);'+extra+'box-shadow:0 1px 3px rgba(0,0,0,.18);" title="'+esc(parts.join(' · '))+'">'+esc(initials(m.name||m.role))+badge+'</span>';
       }).join('');
       grid+='<div class="grid9-cell '+tone(r,c)+'">'+chips+'</div>';
     }
   }
   grid+='<div></div><div class="grid9-axisX">Low</div><div class="grid9-axisX">Developing</div><div class="grid9-axisX">Strong</div></div>';
   var legend=ms.map(function(m){ return '<span class="grid-legend-item"><b>'+esc(initials(m.name||m.role))+'</b> '+esc(m.name||m.role)+'</span>'; }).join('');
-  return '<div class="card">'+head+'<div style="font-size:11.5px;color:var(--gray-600);background:var(--light-sand);border-radius:6px;padding:7px 11px;margin-bottom:10px;">Note: readiness here is based on perception data; combine it with performance and HR input before making promotion decisions.</div>'+grid+'<div class="grid-legend">'+legend+'</div></div>';
+  var flagLegend='';
+  if(anyOver||anySplit){
+    flagLegend='<div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:8px;font-size:11px;color:var(--gray-600);">'
+      +(anyOver?'<span><b style="color:#c8891f;">!</b> rates themselves higher than their stakeholders do</span>':'')
+      +(anySplit?'<span><b>dashed ring</b> = raters disagree; treat the spot as soft</span>':'')
+      +'</div>';
+  }
+  return '<div class="card">'+head+'<div style="font-size:11.5px;color:var(--gray-600);background:var(--light-sand);border-radius:6px;padding:7px 11px;margin-bottom:10px;">Note: this is a perception read from the diagnostic. Combine it with performance and HR input before making promotion decisions.</div>'+grid+'<div class="grid-legend">'+legend+'</div>'+flagLegend+'</div>';
 }
 
 function recCat(r){ return (r.category==='included_in_current_scope') ? 'scope' : 'accel'; }

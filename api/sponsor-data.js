@@ -71,6 +71,26 @@ async function sbGet(path) {
 const TRUST_CODES = ['A1','A2','A3','A4','A5','A6','A7'];
 const PROACT_CODES = ['B1','B2','B3','B4','B5','B6'];
 const PROD_CODES = ['C1','C2','C3','C4','C5','C6'];
+// ── 9-box READINESS axis (vertical). Built only from items already in the survey.
+//    Council design (2026-07-20): readiness = does the org scale THROUGH this leader
+//    or DEPEND on them. Two rater-scored clusters, mapped by what each item MEASURES
+//    (not its section label): C5 lives under Productivity but measures bench, so it
+//    counts as bench here; A4 lives under Trust but measures development.
+//      • Bench & development (F1 continuity, F2 pipeline, C5 runs-without-them, A4 develops)
+//      • Forward drive       (B1-B4 anticipate/drive/initiate, B6 invests in own growth)
+//    Overall impact (D1) and steady-state productivity (C1-C4,C6) are deliberately
+//    kept OFF this axis — they measure performance TODAY (the horizontal axis). Putting
+//    D1 here would float the high-impact / no-bench bottleneck to the top, which is
+//    backwards. Self-awareness (self-vs-rater gap) is shown as a VISIBLE FLAG, not
+//    folded into the score.
+const BENCH_CODES = ['F1','F2','C5','A4'];
+const DRIVE_CODES = ['B1','B2','B3','B4','B6'];
+const READINESS_W_BENCH = 0.55;
+const READINESS_W_DRIVE = 0.45;
+// Overall self-vs-rater basis (self-awareness flag) and the agreement basis.
+const OVERALL_CODES = ['A1','A2','A3','A4','A5','A6','A7','B1','B2','B3','B4','B5','B6','C1','C2','C3','C4','C5','C6','D1'];
+const OVERRATE_FLAG_DELTA = 0.5;   // self exceeds raters by this much → blind-spot flag
+const RATER_SPLIT_SD = 1.10;       // mean per-item rater SD above this → "raters split" flag
 function avg(nums) {
   const v = nums.filter(s => s != null && !isNaN(s));
   if (!v.length) return null;
@@ -173,6 +193,7 @@ async function buildMemberReport(m, confidential) {
     engagement,
     pipeline,
     selfVsRaters,
+    readiness,
     sponsorReadout,
   ] = await Promise.all([
     // Single clients query combining both needed field sets (was two separate queries).
@@ -184,6 +205,7 @@ async function buildMemberReport(m, confidential) {
     buildPipeline(m.client_id),
     // Confidential 360 detail — fetched here but only attached when !confidential.
     confidential ? Promise.resolve(null) : buildSelfVsRaters(m.client_id),
+    confidential ? Promise.resolve(null) : buildReadiness(m.client_id),
     // Sponsor manager-view readout: aggregate by-group scores (incl "Other colleagues"),
     // the sponsor's OWN written comments, bench/succession, plan-approval state, debrief.
     // Peer/direct-report verbatims are NEVER fetched here — confidentiality.
@@ -213,6 +235,7 @@ async function buildMemberReport(m, confidential) {
 
   if (!confidential) {
     report.selfVsRaters = selfVsRaters;
+    report.readiness = readiness;
     // Demo/test fallback: serve sponsorReadout from report_json when rater data
     // produced no scores. buildSponsorReadout returns a truthy object even when
     // diagnostic_report_drafts is empty (scores: null), so we check scores too.
@@ -395,6 +418,19 @@ async function buildSelfVsRaters(clientId) {
   };
 }
 
+// Readiness for the non-bulk path (sponsor's OWN report + progress rooms). Fetches
+// the full rated response set (incl F/D1 codes) and reuses computeReadinessRow so the
+// math matches the bulk assembler exactly.
+async function buildReadiness(clientId) {
+  const diags = await sbGet(`/rest/v1/diagnostics?client_id=eq.${enc(clientId)}&select=id,status,survey_closed_at,close_date&order=created_at.desc&limit=1`);
+  const diag = diags[0];
+  if (!diag) return null;
+  if (!diag.survey_closed_at) return { surveyClosed: false, closesOn: diag.close_date || null };
+  const raters = await sbGet(`/rest/v1/diagnostic_raters?diagnostic_id=eq.${enc(diag.id)}&select=id,is_self`);
+  const resp = await sbGet(`/rest/v1/diagnostic_responses?diagnostic_id=eq.${enc(diag.id)}&select=rater_id,question_code,score&limit=5000`);
+  return computeReadinessRow(diag, raters, resp);
+}
+
 async function buildScoreboard(clientId) {
   const stks = await sbGet(`/rest/v1/stakeholders?client_id=eq.${enc(clientId)}&is_active=eq.true&select=id,relationship,is_supervisor`);
   if (!stks.length) return null;
@@ -470,6 +506,87 @@ function computeSelfVsRatersRow(diag, raters, resp) {
     proactivity:  { self: self.proactivity,  raters: raterAvg.proactivity },
     productivity: { self: self.productivity, raters: raterAvg.productivity },
   } };
+}
+// ── 9-box READINESS row (vertical axis + self-awareness / agreement flags) ──────
+// Same self/rater split convention as computeSelfVsRatersRow: self rows carry a
+// rater_id in the is_self set; non-self rater rows have rater_id NULL, so anything
+// not in selfIds is a rater response.
+function avgByCodes(rows, codes) {
+  const byCode = {};
+  for (const r of (rows || [])) {
+    if (r.score == null) continue;
+    (byCode[r.question_code] = byCode[r.question_code] || []).push(Number(r.score));
+  }
+  return avg(codes.flatMap(c => byCode[c] || []));
+}
+// Mean per-item standard deviation across rater scores — "how much do the raters
+// disagree, item by item." Pooling all items would inflate SD because items have
+// different means, so we take each item's SD then average. Needs ≥2 raters/item.
+function meanItemSd(rows, codes) {
+  const byCode = {};
+  for (const r of (rows || [])) {
+    if (r.score == null) continue;
+    if (codes && !codes.includes(r.question_code)) continue;
+    (byCode[r.question_code] = byCode[r.question_code] || []).push(Number(r.score));
+  }
+  const sds = [];
+  for (const c of Object.keys(byCode)) {
+    const v = byCode[c];
+    if (v.length < 2) continue;
+    const m = v.reduce((a, b) => a + b, 0) / v.length;
+    sds.push(Math.sqrt(v.reduce((a, b) => a + (b - m) * (b - m), 0) / v.length));
+  }
+  if (!sds.length) return null;
+  return Math.round((sds.reduce((a, b) => a + b, 0) / sds.length) * 100) / 100;
+}
+function computeReadinessRow(diag, raters, resp) {
+  if (!diag) return null;
+  if (!diag.survey_closed_at) return { surveyClosed: false, closesOn: diag.close_date || null };
+  const selfIds = new Set((raters || []).filter(r => r.is_self).map(r => r.id));
+  const selfResp  = (resp || []).filter(r => selfIds.has(r.rater_id));
+  const otherResp = (resp || []).filter(r => !selfIds.has(r.rater_id));
+
+  const bench = avgByCodes(otherResp, BENCH_CODES);
+  const drive = avgByCodes(otherResp, DRIVE_CODES);
+  // Readiness score on the 1-5 scale. Weight what we have: if one cluster has no
+  // data, fall back to the other rather than dragging the score toward null.
+  let score = null;
+  if (bench != null && drive != null) score = Math.round((READINESS_W_BENCH * bench + READINESS_W_DRIVE * drive) * 100) / 100;
+  else if (bench != null) score = bench;
+  else if (drive != null) score = drive;
+
+  // Self-awareness flag (Goldsmith): directional gap on the overall rated set.
+  const selfOverall  = avgByCodes(selfResp,  OVERALL_CODES);
+  const raterOverall = avgByCodes(otherResp, OVERALL_CODES);
+  const delta = (selfOverall != null && raterOverall != null)
+    ? Math.round((selfOverall - raterOverall) * 100) / 100 : null;
+
+  // Rater-agreement / confidence flag (Cialdini): dispersion across the readiness
+  // + TP3 core. Low = firm placement; high = split, treat the position as soft.
+  const dispersion = meanItemSd(otherResp, OVERALL_CODES);
+
+  return {
+    surveyClosed: true,
+    asOf: diag.survey_closed_at,
+    score,                                 // 1-5, the vertical coordinate
+    bench, drive,                          // the two clusters (for the tooltip)
+    weights: { bench: READINESS_W_BENCH, drive: READINESS_W_DRIVE },
+    components: {                          // rater averages, for transparency
+      F1: avgByCodes(otherResp, ['F1']), F2: avgByCodes(otherResp, ['F2']),
+      C5: avgByCodes(otherResp, ['C5']), A4: avgByCodes(otherResp, ['A4']),
+      B1: avgByCodes(otherResp, ['B1']), B2: avgByCodes(otherResp, ['B2']),
+      B3: avgByCodes(otherResp, ['B3']), B4: avgByCodes(otherResp, ['B4']),
+      B6: avgByCodes(otherResp, ['B6']),
+    },
+    selfAwareness: {                       // VISIBLE FLAG — never folded into score
+      self: selfOverall, raters: raterOverall, delta,
+      overRates: delta != null && delta >= OVERRATE_FLAG_DELTA,
+    },
+    agreement: {
+      dispersion,
+      split: dispersion != null && dispersion >= RATER_SPLIT_SD,
+    },
+  };
 }
 function computeSponsorReadoutRow(d, scores, sponsorVerbatims) {
   if (!d) return null;
@@ -611,6 +728,7 @@ async function assembleMemberReportsBulk(members, opts) {
     if (!isPrivate) {
       const dSelf = latestAny[cid] || null;
       report.selfVsRaters = computeSelfVsRatersRow(dSelf, dSelf ? (ratersByDiag[dSelf.id] || []) : [], dSelf ? (respByDiag[dSelf.id] || []) : []);
+      report.readiness = computeReadinessRow(dSelf, dSelf ? (ratersByDiag[dSelf.id] || []) : [], dSelf ? (respByDiag[dSelf.id] || []) : []);
       const dSpon = latestActive[cid] || null;
       let sr = null;
       if (dSpon) {
