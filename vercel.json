@@ -83,6 +83,10 @@
       "schedule": "0 13 * * *"
     },
     {
+      "path": "/api/workshop-data?action=send-scheduled",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/diagnostic?action=send-scheduled",
       "schedule": "*/15 * * * *"
     },

@@ -361,6 +361,37 @@ function findingsFrom(agg) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Handler
 // ─────────────────────────────────────────────────────────────────────────────
+// Send the PRE-survey invite to a workshop's not-yet-invited participants (force_all
+// re-sends to everyone). Shared by the manual "Send survey emails" button and the
+// scheduled-send cron. Sets pre_survey_open_at on first send so it never double-fires,
+// and drops a sponsor/POC visibility copy of that first send.
+async function performWorkshopPreSend(workshopId, forceAll) {
+  const w = await sbOne(`/rest/v1/workshops?id=eq.${enc(workshopId)}&select=*&limit=1`);
+  if (!w) return { ok: false, status: 404, error: 'Workshop not found' };
+  const allParts = await sbGet(`/rest/v1/workshop_participants?workshop_id=eq.${enc(workshopId)}&select=id,participant_token,client_id,invited_at`);
+  const parts = forceAll ? allParts : allParts.filter(p => !p.invited_at);
+  const cmapSend = await clientsMapByIds(parts.map(p => p.client_id));
+  let sent = 0;
+  for (const p of parts) {
+    const c = cmapSend.get(p.client_id);
+    if (!c?.email) continue;
+    const url = `${PORTAL_BASE_URL}/workshop-survey?token=${enc(p.participant_token)}&phase=pre`;
+    const subj = `Your ${w.title} survey — 5–10 minutes, completely confidential`;
+    const html = inviteHtml(c.name, w, 'pre', url);
+    const r = await sendEmail(c.email, subj, html, w);
+    if (r.ok) {
+      sent++;
+      await sb(`/rest/v1/workshop_participants?id=eq.${enc(p.id)}`, 'PATCH', { invited_at: isoNow() }, { Prefer: 'return=minimal' });
+    }
+  }
+  if (sent > 0 && !w.pre_survey_open_at) {
+    await sb(`/rest/v1/workshops?id=eq.${enc(workshopId)}`, 'PATCH',
+      { pre_survey_open_at: isoNow(), status: 'pre_survey_open', updated_at: isoNow() }, { Prefer: 'return=minimal' });
+  }
+  await notifySurveyDispatched(w, 'pre', sent, inviteHtml('[Participant]', w, 'pre', `${PORTAL_BASE_URL}/workshop-survey?token=SAMPLE&phase=pre`));
+  return { ok: true, sent, total: parts.length, skipped: parts.length - sent };
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS, GET');
@@ -388,6 +419,37 @@ export default async function handler(req, res) {
         });
       } catch (_) { /* heartbeat best-effort */ }
       return res.status(200).json({ ok: true, ...out });
+    }
+
+    // ── CRON: fire scheduled INITIAL pre-survey sends (no coach session) ──────
+    // Runs every 15 min so a coach can schedule the first survey send for a precise
+    // future time. Fires any workshop whose pre_survey_scheduled_at has passed and
+    // that hasn't gone out yet (pre_survey_open_at IS null), then clears the schedule.
+    if (action === 'send-scheduled') {
+      const authHeader = req.headers['authorization'] || '';
+      const isCron = (CRON_SECRET && authHeader === `Bearer ${CRON_SECRET}`) || !!req.headers['x-vercel-cron'];
+      const isManual = req.method === 'POST' && !!verifyCoachSession(body.session);
+      if (!isCron && !isManual) return res.status(401).json({ error: 'Unauthorized' });
+      const nowIso = new Date().toISOString();
+      const due = await sbGet(`/rest/v1/workshops?is_archived=eq.false&pre_survey_open_at=is.null&pre_survey_scheduled_at=not.is.null&pre_survey_scheduled_at=lte.${enc(nowIso)}&select=id,title`);
+      const log = { fired: [], errors: [] };
+      for (const w of (due || [])) {
+        try {
+          const r = await performWorkshopPreSend(w.id, false);
+          // Clear the schedule regardless (it fired); pre_survey_open_at now guards re-sends.
+          await sb(`/rest/v1/workshops?id=eq.${enc(w.id)}`, 'PATCH', { pre_survey_scheduled_at: null, updated_at: isoNow() }, { Prefer: 'return=minimal' });
+          if (r.ok) log.fired.push({ id: w.id, title: w.title, sent: r.sent });
+          else log.errors.push({ id: w.id, error: r.error });
+        } catch (e) { log.errors.push({ id: w.id, error: e.message }); }
+      }
+      try {
+        await fetch(`${SUPABASE_URL}/rest/v1/cron_heartbeats?on_conflict=cron_name`, {
+          method: 'POST',
+          headers: { apikey: SUPABASE_SECRET, Authorization: `Bearer ${SUPABASE_SECRET}`, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
+          body: JSON.stringify({ cron_name: 'workshop-send-scheduled', last_run_at: new Date().toISOString(), last_status: log.errors.length ? 'error' : 'ok', last_detail: JSON.stringify(log).slice(0, 200), updated_at: new Date().toISOString() }),
+        });
+      } catch (_) { /* heartbeat best-effort */ }
+      return res.status(200).json({ ok: true, ...log });
     }
 
     // ── Everything else requires a coach session ─────────────────────────────
@@ -902,34 +964,29 @@ export default async function handler(req, res) {
       // Sends to participants where invited_at IS NULL (not yet sent).
 
       case 'send-survey-emails': {
-        const w = await sbOne(`/rest/v1/workshops?id=eq.${enc(body.workshop_id)}&select=*&limit=1`);
+        const r = await performWorkshopPreSend(body.workshop_id, !!body.force_all);
+        if (!r.ok) return res.status(r.status || 500).json({ error: r.error });
+        return res.status(200).json({ ok: true, sent: r.sent, total: r.total, skipped: r.skipped });
+      }
+
+      // ── Schedule (or cancel) the INITIAL pre-survey send for a future time ────
+      // body.scheduled_at = ISO datetime (schedule) or null (cancel). The send-scheduled
+      // cron fires it when the time passes. Reminders (3/1/0 days before close) and the
+      // sponsor copy on first send are already handled by the existing cadence.
+      case 'schedule-survey': {
+        const w = await sbOne(`/rest/v1/workshops?id=eq.${enc(body.workshop_id)}&select=id,pre_survey_open_at&limit=1`);
         if (!w) return res.status(404).json({ error: 'Workshop not found' });
-        const allParts = await sbGet(`/rest/v1/workshop_participants?workshop_id=eq.${enc(body.workshop_id)}&select=id,participant_token,client_id,invited_at`);
-        // Filter to only not-yet-invited (allow force_all flag for resend-all)
-        const parts = body.force_all ? allParts : allParts.filter(p => !p.invited_at);
-        const cmapSend = await clientsMapByIds(parts.map(p => p.client_id));
-        let sent = 0;
-        for (const p of parts) {
-          const c = cmapSend.get(p.client_id);
-          if (!c?.email) continue;
-          const url = `${PORTAL_BASE_URL}/workshop-survey?token=${enc(p.participant_token)}&phase=pre`;
-          const subj = `Your ${w.title} survey — 5–10 minutes, completely confidential`;
-          const html = inviteHtml(c.name, w, 'pre', url);
-          const r = await sendEmail(c.email, subj, html, w);
-          if (r.ok) {
-            sent++;
-            await sb(`/rest/v1/workshop_participants?id=eq.${enc(p.id)}`, 'PATCH',
-              { invited_at: isoNow() }, { Prefer: 'return=minimal' });
-          }
+        if (w.pre_survey_open_at) return res.status(409).json({ error: 'The survey has already gone out, so it can no longer be scheduled.' });
+        let whenIso = null;
+        if (body.scheduled_at) {
+          const when = new Date(body.scheduled_at);
+          if (isNaN(when.getTime())) return res.status(400).json({ error: 'Invalid date/time.' });
+          if (when.getTime() < Date.now() - 60000) return res.status(400).json({ error: 'Pick a time in the future.' });
+          whenIso = when.toISOString();
         }
-        // Advance status if first send
-        if (sent > 0 && !w.pre_survey_open_at) {
-          await sb(`/rest/v1/workshops?id=eq.${enc(body.workshop_id)}`, 'PATCH',
-            { pre_survey_open_at: isoNow(), status: 'pre_survey_open', updated_at: isoNow() },
-            { Prefer: 'return=minimal' });
-        }
-        await notifySurveyDispatched(w, 'pre', sent, inviteHtml('[Participant]', w, 'pre', `${PORTAL_BASE_URL}/workshop-survey?token=SAMPLE&phase=pre`));
-        return res.status(200).json({ ok: true, sent, total: parts.length, skipped: parts.length - sent });
+        await sb(`/rest/v1/workshops?id=eq.${enc(body.workshop_id)}`, 'PATCH',
+          { pre_survey_scheduled_at: whenIso, updated_at: isoNow() }, { Prefer: 'return=minimal' });
+        return res.status(200).json({ ok: true, scheduled_at: whenIso });
       }
 
       // ── Resend survey to one participant ──────────────────────────────────────
