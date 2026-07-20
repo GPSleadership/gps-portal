@@ -796,14 +796,16 @@ export default async function handler(req, res) {
             const dr = await sbGet(`/rest/v1/diagnostics?client_id=eq.${enc(selfCid)}&is_archived=eq.false&select=leader_token,report_pdf_url&order=created_at.desc&limit=1`);
             const drow = dr && dr[0];
             const base = process.env.PORTAL_BASE_URL || 'https://portal.gpsleadership.org';
-            if (drow && drow.report_pdf_url) {
-              // Prefer the branded PDF — it is the full report (detail + quotes) and is
-              // available even before the interactive leader page is released.
-              selfMember.is_self = true;
-              selfMember.own_report_url = drow.report_pdf_url;
-            } else if (drow && drow.leader_token) {
+            if (drow && drow.leader_token) {
+              // Link to their OWN interactive leader report page — the same experience
+              // every other leader gets: TP3 scores + breakdown on the page, with the
+              // branded PDF reachable from there. NOT the raw PDF on its own.
               selfMember.is_self = true;
               selfMember.own_report_url = `${base}/diagnostic-leader.html?token=${enc(drow.leader_token)}`;
+            } else if (drow && drow.report_pdf_url) {
+              // Fallback only if there's no leader page token: the PDF direct.
+              selfMember.is_self = true;
+              selfMember.own_report_url = drow.report_pdf_url;
             }
           }
         }
