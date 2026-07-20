@@ -11286,12 +11286,43 @@ async function openReportPreview(opts) {
   sendNameEl.textContent = (d.client_name || 'Client').split(' ')[0];
   metaEl.textContent     = `${d.client_name || '—'}${d.client_email ? ' · ' + d.client_email : ''}${d.client_org ? ' · ' + d.client_org : ''}`;
 
+  // Make the action wording reflect what actually happens on approve. Approving does
+  // NOT send now — it schedules the release + email for noon the working day before the
+  // debrief. Only an immediate release (no debrief date, or that time already passed)
+  // sends on approval. Rewrite the checkbox line + button so nothing reads as "send now".
+  if (!previewMode) {
+    const _previewDt    = previewReportReleaseAt(d.debrief_date);
+    const _willSchedule = !!(_previewDt && _previewDt.getTime() > Date.now());
+    const _firstName    = (d.client_name || 'the leader').split(' ')[0];
+    const _lbl = document.querySelector('#report-preview-modal label[for="rp-review-check"]');
+    if (_lbl) {
+      if (!d.debrief_date) {
+        _lbl.innerHTML = 'I have read this report in full and it is accurate. No debrief date is set, so approving releases it and emails <strong>' + _firstName + '</strong> now.';
+      } else if (_willSchedule) {
+        _lbl.innerHTML = 'I have read this report in full and it is accurate. Approving does not send now — it schedules the release + email to <strong>' + _firstName + '</strong> for <strong>' + fmtReleaseET(_previewDt) + '</strong> (the wizard still opens only after the debrief).';
+      } else {
+        _lbl.innerHTML = 'I have read this report in full and it is accurate. The scheduled send time has passed, so approving releases it and emails <strong>' + _firstName + '</strong> now.';
+      }
+    }
+    sendBtn.innerHTML = _willSchedule ? 'Approve &amp; Schedule →' : 'Approve &amp; Send Now →';
+  }
+
   // Open modal immediately so coach sees it loading
   document.getElementById('report-preview-modal').classList.add('open');
   // Preview mode (survey still open): hide the finalize/send footer entirely.
   var _rpFooter = document.getElementById('rp-footer');
   if (_rpFooter) _rpFooter.style.display = previewMode ? 'none' : '';
   if (metaEl && previewMode) metaEl.textContent = 'PRIVATE PREVIEW · survey still open · ' + metaEl.textContent;
+
+  // Review the ACTUAL client-facing PDF when one is on file. That branded PDF is what the
+  // leader receives, so the coach approves exactly what ships — not the raw draft text.
+  if (!previewMode && d.report_pdf_url) {
+    bodyEl.innerHTML =
+      '<div style="background:#eef4ff;border:1px solid #cfe0ff;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:13px;color:#1A3D6E;"><strong>This is the exact branded PDF the leader receives.</strong> Review it here as they will see it, then approve below.</div>' +
+      '<iframe src="' + d.report_pdf_url + '#view=FitH" title="Client report PDF" style="width:100%;height:62vh;border:1px solid #d0d0d0;border-radius:8px;background:#fff;"></iframe>' +
+      '<p style="font-size:12px;color:#666;margin-top:8px;">Trouble viewing it inline? <a href="' + d.report_pdf_url + '" target="_blank" style="color:#1A3D6E;font-weight:600;">Open the PDF in a new tab</a>.</p>';
+    return;
+  }
 
   // Fetch latest report draft
   try {
@@ -11313,11 +11344,42 @@ async function openReportPreview(opts) {
     var _previewBanner = previewMode
       ? '<div style="background:#fff8e1;border:1px solid #ffd76a;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:13px;color:#7a5b00;"><strong>Private preview.</strong> Generated from the responses received so far while the survey is still open. The leader and sponsor cannot see this. Finalizing and sending stay locked until you close the survey.</div>'
       : '';
-    bodyEl.innerHTML = _previewBanner + (narrative ? narrative : buildCoachReportFallback(report));
+    // No branded PDF on file — this is the draft text, not what the leader ultimately sees.
+    var _noPdfBanner = (!previewMode)
+      ? '<div style="background:#fff4e5;border:1px solid #ffd9a8;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:13px;color:#8a4b00;"><strong>No branded PDF on file yet.</strong> This is the draft text. Upload the PDF (step 2) to review exactly what the leader receives.</div>'
+      : '';
+    // Render markdown so the draft never shows raw #, ** or --- ; pass real HTML through.
+    bodyEl.innerHTML = _previewBanner + _noPdfBanner + (narrative ? mdLite(narrative) : buildCoachReportFallback(report));
 
   } catch (err) {
     bodyEl.innerHTML = `<div class="rp-loading" style="color:var(--err);">Error loading report: ${err.message}</div>`;
   }
+}
+
+// Minimal markdown → HTML for the report-review fallback. If the string already looks
+// like HTML (the normal html_v2 case), it is passed through untouched; otherwise headings,
+// bold, rules and bullets are rendered so the coach never sees raw #, ** or ---.
+function mdLite(s) {
+  if (!s) return '';
+  if (/<(h[1-6]|p|div|ul|ol|table|strong|em)\b/i.test(s)) return s; // already HTML
+  var t = String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/^######\s?(.*)$/gm, '<h6>$1</h6>')
+    .replace(/^#####\s?(.*)$/gm, '<h5>$1</h5>')
+    .replace(/^####\s?(.*)$/gm, '<h4>$1</h4>')
+    .replace(/^###\s?(.*)$/gm, '<h3>$1</h3>')
+    .replace(/^##\s?(.*)$/gm, '<h2>$1</h2>')
+    .replace(/^#\s?(.*)$/gm, '<h1>$1</h1>')
+    .replace(/^\s*---\s*$/gm, '<hr>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/^\s*[-*]\s+(.*)$/gm, '<li>$1</li>');
+  t = t.replace(/(?:<li>[\s\S]*?<\/li>\s*)+/g, function (m) { return '<ul>' + m + '</ul>'; });
+  t = t.split(/\n{2,}/).map(function (b) {
+    var x = b.trim();
+    if (!x) return '';
+    return /^<(h[1-6]|ul|ol|hr|li|strong|table|blockquote)/.test(x) ? x : '<p>' + x.replace(/\n/g, '<br>') + '</p>';
+  }).join('\n');
+  return t;
 }
 
 function buildCoachReportFallback(r) {
@@ -11400,7 +11462,7 @@ async function confirmAndFinalize() {
     const data = await r.json();
     if (!r.ok) {
       sendBtn.disabled = false;
-      sendBtn.textContent = 'Send to Client →';
+      sendBtn.textContent = 'Approve →';
       alert('Error finalizing report: ' + (data.error || r.status));
       return;
     }
@@ -11417,7 +11479,7 @@ async function confirmAndFinalize() {
     await refreshSelected();
   } catch (err) {
     sendBtn.disabled = false;
-    sendBtn.textContent = 'Send to Client →';
+    sendBtn.textContent = 'Approve →';
     alert('Error: ' + err.message);
   }
 }

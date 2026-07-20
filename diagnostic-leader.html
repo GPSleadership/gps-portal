@@ -479,16 +479,22 @@ function renderTopAlert() {
       <div><strong>Your diagnostic report is ready.</strong>${DIAGNOSTIC.debrief_date ? ' Your debrief session is scheduled for ' + formatDate(DIAGNOSTIC.debrief_date) + '.' : ''}</div>
     </div>`;
   } else if (s === 'debrief_complete') {
-    const portalBtn = DIAGNOSTIC.coaching_portal_url
-      ? `<div style="margin-top:14px;"><a href="${DIAGNOSTIC.coaching_portal_url}" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:700;">Go to Your Coaching Portal &rarr;</a></div>`
+    // The button must take the leader straight into their 90-day plan portal. The server
+    // sets client_portal_url (clients.token via the diagnostic) once the debrief is done;
+    // only if that is somehow missing do we fall back to emailing Alex for the link.
+    const portalBtn = DIAGNOSTIC.client_portal_url
+      ? `<div style="margin-top:14px;"><a href="${DIAGNOSTIC.client_portal_url}" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:700;">Open Your 90-Day Plan &rarr;</a></div>`
       : `<div style="margin-top:14px;"><a href="mailto:alex@gpsleadership.org?subject=My%20coaching%20portal%20link" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:700;">Email Alex for your portal link &rarr;</a><div style="margin-top:8px;font-size:13px;color:#666;">Your link is also on its way by email. Don't see it? Use the button above.</div></div>`;
+    const startCopy = DIAGNOSTIC.client_portal_url
+      ? 'Your 90-day plan portal is ready. Open it below to get started.'
+      : 'Your 90-day plan portal is ready. Use the link in your email or the button below to get started.';
     el.innerHTML = `<div class="alert alert-green">
       <span class="alert-icon">✓</span>
-      <div><strong>Debrief complete.</strong> Your 90-day plan portal is ready. Use the link in your email or the button below to get started.${portalBtn}</div>
+      <div><strong>Debrief complete.</strong> ${startCopy}${portalBtn}</div>
     </div>`;
   } else if (s === 'plan_active') {
-    const portalBtn = DIAGNOSTIC.coaching_portal_url
-      ? `<div style="margin-top:14px;"><a href="${DIAGNOSTIC.coaching_portal_url}" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:700;">Go to Your Coaching Portal &rarr;</a></div>`
+    const portalBtn = DIAGNOSTIC.client_portal_url
+      ? `<div style="margin-top:14px;"><a href="${DIAGNOSTIC.client_portal_url}" style="display:inline-block;background:#004369;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:700;">Open Your 90-Day Plan &rarr;</a></div>`
       : '';
     el.innerHTML = `<div class="alert alert-green">
       <span class="alert-icon">✓</span>
