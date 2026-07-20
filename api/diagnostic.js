@@ -190,9 +190,12 @@ async function loadCcConfig() {
 // Leader-eligible stages: 'invite' always; 'reminder_1' only when the flag is set.
 function buildDiagCc(cfg, diag, stage) {
   const out = [];
-  const leaderOnInvite        = (stage === 'invite');
-  const leaderOnFirstReminder = (stage === 'reminder_1' && diag.cc_leader_first_reminder === true);
-  if (cfg.cc_leader && (leaderOnInvite || leaderOnFirstReminder) && diag.client_email) out.push(diag.client_email);
+  // Rule (confirmed 2026-07-20): the leader is copied ONLY on the initial invite —
+  // never on ANY reminder (first, mid, or final). Reminders go only to people who
+  // haven't finished, so copying the leader both floods their inbox and exposes the
+  // not-yet-completed list. team@/alex@/extra_cc are unaffected.
+  const leaderOnInvite = (stage === 'invite');
+  if (cfg.cc_leader && leaderOnInvite && diag.client_email) out.push(diag.client_email);
   if (cfg.cc_team) out.push('team@gpsleadership.org');
   if (cfg.cc_alex) out.push('alex@gpsleadership.org');
   if (Array.isArray(cfg.extra_cc)) cfg.extra_cc.forEach(e => out.push(e));
