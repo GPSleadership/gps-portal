@@ -808,7 +808,18 @@ function renderTalentGrid(members){
   var ms=members.filter(function(m){ return m.report_json && m.report_json.succession; });
   if(!ms.length) return '';
   function rRow(m){ var lvl=(m.report_json&&m.report_json.readinessLevel)||'developing'; return lvl==='ready'?2:(lvl==='not_ready'?0:1); }
-  function sCol(m){ var v=memberStanding(m); if(v==null) return 1; return v<3?0:(v<4?1:2); }
+  // The 9-box is a point-in-time DIAGNOSTIC read (perception from the 14-Day Diagnostic).
+  // It uses the diagnostic TP3 rater average ONLY — never the coaching-pulse scoreboard —
+  // so a stray or early stakeholder pulse can't move a leader's placement. (The pulse
+  // signal lives in Team Stakeholder Momentum, which is separate.)
+  function diagStanding(m){
+    if(m.selfVsRaters && m.selfVsRaters.tp3){
+      var tp=m.selfVsRaters.tp3;
+      return avgOf([tp.trust&&tp.trust.raters, tp.proactivity&&tp.proactivity.raters, tp.productivity&&tp.productivity.raters]);
+    }
+    return null;
+  }
+  function sCol(m){ var v=diagStanding(m); if(v==null) return 1; return v<3?0:(v<4?1:2); }
   function tone(r,c){ var s=r+c; return s>=3?'g9-green':(s===2?'g9-amber':'g9-red'); }
   var cells=[[[],[],[]],[[],[],[]],[[],[],[]]];
   ms.forEach(function(m){ cells[rRow(m)][sCol(m)].push(m); });
@@ -819,7 +830,7 @@ function renderTalentGrid(members){
   // same cell are spread vertically so they never stack on top of each other. (Vertical
   // is only declutter — readiness itself is the 3-level row, not a continuous value.)
   function standFrac(m, c){
-    var v = memberStanding(m);
+    var v = diagStanding(m);
     if(v==null) return 0.5;
     var lo = c===0?1:(c===1?3:4), hi = c===0?3:(c===1?4:5);
     var f = (v-lo)/(hi-lo); return f<0?0:(f>1?1:f);
@@ -833,7 +844,7 @@ function renderTalentGrid(members){
       var chips=list.map(function(m,i){
         var left=(14 + standFrac(m,c)*72).toFixed(1);
         var top =(n<=1?50:(24 + (i/(n-1))*52)).toFixed(1);
-        var v=memberStanding(m);
+        var v=diagStanding(m);
         var ttl=(m.name||m.role)+(v!=null?(' · '+(Math.round(v*100)/100).toFixed(2)):'');
         return '<span class="grid-chip" style="position:absolute;left:'+left+'%;top:'+top+'%;transform:translate(-50%,-50%);box-shadow:0 1px 3px rgba(0,0,0,.18);" title="'+esc(ttl)+'">'+esc(initials(m.name||m.role))+'</span>';
       }).join('');

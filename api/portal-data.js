@@ -827,7 +827,20 @@ export default async function handler(req, res) {
           const crow = cr.ok ? (await cr.json())[0] : null;
           const isCoaching = !!(crow && (crow.in_coaching_program || crow.is_active_coaching || crow.coaching_sessions_enabled));
           const isSelfServiceTrial = !!(crow && crow.is_workshop_participant && crow.account_type === 'trial' && !isCoaching);
+          // HARD BLOCK: anyone doing a PAID DIAGNOSTIC never auto-sends stakeholder
+          // invites — the coach schedules/pushes those, because the chosen stakeholders
+          // can change after the sponsor debrief. A leader can still ENTER their people
+          // (saved above); they just don't go out until the coach sends them. Auto-send
+          // stays ONLY for workshop-ONLY participants who have no diagnostic engagement.
+          // (JMAA execs are BOTH workshop participants AND diagnostic leaders — that
+          // overlap is exactly what previously misfired.)
+          let hasDiagnostic = false;
           if (isSelfServiceTrial) {
+            const dq = await sb(`/rest/v1/diagnostics?client_id=eq.${clientId}&is_archived=eq.false&select=id&limit=1`);
+            const drows = dq.ok ? await dq.json() : [];
+            hasDiagnostic = Array.isArray(drows) && drows.length > 0;
+          }
+          if (isSelfServiceTrial && !hasDiagnostic) {
             const { performSend } = await import('./survey.js');
             await performSend(clientId, 'baseline');
           }
