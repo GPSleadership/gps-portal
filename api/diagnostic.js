@@ -2738,6 +2738,27 @@ function buildReportReadyEmail({ clientName, leaderTitle, leaderOrg, portalUrl, 
   `;
 }
 
+// ── Scheduled report release time ────────────────────────────────────────────
+// The report unlock + report-ready email are timed to noon ET (16:00 UTC, the
+// house convention) on the LAST WORKING DAY on-or-before the day before the
+// debrief. If the day-before-debrief lands on a weekend, roll back to the prior
+// Friday so nothing is delivered over the weekend.
+//   Debrief Thursday  → day before = Wednesday → release Wed noon.
+//   Debrief Monday    → day before = Sunday    → roll back to Friday noon.
+// Returns an ISO string, or null when there is no debrief_date to anchor to.
+function computeReportReleaseAt(debriefDate) {
+  if (!debriefDate) return null;
+  const pts = String(debriefDate).split('-');
+  if (pts.length !== 3) return null;
+  // Day before the debrief at 16:00 UTC (= noon ET during EDT).
+  let d = new Date(Date.UTC(+pts[0], +pts[1] - 1, +pts[2] - 1, 16, 0, 0));
+  if (isNaN(d.getTime())) return null;
+  const dow = d.getUTCDay();            // 0 = Sun … 6 = Sat
+  if (dow === 6) d = new Date(d.getTime() - 1 * 86400000);   // Saturday → Friday
+  else if (dow === 0) d = new Date(d.getTime() - 2 * 86400000); // Sunday → Friday
+  return d.toISOString();
+}
+
 async function handleFinalizeReport(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!verifyCoachSession(req.body?.session)) return res.status(401).json({ error: 'Unauthorized' }); // P0-4 2026-07-01
@@ -2767,13 +2788,22 @@ async function handleFinalizeReport(req, res) {
       });
     }
 
-    // 3. Mark diagnostic as finalized
-    const now = new Date().toISOString();
-    // Publishing IS the release: unlock the report to the leader immediately (report_release_at
-    // = now), instead of holding it until a pre-set date the evening before the debrief. The
-    // manual release-date field can still re-hold it afterward if a coach ever needs to.
+    // 3. Mark diagnostic as finalized.
+    // Approving locks in the report content NOW, but the leader-facing unlock and the
+    // report-ready email are TIMED, not immediate: they land at noon ET on the last
+    // working day before the debrief (weekend → prior Friday). report_release_at holds
+    // the leader's report on the holding screen until that moment; the report-ready
+    // email is queued (status=scheduled) for the same instant so the two fire together.
+    // Fallback: if there's no debrief date, or the designated time has already passed
+    // (e.g. finalizing the morning of the debrief, or a supervised same-day release),
+    // release + send immediately. The manual release-date field can still re-hold it.
+    const now       = new Date().toISOString();
+    const computed  = computeReportReleaseAt(diag.debrief_date);
+    const isFuture  = !!(computed && new Date(computed) > new Date(now));
+    const releaseAt = isFuture ? computed : now;
+
     const updateRes = await sb(`/rest/v1/diagnostics?id=eq.${diagnostic_id}`, 'PATCH',
-      { status: 'report_final', report_finalized_at: now, report_release_at: now },
+      { status: 'report_final', report_finalized_at: now, report_release_at: releaseAt },
       { Prefer: 'return=minimal' });
     if (!updateRes.ok) {
       const errText = await updateRes.text();
@@ -2805,23 +2835,62 @@ async function handleFinalizeReport(req, res) {
       bodyHtml,
     });
 
-    let emailId = null;
-    try {
-      emailId = await sendEmail({
-        to:            client.email,
-        subject,
-        html:          emailHtml,
-        emailType:     'report_ready',
-        recipientName: client.name,
-      });
-    } catch (emailErr) {
-      // Don't fail the whole request if email errors — report is still finalized
-      console.error('[finalize-report] email error:', emailErr.message);
+    let emailId   = null;
+    let scheduled = false;
+    if (isFuture) {
+      // Queue the report-ready email for the designated release time instead of
+      // sending now. The send loop (action=send-scheduled) delivers it once
+      // scheduled_for arrives AND the report is finalized+released — both true at
+      // releaseAt. Stored on the report_ready_auto key so re-finalizing/date-changes
+      // upsert the same row (no duplicate sends). Body is pre-rendered HTML;
+      // sendEmailDraft detects that and sends it as-is.
+      try {
+        const enc = encodeURIComponent;
+        const existing = await sb(`/rest/v1/email_drafts?diagnostic_id=eq.${enc(diagnostic_id)}&email_key=eq.report_ready_auto&select=id,status&limit=1`);
+        const existRows = existing.ok ? await existing.json() : [];
+        const drow = { subject, body: emailHtml, to_name: client.name || '', to_email: client.email,
+                       scheduled_for: releaseAt, status: 'scheduled', updated_at: now };
+        if (existRows[0] && !['sent', 'cancelled'].includes(existRows[0].status)) {
+          await sb(`/rest/v1/email_drafts?id=eq.${enc(existRows[0].id)}`, 'PATCH', drow, { Prefer: 'return=minimal' });
+        } else if (!existRows[0]) {
+          await sb('/rest/v1/email_drafts', 'POST',
+            { ...drow, email_key: 'report_ready_auto', sequence: 'auto', diagnostic_id, created_at: now },
+            { Prefer: 'return=minimal' });
+        }
+        scheduled = true;
+      } catch (schedErr) {
+        console.error('[finalize-report] schedule error:', schedErr.message);
+      }
+    } else {
+      // Immediate release (no debrief date, or the designated time already passed).
+      // First neutralize any still-scheduled report_ready_auto draft for this
+      // diagnostic so the send loop can't ALSO deliver it — otherwise finalizing
+      // would send twice (once here, once from the queued draft, now that the report
+      // is finalized+released and its guard passes).
+      try {
+        const enc = encodeURIComponent;
+        await sb(`/rest/v1/email_drafts?diagnostic_id=eq.${enc(diagnostic_id)}&email_key=eq.report_ready_auto&status=eq.scheduled`,
+          'PATCH', { status: 'cancelled', updated_at: now }, { Prefer: 'return=minimal' });
+      } catch (_) { /* non-fatal */ }
+      try {
+        emailId = await sendEmail({
+          to:            client.email,
+          subject,
+          html:          emailHtml,
+          emailType:     'report_ready',
+          recipientName: client.name,
+        });
+      } catch (emailErr) {
+        // Don't fail the whole request if email errors — report is still finalized
+        console.error('[finalize-report] email error:', emailErr.message);
+      }
     }
 
     return res.status(200).json({
       ok:         true,
       portal_url: portalUrl,
+      scheduled,
+      release_at: releaseAt,
       email_sent: !!emailId,
     });
 
@@ -5017,25 +5086,31 @@ async function handleScheduleDebriefEmails(req, res) {
       }
     }
 
-    // ── Leader report-ready email (noon ET = 16:00 UTC day before debrief) ──
+    // ── Leader report-ready email (noon ET on the last working day before debrief) ──
+    // The report-ready email is OWNED by finalize (action=finalize-report): finalize
+    // authors the real content and queues it for the designated release time. Here we
+    // only keep the timing in sync when a debrief date changes:
+    //   • Already finalized → re-time the existing scheduled draft + report_release_at
+    //     to the new designated instant. Never rewrite the body finalize authored.
+    //   • Not finalized yet → do nothing; there is no report to announce until approval.
+    if (diag.debrief_date && client.email && diag.report_finalized_at) {
+      const releaseAt = computeReportReleaseAt(diag.debrief_date);
+      if (releaseAt) {
+        await sb(`/rest/v1/diagnostics?id=eq.${enc(diagnostic_id)}`, 'PATCH',
+          { report_release_at: releaseAt }, { Prefer: 'return=minimal' });
+        const existing = await sb(`/rest/v1/email_drafts?diagnostic_id=eq.${enc(diagnostic_id)}&email_key=eq.report_ready_auto&status=eq.scheduled&select=id&limit=1`);
+        const exRows = existing.ok ? await existing.json() : [];
+        if (exRows[0]) {
+          await sb(`/rest/v1/email_drafts?id=eq.${enc(exRows[0].id)}`, 'PATCH',
+            { scheduled_for: releaseAt, updated_at: now }, { Prefer: 'return=minimal' });
+        }
+        created.push('report_ready_auto(retimed)');
+      }
+    }
+
     if (diag.debrief_date && client.email) {
       const pts = diag.debrief_date.split('-');
-      const sendAt = new Date(Date.UTC(+pts[0], +pts[1]-1, +pts[2]-1, 16, 0, 0)).toISOString();
       const firstName = (client.name || '').split(' ')[0] || client.name || 'there';
-      const portalLink = `${PORTAL_BASE}/diagnostic-leader.html?token=${enc(diag.leader_token)}`;
-      const debriefFmt = new Date(diag.debrief_date + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-      await upsertDraft({
-        email_key: 'report_ready_auto',
-        sequence: 'auto',
-        subject: `Your leadership report is ready`,
-        body: `Hi ${firstName},\n\nYour GPS Leadership Diagnostic report is ready. You can view it now in your leader portal:\n\n${portalLink}\n\nI look forward to our debrief on ${debriefFmt}${diag.debrief_time ? ' at ' + diag.debrief_time : ''}. If you have any questions before we meet, feel free to reply to this email.\n\nSee you then.`,
-        to_name: client.name || '',
-        to_email: client.email,
-        scheduled_for: sendAt,
-        status: 'scheduled',
-      });
-      created.push('report_ready_auto');
-
       // ── Leader post-debrief follow-up (5pm ET = 21:00 UTC on the debrief day) ──
       const followUpAt = new Date(Date.UTC(+pts[0], +pts[1]-1, +pts[2], 21, 0, 0)).toISOString();
       await upsertDraft({
@@ -5085,7 +5160,13 @@ async function sendEmailDraft(draft) {
     E6: 'Last day to lock in the sprint', E7: 'Checking in on the development plan',
   };
   const title = titleMap[draft.email_key] || 'GPS Leadership Solutions';
-  const html = diagEmailShell(title, diagBodyToHtml(draft.body || ''));
+  // A draft body that already begins with a tag is pre-rendered HTML (e.g. the
+  // report-ready email finalize queues) — send it as-is. Plain-text bodies get
+  // wrapped in the standard shell. Trim first so leading whitespace doesn't hide
+  // the tag.
+  const rawBody = String(draft.body || '');
+  const isPrebuiltHtml = rawBody.trim().startsWith('<');
+  const html = isPrebuiltHtml ? rawBody : diagEmailShell(title, diagBodyToHtml(rawBody));
   await sendEmail({
     to: draft.to_email,
     subject: draft.subject || 'A note from Alex at GPS Leadership',

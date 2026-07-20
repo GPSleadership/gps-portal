@@ -11346,6 +11346,27 @@ function toggleFinalizeBtn() {
   document.getElementById('rp-send-btn').disabled = !checked;
 }
 
+// Display-only preview of the scheduled report release time. Mirrors the server's
+// computeReportReleaseAt (api/diagnostic.js): noon ET on the last working day
+// before the debrief, rolling a weekend back to the prior Friday. The server is
+// authoritative — this is only so the coach sees WHEN before approving.
+function previewReportReleaseAt(debriefDate) {
+  if (!debriefDate) return null;
+  const pts = String(debriefDate).split('-');
+  if (pts.length !== 3) return null;
+  let dt = new Date(Date.UTC(+pts[0], +pts[1] - 1, +pts[2] - 1, 16, 0, 0));
+  if (isNaN(dt.getTime())) return null;
+  const dow = dt.getUTCDay();
+  if (dow === 6) dt = new Date(dt.getTime() - 1 * 86400000);
+  else if (dow === 0) dt = new Date(dt.getTime() - 2 * 86400000);
+  return dt;
+}
+function fmtReleaseET(dt) {
+  try {
+    return dt.toLocaleString('en-US', { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }) + ' ET';
+  } catch (_) { return dt.toISOString(); }
+}
+
 async function confirmAndFinalize() {
   const d = DIAG_SEL;
   if (!d) return;
@@ -11353,15 +11374,22 @@ async function confirmAndFinalize() {
   if (!checkEl.checked) { alert('Please confirm you have reviewed the report first.'); return; }
 
   const clientLabel = [d.client_name, d.client_org].filter(Boolean).join(' at ');
-  const emailLine   = d.client_email ? `\n\nEmail will go to: ${d.client_email}` : '';
-  const debriefNote = d.debrief_date
-    ? `\nDebrief in the email: ${diagFormatDate(d.debrief_date)}${d.debrief_time ? ' at ' + d.debrief_time : ' (no time set)'}`
-    : `\nNo debrief date is set, so the email will not include a session date/time. Set it in the Report tab first if you want it included.`;
-  if (!confirm(`Send report to ${clientLabel}?${emailLine}${debriefNote}\n\nThis cannot be undone.`)) return;
+  const emailLine   = d.client_email ? `\nEmail will go to: ${d.client_email}` : '';
+  const previewDt   = previewReportReleaseAt(d.debrief_date);
+  const willSchedule = !!(previewDt && previewDt.getTime() > Date.now());
+  let timingNote;
+  if (!d.debrief_date) {
+    timingNote = `\n\nNo debrief date is set, so the report will be released and emailed NOW (immediately). Set a debrief date in the Report tab first if you want it timed.`;
+  } else if (willSchedule) {
+    timingNote = `\n\nApproving does NOT send now. The report will unlock and the email will send automatically on:\n  ${fmtReleaseET(previewDt)}\n(noon the last working day before the ${diagFormatDate(d.debrief_date)} debrief).`;
+  } else {
+    timingNote = `\n\nThe scheduled send time (noon the working day before the ${diagFormatDate(d.debrief_date)} debrief) has already passed, so the report will be released and emailed NOW.`;
+  }
+  if (!confirm(`Approve report for ${clientLabel}?${emailLine}${timingNote}`)) return;
 
   const sendBtn = document.getElementById('rp-send-btn');
   sendBtn.disabled = true;
-  sendBtn.textContent = 'Sending…';
+  sendBtn.textContent = willSchedule ? 'Scheduling…' : 'Sending…';
 
   try {
     const r = await fetch('/api/diagnostic?action=finalize-report', {
@@ -11377,10 +11405,15 @@ async function confirmAndFinalize() {
       return;
     }
     closeDiagModal('report-preview-modal');
-    const emailNote = data.email_sent
-      ? `Report finalized. Email sent to ${d.client_email || 'client'}.`
-      : `Report finalized. Email could not be sent — check Resend config.`;
-    alert(emailNote);
+    let note;
+    if (data.scheduled && data.release_at) {
+      note = `Report approved. It will unlock and email ${d.client_email || 'the client'} automatically on ${fmtReleaseET(new Date(data.release_at))}. Nothing has been sent yet.`;
+    } else if (data.email_sent) {
+      note = `Report approved and released now. Email sent to ${d.client_email || 'client'}.`;
+    } else {
+      note = `Report approved and released now. Email could not be sent — check Resend config.`;
+    }
+    alert(note);
     await refreshSelected();
   } catch (err) {
     sendBtn.disabled = false;
