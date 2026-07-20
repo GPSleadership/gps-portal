@@ -298,9 +298,13 @@ export default async function handler(req, res) {
           } catch (_) { /* avatar is optional */ }
         }
         // Client portal link — look up clients.token via diagnostics.client_id so the
-        // leader page can show a "Open your 90-day plan" button pointing to client.html.
-        // Only exposed once the debrief is done; before that the plan portal isn't relevant.
-        if (diag.client_id && ['debrief_complete','plan_active'].includes(diag.status)) {
+        // leader page can show an "Enter the Executive Impact System" button pointing to
+        // client.html. Always populated when the leader's own client record has an active
+        // token (the leader IS the client, so this is their own link — no cross-user leak).
+        // It is only RENDERED in the debrief_complete/plan_active states, but exposing it
+        // earlier lets the coach preview show the real working button instead of the mailto
+        // fallback.
+        if (diag.client_id) {
           try {
             const cr = await sb(`/rest/v1/clients?id=eq.${encodeURIComponent(diag.client_id)}&select=token,is_active&limit=1`);
             const crows = cr.ok ? await cr.json() : [];
