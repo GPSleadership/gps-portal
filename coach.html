@@ -9525,6 +9525,12 @@ function reportStepperHtml(d, done, canGenerate) {
     if (!d.debrief_completed_at) pubCta += '<button class="dbtn dbtn-outline dbtn-sm" style="color:#b91c1c;border-color:#e3b3b3;" onclick="unpublishReport()">Unpublish</button>';
   }
   else if (s5state === 'locked') pubCta = muted('Review the page first.');
+  else if (d._recGateApplies && !d._recGateOk) {
+    // HARD GATE: no report goes out without at least one recommendation for the leader's
+    // Decision Room team. Send the coach straight to that team's Recommendations panel.
+    pubCta = '<button class="dbtn dbtn-primary" onclick="goToTeamRecs(\'' + d._recTeamId + '\')">Add a recommendation in the Decision Room →</button>'
+      + muted('Publish is locked until at least one recommendation is approved &amp; visible for ' + first + '&rsquo;s team.');
+  }
   else                           pubCta = '<button class="dbtn dbtn-gold" onclick="openReportPreview()">Publish report</button>' + muted('Makes it visible to ' + first + '.');
 
   // Step 6 — Debrief complete. Opens the leader's Executive Impact System access
@@ -11443,6 +11449,12 @@ async function confirmAndFinalize() {
   if (!d) return;
   const checkEl = document.getElementById('rp-review-check');
   if (!checkEl.checked) { alert('Please confirm you have reviewed the report first.'); return; }
+  // HARD GATE (safety net for the publish action itself): never finalize a report for a
+  // leader on a Decision Room team that has no approved+visible recommendation yet.
+  if (d._recGateApplies && !d._recGateOk) {
+    alert('At least one recommendation must be approved and visible for ' + (d.client_name || 'this leader') + '’s team before you can publish. Add it in the Decision Room (Teams → open the team → Recommendations), then publish.');
+    return;
+  }
 
   const clientLabel = [d.client_name, d.client_org].filter(Boolean).join(' at ');
   const emailLine   = d.client_email ? `\nEmail will go to: ${d.client_email}` : '';
@@ -12727,6 +12739,32 @@ async function resolveSelectedSponsorToken() {
       if (row) DIAG_SEL._sponsor_token = row.sponsor_token;
     }
   } catch (_) { /* non-fatal: falls back to the individual leader preview */ }
+
+  // HARD-GATE data: a leader on a Decision Room team cannot have their report published
+  // until that team has at least one approved + visible recommendation. Resolve the team
+  // and whether the gate is satisfied so the report stepper can lock Publish.
+  DIAG_SEL._recTeamId = null;
+  DIAG_SEL._recGateApplies = false;
+  DIAG_SEL._recGateOk = true;
+  try {
+    if (DIAG_SEL.client_id) {
+      const tm = await cdSelect('team_members', { eq: { client_id: DIAG_SEL.client_id }, limit: 1 });
+      const teamId = (Array.isArray(tm) && tm[0]) ? tm[0].team_id : null;
+      if (teamId) {
+        DIAG_SEL._recTeamId = teamId;
+        DIAG_SEL._recGateApplies = true;
+        const recs = await cdSelect('recommendations', { eq: { team_id: teamId, status: 'approved', visible_to_client: true }, limit: 1 });
+        DIAG_SEL._recGateOk = Array.isArray(recs) && recs.length > 0;
+      }
+    }
+  } catch (_) { DIAG_SEL._recGateApplies = false; DIAG_SEL._recGateOk = true; }
+}
+
+// Jump from the report stepper's publish gate straight to a team's Decision Room
+// Recommendations panel so the coach can add the required recommendation.
+function goToTeamRecs(teamId){
+  showSection('decisionroom');
+  if (teamId) { try { drManageTeam(teamId); } catch(_){ /* team view opens; recs panel is inside */ } }
 }
 
 async function refreshSelected() {

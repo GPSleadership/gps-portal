@@ -2806,6 +2806,27 @@ async function handleFinalizeReport(req, res) {
       });
     }
 
+    // 2c. HARD GATE — a leader on a Decision Room team cannot have their report published
+    // until that team has at least one APPROVED + VISIBLE recommendation. The coach UI
+    // also blocks this, but enforce it on the server so a report can never ship without
+    // the recommendation that anchors the debrief. (A transient lookup error does NOT
+    // block publish — the UI gate is the primary guard; this is defense in depth.)
+    try {
+      const tmRes  = await sb(`/rest/v1/team_members?client_id=eq.${diag.client_id}&select=team_id&limit=1`);
+      const tmRows = tmRes.ok ? await tmRes.json() : [];
+      const teamId = (Array.isArray(tmRows) && tmRows[0]) ? tmRows[0].team_id : null;
+      if (teamId) {
+        const recRes  = await sb(`/rest/v1/recommendations?team_id=eq.${encodeURIComponent(teamId)}&status=eq.approved&visible_to_client=eq.true&select=id&limit=1`);
+        const recRows = recRes.ok ? await recRes.json() : [];
+        if (!(Array.isArray(recRows) && recRows.length > 0)) {
+          return res.status(422).json({
+            error: 'At least one recommendation must be approved and visible in this leader\'s Decision Room before the report can be published.',
+            code:  'NO_RECOMMENDATION',
+          });
+        }
+      }
+    } catch (_) { /* infra hiccup — fall through; UI gate remains the primary guard */ }
+
     // 3. Mark diagnostic as finalized.
     // Approving locks in the report content NOW, but the leader-facing unlock and the
     // report-ready email are TIMED, not immediate: they land at noon ET on the last
