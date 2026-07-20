@@ -538,9 +538,19 @@ async function assembleMemberReportsBulk(members, opts) {
 
   let ratersByDiag = {}, respByDiag = {}, draftByDiag = {};
   if (diagIdList) {
+    const diagIds = Array.from(usedDiagIds);
+    // diagnostic_responses is fetched PER-DIAGNOSTIC (not one bulk IN(...) query).
+    // A whole team easily exceeds PostgREST's 1000-row default page cap — a 5-leader
+    // team here is ~2,500 rows — which silently truncated the bulk query and dropped
+    // some leaders' responses, so their TP3 (and their roster status chip) never
+    // computed. One query per diagnostic keeps every leader's rows under the cap.
     const jobs = [ sbGet(`/rest/v1/diagnostic_raters?diagnostic_id=in.(${diagIdList})&select=id,is_self,diagnostic_id`).catch(() => []) ];
     if (!isPrivate) {
-      jobs.push(sbGet(`/rest/v1/diagnostic_responses?diagnostic_id=in.(${diagIdList})&select=rater_id,question_code,score,rater_relationship,text_response,diagnostic_id`).catch(() => []));
+      jobs.push(
+        Promise.all(diagIds.map(id =>
+          sbGet(`/rest/v1/diagnostic_responses?diagnostic_id=eq.${enc(id)}&select=rater_id,question_code,score,rater_relationship,text_response,diagnostic_id&limit=5000`).catch(() => [])
+        )).then(arrs => arrs.flat())
+      );
       jobs.push(sbGet(`/rest/v1/diagnostic_report_drafts?diagnostic_id=in.(${diagIdList})&select=diagnostic_id,scores_json,generated_at&order=generated_at.desc`).catch(() => []));
     }
     const done = await Promise.all(jobs);

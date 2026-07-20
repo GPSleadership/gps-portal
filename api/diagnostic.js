@@ -609,7 +609,14 @@ async function handleResendRater(req, res) {
       raterName: rater.name, leaderName: diag.client_name, leaderTitle: diag.client_title,
       leaderOrg: diag.client_org, surveyLink, closeDate: closeDateDisp, calendarLink, bodyHtml,
     });
-    const cc = buildDiagCc(await loadCcConfig(), diag, 'invite');
+    // CC the leader ONLY when this is the rater's genuine FIRST invite. A re-send to a
+    // rater who was already invited is a REMINDER — copying the leader on every one just
+    // blows up their inbox (and exposes the not-yet-completed list). invited_at already
+    // set => treat as a reminder (stage 'reminder_2', which never copies the leader);
+    // otherwise it's the initial invite (stage 'invite', which does). team@/alex@/extra_cc
+    // are unaffected either way.
+    const ccStage = rater.invited_at ? 'reminder_2' : 'invite';
+    const cc = buildDiagCc(await loadCcConfig(), diag, ccStage);
     await sendEmail({ to: rater.email, subject, html, emailType: 'diagnostic_invite', recipientName: rater.name, cc });
     if (!rater.invited_at) {
       await sb(`/rest/v1/diagnostic_raters?id=eq.${rater.id}`, 'PATCH', { invited_at: now.toISOString() }, { Prefer: 'return=minimal' });
