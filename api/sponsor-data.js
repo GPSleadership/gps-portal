@@ -779,6 +779,36 @@ export default async function handler(req, res) {
         else if (link.custom_cta_url) sprintCtaUrl = link.custom_cta_url;
       }
 
+      // Sponsor's OWN report link. When one of the team members IS this sponsor
+      // (their own diagnostic — matched by linked_client_id, else by the sponsor's
+      // email), that row's "View report" should open their FULL personal report — all
+      // detail, quotes, and PDF — instead of the manager/confidential view shown for
+      // their subordinates. It's their own data, so no confidentiality wall applies.
+      try {
+        let selfCid = ownClientId;
+        if (!selfCid && sponsor.email) {
+          const sc = await sbGet(`/rest/v1/clients?email=eq.${enc(sponsor.email)}&select=id&limit=1`);
+          selfCid = (sc && sc[0]) ? sc[0].id : null;
+        }
+        if (selfCid && Array.isArray(memberReports)) {
+          const selfMember = memberReports.find(mr => mr && mr.client_id === selfCid);
+          if (selfMember) {
+            const dr = await sbGet(`/rest/v1/diagnostics?client_id=eq.${enc(selfCid)}&is_archived=eq.false&select=leader_token,report_pdf_url&order=created_at.desc&limit=1`);
+            const drow = dr && dr[0];
+            const base = process.env.PORTAL_BASE_URL || 'https://portal.gpsleadership.org';
+            if (drow && drow.report_pdf_url) {
+              // Prefer the branded PDF — it is the full report (detail + quotes) and is
+              // available even before the interactive leader page is released.
+              selfMember.is_self = true;
+              selfMember.own_report_url = drow.report_pdf_url;
+            } else if (drow && drow.leader_token) {
+              selfMember.is_self = true;
+              selfMember.own_report_url = `${base}/diagnostic-leader.html?token=${enc(drow.leader_token)}`;
+            }
+          }
+        }
+      } catch (_) { /* self-report link is best-effort; roster still renders */ }
+
       return res.status(200).json({
         ok: true,
         teams: teamsForPicker,

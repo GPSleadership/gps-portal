@@ -760,10 +760,16 @@ function renderRoster(members){
     // Only show a score band once a real score exists -- no "No score yet" noise when we are already showing the stage.
     var scoreChip = (st.key!=='pending') ? '<span class="badge status-chip '+st.cls+'">'+st.label+'</span>' : '';
     var stageChip = (m.pipeline&&m.pipeline.current_label) ? '<span class="badge b-draft" title="Where this leader is in the process">Stage: '+esc(m.pipeline.current_label)+'</span>' : '';
+    // The sponsor's OWN row links to their full personal report (all detail, quotes,
+    // PDF) — server flags it with is_self + own_report_url. Everyone else opens the
+    // manager/confidential drill-in.
+    var viewBtn = (m.is_self && m.own_report_url)
+      ? '<a class="btn-sm" href="'+esc(m.own_report_url)+'" target="_blank" rel="noopener">View my full report</a>'
+      : '<button class="btn-sm" onclick="viewMember('+members.indexOf(m)+')">View report</button>';
     return '<div class="doc-row"><div class="doc-icon">'+esc(initials(name))+'</div>'
-      +'<div class="doc-info"><div class="doc-title">'+esc(name)+'</div><div class="doc-meta">'+esc(m.role||'')+'</div>'+meetingDates(m.pipeline)+'</div>'
+      +'<div class="doc-info"><div class="doc-title">'+esc(name)+(m.is_self?' <span style="font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#1A6C5B;background:#e8f5f0;border-radius:20px;padding:2px 9px;white-space:nowrap;">You</span>':'')+'</div><div class="doc-meta">'+esc(m.role||'')+'</div>'+meetingDates(m.pipeline)+'</div>'
       +'<div class="roster-chips">'+stageChip+pills+scoreChip
-      +'<button class="btn-sm" onclick="viewMember('+members.indexOf(m)+')">View report</button></div></div>';
+      +viewBtn+'</div></div>';
   }).join('');
   return '<div class="card"><div class="card-head"><div class="card-title"><span class="dot"></span>Leadership Team</div><span class="section-note">Each leader\'s current stage is shown · open a leader for their report</span></div>'+(rows||'<div class="empty">No team members.</div>')+'</div>';
 }
