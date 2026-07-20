@@ -9407,9 +9407,17 @@ function reportStepperHtml(d, done, canGenerate) {
   const published = !!d.report_finalized_at;
   const planDrafted = !!(d.wizard_prefill_data);
   const first = (d.client_name || 'leader').split(' ')[0];
-  const previewUrl = d.leader_token
-    ? (DIAG_BASE_URL + '/diagnostic-leader.html?token=' + d.leader_token + '&preview=debrief_complete&coach=' + encodeURIComponent(getCoachSessionToken()))
-    : '';
+  // Sponsor routing: if this leader is ALSO a sponsor (resolved into d._sponsor_token in
+  // refreshSelected), the coach preview opens their Decision Room — the aggregate view of
+  // their own report + their leaders' — from which the coach can drill into the personal
+  // page. Regular leaders preview their individual leader page as before.
+  const previewIsRoom = !!d._sponsor_token;
+  const previewLabel  = previewIsRoom ? "'s Decision Room" : "'s page";
+  const previewUrl = previewIsRoom
+    ? (location.origin + '/decision-room?token=' + encodeURIComponent(d._sponsor_token) + '&coach_session=' + encodeURIComponent(getCoachSessionToken()) + '&preview=1')
+    : d.leader_token
+      ? (DIAG_BASE_URL + '/diagnostic-leader.html?token=' + d.leader_token + '&preview=debrief_complete&coach=' + encodeURIComponent(getCoachSessionToken()))
+      : '';
 
   // GPS executive baseline: navy var(--navy) = active, teal var(--teal) = done, muted = locked.
   // No emoji. Colour encodes state only. One prominent action per step.
@@ -9506,8 +9514,8 @@ function reportStepperHtml(d, done, canGenerate) {
   // Step 4 — Review (HARD GATE). Preview the leader page + a deliberate confirm.
   let reviewCta;
   if (s4state === 'locked')      reviewCta = muted('Complete the step above first.');
-  else if (s4state === 'done')   reviewCta = (previewUrl ? '<a class="dbtn dbtn-outline dbtn-sm" href="' + previewUrl + '" target="_blank">Re-open ' + first + "'s page</a>" : '') + muted(reviewed ? ('Reviewed ' + diagFormatDate(d.report_reviewed_at) + '.') : 'Reviewed at publish.');
-  else                           reviewCta = (previewUrl ? '<a class="dbtn dbtn-primary" href="' + previewUrl + '" target="_blank">Preview ' + first + "'s page</a>" : muted('No leader link on file.')) + '<button class="dbtn dbtn-outline" onclick="markReportReviewed()">I have reviewed it &mdash; unlock publish</button>';
+  else if (s4state === 'done')   reviewCta = (previewUrl ? '<a class="dbtn dbtn-outline dbtn-sm" href="' + previewUrl + '" target="_blank">Re-open ' + first + previewLabel + '</a>' : '') + muted(reviewed ? ('Reviewed ' + diagFormatDate(d.report_reviewed_at) + '.') : 'Reviewed at publish.');
+  else                           reviewCta = (previewUrl ? '<a class="dbtn dbtn-primary" href="' + previewUrl + '" target="_blank">Preview ' + first + previewLabel + '</a>' : muted('No leader link on file.')) + '<button class="dbtn dbtn-outline" onclick="markReportReviewed()">I have reviewed it &mdash; unlock publish</button>';
 
   // Step 5 — Publish.
   let pubCta;
@@ -12706,6 +12714,18 @@ async function toggleSponsorApproval(on){
 async function refreshSelected() {
   const raterData = await cdSelect('diagnostic_raters', { eq: { diagnostic_id: DIAG_SEL.id }, order: { col: 'created_at', asc: true } });
   DIAG_RATERS = raterData || [];
+  // Resolve whether this leader is ALSO a sponsor (has their own Decision Room). Matched
+  // by email against the sponsors table. Used by the report stepper so the coach "Preview"
+  // button opens the Decision Room for a sponsor instead of the individual leader page.
+  DIAG_SEL._sponsor_token = null;
+  try {
+    const em = (DIAG_SEL.client_email || '').trim();
+    if (em) {
+      const sp = await cdSelect('sponsors', { eq: { email: em }, limit: 1 });
+      const row = Array.isArray(sp) ? sp.find(x => x && x.active !== false && x.sponsor_token) : null;
+      if (row) DIAG_SEL._sponsor_token = row.sponsor_token;
+    }
+  } catch (_) { /* non-fatal: falls back to the individual leader preview */ }
   renderDetailHeader();
   renderOverviewTab();
   renderRatersTab();
