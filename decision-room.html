@@ -763,8 +763,16 @@ function renderRoster(members){
     // The sponsor's OWN row links to their full personal report (all detail, quotes,
     // PDF) — server flags it with is_self + own_report_url. Everyone else opens the
     // manager/confidential drill-in.
+    // Coach preview only: append the coach session + preview flag so the coach can see
+    // the FULL report ungated while previewing, even before it's released to the leader.
+    // A real sponsor (no COACH_SESSION) gets the plain link, which stays gated until the
+    // report is actually finalized/released — so the leader never sees it early.
+    var selfUrl = m.own_report_url || '';
+    if (m.is_self && selfUrl && COACH_SESSION && selfUrl.indexOf('diagnostic-leader.html') >= 0) {
+      selfUrl += (selfUrl.indexOf('?') >= 0 ? '&' : '?') + 'preview=debrief_complete&coach=' + encodeURIComponent(COACH_SESSION);
+    }
     var viewBtn = (m.is_self && m.own_report_url)
-      ? '<a class="btn-sm" href="'+esc(m.own_report_url)+'" target="_blank" rel="noopener">View my full report</a>'
+      ? '<a class="btn-sm" href="'+esc(selfUrl)+'" target="_blank" rel="noopener">View my full report</a>'
       : '<button class="btn-sm" onclick="viewMember('+members.indexOf(m)+')">View report</button>';
     return '<div class="doc-row"><div class="doc-icon">'+esc(initials(name))+'</div>'
       +'<div class="doc-info"><div class="doc-title">'+esc(name)+(m.is_self?' <span style="font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#1A6C5B;background:#e8f5f0;border-radius:20px;padding:2px 9px;white-space:nowrap;">You</span>':'')+'</div><div class="doc-meta">'+esc(m.role||'')+'</div>'+meetingDates(m.pipeline)+'</div>'
@@ -1323,8 +1331,12 @@ init();
       if(lbl) lbl.textContent = 'The 90-Day Sprint';
       if(btn) btn.textContent = 'Get started \u2192';
     }
-    // Show immediately on first commit; otherwise on scroll
-    if(window._hasCommitted || window.scrollY > 400){ bar.style.display='block'; } else { bar.style.display='none'; }
+    // Show immediately on first commit; otherwise hold it back until the viewer has
+    // scrolled into the decision zone (~60% down — past the read, people, and talent
+    // grid, around Recommendations/Approvals). Make the case first, THEN ask. Percentage
+    // of document height keeps it robust across short and long rooms.
+    var scrolledIntoDecisionZone = (window.scrollY + window.innerHeight) >= (document.documentElement.scrollHeight * 0.6);
+    if(window._hasCommitted || scrolledIntoDecisionZone){ bar.style.display='block'; } else { bar.style.display='none'; }
   }
   window.addEventListener('scroll', updateSticky, {passive:true});
   // Expose so commitment buttons can trigger a re-render
