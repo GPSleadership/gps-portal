@@ -979,11 +979,25 @@ async function handleSendScheduled(req, res) {
     // send-reminders.js is the Monday backup; both are safe to run concurrently
     // because sendEmailDraft immediately PATCHes to 'sent', preventing re-send.
     const dueEmailsRes = await sb(
-      '/rest/v1/email_drafts?status=eq.scheduled&scheduled_for=lte.' + encodeURIComponent(new Date().toISOString()) + '&select=id,email_key,subject,body,to_name,to_email&limit=50'
+      '/rest/v1/email_drafts?status=eq.scheduled&scheduled_for=lte.' + encodeURIComponent(new Date().toISOString()) + '&select=id,email_key,subject,body,to_name,to_email,diagnostic_id&limit=50'
     );
     const dueDraftEmails = dueEmailsRes.ok ? await dueEmailsRes.json() : [];
     for (const draft of (Array.isArray(dueDraftEmails) ? dueDraftEmails : [])) {
       try {
+        // Guard: a "report ready" email must never go out before the report is actually
+        // viewable to the leader. Skip (leave it scheduled) until the diagnostic is both
+        // finalized AND released; publishing sets report_release_at = now, so it then
+        // sends on the next pass. Prevents telling a leader their report is ready while
+        // it is still a holding screen.
+        if (draft.email_key === 'report_ready_auto' && draft.diagnostic_id) {
+          const rr = await sb('/rest/v1/diagnostics?id=eq.' + encodeURIComponent(draft.diagnostic_id) + '&select=report_release_at,report_finalized_at&limit=1');
+          const drow = (rr.ok ? await rr.json() : [])[0];
+          const released = !!(drow && drow.report_finalized_at && drow.report_release_at && new Date(drow.report_release_at) <= new Date());
+          if (!released) {
+            (log.skipped = log.skipped || []).push({ id: draft.id, email_key: draft.email_key, reason: 'report not finalized/released' });
+            continue;
+          }
+        }
         await sendEmailDraft(draft);
         log.processed.push({ id: draft.id, email_key: draft.email_key, to: draft.to_email });
       } catch (draftErr) {
@@ -2755,8 +2769,11 @@ async function handleFinalizeReport(req, res) {
 
     // 3. Mark diagnostic as finalized
     const now = new Date().toISOString();
+    // Publishing IS the release: unlock the report to the leader immediately (report_release_at
+    // = now), instead of holding it until a pre-set date the evening before the debrief. The
+    // manual release-date field can still re-hold it afterward if a coach ever needs to.
     const updateRes = await sb(`/rest/v1/diagnostics?id=eq.${diagnostic_id}`, 'PATCH',
-      { status: 'report_final', report_finalized_at: now },
+      { status: 'report_final', report_finalized_at: now, report_release_at: now },
       { Prefer: 'return=minimal' });
     if (!updateRes.ok) {
       const errText = await updateRes.text();
