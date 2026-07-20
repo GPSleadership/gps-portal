@@ -8547,6 +8547,7 @@ async function openDiag(id, _fromHistory) {
   DIAG_OVERRIDES = {};
   (ovData || []).forEach(o => { DIAG_OVERRIDES[o.question_code] = { text: o.override_text, note: o.override_note }; });
 
+  await resolveSelectedSponsorToken();  // sets DIAG_SEL._sponsor_token for the report-step preview
   renderDetailHeader();
   renderOverviewTab();
   renderRatersTab();
@@ -12711,12 +12712,12 @@ async function toggleSponsorApproval(on){
   await updateDiag({ plan_requires_sponsor_approval: !!on });
 }
 
-async function refreshSelected() {
-  const raterData = await cdSelect('diagnostic_raters', { eq: { diagnostic_id: DIAG_SEL.id }, order: { col: 'created_at', asc: true } });
-  DIAG_RATERS = raterData || [];
-  // Resolve whether this leader is ALSO a sponsor (has their own Decision Room). Matched
-  // by email against the sponsors table. Used by the report stepper so the coach "Preview"
-  // button opens the Decision Room for a sponsor instead of the individual leader page.
+// Resolve whether the selected leader is ALSO a sponsor (has their own Decision Room),
+// matched by email against the sponsors table. Sets DIAG_SEL._sponsor_token so the report
+// stepper's "Preview" button opens the Decision Room instead of the individual leader page.
+// Must run before renderReportTab in BOTH the initial open (openDiag) and refreshSelected.
+async function resolveSelectedSponsorToken() {
+  if (!DIAG_SEL) return;
   DIAG_SEL._sponsor_token = null;
   try {
     const em = (DIAG_SEL.client_email || '').trim();
@@ -12726,6 +12727,12 @@ async function refreshSelected() {
       if (row) DIAG_SEL._sponsor_token = row.sponsor_token;
     }
   } catch (_) { /* non-fatal: falls back to the individual leader preview */ }
+}
+
+async function refreshSelected() {
+  const raterData = await cdSelect('diagnostic_raters', { eq: { diagnostic_id: DIAG_SEL.id }, order: { col: 'created_at', asc: true } });
+  DIAG_RATERS = raterData || [];
+  await resolveSelectedSponsorToken();
   renderDetailHeader();
   renderOverviewTab();
   renderRatersTab();
