@@ -2684,13 +2684,21 @@ Write the complete 14-Day Executive Leadership Diagnostic Report for ${diag.clie
 // Body: { diagnostic_id }
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function buildReportReadyEmail({ clientName, leaderTitle, leaderOrg, portalUrl, debriefDate, debriefTime, bodyHtml }) {
+function buildReportReadyEmail({ clientName, leaderTitle, leaderOrg, portalUrl, debriefDate, debriefTime, bodyHtml, isSponsor }) {
   const firstName = (clientName || '').split(' ')[0] || 'there';
   const orgLine   = [leaderTitle, leaderOrg].filter(Boolean).join(' — ');
 
+  // Sponsors enter through the Decision Room (their own report PLUS their leaders'), so
+  // the CTA and copy speak to that; individual leaders get the standard report copy.
+  const ctaLabel = isSponsor ? 'Enter the Executive Impact System →' : 'View My Report →';
+
   // Editable paragraph region — comes from the approved template when present,
   // otherwise the built-in default below (so the email is unchanged until edited).
-  const defaultBody = `<p>Hi ${firstName},</p>
+  const defaultBody = isSponsor
+    ? `<p>Hi ${firstName},</p>
+        <p>Your GPS Leadership Diagnostic report has been finalized${orgLine ? ` for <strong>${orgLine}</strong>` : ''}.</p>
+        <p>Your Decision Room is ready. From there you can see your own results — TP3™ breakdown, rater feedback themes, and 90-day priorities — alongside the reporting for your leaders.</p>`
+    : `<p>Hi ${firstName},</p>
         <p>Your GPS Leadership Diagnostic report has been finalized${orgLine ? ` for <strong>${orgLine}</strong>` : ''}.</p>
         <p>Your results — including your TP3™ breakdown, rater feedback themes, and 90-day priorities — are now available in your portal.</p>`;
   const bodyContent = bodyHtml || defaultBody;
@@ -2723,7 +2731,7 @@ function buildReportReadyEmail({ clientName, leaderTitle, leaderOrg, portalUrl, 
         <div style="margin:28px 0;text-align:center;">
           <a href="${portalUrl}"
              style="background:#1A3D6E;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;display:inline-block;letter-spacing:0.3px;">
-            View My Report →
+            ${ctaLabel}
           </a>
         </div>
         <p style="font-size:13px;color:#666;">Or copy this link: <a href="${portalUrl}" style="color:#1A3D6E;">${portalUrl}</a></p>
@@ -2810,8 +2818,23 @@ async function handleFinalizeReport(req, res) {
       return res.status(500).json({ error: `Failed to update diagnostic: ${errText}` });
     }
 
-    // 4. Build portal URL
-    const portalUrl = `${PORTAL_BASE}/client?token=${client.token}`;
+    // 4. Build portal URL.
+    // Sponsor routing: if this leader is ALSO a sponsor (matched by email to an active
+    // sponsors row with a token), their entry point is the Decision Room — their own
+    // report PLUS their leaders' reporting — NOT the individual 90-day plan portal.
+    let portalUrl = `${PORTAL_BASE}/client?token=${client.token}`;
+    let isSponsor = false;
+    try {
+      const em = (client.email || '').trim();
+      if (em) {
+        const sr = await sb(`/rest/v1/sponsors?email=ilike.${encodeURIComponent(em)}&active=eq.true&select=sponsor_token&limit=1`);
+        const srows = sr.ok ? await sr.json() : [];
+        if (srows[0] && srows[0].sponsor_token) {
+          portalUrl = `${PORTAL_BASE}/decision-room?token=${encodeURIComponent(srows[0].sponsor_token)}`;
+          isSponsor = true;
+        }
+      }
+    } catch (_) { /* sponsor routing is best-effort; fall back to the individual link */ }
 
     // 5. Send email to client
     // Editable template (Communication → Email Templates). Falls back to built-in copy.
@@ -2833,6 +2856,7 @@ async function handleFinalizeReport(req, res) {
       debriefDate: diag.debrief_date || null,
       debriefTime: diag.debrief_time || null,
       bodyHtml,
+      isSponsor,
     });
 
     let emailId   = null;

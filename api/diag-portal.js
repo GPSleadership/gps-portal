@@ -305,14 +305,29 @@ export default async function handler(req, res) {
         // earlier lets the coach preview show the real working button instead of the mailto
         // fallback.
         if (diag.client_id) {
+          const base = process.env.PORTAL_BASE_URL || 'https://portal.gpsleadership.org';
           try {
             const cr = await sb(`/rest/v1/clients?id=eq.${encodeURIComponent(diag.client_id)}&select=token,is_active&limit=1`);
             const crows = cr.ok ? await cr.json() : [];
             if (crows[0] && crows[0].token && crows[0].is_active) {
-              const base = process.env.PORTAL_BASE_URL || 'https://portal.gpsleadership.org';
               diag.client_portal_url = `${base}/client?token=${encodeURIComponent(crows[0].token)}`;
             }
           } catch (_) { /* client portal link is optional */ }
+          // Sponsor routing: a leader who is ALSO a sponsor (matched by email to an active
+          // sponsors row with a token) enters through the Decision Room — their own report
+          // PLUS their leaders' reporting — not the individual 90-day plan. Override the
+          // entry link so the "Enter the Executive Impact System" button lands there.
+          try {
+            const em = (diag.client_email || '').trim();
+            if (em) {
+              const sr = await sb(`/rest/v1/sponsors?email=ilike.${encodeURIComponent(em)}&active=eq.true&select=sponsor_token&limit=1`);
+              const srows = sr.ok ? await sr.json() : [];
+              if (srows[0] && srows[0].sponsor_token) {
+                diag.client_portal_url = `${base}/decision-room?token=${encodeURIComponent(srows[0].sponsor_token)}`;
+                diag.is_sponsor_entry = true;
+              }
+            }
+          } catch (_) { /* sponsor routing is best-effort */ }
         }
         // Report-release gate: if report_release_at is set and still in the future,
         // override the leader's visible status to 'report_pending' so the page shows
