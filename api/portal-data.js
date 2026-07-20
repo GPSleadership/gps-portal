@@ -16,6 +16,7 @@ const SUPABASE_URL    = process.env.SUPABASE_URL || 'https://pbnkefuqpoztcxfagio
 const SUPABASE_SECRET = process.env.SUPABASE_SECRET_KEY;
 const RESEND_API_KEY  = process.env.RESEND_API_KEY || '';
 const RESEND_FROM     = process.env.RESEND_FROM_EMAIL || 'noreply@portal.gpsleadership.org';
+const PORTAL_BASE     = process.env.PORTAL_BASE_URL || 'https://portal.gpsleadership.org';
 const COACH_EMAIL     = 'alex@gpsleadership.org';
 
 function sb(path, method = 'GET', body = null, extra = {}) {
@@ -432,14 +433,17 @@ export default async function handler(req, res) {
         // campaign approval are live (smsConfigured() === false). Never fails the save.
         if (updates.sms_opt_in === true) {
           try {
-            const chk = await sb(`/rest/v1/clients?id=eq.${clientId}&select=phone,sms_opt_in,sms_welcome_sent_at&limit=1`);
+            const chk = await sb(`/rest/v1/clients?id=eq.${clientId}&select=phone,sms_opt_in,sms_welcome_sent_at,token&limit=1`);
             const row = (await chk.json().catch(() => []))[0] || {};
             if (row.sms_opt_in && row.phone && !row.sms_welcome_sent_at) {
               const { sendSms, smsConfigured } = require('./twilio-sms');
               if (smsConfigured()) {
+                // Confirmation + their private portal link so they can save it to their
+                // phone's home screen — the whole point of collecting the number up front.
+                const link = row.token ? `${PORTAL_BASE}/client?token=${encodeURIComponent(row.token)}` : PORTAL_BASE;
                 const sent = await sendSms({
                   to: row.phone,
-                  body: "GPS Leadership Solutions: You're now subscribed to coaching check-in reminders. Message frequency varies. Msg & data rates may apply. Reply HELP for help, STOP to cancel.",
+                  body: `GPS Leadership Solutions: You're subscribed to coaching check-in reminders. Save your private portal to your home screen: ${link}\nMsg & data rates may apply. Reply HELP for help, STOP to cancel.`,
                 });
                 if (sent.ok) {
                   await sb(`/rest/v1/clients?id=eq.${clientId}`, 'PATCH',

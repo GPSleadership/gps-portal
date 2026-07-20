@@ -1690,6 +1690,10 @@ I'm taking part in a leadership assessment run by GPS Leadership Solutions. Thei
       <input type="email" id="newEmail" placeholder="e.g. david@company.com" oninput="document.getElementById('modalError').textContent=''" />
     </div>
     <div class="form-group">
+      <label>Mobile phone <span style="font-weight:400;text-transform:none;opacity:0.6;">(optional — pre-fills their text-reminder opt-in)</span></label>
+      <input type="tel" id="newPhone" inputmode="tel" placeholder="e.g. (571) 555-1234" />
+    </div>
+    <div class="form-group">
       <label>Title</label>
       <input type="text" id="newTitle" placeholder="e.g. VP of Operations" />
     </div>
@@ -3765,6 +3769,7 @@ function closeAddModal() {
 async function addClient() {
   const name            = document.getElementById('newName').value.trim();
   const email           = document.getElementById('newEmail').value.trim();
+  const phone           = document.getElementById('newPhone').value.trim();
   const title           = document.getElementById('newTitle').value.trim();
   const org             = document.getElementById('newOrg').value.trim();
   const website         = document.getElementById('newWebsite').value.trim();
@@ -3788,7 +3793,7 @@ async function addClient() {
 
   let data = null, error = null;
   try {
-    const _rows = await cdInsert('clients', { name, email: email || null, title: title || null, organization: org || null, website: website || null, is_active: true, ask_alex_enabled: true, industry, revenue_band: revenueBand, num_locations: numLocations, direct_reports_count: directReports, coaching_sessions_enabled: coachingSessionsEnabled });
+    const _rows = await cdInsert('clients', { name, email: email || null, phone: phone || null, title: title || null, organization: org || null, website: website || null, is_active: true, ask_alex_enabled: true, industry, revenue_band: revenueBand, num_locations: numLocations, direct_reports_count: directReports, coaching_sessions_enabled: coachingSessionsEnabled });
     data = Array.isArray(_rows) ? _rows[0] : _rows;
   } catch (e) { error = e; }
 
