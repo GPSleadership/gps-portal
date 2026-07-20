@@ -640,15 +640,21 @@ function renderSnapshot(t){
 }
 
 function teamMomentum(members){
-  var bV=[],cV=[],n=0;
+  var bV=[],cV=[],n=0,hasProgress=false;
   members.forEach(function(m){
     if(!m.scoreboard||!m.scoreboard.length) return;
     var cp=scoreboardCheckpoint(m.scoreboard);
+    if(cp!=='baseline') hasProgress=true;   // a real 30/45-day (or later) pulse has landed
     var b=avgOf(m.scoreboard.map(function(s){return s.baseline;}));
     var c=avgOf(m.scoreboard.map(function(s){return s[cp];}));
     if(b!=null){ bV.push(b); } if(c!=null){ cV.push(c); } if(b!=null||c!=null) n++;
   });
-  var b=avgOf(bV), c=avgOf(cV); if(b==null||c==null) return null; return { n:n, base:b, cur:c };
+  var b=avgOf(bV), c=avgOf(cV);
+  // Only surface momentum once there's a real post-baseline re-measure. Baseline-only
+  // data just reads "5.0 -> 5.0, +0.0" — noise at a first debrief — so hide the whole
+  // card until the first check-in cycle lands (~day 30), then it appears on its own.
+  if(b==null||c==null||!hasProgress) return null;
+  return { n:n, base:b, cur:c };
 }
 function renderMomentum(members){
   var head='<div class="card-head"><div class="card-title"><span class="dot"></span>Team Stakeholder Momentum</div></div>';
