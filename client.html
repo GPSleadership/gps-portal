@@ -3670,7 +3670,15 @@ async function loadClient() {
       // holding state instead of dropping them into the coaching onboarding wizard.
       showSponsorWelcome(displayFirstName);
     } else if (!client.plan_submitted_at || client.allow_plan_edit) {
-      initWizard(client);
+      // The 90-day wizard is the POST-DEBRIEF step. If this client has a diagnostic whose
+      // report is ready but the coach has NOT marked the debrief complete, hold them on a
+      // friendly screen instead of opening the wizard early. Falls through to the wizard for
+      // direct clients (no diagnostic) and once "debrief complete" has been clicked.
+      if (client.diagnostic_id_ref && !client.debrief_completed_at && !client.plan_submitted_at) {
+        showAwaitingDebrief(displayFirstName);
+      } else {
+        initWizard(client);
+      }
     } else {
       // Post-lockdown: all reads go through the token-gated endpoint.
       // Don't silently swallow a failure here — an empty rd makes the portal look
@@ -8161,6 +8169,20 @@ function showSponsorWelcome(firstName) {
       <h2>Welcome${firstName ? ', ' + firstName : ''}.</h2>
       <p>Your workshop results aren't published to this page yet. The moment your report is ready, it'll appear here — and we'll email you, so there's no need to check back.</p>
       <p style="margin-top:14px;font-size:13px;color:#6b7280;">Questions in the meantime? Reach Alex at <a href="mailto:alex@gpsleadership.org" style="color:#1A3D6E;">alex@gpsleadership.org</a>.</p>
+    </div>
+  `;
+}
+
+// Holding screen for a leader whose diagnostic report is ready but whose debrief with the
+// coach has not been marked complete yet. The 90-day plan wizard stays closed until then,
+// so the coach and leader build the plan together on the debrief call.
+function showAwaitingDebrief(firstName) {
+  document.getElementById('mainContent').innerHTML = `
+    <div class="state-screen">
+      <div style="font-size:40px;margin-bottom:16px;">📋</div>
+      <h2>Your report is ready${firstName ? ', ' + firstName : ''}.</h2>
+      <p>Your 90-day plan opens right after your debrief with Alex. You'll build it together on that call, so there's nothing to fill out here yet.</p>
+      <p style="margin-top:14px;font-size:13px;color:#6b7280;">Questions before then? Reach Alex at <a href="mailto:alex@gpsleadership.org" style="color:#1A3D6E;">alex@gpsleadership.org</a>.</p>
     </div>
   `;
 }
