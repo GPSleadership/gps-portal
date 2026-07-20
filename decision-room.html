@@ -119,7 +119,7 @@
   .sh-table { width:100%; border-collapse:collapse; font-size:13px; } .sh-table th { background:var(--navy); color:#fff; padding:8px 11px; text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:0.4px; font-family:'Montserrat',sans-serif; font-weight:700; } .sh-table td { padding:8px 11px; border-bottom:1px solid var(--gray-200); } .sh-table tr:nth-child(even) td { background:var(--light-sand); } .sh-na { color:var(--gray-300); } .sh-table tr.sh-avg td { font-weight:800; color:var(--navy); background:var(--light-teal); border-top:2px solid var(--teal); font-family:'Montserrat',sans-serif; }
   .eng-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; } @media (max-width:600px){ .eng-grid { grid-template-columns:1fr; } } .eng-stat { border:1px solid var(--gray-200); border-radius:8px; padding:15px; text-align:center; } .eng-stat.good { border-top:3px solid var(--proactivity); } .eng-stat.warn { border-top:3px solid var(--productivity); } .eng-stat.bad { border-top:3px solid var(--red); } .eng-num { font-family:'Montserrat',sans-serif; font-weight:800; font-size:24px; color:var(--navy); } .eng-lbl { font-size:11.5px; color:var(--gray-600); margin-top:5px; line-height:1.35; } .eng-sub { font-size:10.5px; color:var(--gray-600); margin-top:4px; }
   .succ-line { font-size:13px; line-height:1.55; color:var(--navy-dark); margin-bottom:7px; } .succ-summary { font-size:13px; line-height:1.55; color:var(--navy-dark); background:var(--light-sand); border-radius:7px; padding:10px 13px; margin-bottom:12px; } .succ-sub { font-size:11px; color:var(--gray-600); margin-top:2px; }
-  .grid9 { display:grid; grid-template-columns:auto 1fr 1fr 1fr; gap:6px; margin-top:6px; } .grid9-axisY { font-size:9.5px; font-weight:700; color:var(--gray-600); display:flex; align-items:center; justify-content:flex-end; padding-right:8px; text-transform:uppercase; letter-spacing:0.3px; text-align:right; min-width:70px; } .grid9-cell { min-height:62px; border-radius:7px; padding:7px; display:flex; flex-wrap:wrap; gap:5px; align-content:flex-start; border:1px solid rgba(0,0,0,0.05); } .g9-green { background:#eaf6ec; } .g9-amber { background:#fff6e8; } .g9-red { background:#fdeef0; } .grid9-axisX { font-size:9.5px; font-weight:700; color:var(--gray-600); text-align:center; text-transform:uppercase; letter-spacing:0.3px; padding-top:4px; } .grid-chip { width:30px; height:30px; border-radius:50%; background:var(--navy); color:var(--sand); font-family:'Montserrat',sans-serif; font-weight:800; font-size:11px; display:flex; align-items:center; justify-content:center; } .grid-legend { display:flex; flex-wrap:wrap; gap:14px; margin-top:12px; font-size:11px; color:var(--gray-600); } .grid-legend-item b { color:var(--navy); }
+  .grid9 { display:grid; grid-template-columns:auto 1fr 1fr 1fr; gap:6px; margin-top:6px; } .grid9-axisY { font-size:9.5px; font-weight:700; color:var(--gray-600); display:flex; align-items:center; justify-content:flex-end; padding-right:8px; text-transform:uppercase; letter-spacing:0.3px; text-align:right; min-width:70px; } .grid9-cell { position:relative; min-height:80px; border-radius:7px; padding:7px; border:1px solid rgba(0,0,0,0.05); } .g9-green { background:#eaf6ec; } .g9-amber { background:#fff6e8; } .g9-red { background:#fdeef0; } .grid9-axisX { font-size:9.5px; font-weight:700; color:var(--gray-600); text-align:center; text-transform:uppercase; letter-spacing:0.3px; padding-top:4px; } .grid-chip { width:30px; height:30px; border-radius:50%; background:var(--navy); color:var(--sand); font-family:'Montserrat',sans-serif; font-weight:800; font-size:11px; display:flex; align-items:center; justify-content:center; } .grid-legend { display:flex; flex-wrap:wrap; gap:14px; margin-top:12px; font-size:11px; color:var(--gray-600); } .grid-legend-item b { color:var(--navy); }
   .theme-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; } @media (max-width:680px){ .theme-grid { grid-template-columns:1fr; } } .theme-col { border:1px solid var(--gray-200); border-radius:8px; padding:13px 15px; } .theme-head { font-family:'Montserrat',sans-serif; font-weight:800; font-size:12px; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:9px; } .theme-head.theme-good { color:var(--proactivity); } .theme-head.theme-risk { color:var(--red); } .theme-list { margin:0 0 0 17px; font-size:13px; line-height:1.55; color:var(--navy-dark); }
   .ssc-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; } @media (max-width:680px){ .ssc-grid { grid-template-columns:1fr; } } .ssc-col { border:1px solid var(--gray-200); border-radius:8px; padding:13px 15px; } .ssc-head { font-family:'Montserrat',sans-serif; font-weight:800; font-size:12px; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:9px; } .ssc-start { color:var(--proactivity); } .ssc-stop { color:var(--red); } .ssc-continue { color:var(--teal); }
   .ii-note { font-size:12px; color:var(--gray-600); line-height:1.5; margin-bottom:12px; } .ii-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:10px; } @media (max-width:680px){ .ii-row { grid-template-columns:1fr; } } .ii-cell { font-size:13px; line-height:1.5; border-radius:8px; padding:11px 13px; } .ii-intent { background:var(--light-teal); } .ii-impact { background:#fff6e8; } .ii-tag { display:block; font-family:'Montserrat',sans-serif; font-size:9.5px; font-weight:800; text-transform:uppercase; letter-spacing:0.4px; color:var(--teal); margin-bottom:4px; } .ii-tag-impact { color:#b9770e; }
@@ -807,8 +807,33 @@ function renderTalentGrid(members){
   var cells=[[[],[],[]],[[],[],[]],[[],[],[]]];
   ms.forEach(function(m){ cells[rRow(m)][sCol(m)].push(m); });
   var rowLabel={2:'Ready',1:'Developing',0:'Not ready'};
+  // Float each chip HORIZONTALLY by how far its actual TP3 standing sits into its band,
+  // so a leader near the next boundary reads as near it (not just lined up in the box).
+  // Margins (14%–86%) keep even a perfect score off the hard edge/corner. Chips in the
+  // same cell are spread vertically so they never stack on top of each other. (Vertical
+  // is only declutter — readiness itself is the 3-level row, not a continuous value.)
+  function standFrac(m, c){
+    var v = memberStanding(m);
+    if(v==null) return 0.5;
+    var lo = c===0?1:(c===1?3:4), hi = c===0?3:(c===1?4:5);
+    var f = (v-lo)/(hi-lo); return f<0?0:(f>1?1:f);
+  }
   var grid='<div class="grid9">';
-  for(var r=2;r>=0;r--){ grid+='<div class="grid9-axisY">'+rowLabel[r]+'</div>'; for(var c=0;c<3;c++){ var chips=cells[r][c].map(function(m){ return '<span class="grid-chip" title="'+esc(m.name||m.role)+'">'+esc(initials(m.name||m.role))+'</span>'; }).join(''); grid+='<div class="grid9-cell '+tone(r,c)+'">'+chips+'</div>'; } }
+  for(var r=2;r>=0;r--){
+    grid+='<div class="grid9-axisY">'+rowLabel[r]+'</div>';
+    for(var c=0;c<3;c++){
+      var list=cells[r][c].slice().sort(function(a,b){ return standFrac(a,c)-standFrac(b,c); });
+      var n=list.length;
+      var chips=list.map(function(m,i){
+        var left=(14 + standFrac(m,c)*72).toFixed(1);
+        var top =(n<=1?50:(24 + (i/(n-1))*52)).toFixed(1);
+        var v=memberStanding(m);
+        var ttl=(m.name||m.role)+(v!=null?(' · '+(Math.round(v*100)/100).toFixed(2)):'');
+        return '<span class="grid-chip" style="position:absolute;left:'+left+'%;top:'+top+'%;transform:translate(-50%,-50%);box-shadow:0 1px 3px rgba(0,0,0,.18);" title="'+esc(ttl)+'">'+esc(initials(m.name||m.role))+'</span>';
+      }).join('');
+      grid+='<div class="grid9-cell '+tone(r,c)+'">'+chips+'</div>';
+    }
+  }
   grid+='<div></div><div class="grid9-axisX">Low</div><div class="grid9-axisX">Developing</div><div class="grid9-axisX">Strong</div></div>';
   var legend=ms.map(function(m){ return '<span class="grid-legend-item"><b>'+esc(initials(m.name||m.role))+'</b> '+esc(m.name||m.role)+'</span>'; }).join('');
   return '<div class="card">'+head+'<div style="font-size:11.5px;color:var(--gray-600);background:var(--light-sand);border-radius:6px;padding:7px 11px;margin-bottom:10px;">Note: readiness here is based on perception data; combine it with performance and HR input before making promotion decisions.</div>'+grid+'<div class="grid-legend">'+legend+'</div></div>';
@@ -841,7 +866,7 @@ function renderRecs(recs){
     var clrStyle = 'font-size:11px;background:none;border:none;color:#9ca3af;cursor:pointer;padding:0 0 0 12px;text-decoration:underline;display:'+(curDec?'inline':'none')+';';
     var commitRow = '<div style="display:flex;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid #f0f0f0;flex-wrap:wrap;gap:4px;">'
       +'<span style="font-size:12px;color:var(--navy);font-weight:700;font-family:Montserrat,sans-serif;text-transform:uppercase;letter-spacing:.04em;margin-right:8px;">Your call:</span>'
-      +'<button id="cbtn-'+recKey+'" style="'+cbStyle+'" onclick="setRecCommitment(\''+recKey+"','commit',event)\">"+(isCommit ? '&#10003; Committed' : "Back this &rarr;")+'</button>'
+      +'<button id="cbtn-'+recKey+'" style="'+cbStyle+'" onclick="setRecCommitment(\''+recKey+"','commit',event)\">"+(isCommit ? '&#10003; Approved' : "Approve this &rarr;")+'</button>'
       +'<button id="pbtn-'+recKey+'" style="'+pbStyle+'" onclick="setRecCommitment(\''+recKey+"','pass',event)\">"+(isPass ? 'Not this time' : 'Pass')+'</button>'
       +'<button id="clr-'+recKey+'" style="'+clrStyle+'" onclick="setRecCommitment(\''+recKey+"',null,event)\">Clear</button>"
       +'<span id="rcerr-'+recKey+'" style="font-size:11px;color:#dc2626;margin-left:8px;"></span>'
