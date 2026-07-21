@@ -91,6 +91,17 @@ const READINESS_W_DRIVE = 0.45;
 const OVERALL_CODES = ['A1','A2','A3','A4','A5','A6','A7','B1','B2','B3','B4','B5','B6','C1','C2','C3','C4','C5','C6','D1'];
 const OVERRATE_FLAG_DELTA = 0.5;   // self exceeds raters by this much → blind-spot flag
 const RATER_SPLIT_SD = 1.10;       // mean per-item rater SD above this → "raters split" flag
+// TP3 core (Trust+Proactivity+Productivity), used for the supervisor-vs-team read.
+const TP3_CORE_CODES = ['A1','A2','A3','A4','A5','A6','A7','B1','B2','B3','B4','B5','B6','C1','C2','C3','C4','C5','C6'];
+// Supervisor-divergence flag. The composite is NEVER re-weighted for the supervisor —
+// they count as one voice among many (equal-weight), so a single boss can't move the
+// placement (the whole point of a stakeholder diagnostic). This only SURFACES a large
+// boss-vs-team gap as a coaching/calibration signal. |team − supervisor| ≥ this flags.
+const SUPERVISOR_DIVERGENCE_DELTA = 1.0;
+function isSupervisorRel(rel) {
+  const s = String(rel || '').toLowerCase();
+  return s.includes('supervis') || s.includes('manager') || s.includes('boss');
+}
 function avg(nums) {
   const v = nums.filter(s => s != null && !isNaN(s));
   if (!v.length) return null;
@@ -427,7 +438,7 @@ async function buildReadiness(clientId) {
   if (!diag) return null;
   if (!diag.survey_closed_at) return { surveyClosed: false, closesOn: diag.close_date || null };
   const raters = await sbGet(`/rest/v1/diagnostic_raters?diagnostic_id=eq.${enc(diag.id)}&select=id,is_self`);
-  const resp = await sbGet(`/rest/v1/diagnostic_responses?diagnostic_id=eq.${enc(diag.id)}&select=rater_id,question_code,score&limit=5000`);
+  const resp = await sbGet(`/rest/v1/diagnostic_responses?diagnostic_id=eq.${enc(diag.id)}&select=rater_id,question_code,score,rater_relationship&limit=5000`);
   return computeReadinessRow(diag, raters, resp);
 }
 
@@ -565,6 +576,16 @@ function computeReadinessRow(diag, raters, resp) {
   // + TP3 core. Low = firm placement; high = split, treat the position as soft.
   const dispersion = meanItemSd(otherResp, OVERALL_CODES);
 
+  // Supervisor-divergence flag: does the boss read this leader very differently from
+  // everyone else? Split the non-self raters into supervisor vs the rest of the team.
+  // delta = team − supervisor  (positive → boss rates BELOW the team; negative → ABOVE).
+  const supResp  = otherResp.filter(r => isSupervisorRel(r.rater_relationship));
+  const teamResp = otherResp.filter(r => !isSupervisorRel(r.rater_relationship));
+  const supTp3  = avgByCodes(supResp,  TP3_CORE_CODES);
+  const teamTp3 = avgByCodes(teamResp, TP3_CORE_CODES);
+  const supDelta = (supTp3 != null && teamTp3 != null)
+    ? Math.round((teamTp3 - supTp3) * 100) / 100 : null;
+
   return {
     surveyClosed: true,
     asOf: diag.survey_closed_at,
@@ -585,6 +606,11 @@ function computeReadinessRow(diag, raters, resp) {
     agreement: {
       dispersion,
       split: dispersion != null && dispersion >= RATER_SPLIT_SD,
+    },
+    supervisorDivergence: {                // VISIBLE FLAG — composite stays equal-weight
+      supervisor: supTp3, team: teamTp3, delta: supDelta,
+      direction: supDelta == null ? null : (supDelta > 0 ? 'below' : 'above'),
+      diverges: supDelta != null && Math.abs(supDelta) >= SUPERVISOR_DIVERGENCE_DELTA,
     },
   };
 }
