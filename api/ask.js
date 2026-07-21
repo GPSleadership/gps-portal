@@ -515,7 +515,7 @@ Return ONLY valid JSON, no markdown, ASCII only:
 async function logUsage(token, questionText, questionLength, responseText, inputTokens, outputTokens) {
   // 1. Look up client by token (also fetch current_sprint for context)
   const clientRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/clients?token=eq.${encodeURIComponent(token)}&select=id,current_sprint_number`,
+    `${SUPABASE_URL}/rest/v1/clients?token=eq.${encodeURIComponent(token)}&select=id,current_sprint_number,industry,title,revenue_band`,
     {
       headers: {
         apikey: SUPABASE_SECRET,
@@ -528,6 +528,10 @@ async function logUsage(token, questionText, questionLength, responseText, input
   if (!clients || clients.length === 0) return;
   const clientId     = clients[0].id;
   const sprintNumber = clients[0].current_sprint_number || null;
+  // Denormalized segments so theme reports can slice by cohort without touching identity.
+  const segIndustry  = clients[0].industry      || null;
+  const segTitle     = clients[0].title         || null;
+  const segRevBand   = clients[0].revenue_band  || null;
 
   const now = new Date().toISOString();
 
@@ -548,6 +552,10 @@ async function logUsage(token, questionText, questionLength, responseText, input
       sprint_number: sprintNumber,
       input_tokens:  inputTokens   || null,
       output_tokens: outputTokens  || null,
+      // Anonymous cohort tags for theme reporting (v108) — no identity needed downstream.
+      segment_industry:     segIndustry,
+      segment_title:        segTitle,
+      segment_revenue_band: segRevBand,
     })
   });
 

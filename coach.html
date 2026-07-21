@@ -3099,7 +3099,6 @@ function renderProfileSection(section, client, checkins) {
     loadCloseoutData(client.id);
     loadSprintData(client.id);
     loadAskAlexStats(client.id);
-    if (client.ask_alex_enabled) loadAskAlexLog(client.id);
   } else if (section === 'diagnostics') {
     const linkedDiags = ALL_DIAGS.filter(d => d.client_id === client.id);
     const diagRows = linkedDiags.length > 0
@@ -3249,18 +3248,14 @@ function renderProfileSection(section, client, checkins) {
         ` : `<p style="font-size:13px;color:var(--gray-600);font-style:italic;">Ask Alex is not enabled for this client.</p>`}
       </div>
       ${client.ask_alex_enabled ? `
-      <div class="detail-section" id="aa-log-section-${client.id}">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-          <h4 style="margin:0;">Ask Alex Questions Log</h4>
-          <button onclick="loadAskAlexLog('${client.id}', true)"
-            id="aa-log-reload-${client.id}"
-            style="padding:5px 12px;background:var(--navy);color:#fff;border:none;border-radius:5px;font-size:11px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">
-            ↻ Reload
-          </button>
-        </div>
-        <div id="aa-log-${client.id}">
-          <p style="font-size:12px;color:var(--gray-600);">Loading questions…</p>
-        </div>
+      <div class="detail-section">
+        <h4 style="margin:0 0 6px;">Ask Alex Questions</h4>
+        <p style="font-size:12px;color:var(--gray-600);line-height:1.55;margin:0;">
+          Individual questions are not shown here by design. Leaders are told their Ask Alex
+          conversations are not reviewed to prepare for coaching — their weekly check-ins and
+          diagnostic are. Usage counts above show engagement; question themes are reviewed
+          anonymously across all clients to improve the tool.
+        </p>
       </div>
       ` : ''}
       <div class="detail-section">
@@ -3378,7 +3373,6 @@ function renderProfileSection(section, client, checkins) {
     `;
     if (client.ask_alex_enabled) {
       loadAskAlexStats(client.id);
-      loadAskAlexLog(client.id);
     }
     loadSponsorPanel(client.id);
   }
@@ -3523,77 +3517,10 @@ async function loadAskAlexStats(clientId) {
   el30.querySelector('div:first-child').textContent = r30.length;
 }
 
-// ── Ask Alex Questions Log ────────────────────────────────────────────────────
-async function loadAskAlexLog(clientId, forceReload) {
-  const el = document.getElementById('aa-log-' + clientId);
-  if (!el) return;
-
-  // If already loaded and not a forced reload, don't re-fetch
-  if (!forceReload && el.dataset.loaded === '1') return;
-
-  el.innerHTML = '<p style="font-size:12px;color:var(--gray-600);">Loading…</p>';
-
-  let data = null;
-  try {
-    data = await cdSelect('ask_alex_log', {
-      eq: { client_id: clientId },
-      order: { col: 'asked_at', asc: false },
-      limit: 50,
-      select: 'id,asked_at,question_text,response_text,sprint_number,input_tokens,output_tokens'
-    });
-  } catch (e) { data = null; }
-
-  if (!data) {
-    el.innerHTML = '<p style="font-size:12px;color:var(--red);">Error loading questions. Check Supabase RLS on ask_alex_log.</p>';
-    return;
-  }
-
-  el.dataset.loaded = '1';
-
-  if (data.length === 0) {
-    el.innerHTML = '<p style="font-size:12px;color:var(--gray-600);font-style:italic;">No questions logged yet. Questions will appear here once the client uses Ask Alex after migration v18 is applied.</p>';
-    return;
-  }
-
-  const rows = data.map((row, i) => {
-    const dt = new Date(row.asked_at);
-    const dtStr = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
-                  ' · ' + dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-    const sprintBadge = row.sprint_number
-      ? `<span style="background:var(--light-sand);color:var(--navy);font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:6px;">Sprint ${row.sprint_number}</span>`
-      : '';
-    const tokenInfo = (row.input_tokens || row.output_tokens)
-      ? `<span style="font-size:10px;color:var(--gray-600);margin-left:6px;">${(row.input_tokens||0)}↑ ${(row.output_tokens||0)}↓ tokens</span>`
-      : '';
-    const qText = row.question_text || '(no question text recorded)';
-    const rText = row.response_text || '(no response text recorded)';
-    const uid   = `aaq-${clientId}-${i}`;
-
-    return `
-      <div style="border:1px solid var(--gray-200);border-radius:8px;padding:12px 14px;margin-bottom:10px;">
-        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:8px;">
-          <span style="font-size:11px;color:var(--gray-600);">${dtStr}</span>
-          ${sprintBadge}${tokenInfo}
-        </div>
-        <div style="font-size:13px;color:var(--navy);font-weight:600;margin-bottom:6px;line-height:1.45;">
-          ${qText.length > 220 ? qText.substring(0, 220) + '…' : qText}
-        </div>
-        <button onclick="document.getElementById('${uid}').style.display = document.getElementById('${uid}').style.display==='none' ? 'block' : 'none';"
-          style="padding:3px 10px;background:none;border:1px solid var(--gray-300);border-radius:4px;font-size:11px;color:var(--gray-600);cursor:pointer;font-family:'Open Sans',sans-serif;">
-          Show / Hide Response
-        </button>
-        <div id="${uid}" style="display:none;margin-top:8px;background:var(--light-sand);border-radius:6px;padding:10px 12px;font-size:12px;color:var(--gray-700);line-height:1.55;white-space:pre-wrap;">
-          ${rText.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
-        </div>
-      </div>`;
-  }).join('');
-
-  el.innerHTML = `
-    <p style="font-size:11px;color:var(--gray-600);margin-bottom:10px;">
-      Showing ${data.length} most recent question${data.length !== 1 ? 's' : ''}. Responses collapse by default — click to expand.
-    </p>
-    ${rows}`;
-}
+// Ask Alex transcripts are intentionally NOT rendered in the coach console.
+// Leaders are told their Ask Alex conversations are not reviewed for coaching prep;
+// that promise is enforced here by not having a per-client transcript view at all.
+// Question themes are reviewed anonymously (see supabase-migration-v108).
 
 function copyURL(url, btn) {
   navigator.clipboard.writeText(url).then(() => {
