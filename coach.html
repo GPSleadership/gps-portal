@@ -2479,6 +2479,7 @@ function renderClientCard(client, checkins) {
           <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Email</label><input id="editEmail-${client.id}" type="email" value="${(client.email||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /></div>
           <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Organization</label><input id="editOrg-${client.id}" list="editOrgList-${client.id}" autocomplete="off" value="${(client.organization||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /><datalist id="editOrgList-${client.id}">${orgOptionsHtml()}</datalist></div>
           <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Title</label><input id="editTitle-${client.id}" value="${(client.title||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /></div>
+          <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Phone <span style="text-transform:none;opacity:0.6;">(optional — for SMS)</span></label><input id="editPhone-${client.id}" type="tel" value="${(client.phone||'').replace(/"/g,'&quot;')}" placeholder="(555) 123-4567" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /></div>
           <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Company Website <span style="text-transform:none;opacity:0.6;">(optional)</span></label><input id="editWebsite-${client.id}" type="url" value="${(client.website||'').replace(/"/g,'&quot;')}" placeholder="https://www.company.com" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /></div>
         </div>
         <div style="margin-bottom:10px;"><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Industry</label>
@@ -2818,6 +2819,7 @@ function renderProfileSection(section, client, checkins) {
           <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Email</label><input id="editEmail-${client.id}" type="email" value="${(client.email||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /></div>
           <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Organization</label><input id="editOrg-${client.id}" list="editOrgList-${client.id}" autocomplete="off" value="${(client.organization||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /><datalist id="editOrgList-${client.id}">${orgOptionsHtml()}</datalist></div>
           <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Title</label><input id="editTitle-${client.id}" value="${(client.title||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /></div>
+          <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Phone <span style="text-transform:none;opacity:0.6;">(optional — for SMS)</span></label><input id="editPhone-${client.id}" type="tel" value="${(client.phone||'').replace(/"/g,'&quot;')}" placeholder="(555) 123-4567" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /></div>
           <div><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Company Website <span style="text-transform:none;opacity:0.6;">(optional)</span></label><input id="editWebsite-${client.id}" type="url" value="${(client.website||'').replace(/"/g,'&quot;')}" placeholder="https://www.company.com" style="width:100%;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;font-family:'Open Sans',sans-serif;" /></div>
         </div>
         <div style="margin-bottom:10px;"><label style="font-size:11px;text-transform:uppercase;color:var(--gray-600);display:block;margin-bottom:4px;">Industry</label>
@@ -7535,6 +7537,7 @@ async function saveClientInfo(clientId) {
   const email    = document.getElementById('editEmail-'    + clientId)?.value.trim() || '';
   const org      = document.getElementById('editOrg-'      + clientId)?.value.trim() || '';
   const title    = document.getElementById('editTitle-'    + clientId)?.value.trim() || '';
+  const phone    = document.getElementById('editPhone-'    + clientId)?.value.trim() || '';
   let   website  = document.getElementById('editWebsite-'  + clientId)?.value.trim() || '';
   let   industry = document.getElementById('editIndustry-' + clientId)?.value || null;
   // #122: when this client is tied to a known Organization and these are blank, pull from the org.
@@ -7553,7 +7556,7 @@ async function saveClientInfo(clientId) {
   btn.textContent = 'Saving…'; btn.disabled = true;
 
   let error = null;
-  try { await cdUpdate('clients', { name, email, organization: org || null, title: title || null, website: website || null, industry }, { eq: { id: clientId } }); } catch (e) { error = e; }
+  try { await cdUpdate('clients', { name, email, organization: org || null, title: title || null, phone: phone || null, website: website || null, industry }, { eq: { id: clientId } }); } catch (e) { error = e; }
 
   if (error) {
     msg.style.color = 'var(--red)'; msg.textContent = 'Error — try again.';
@@ -7563,7 +7566,7 @@ async function saveClientInfo(clientId) {
 
   // Update local cache
   allClients = allClients.map(c => c.id === clientId
-    ? { ...c, name, email, organization: org || null, title: title || null, website: website || null, industry }
+    ? { ...c, name, email, organization: org || null, title: title || null, phone: phone || null, website: website || null, industry }
     : c);
 
   // Update card header in-place (avoid full re-render)
