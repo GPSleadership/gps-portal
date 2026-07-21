@@ -3959,8 +3959,11 @@ function wizRender() {
 function wizRenderProgress() {
   // Welcome (id 0) is an intro, not a numbered step; the 7 real steps number 1–7
   // to match the inner step badges ("Step N of 7") and the body copy. (P1 2026-07-01)
+  // The current step's NAME is folded into the header so mobile (≤480px, where the
+  // per-dot labels are hidden to avoid crowding) still shows where you are. (P1 2026-07-20)
+  const _curStep = WIZ_STEPS.find(s => s.id === wizStep);
   document.getElementById('wizProgressLabel').textContent =
-    wizStep === 0 ? 'Plan Setup — Welcome' : ('Plan Setup — Step ' + wizStep + ' of 7');
+    wizStep === 0 ? 'Plan Setup — Welcome' : ('Plan Setup — Step ' + wizStep + ' of 7 · ' + (_curStep ? _curStep.label : ''));
   document.getElementById('wizSteps').innerHTML = WIZ_STEPS.map(s => {
     let cls = 'wiz-step';
     if (s.id < wizStep) cls += ' done';
