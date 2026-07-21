@@ -1433,20 +1433,35 @@ function recToFit(rec) {
 }
 
 // ── Survey reminder cron ─────────────────────────────────────────────────────
-// Cadence: day the survey opens, 3 days before close, 1 day before close, and
-// the morning of close. Sends only to participants who haven't completed.
+// Cadence (GPS standard): the survey opens on day one; then TWO reminders — 3 days
+// before close, and the morning of close. No day-before reminder. Sends only to
+// participants who haven't completed.
+// ── Business-day scheduling (GPS standard) ───────────────────────────────────
+// Reminders fire 3 days before close and the morning of close. If a reminder
+// date lands on a weekend it rolls BACK to the prior business day (Friday). (The 7-day
+// close date itself rolls FORWARD to the next workday when it lands on a weekend — that
+// is applied where the close date is chosen, in the coach console.)
+function etYmd(d) { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(d); } // yyyy-mm-dd in ET
+function ymdShift(ymd, n) { const d = new Date(ymd + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+function ymdDow(ymd) { return new Date(ymd + 'T12:00:00Z').getUTCDay(); } // 0=Sun .. 6=Sat
+function reminderDateOffWeekend(ymd) { const w = ymdDow(ymd); if (w === 6) return ymdShift(ymd, -1); if (w === 0) return ymdShift(ymd, -2); return ymd; }
+
 async function runReminders() {
   const now = new Date();
-  const today = now.toISOString().slice(0, 10);
   const workshops = await sbGet(`/rest/v1/workshops?is_archived=eq.false&select=id,title,engagement_kind,pre_survey_open_at,pre_survey_close_at,post_survey_open_at,post_survey_close_at&or=(status.eq.pre_survey_open,status.eq.post_survey_open)`);
   let nudged = 0;
+  const todayYmd = etYmd(now);
   for (const w of workshops) {
     for (const phase of ['pre', 'post']) {
       const closeAt = phase === 'pre' ? w.pre_survey_close_at : w.post_survey_close_at;
       if (!closeAt) continue;
-      const days = Math.ceil((new Date(closeAt) - now) / 86400000);
-      // Only nudge on the cadence days (open handled by send-invites): 3, 1, 0 days out.
-      if (![3, 1, 0].includes(days)) continue;
+      const closeYmd = etYmd(new Date(closeAt));
+      // Two reminders — 3 days before close and the morning of close — each rolled
+      // back off weekends to the prior Friday.
+      const sendDates = new Set([3, 0].map(off => reminderDateOffWeekend(ymdShift(closeYmd, -off))));
+      if (!sendDates.has(todayYmd)) continue;
+      // Days-until-close for the email copy, measured from the actual send day.
+      const days = Math.max(0, Math.round((new Date(closeYmd + 'T12:00:00Z') - new Date(todayYmd + 'T12:00:00Z')) / 86400000));
       const statusCol = phase === 'pre' ? 'pre_status' : 'post_status';
       const parts = await sbGet(`/rest/v1/workshop_participants?workshop_id=eq.${enc(w.id)}&${statusCol}=neq.complete&select=id,participant_token,client_id`);
       const cmapNudge = await clientsMapByIds(parts.map(p => p.client_id));

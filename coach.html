@@ -14741,25 +14741,32 @@ async function drSendSponsor(sponsorId){
     var _surveyWord=(isA?'survey':'pre-survey');
     var schedCard='';
     if(w.pre_survey_open_at){
-      schedCard=card('<div style="font-weight:800;margin-bottom:6px;color:var(--navy);">Initial send</div><div style="font-size:13px;color:var(--ok);font-weight:700;">✓ Sent '+new Date(w.pre_survey_open_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</div><div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Reminders run automatically: 3 days before, 1 day before, and the morning the '+_surveyWord+' closes. You can still send individual invites to anyone new from the roster below.</div>');
+      schedCard=card('<div style="font-weight:800;margin-bottom:6px;color:var(--navy);">Initial send</div><div style="font-size:13px;color:var(--ok);font-weight:700;">✓ Sent '+new Date(w.pre_survey_open_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</div><div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Reminders run automatically: 3 days before, and the morning the '+_surveyWord+' closes. You can still send individual invites to anyone new from the roster below.</div>');
     } else {
       var schedInner = w.pre_survey_scheduled_at
         ? '<div style="background:var(--light-sand);padding:10px 12px;border-radius:8px;font-size:13px;color:var(--navy);">📅 Scheduled to send: <strong>'+esc(fmtReleaseET(new Date(w.pre_survey_scheduled_at)))+'</strong></div><div style="margin-top:10px;">'+btn('wsSchedCancel','Cancel scheduled send','ghost')+'<span id="wsSchedOut" style="font-size:12px;color:var(--text-muted);margin-left:8px;"></span></div>'
         : '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><input type="datetime-local" id="wsSchedAt" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;">'+btn('wsSchedSet','Schedule send')+'<span id="wsSchedOut" style="font-size:12px;color:var(--text-muted);margin-left:4px;"></span></div>';
-      schedCard=card('<div style="font-weight:800;margin-bottom:6px;color:var(--navy);">Schedule the initial send</div><div style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">Auto-send the '+_surveyWord+' to everyone not yet invited at a date and time you pick (your local time). The sponsor is copied on the first email. Reminders then go out 3 days before, 1 day before, and the morning the '+_surveyWord+' closes. You can still send individual invites any time from the roster below, or send to everyone now with the button under the roster.</div>'+schedInner);
+      schedCard=card('<div style="font-weight:800;margin-bottom:6px;color:var(--navy);">Schedule the initial send</div><div style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">Auto-send the '+_surveyWord+' to everyone not yet invited at a date and time you pick (your local time). The sponsor is copied on the first email. Reminders then go out 3 days before, and the morning the '+_surveyWord+' closes. You can still send individual invites any time from the roster below, or send to everyone now with the button under the roster.</div>'+schedInner);
     }
     // Close date: the day the survey/assessment stops accepting responses and reminders
     // escalate (3/1/0 days before). Without it, reminders never run. Saved directly to
     // workshops.pre_survey_close_at via the existing coach-data update path.
     var _closeWord = isA ? 'assessment' : 'survey';
-    var _closeDefault = w.pre_survey_close_at ? new Date(w.pre_survey_close_at)
-      : (w.pre_survey_open_at ? new Date(new Date(w.pre_survey_open_at).getTime() + 7*86400000)
-      : new Date(Date.now() + 7*86400000));
+    var _closeDefault;
+    if(w.pre_survey_close_at){ _closeDefault=new Date(w.pre_survey_close_at); }
+    else {
+      // GPS standard: default close is 7 days out; if that lands on a weekend, roll
+      // FORWARD to the next workday (Sat->Mon, Sun->Mon).
+      var _cbase=w.pre_survey_open_at?new Date(w.pre_survey_open_at).getTime():Date.now();
+      var _d7=new Date(_cbase+7*86400000); var _g=_d7.getDay();
+      if(_g===6) _d7.setDate(_d7.getDate()+2); else if(_g===0) _d7.setDate(_d7.getDate()+1);
+      _closeDefault=_d7;
+    }
     var _closeInputVal = new Date(_closeDefault.getTime() - _closeDefault.getTimezoneOffset()*60000).toISOString().slice(0,10);
     var _closeStatus = w.pre_survey_close_at
       ? '<div style="font-size:13px;color:var(--ok);font-weight:700;">✓ Closes '+new Date(w.pre_survey_close_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</div>'
       : '<div style="font-size:13px;color:var(--red);font-weight:700;">⚠ No close date set — the '+_closeWord+' stays open indefinitely and reminders won\'t run.</div>';
-    var closeCard=card('<div style="font-weight:800;margin-bottom:6px;color:var(--navy);">'+(isA?'Assessment':'Survey')+' close date</div>'+_closeStatus+'<div style="font-size:12px;color:var(--text-muted);margin:6px 0 10px;">On this date the '+_closeWord+' stops accepting responses. Reminders to anyone who hasn\'t finished go out 3 days before, 1 day before, and that morning.</div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><input type="date" id="wsCloseDate" value="'+_closeInputVal+'" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;">'+btn('wsCloseSet','Save close date')+'<span id="wsCloseOut" style="font-size:12px;color:var(--text-muted);margin-left:4px;"></span></div>');
+    var closeCard=card('<div style="font-weight:800;margin-bottom:6px;color:var(--navy);">'+(isA?'Assessment':'Survey')+' close date</div>'+_closeStatus+'<div style="font-size:12px;color:var(--text-muted);margin:6px 0 10px;">On this date the '+_closeWord+' stops accepting responses. Reminders to anyone who hasn\'t finished go out 3 days before close and the morning it closes.</div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><input type="date" id="wsCloseDate" value="'+_closeInputVal+'" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;">'+btn('wsCloseSet','Save close date')+'<span id="wsCloseOut" style="font-size:12px;color:var(--text-muted);margin-left:4px;"></span></div>');
     var rosterStatusCard = card(
       '<div style="font-weight:800;margin-bottom:10px;color:var(--navy);">Roster status</div>'+
       (w.roster_locked
