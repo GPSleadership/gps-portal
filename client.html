@@ -2435,6 +2435,10 @@
       <h2 id="qaIntroHeading">Ask a <span>leadership question.</span></h2>
       <p id="qaIntroDesc">Quick answers grounded in GPS frameworks, built for operations-heavy CEOs. <a href="javascript:void(0)" onclick="openCoachModal()" style="color:var(--teal);font-weight:600;text-decoration:none;border-bottom:1px solid rgba(1,148,154,.35);">Learn more about Alex</a></p>
     </div>
+    <!-- P0-6 (Wave 2, 3A): persistent Ask Alex output/reliance label (layer 2), pulled
+         live from legal_texts (ai_output_label). Always visible, never dismissed —
+         reliance happens at every answer, not once at signup. -->
+    <div id="qaAiLabel" style="display:none;font-size:11.5px;line-height:1.5;color:#8b93a6;margin:2px 0 10px;"></div>
     <div class="qa-boundary" id="qa-boundary">
       <div>For the deeper, situational work that needs someone in your corner over time, that's coaching. <a href="mailto:alex@gpsleadership.org" style="color:var(--navy);text-decoration:none;border-bottom:1px solid rgba(0,67,105,.3);font-weight:600;">Reach out to Alex directly</a></div>
     </div>
@@ -3012,10 +3016,11 @@ function submitQaNudge() {
 
   dismissQaNudge(true); // mark shown for this week
 
-  // Check terms consent
-  const needsTerms = !currentClient ||
-    !currentClient.ai_terms_accepted ||
-    currentClient.ai_terms_version !== CURRENT_TERMS_VERSION;
+  // Check terms consent. P0-6 (Wave 2, 3A): MAP FORWARD — anyone who has accepted
+  // (any version) is satisfied, so existing v1.0 clients are NOT re-prompted. A
+  // material re-accept is a deliberate action (bump system_entry_ack + clear
+  // ai_terms_accepted for affected clients), not an automatic version-mismatch prompt.
+  const needsTerms = !currentClient || !currentClient.ai_terms_accepted;
   if (needsTerms) {
     // Store question to auto-fill after terms accepted
     window._pendingNudgeQuestion = question;
@@ -3304,6 +3309,39 @@ function renderDiagCompleteMinimal(d) {
     </div>`;
 }
 
+// P0-6 (Wave 2, 1A): the deliverable footer (AI-assisted output; not a legal/medical/
+// employment determination) pulled LIVE from legal_texts (key: report_footer) and
+// appended to the on-portal report at RENDER time — so every report, including ones
+// already finalized, carries it, and swapping the wording needs no code deploy.
+var _aiOutputLabelText = null;
+async function populateAskAlexLabel() {
+  var slot = document.getElementById('qaAiLabel');
+  if (!slot) return;
+  try {
+    if (_aiOutputLabelText == null) {
+      var r = await fetch('/api/legal-text?key=ai_output_label', { headers: { 'Accept': 'application/json' } });
+      var j = r.ok ? await r.json() : null;
+      _aiOutputLabelText = (j && j.ok && j.active && j.body) ? String(j.body) : '';
+    }
+    if (_aiOutputLabelText) { slot.textContent = _aiOutputLabelText; slot.style.display = 'block'; }
+  } catch (e) { /* label is best-effort */ }
+}
+
+var _reportFooterText = null;
+async function populateReportLegalFooter() {
+  var slot = document.getElementById('dcReportLegalFooter');
+  if (!slot) return;
+  try {
+    if (_reportFooterText == null) {
+      var r = await fetch('/api/legal-text?key=report_footer', { headers: { 'Accept': 'application/json' } });
+      var j = r.ok ? await r.json() : null;
+      _reportFooterText = (j && j.ok && j.active && j.body) ? String(j.body) : '';
+    }
+    slot.textContent = _reportFooterText || '';
+    if (!_reportFooterText) slot.style.display = 'none';
+  } catch (e) { slot.style.display = 'none'; }
+}
+
 function renderDiagReportMode(d, reportDraft) {
   const el = document.getElementById('diag-content');
   if (!el) return;
@@ -3327,10 +3365,12 @@ function renderDiagReportMode(d, reportDraft) {
       </div>
       <div class="dc-report-body">${docHtml}</div>
       ${renderLeaderRecs(CLIENT_DIAG_RECS)}
-      <div style="text-align:center;padding-bottom:32px;">
+      <div style="text-align:center;padding-bottom:12px;">
         <p style="font-size:13px;color:#6b7280;">Questions about your results? Reach out to Alex directly.</p>
         <a href="mailto:alex@gpsleadership.org" class="dc-btn dc-btn-outline" style="text-decoration:none;display:inline-block;">Contact Alex →</a>
-      </div>`;
+      </div>
+      <div class="dc-report-legal-footer" id="dcReportLegalFooter" style="max-width:820px;margin:8px auto 28px;padding:14px 18px;border-top:1px solid #e8ecf2;font-size:11.5px;line-height:1.5;color:#8b93a6;white-space:pre-wrap;"></div>`;
+    populateReportLegalFooter();
     return;
   }
 
@@ -3350,10 +3390,12 @@ function renderDiagReportMode(d, reportDraft) {
         <iframe src="${report.pdf_base64}" style="width:100%;min-height:800px;border:none;display:block;" title="GPS Diagnostic Report"></iframe>
       </div>
       ${renderLeaderRecs(CLIENT_DIAG_RECS)}
-      <div style="text-align:center;padding:24px 0 32px;">
+      <div style="text-align:center;padding:24px 0 12px;">
         <p style="font-size:13px;color:#6b7280;">Questions about your results? Reach out to Alex directly.</p>
         <a href="mailto:alex@gpsleadership.org" class="dc-btn dc-btn-outline" style="text-decoration:none;display:inline-block;">Contact Alex →</a>
-      </div>`;
+      </div>
+      <div class="dc-report-legal-footer" id="dcReportLegalFooter" style="max-width:820px;margin:8px auto 28px;padding:14px 18px;border-top:1px solid #e8ecf2;font-size:11.5px;line-height:1.5;color:#8b93a6;white-space:pre-wrap;"></div>`;
+    populateReportLegalFooter();
     return;
   }
 
@@ -8252,8 +8294,9 @@ async function sendRecoveryLink() {
 // ─────────────────────────────────────────────
 // Q&A TOOL — TAB SWITCHING
 // ─────────────────────────────────────────────
-// Current terms version — bump to "v1.1" etc. when terms change.
-// Must match CURRENT_TERMS_VERSION in api/accept-terms.js.
+// P0-6 (Wave 2, 3A): the live acceptance version now comes from legal_texts
+// (system_entry_ack) via the server. This is only a FALLBACK label used if the
+// server response omits a version; gating no longer depends on it (map-forward).
 const CURRENT_TERMS_VERSION = 'v1.0';
 
 // ── Ask Alex: load recent question history from ask_alex_log ─────────────────
@@ -8409,6 +8452,7 @@ function showPortalTab(tab, _fromHistory) {
     alert('Ask Alex has been turned off for your account. Contact alex@gpsleadership.org if you would like it enabled.');
     return;
   }
+  if (tab === 'ask') populateAskAlexLabel();  // P0-6: persistent AI reliance label
   const mainContent   = document.getElementById('mainContent');
   const qaPanel       = document.getElementById('qaPanel');
   const resultsPanel  = document.getElementById('resultsPanel');
@@ -8480,10 +8524,10 @@ function showPortalTab(tab, _fromHistory) {
     clearCoachUnread();   // opening the thread marks messages read server-side
     window.scrollTo({ top: 0 });
   } else {
-    // Check terms consent before showing Q&A
+    // Check terms consent before showing Q&A. P0-6 (Wave 2, 3A): map forward —
+    // satisfied if accepted at all (no automatic re-prompt on version change).
     const needsTerms = !currentClient ||
-      !currentClient.ai_terms_accepted ||
-      currentClient.ai_terms_version !== CURRENT_TERMS_VERSION;
+      !currentClient.ai_terms_accepted;
     if (needsTerms) {
       openTermsModal(false);
       return; // don't switch tabs yet — modal handles it
@@ -8874,10 +8918,14 @@ async function handleTermsAgree() {
       body:    JSON.stringify({ token })
     });
     if (!res.ok) throw new Error('Save failed');
+    // P0-6 (Wave 2, 3A): the version comes back from the server (sourced from
+    // legal_texts system_entry_ack), so the client stores the real recorded version.
+    let _acceptedVer = CURRENT_TERMS_VERSION;
+    try { const _j = await res.json(); if (_j && _j.version) _acceptedVer = _j.version; } catch (_) {}
     // Update local client object so terms modal won't reappear this session
     if (currentClient) {
       currentClient.ai_terms_accepted    = true;
-      currentClient.ai_terms_version     = CURRENT_TERMS_VERSION;
+      currentClient.ai_terms_version     = _acceptedVer;
       currentClient.ai_terms_accepted_at = new Date().toISOString();
     }
     closeTermsModal();

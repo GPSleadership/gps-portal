@@ -240,6 +240,10 @@
     <p>Your response has been recorded. Your perspective directly supports this leader's development over the next 90 days.</p>
   </div>
 
+  <div id="consentState" class="card state-card" style="display:none;">
+    <div id="consent-slot"></div>
+  </div>
+
   <div id="surveyForm">
 
     <!-- Intro card -->
@@ -357,7 +361,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (tokenData.is_used) { show('alreadyDoneState'); return; }
     if (tokenData.expires_at && new Date(tokenData.expires_at) < new Date()) { show('errorState'); return; }
 
-    buildSurvey();
+    // AI-disclosure consent gate before any questions. On tick, the stamp (text id +
+    // version + timestamp) is recorded on this survey token before they can rate.
+    if (window.GPSConsentGate) {
+      show('consentState');
+      GPSConsentGate.mount(document.getElementById('consent-slot'), {
+        key: 'survey_consent',
+        beginLabel: 'Begin →',
+        recordConsent: async (textId, version) => {
+          try {
+            const r = await fetch('/api/survey?action=record-consent', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ token: tokenData.token, consent_text_id: textId, consent_version: version }),
+            });
+            const j = await r.json().catch(() => null);
+            return !!(j && j.ok);
+          } catch (e) { return false; }
+        },
+        onProceed: () => buildSurvey(),
+      });
+    } else {
+      show('errorState');
+    }
   } catch(e) {
     show('errorState');
   }
@@ -389,8 +414,8 @@ async function resilientFetch(url, opts) {
 }
 
 function show(id) {
-  ['loadingState','errorState','alreadyDoneState','successState','surveyForm']
-    .forEach(s => document.getElementById(s).style.display = (s === id ? 'block' : 'none'));
+  ['loadingState','errorState','alreadyDoneState','successState','consentState','surveyForm']
+    .forEach(s => { const el = document.getElementById(s); if (el) el.style.display = (s === id ? 'block' : 'none'); });
   // Keep the header pill honest. It starts as "Loading…" and is set to the real
   // checkpoint label by buildSurvey(); terminal states that never reach build must
   // clear it so it doesn't sit on "Loading…" behind an error or completion card.
@@ -521,6 +546,27 @@ async function submitSurvey() {
     });
 
     const data = await res.json();
+    if (data && data.consent_required) {
+      // Reached submit without a recorded consent — send them back to the disclosure.
+      btn.disabled = false; btn.textContent = 'Submit My Response →';
+      show('consentState');
+      if (window.GPSConsentGate) {
+        GPSConsentGate.mount(document.getElementById('consent-slot'), {
+          key: 'survey_consent', beginLabel: 'Continue →',
+          recordConsent: async (textId, version) => {
+            try {
+              const r = await fetch('/api/survey?action=record-consent', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: tokenData.token, consent_text_id: textId, consent_version: version }),
+              });
+              const j = await r.json().catch(() => null); return !!(j && j.ok);
+            } catch (e) { return false; }
+          },
+          onProceed: () => buildSurvey(),
+        });
+      }
+      return;
+    }
     if (!res.ok) {
       errEl.textContent   = data.error || 'Submission failed. Please try again.';
       errEl.style.display = 'block';
@@ -538,6 +584,7 @@ async function submitSurvey() {
 }
 
 </script>
+<script src="/consent-gate.js"></script>
 <script src="/device-preview.js"></script>
 </body>
 </html>

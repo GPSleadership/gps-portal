@@ -57,6 +57,7 @@
     <div id="root" class="card center"><p class="muted">Loading…</p></div>
   </div>
 
+<script src="/consent-gate.js"></script>
 <script>
 (function(){
   var qs = new URLSearchParams(location.search);
@@ -108,12 +109,22 @@
         : '<p class="muted" style="margin-top:16px;">Your answers are confidential and shared only as a team-level summary.</p>'+
           '<div class="field"><label>Your email (optional — lets us match your before &amp; after)</label><input id="rm_email" type="email" placeholder="you@company.com"></div>'+
           '<div class="field"><label>Your name (optional)</label><input id="rm_name" placeholder="Name"></div>')+
-      '<div class="nav"><button class="btn btn-primary" id="begin">Begin</button></div>';
-    document.getElementById('begin').onclick=function(){
+      '<div id="consent-slot"></div>';
+    // In-room QR survey is anonymous by design — no per-person row exists to stamp,
+    // so the gate shows the disclosure (required before question one) without a
+    // server-side per-person consent record. Ticking + Begin then starts.
+    function beginRoom(){
       var e=document.getElementById('rm_email'), n=document.getElementById('rm_name');
       respondent.email = e?e.value.trim():''; respondent.name = n?n.value.trim():'';
       STATE.idx=0; renderPage();
-    };
+    }
+    if(window.GPSConsentGate){
+      GPSConsentGate.mount(document.getElementById('consent-slot'),{
+        key:'survey_consent', beginLabel:'Begin', onProceed: beginRoom
+      });
+    } else {
+      document.getElementById('consent-slot').innerHTML='<div class="err">This survey couldn’t finish loading. Please refresh.</div>';
+    }
   }
 
   // ───────────────────────── PARTICIPANT SURVEY ─────────────────────────
@@ -155,8 +166,21 @@
       (d.workshop.anonymous
         ? '<p class="muted" style="margin-top:16px;"><b>Your answers are anonymous.</b> Your name and email are used only to deliver this survey. The moment you submit, your responses are stored with no link to you. Only the team-level picture is ever shared.</p>'
         : '<p class="muted" style="margin-top:16px;">Your answers are confidential. '+esc(d.participant.name||'')+', I only ever share the team-level picture — never individual responses.</p>')+
-      '<div class="nav"><button class="btn btn-primary" id="begin">Begin</button></div>';
-    document.getElementById('begin').onclick=function(){ STATE.idx=0; renderPage(); };
+      '<div id="consent-slot"></div>';
+    // AI-disclosure consent gate before question one. On tick, the stamp is recorded
+    // on this participant row; only then can they begin.
+    if(window.GPSConsentGate){
+      GPSConsentGate.mount(document.getElementById('consent-slot'),{
+        key:'survey_consent', beginLabel:'Begin',
+        recordConsent: async function(textId, version){
+          try{ var d2 = await api('record-consent',{consent_text_id:textId, consent_version:version}); return !!(d2 && d2.ok); }
+          catch(e){ return false; }
+        },
+        onProceed: function(){ STATE.idx=0; renderPage(); }
+      });
+    } else {
+      document.getElementById('consent-slot').innerHTML='<div class="err">This survey couldn’t finish loading. Please refresh.</div>';
+    }
   }
   function answeredCount(){ return STATE.questions.filter(function(q){ var v=STATE.answers[q.question_id]; return v!=null && v!==''; }).length; }
   function renderPage(){
@@ -238,6 +262,12 @@
     var payload = { responses: collect() };
     if(ROOM) payload.respondent = respondent;
     api(ROOM?'room-submit':'submit', payload).then(function(d){
+      if(d && d.consent_required){
+        // Reached submit without a recorded consent — bounce back to the disclosure.
+        if(nb) nb.disabled=false;
+        startParticipant();
+        return;
+      }
       if(d && d.ok){ thankYou('Thank you — your responses are in.' + (ROOM ? '' : ' This makes the workshop sharper for your whole team.')); }
       else if(d && d.closed){ thankYou('This survey just closed, but thanks for your time.'); }
       else { showError(d && d.error); }

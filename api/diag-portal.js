@@ -496,10 +496,31 @@ export default async function handler(req, res) {
         const overrides = or.ok ? await or.json() : [];
         return res.status(200).json({ ok: true, rater, diagnostic, overrides });
       }
+      // Record AI-disclosure consent at the START of the survey (before question one).
+      // Recorded even if the rater later abandons — that's the point: we can always
+      // show what was disclosed and agreed to. The FIRST stamp wins and is never
+      // overwritten, so a re-visit under a newer active version keeps the original.
+      case 'record-consent': {
+        const rater = await raterByToken(token);
+        if (!rater) return res.status(401).json({ error: 'Invalid or expired link' });
+        if (!rater.consent_ai_disclosure_at) {
+          await sb(`/rest/v1/diagnostic_raters?id=eq.${rater.id}`, 'PATCH', {
+            consent_ai_disclosure_at: new Date().toISOString(),
+            consent_version: body.consent_version || null,
+            consent_text_id: body.consent_text_id || null,
+          }, { Prefer: 'return=minimal' });
+        }
+        return res.status(200).json({ ok: true });
+      }
       case 'rater-submit': {
         const rater = await raterByToken(token);
         if (!rater) return res.status(401).json({ error: 'Invalid or expired link' });
         if (rater.completed_at) return res.status(200).json({ ok: false, already: true });
+        // Consent is server-authoritative: no responses are processed without a
+        // recorded AI-disclosure consent. The UI gate records it before question one;
+        // this rejects anything that reached submit without a stamp (returns
+        // consent_required so the page can re-show the gate rather than lose answers).
+        if (!rater.consent_ai_disclosure_at) return res.status(200).json({ ok: false, consent_required: true });
 
         // Re-verify the survey is still open at submit time (server-authoritative)
         const dr = await sb(`/rest/v1/diagnostics?id=eq.${rater.diagnostic_id}&select=status,survey_closed_at,anonymous_feedback&limit=1`);

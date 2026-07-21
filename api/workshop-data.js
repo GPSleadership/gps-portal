@@ -365,7 +365,20 @@ function findingsFrom(agg) {
 // re-sends to everyone). Shared by the manual "Send survey emails" button and the
 // scheduled-send cron. Sets pre_survey_open_at on first send so it never double-fires,
 // and drops a sponsor/POC visibility copy of that first send.
+// P0-6: no active survey consent text = no invitations go out. Fails closed.
+async function hasActiveConsentText() {
+  try {
+    const r = await sb('/rest/v1/legal_texts?key=eq.survey_consent&is_active=eq.true&select=id&limit=1');
+    if (!r.ok) return false;
+    const rows = await r.json().catch(() => []);
+    return Array.isArray(rows) && rows.length > 0;
+  } catch (_) { return false; }
+}
+
 async function performWorkshopPreSend(workshopId, forceAll) {
+  if (!(await hasActiveConsentText())) {
+    return { ok: false, status: 409, error: 'Blocked: no active survey consent text is published. Publish the AI-disclosure consent in Settings → Legal Texts before sending workshop invitations.' };
+  }
   const w = await sbOne(`/rest/v1/workshops?id=eq.${enc(workshopId)}&select=*&limit=1`);
   if (!w) return { ok: false, status: 404, error: 'Workshop not found' };
   const allParts = await sbGet(`/rest/v1/workshop_participants?workshop_id=eq.${enc(workshopId)}&select=id,participant_token,client_id,invited_at`);

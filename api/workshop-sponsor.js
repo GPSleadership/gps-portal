@@ -41,6 +41,13 @@ async function aggregate(workshopId) {
   const preDone = parts.filter(p => p.pre_status === 'complete').length;
   const postDone = parts.filter(p => p.post_status === 'complete').length;
 
+  // P0-6 (Wave 2, item 4): the workshop consent gate promises min-3 aggregation.
+  // The SPONSOR view must honor it — a phase with fewer than 3 respondents shows no
+  // averages/NPS/added-question scores (the coach view in workshop-data.js is
+  // unchanged; the coach is the neutral facilitator, not the subject).
+  const MIN_N = 3;
+  const phaseOK = { pre: preDone >= MIN_N, post: postDone >= MIN_N };
+
   const themesByPhase = { pre: {}, post: {} };
   const npsRaw = { pre: [], post: [] };
   for (const r of resp) {
@@ -52,7 +59,7 @@ async function aggregate(workshopId) {
     (themesByPhase[ph][t] = themesByPhase[ph][t] || []).push(Number(r.response_value));
   }
   const themeAvg = ph => Object.fromEntries(Object.entries(themesByPhase[ph]).map(([t, a]) => [t, avg(a)]));
-  const preThemes = themeAvg('pre'), postThemes = themeAvg('post');
+  const preThemes = phaseOK.pre ? themeAvg('pre') : {}, postThemes = phaseOK.post ? themeAvg('post') : {};
 
   const tp3 = {};
   for (const t of TP3_THEMES) {
@@ -62,7 +69,8 @@ async function aggregate(workshopId) {
   const allThemes = Array.from(new Set([...Object.keys(preThemes), ...Object.keys(postThemes)]));
   const themeTable = allThemes.map(t => ({ theme: t, pre: preThemes[t] ?? null, post: postThemes[t] ?? null, delta: (preThemes[t] != null && postThemes[t] != null) ? round2(postThemes[t] - preThemes[t]) : null }));
 
-  const npsScores = npsRaw.post.length ? npsRaw.post : npsRaw.pre;
+  // NPS: only from a phase that met the min-3 floor (post preferred, then pre).
+  const npsScores = (phaseOK.post && npsRaw.post.length) ? npsRaw.post : (phaseOK.pre ? npsRaw.pre : []);
   let nps = null, npsAvg = null;
   if (npsScores.length) { const prom = npsScores.filter(s => s >= 9).length; const detr = npsScores.filter(s => s <= 6).length; nps = Math.round(((prom - detr) / npsScores.length) * 100); npsAvg = avg(npsScores); }
 
@@ -79,13 +87,17 @@ async function aggregate(workshopId) {
       scoredMap[r.question_id].vals.push(Number(r.response_value));
     }
   }
-  const addedScored = Object.values(scoredMap).map(a => ({ text: a.text, theme: a.theme, score: avg(a.vals), n: a.vals.length }));
+  // Added-question scores also honor min-3: below the floor, show no score.
+  const addedScored = Object.values(scoredMap).map(a => ({ text: a.text, theme: a.theme, score: a.vals.length >= MIN_N ? avg(a.vals) : null, n: a.vals.length, suppressed: a.vals.length < MIN_N }));
   const addedQualitative = Object.values(qualMap).map(a => ({ text: a.text, theme: a.theme, count: a.count }));
 
   return {
     participation: { total, pre: { done: preDone, rate: total ? Math.round((preDone / total) * 100) : 0 }, post: { done: postDone, rate: total ? Math.round((postDone / total) * 100) : 0 } },
     tp3, themeTable, nps, npsAvg,
     added: { scored: addedScored, qualitative: addedQualitative },
+    // min-3 transparency for the UI: which phases were withheld and why.
+    min_n: MIN_N,
+    suppressed: { pre: !phaseOK.pre, post: !phaseOK.post },
   };
 }
 

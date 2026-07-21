@@ -41,6 +41,7 @@
 <div class="wrap">
   <div id="view" class="card"><div class="muted">Loading…</div></div>
 </div>
+<script src="/consent-gate.js"></script>
 <script>
 var TOKEN = new URLSearchParams(location.search).get('token') || '';
 var LEVEL = 'yellow';
@@ -86,7 +87,11 @@ async function submit(){
   if(!role){ m.style.color='#b00'; m.textContent='Please add your role or relationship to the team.'; return; }
   if(!obs){ m.style.color='#b00'; m.textContent='Please add a short observation before submitting.'; return; }
   btn.disabled=true; btn.textContent='Submitting…';
-  try{ await api('submit-external-feedback', { token:TOKEN, summary:obs, level:LEVEL, name:nm, by_role:role }); thanks(fmtDate()); }
+  try{
+    var subRes = await api('submit-external-feedback', { token:TOKEN, summary:obs, level:LEVEL, name:nm, by_role:role });
+    if(subRes && subRes.consent_required){ m.style.color='#b00'; m.textContent='Please review and accept the disclosure before submitting.'; btn.disabled=false; btn.textContent='Submit my input'; return; }
+    thanks(fmtDate());
+  }
   catch(e){ m.style.color='#b00'; m.textContent=e.message; btn.disabled=false; btn.textContent='Submit my input'; }
 }
 (async function(){
@@ -94,7 +99,21 @@ async function submit(){
   try{
     var ctx = await api('feedback-context', { token:TOKEN });
     if(ctx.submitted){ thanks(fmtDate(ctx.submitted_at)); return; }
-    renderForm(ctx);
+    // AI-disclosure consent gate before the form. The stamp is recorded on this
+    // invite row before any observation is written.
+    if(window.GPSConsentGate){
+      document.getElementById('view').innerHTML = '<div id="consent-slot"></div>';
+      GPSConsentGate.mount(document.getElementById('consent-slot'), {
+        key:'survey_consent', beginLabel:'Continue →',
+        recordConsent: async function(textId, version){
+          try{ var d = await api('record-external-consent', { token:TOKEN, consent_text_id:textId, consent_version:version }); return !!(d && d.ok); }
+          catch(e){ return false; }
+        },
+        onProceed: function(){ renderForm(ctx); }
+      });
+    } else {
+      errorBox('This page couldn’t finish loading. Please refresh.');
+    }
   }catch(e){ errorBox(e.message); }
 })();
 </script>

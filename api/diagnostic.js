@@ -75,6 +75,22 @@ function sb(path, method = 'GET', body = null, extra = {}) {
   });
 }
 
+// ── Consent guardrail (P0-6) ─────────────────────────────────────────────────
+// A survey/feedback invite promises confidential, aggregated, AI-assisted handling.
+// If there is no ACTIVE survey_consent text in legal_texts, the system cannot show
+// that disclosure — so it must NOT send. Returns true if an active version exists.
+// Fails CLOSED: any error (table missing, upstream down) blocks the send.
+async function hasActiveConsentText() {
+  try {
+    const r = await sb('/rest/v1/legal_texts?key=eq.survey_consent&is_active=eq.true&select=id&limit=1');
+    if (!r.ok) return false;
+    const rows = await r.json().catch(() => []);
+    return Array.isArray(rows) && rows.length > 0;
+  } catch (_) { return false; }
+}
+const CONSENT_MISSING_MSG =
+  'Blocked: no active survey consent text is published. Publish the AI-disclosure consent in Settings → Legal Texts before sending invitations. (A survey must not go out promising disclosures the system can’t show.)';
+
 // ── Call Claude API (with retry) ─────────────────────────────────────────────
 async function callClaude(systemPrompt, userPrompt, maxTokens = 512, { retries = 2, retryDelayMs = 3000, model = CLAUDE_MODEL, timeoutMs = null, temperature = null, documentBase64 = null, documentMediaType = 'application/pdf' } = {}) {
   // When a PDF is supplied, send it as a document block alongside the text so the
@@ -544,6 +560,7 @@ export default async function handler(req, res) {
     case 'nudge-checkin':        return handleNudgeCheckin(req, res);
     case 'request-external-feedback': return handleRequestExternalFeedback(req, res);
     case 'feedback-context':     return handleFeedbackContext(req, res);
+    case 'record-external-consent': return handleRecordExternalConsent(req, res);
     case 'submit-external-feedback': return handleSubmitExternalFeedback(req, res);
     case 'reminders':            return handleReminders(req, res);
     case 'draft-kickoff-email':  return handleDraftKickoffEmail(req, res);
@@ -573,6 +590,7 @@ async function handleResendRater(req, res) {
   const { rater_id, session } = req.body || {};
   if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
   if (!rater_id) return res.status(400).json({ error: 'rater_id required' });
+  if (!(await hasActiveConsentText())) return res.status(409).json({ error: CONSENT_MISSING_MSG }); // P0-6
   try {
     const rRes  = await sb(`/rest/v1/diagnostic_raters?id=eq.${rater_id}&select=id,name,email,relationship,token,will_interview,invited_at,diagnostic_id&limit=1`);
     const rRows = await rRes.json();
@@ -711,6 +729,9 @@ function buildInviteEmail({ raterName, leaderName, leaderTitle, leaderOrg, surve
 // invites_sent_at (and clears any pending schedule) only when at least one email
 // actually went out.
 async function sendInvitesForDiagnostic(diagnostic_id) {
+  // P0-6 consent guardrail at the shared chokepoint — covers the manual button AND
+  // the scheduled-send cron. No active disclosure text = no invitations go out.
+  if (!(await hasActiveConsentText())) return { httpStatus: 409, payload: { error: CONSENT_MISSING_MSG } };
   const diagRes = await sb(
     `/rest/v1/diagnostics?id=eq.${diagnostic_id}&select=id,client_name,client_title,client_org,client_email,close_date,status,self_assessment_completed_at,interviews_enabled,interview_calendar_link,anonymous_feedback&limit=1`
   );
@@ -819,6 +840,8 @@ async function handleSendInvites(req, res) {
   const { diagnostic_id } = req.body || {};
   if (!diagnostic_id) return res.status(400).json({ error: 'diagnostic_id is required' });
   if (!/^[0-9a-fA-F-]{36}$/.test(diagnostic_id)) return res.status(400).json({ error: 'Invalid diagnostic_id' }); // P0-4
+
+  if (!(await hasActiveConsentText())) return res.status(409).json({ error: CONSENT_MISSING_MSG }); // P0-6
 
   try {
     const r = await sendInvitesForDiagnostic(diagnostic_id);
@@ -3871,6 +3894,7 @@ async function handleRequestExternalFeedback(req, res) {
   const { team_id, name, email, by_role, session } = req.body || {};
   if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
   if (!team_id || !name || !email) return res.status(400).json({ error: 'team_id, name, and email are required' });
+  if (!(await hasActiveConsentText())) return res.status(409).json({ error: CONSENT_MISSING_MSG }); // P0-6
   try {
     const teamRows = await (await sb(`/rest/v1/teams?id=eq.${team_id}&select=name,client_org_name`)).json();
     const team = Array.isArray(teamRows) && teamRows[0];
@@ -3904,6 +3928,24 @@ async function handleFeedbackContext(req, res) {
   }
 }
 
+// Record AI-disclosure consent for an external feedback respondent (before they write).
+async function handleRecordExternalConsent(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const { token, consent_text_id, consent_version } = req.body || {};
+  if (!token) return res.status(400).json({ error: 'token required' });
+  const rows = await (await sb(`/rest/v1/external_feedback_invites?token=eq.${enc4(token)}&select=id,consent_ai_disclosure_at`)).json();
+  const inv = Array.isArray(rows) && rows[0];
+  if (!inv) return res.status(404).json({ error: 'This link is invalid or has expired.' });
+  if (!inv.consent_ai_disclosure_at) {
+    await sb(`/rest/v1/external_feedback_invites?id=eq.${inv.id}`, 'PATCH', {
+      consent_ai_disclosure_at: new Date().toISOString(),
+      consent_version: consent_version || null,
+      consent_text_id: consent_text_id || null,
+    }, { Prefer: 'return=minimal' });
+  }
+  return res.status(200).json({ ok: true });
+}
+
 async function handleSubmitExternalFeedback(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const { token, summary, level, name, by_role } = req.body || {};
@@ -3912,9 +3954,11 @@ async function handleSubmitExternalFeedback(req, res) {
   if (!by_role || !String(by_role).trim()) return res.status(400).json({ error: 'Your role is required.' });
   const lv = ['green', 'yellow', 'red'].includes(level) ? level : 'yellow';
   try {
-    const rows = await (await sb(`/rest/v1/external_feedback_invites?token=eq.${enc4(token)}&select=id,team_id,name,by_role,submitted_at`)).json();
+    const rows = await (await sb(`/rest/v1/external_feedback_invites?token=eq.${enc4(token)}&select=id,team_id,name,by_role,submitted_at,consent_ai_disclosure_at`)).json();
     const inv = Array.isArray(rows) && rows[0];
     if (!inv) return res.status(404).json({ error: 'This link is invalid or has expired.' });
+    // P0-6: no external feedback is processed without a recorded AI-disclosure consent.
+    if (!inv.consent_ai_disclosure_at) return res.status(200).json({ ok: false, consent_required: true });
     if (inv.submitted_at) return res.status(409).json({ error: 'This feedback has already been submitted. Thank you.' });
     await sb('/rest/v1/external_signals', 'POST', {
       // The respondent self-identifies on the form; prefer those over invite values.

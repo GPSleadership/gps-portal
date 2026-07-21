@@ -299,6 +299,49 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
+    // ── Legal texts (P0-6): single source of truth for all disclosure/consent copy.
+    //    Owner-only. Publishing INSERTS a new active version and deactivates the old
+    //    one — it never mutates an existing row, so recorded consents keep pointing at
+    //    the exact text that was shown. ────────────────────────────────────────────
+    const LEGAL_KEYS = new Set(['survey_consent','system_entry_ack','ai_output_label','invite_line','checkout_notice','report_footer','privacy_section']);
+    if (action === 'legal-text-list') {
+      if (!isOwner) return ownerOnly();
+      const r = await sb('/rest/v1/legal_texts?select=id,key,body,version,is_active,effective_from,updated_by,created_at&order=key.asc,created_at.desc');
+      const rows = r.ok ? await r.json() : [];
+      const byKey = {};
+      for (const row of (Array.isArray(rows) ? rows : [])) {
+        if (!byKey[row.key]) byKey[row.key] = { key: row.key, active: null, history: [] };
+        if (row.is_active && !byKey[row.key].active) byKey[row.key].active = row;
+        byKey[row.key].history.push(row);
+      }
+      // Ensure every known key appears even if it has no row yet.
+      for (const k of LEGAL_KEYS) if (!byKey[k]) byKey[k] = { key: k, active: null, history: [] };
+      return res.status(200).json({ ok: true, keys: byKey });
+    }
+    if (action === 'legal-text-publish') {
+      if (!isOwner) return ownerOnly();
+      const key = String(body.key || '');
+      const text = String(body.body == null ? '' : body.body);
+      if (!LEGAL_KEYS.has(key)) return res.status(400).json({ error: 'Unknown legal text key' });
+      if (!text.trim()) return res.status(400).json({ error: 'Text cannot be empty' });
+      // Sequence a human-readable version: YYYY-MM-vN (N = count of prior rows for this key + 1).
+      const cntRes = await sb(`/rest/v1/legal_texts?key=eq.${encodeURIComponent(key)}&select=id`);
+      const cnt = cntRes.ok ? (await cntRes.json()).length : 0;
+      const now = new Date();
+      const version = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-v${cnt + 1}`;
+      // 1) Deactivate the current active row FIRST (the partial unique index allows
+      //    only one active per key, so the new insert must not collide).
+      const deact = await sb(`/rest/v1/legal_texts?key=eq.${encodeURIComponent(key)}&is_active=eq.true`, 'PATCH', { is_active: false }, { Prefer: 'return=minimal' });
+      if (!deact.ok) { const d = await deact.json().catch(() => ({})); return res.status(500).json({ error: 'Could not deactivate current version', detail: d }); }
+      // 2) Insert the new active version.
+      const ins = await sb('/rest/v1/legal_texts', 'POST', {
+        key, body: text, version, is_active: true, updated_by: senderEmail || 'owner',
+      }, { Prefer: 'return=representation' });
+      if (!ins.ok) { const d = await ins.json().catch(() => ({})); return res.status(500).json({ error: 'Could not publish new version', detail: d }); }
+      const created = (await ins.json())[0] || null;
+      return res.status(200).json({ ok: true, version, row: created });
+    }
+
     // ── Leader profile photo (coach uploads on the leader's behalf) ─────────
     // Same bucket/field the leader's own uploader uses (org-assets ·
     // client-avatars/<id> · clients.avatar_url), so a coach-set photo shows up

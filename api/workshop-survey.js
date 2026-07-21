@@ -129,6 +129,20 @@ export default async function handler(req, res) {
         });
       }
 
+      // ── Participant survey: record AI-disclosure consent (before question one) ─
+      case 'record-consent': {
+        const p = await participantByToken(token);
+        if (!p) return res.status(401).json({ error: 'Invalid or expired link' });
+        if (!p.consent_ai_disclosure_at) {
+          await sb(`/rest/v1/workshop_participants?id=eq.${enc(p.id)}`, 'PATCH', {
+            consent_ai_disclosure_at: isoNow(),
+            consent_version: body.consent_version || null,
+            consent_text_id: body.consent_text_id || null,
+          }, { Prefer: 'return=minimal' });
+        }
+        return res.status(200).json({ ok: true });
+      }
+
       // ── Participant survey: save progress (resume later) ─────────────────────
       case 'save-progress': {
         const phase = body.phase === 'post' ? 'post' : 'pre';
@@ -146,6 +160,8 @@ export default async function handler(req, res) {
         const phase = body.phase === 'post' ? 'post' : 'pre';
         const p = await participantByToken(token);
         if (!p) return res.status(401).json({ error: 'Invalid or expired link' });
+        // P0-6: no response is processed without a recorded AI-disclosure consent.
+        if (!p.consent_ai_disclosure_at) return res.status(200).json({ ok: false, consent_required: true });
         const w = await sbOne(`/rest/v1/workshops?id=eq.${enc(p.workshop_id)}&select=*&limit=1`);
         if (!w) return res.status(404).json({ error: 'Workshop not found' });
         if (!phaseOpen(w, phase)) return res.status(200).json({ ok: false, closed: true });

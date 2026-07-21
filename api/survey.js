@@ -52,6 +52,20 @@ function sbFetch(path, method = 'GET', body = null, extraHeaders = {}) {
   });
 }
 
+// ── Consent guardrail (P0-6) ─────────────────────────────────────────────────
+// No active survey_consent text = the disclosure can't be shown = no pulse invites go
+// out. Fails CLOSED (any error blocks the send).
+async function hasActiveConsentText() {
+  try {
+    const r = await sbFetch('/rest/v1/legal_texts?key=eq.survey_consent&is_active=eq.true&select=id&limit=1');
+    if (!r.ok) return false;
+    const rows = await r.json().catch(() => []);
+    return Array.isArray(rows) && rows.length > 0;
+  } catch (_) { return false; }
+}
+const CONSENT_MISSING_MSG =
+  'Blocked: no active survey consent text is published. Publish the AI-disclosure consent in Settings → Legal Texts before sending pulse invitations.';
+
 // Configurable CC for survey emails — global toggles (email_cc_settings) + per-client
 // project CCs. Falls back to leader+team+alex if the config can't be read.
 async function loadCcConfig() {
@@ -92,6 +106,7 @@ export default async function handler(req, res) {
     case 'send-scheduled': return handleSendScheduled(req, res);
     case 'resend': return handleResend(req, res);
     case 'submit': return handleSubmit(req, res);
+    case 'record-consent': return handleRecordConsent(req, res);
     default:
       return res.status(400).json({ error: `Unknown action: "${action}". Valid: get, send, schedule-send, schedule-pulses, send-scheduled, resend, submit` });
   }
@@ -113,6 +128,27 @@ async function handleGet(req, res) {
   const rows = await r.json();
   if (!Array.isArray(rows) || rows.length === 0) return res.status(404).json({ error: 'Survey link not recognized' });
   return res.status(200).json({ ok: true, token: rows[0] });
+}
+
+// Record AI-disclosure consent at the START of the pulse survey (before question one).
+// First stamp wins and is never overwritten.
+async function handleRecordConsent(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const { token, consent_text_id, consent_version } = req.body || {};
+  if (!token) return res.status(400).json({ error: 'Missing token' });
+  const r = await sbFetch(`/rest/v1/survey_tokens?token=eq.${encodeURIComponent(token)}&select=id,consent_ai_disclosure_at&limit=1`);
+  if (!r.ok) return res.status(500).json({ error: 'Token lookup failed' });
+  const rows = await r.json().catch(() => []);
+  const row = Array.isArray(rows) ? rows[0] : null;
+  if (!row) return res.status(404).json({ error: 'Survey link not recognized' });
+  if (!row.consent_ai_disclosure_at) {
+    await sbFetch(`/rest/v1/survey_tokens?id=eq.${row.id}`, 'PATCH', {
+      consent_ai_disclosure_at: new Date().toISOString(),
+      consent_version: consent_version || null,
+      consent_text_id: consent_text_id || null,
+    }, { Prefer: 'return=minimal' });
+  }
+  return res.status(200).json({ ok: true });
 }
 
 
@@ -424,6 +460,8 @@ async function handleSend(req, res) {
       return res.status(400).json({ error: 'checkpoint must be baseline, day30, or day90' });
     }
 
+    if (!(await hasActiveConsentText())) return res.status(409).json({ error: CONSENT_MISSING_MSG }); // P0-6
+
     const authOk = !!verifyCoachSession(req.body.session);
     if (!authOk) return res.status(401).json({ error: 'Not authorized' });
 
@@ -590,6 +628,11 @@ async function handleSendScheduled(req, res) {
 
   const nowISO = new Date().toISOString();
   const log = { processed: [], skipped: [], errors: [] };
+  // P0-6: never send scheduled pulses while no active consent text is published.
+  // Leave the schedule rows unclaimed so they go out once consent is published.
+  if (!(await hasActiveConsentText())) {
+    return res.status(200).json({ ok: true, blocked: 'no_active_consent_text', sent: 0, note: CONSENT_MISSING_MSG });
+  }
   try {
     const dueRes = await sbFetch(`/rest/v1/survey_schedules?scheduled_at=lte.${nowISO}&sent_at=is.null&claimed_at=is.null&select=id,client_id,checkpoint&order=scheduled_at.asc&limit=50`);
     const due = dueRes.ok ? (await dueRes.json() || []) : [];
@@ -633,6 +676,8 @@ async function handleResend(req, res) {
   try {
     const { client_id, stakeholder_id, checkpoint = 'baseline', password } = req.body || {};
     if (!client_id || !stakeholder_id) return res.status(400).json({ error: 'client_id and stakeholder_id are required' });
+
+    if (!(await hasActiveConsentText())) return res.status(409).json({ error: CONSENT_MISSING_MSG }); // P0-6
 
     const authOk = !!verifyCoachSession(req.body.session);
     if (!authOk) return res.status(401).json({ error: 'Not authorized' });
@@ -815,6 +860,8 @@ async function handleSubmit(req, res) {
     if (!tokens || tokens.length === 0) return res.status(404).json({ error: 'Invalid survey link' });
 
     const tokenRecord = tokens[0];
+    // P0-6: no response is processed without a recorded AI-disclosure consent.
+    if (!tokenRecord.consent_ai_disclosure_at) return res.status(200).json({ ok: false, consent_required: true });
     if (tokenRecord.is_used) return res.status(409).json({ error: 'This survey has already been submitted' });
     if (tokenRecord.expires_at && new Date(tokenRecord.expires_at) < new Date()) {
       return res.status(410).json({ error: 'This survey link has expired' });

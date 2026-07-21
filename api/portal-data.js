@@ -332,8 +332,10 @@ function computeMilestoneState(client, bookingUrl, checkins, surveyResponses) {
       metric_window_n: w.n,
       gate: (days === 90 && stakeholderArmed) ? 'stakeholder' : 'self_report',
       stakeholder_target:        days === 90 ? pulseTarget : null,
-      stakeholder_baseline_avg:  days === 90 && _pulseBase.avg != null ? Math.round(_pulseBase.avg * 100) / 100 : null,
-      stakeholder_day90_avg:     days === 90 && _pulse90.avg  != null ? Math.round(_pulse90.avg  * 100) / 100 : null,
+      // P0-6 (Wave 2, item 4): honor the min-3 promise the survey consent makes —
+      // never surface a stakeholder average built from fewer than MIN_RATERS voices.
+      stakeholder_baseline_avg:  days === 90 && _pulseBase.n >= MIN_RATERS && _pulseBase.avg != null ? Math.round(_pulseBase.avg * 100) / 100 : null,
+      stakeholder_day90_avg:     days === 90 && _pulse90.n  >= MIN_RATERS && _pulse90.avg  != null ? Math.round(_pulse90.avg  * 100) / 100 : null,
       stakeholder_n:             days === 90 ? _pulse90.n : null,
       stakeholder_quorum_met:    days === 90 ? stakeholderQuorum : null,
       hit,

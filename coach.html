@@ -1242,6 +1242,10 @@ I'm taking part in a leadership assessment run by GPS Leadership Solutions. Thei
         <strong>Review before activating.</strong> These templates control the emails sent to stakeholders. Edit the subject and body as needed, then toggle <strong>Approved</strong> to activate each one. Unapproved templates fall back to the system default. Placeholders like <code>[ClientFirstName]</code> and <code>[SurveyLink]</code> are replaced automatically.
       </div>
 
+      <div id="legalTextsPanel" class="owner-only" style="background:var(--white);border-radius:8px;padding:16px 18px;margin-bottom:16px;border:1px solid var(--gray-200);">
+        <div class="spinner"></div>
+      </div>
+
       <div id="pricingControlPanel" class="owner-only" style="background:var(--white);border-radius:8px;padding:16px 18px;margin-bottom:16px;border:1px solid var(--gray-200);">
         <div class="spinner"></div>
       </div>
@@ -4975,7 +4979,7 @@ function showSection(name, skipHooks, _fromHistory) {
   if (name === 'admins')      loadAdminAccounts();
   if (name === 'reportflow')  loadReportFlowSettings();
   if (name === 'aicontrols')  loadAiControls();
-  if (name === 'templates')   { loadEmailTemplates(); loadCcSettingsPanel(); loadPricingControlPanel(); loadRenewalConfigPanel(); }
+  if (name === 'templates')   { loadEmailTemplates(); loadCcSettingsPanel(); loadLegalTextsPanel(); loadPricingControlPanel(); loadRenewalConfigPanel(); }
   if (name === 'dashboard')   { _actionItemsLoaded = false; renderDiagHome(); refreshMsgBadge(); }
   if (name === 'diagnostics') { diagBoot(); renderDiagTable(); }
   if (name === 'organizations') renderOrganizations();
@@ -5622,6 +5626,73 @@ function tplGroup(t){
   if (/remind|check.?in|sprint|welcome|coach|plan|closeout|testimonial|referral|debrief|report/.test(s)) return 'Coaching Sprint';
   return 'Other';
 }
+
+// ── Legal Texts (P0-6): single source of truth for disclosure/consent copy ────
+// These render everywhere (survey consent gate, invite email, checkout, report
+// footer, privacy page, Ask Alex label). Publishing a new version does NOT change
+// consents people already recorded — those keep the exact text they agreed to.
+var LEGAL_TEXT_LABELS = {
+  survey_consent:   { name: 'Survey consent gate', where: 'Shown before question one on every survey (raters, self, workshop, pulse, external).' },
+  system_entry_ack: { name: 'System entry acknowledgement', where: 'Shown once at a leader/client’s first login to the Executive Impact System.' },
+  ai_output_label:  { name: 'Ask Alex output label', where: 'The always-visible line under Ask Alex (reliance disclaimer).' },
+  invite_line:      { name: 'Invitation email line', where: 'One line in survey/feedback invitation emails.' },
+  checkout_notice:  { name: 'Checkout / payment notice', where: 'Above the pay button on checkout/FastPay pages.' },
+  report_footer:    { name: 'Deliverable footer', where: 'Appended to generated diagnostic PDFs and the report view.' },
+  privacy_section:  { name: 'Privacy page — AI section', where: 'The AI/third-party processing section of the privacy page.' }
+};
+var LEGAL_TEXT_ORDER = ['survey_consent','system_entry_ack','ai_output_label','invite_line','checkout_notice','report_footer','privacy_section'];
+
+async function loadLegalTextsPanel(){
+  var el = document.getElementById('legalTextsPanel');
+  if (!el) return;
+  try {
+    var r = await coachData({ action: 'legal-text-list' });
+    var keys = (r && r.keys) || {};
+    var h = '<div style="font-size:15px;font-weight:800;color:var(--navy);margin-bottom:4px;">Legal Texts — AI Disclosure &amp; Consent</div>'
+      + '<div style="font-size:12.5px;color:var(--gray-600);margin-bottom:14px;line-height:1.5;">One source of truth. Edit here and publish — the new wording appears everywhere with no code deploy. Publishing a new version <b>does not</b> change consents people already recorded; those keep the exact text they agreed to.</div>';
+    LEGAL_TEXT_ORDER.forEach(function(key){
+      var meta = LEGAL_TEXT_LABELS[key] || { name: key, where: '' };
+      var rec = keys[key] || { active: null };
+      var active = rec.active;
+      var body = active ? String(active.body || '') : '';
+      var ver  = active ? String(active.version || '') : '';
+      var isDraft = /draft/i.test(ver) || /\[DRAFT/i.test(body);
+      var statusPill = active
+        ? '<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:' + (isDraft ? '#FBE9C4;color:#8A5A00' : '#D9F2E4;color:#0F6E56') + ';">' + (isDraft ? 'DRAFT · ' : 'Active · ') + esc(ver) + '</span>'
+        : '<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:#F6D6D6;color:#8A1C1C;">No active version</span>';
+      h += '<div style="border:1px solid var(--gray-200);border-radius:8px;padding:12px 14px;margin-bottom:12px;">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">'
+        +   '<div style="font-size:13.5px;font-weight:700;color:var(--navy);">' + esc(meta.name) + '</div>' + statusPill
+        + '</div>'
+        + '<div style="font-size:11.5px;color:var(--gray-600);margin:4px 0 8px;">' + esc(meta.where) + '</div>'
+        + '<textarea id="lt-' + key + '" style="width:100%;min-height:120px;font-size:13px;line-height:1.5;padding:10px;border:1px solid var(--gray-300);border-radius:6px;font-family:inherit;">' + esc(body) + '</textarea>'
+        + '<div style="margin-top:8px;text-align:right;">'
+        +   '<button class="btn-add" onclick="publishLegalText(\'' + key + '\')">Publish new version</button>'
+        + '</div>'
+        + '</div>';
+    });
+    el.innerHTML = h;
+  } catch (e) {
+    el.innerHTML = '<div style="color:#8A1C1C;font-size:13px;">Could not load legal texts: ' + esc(e.message || 'error') + '</div>';
+  }
+}
+
+async function publishLegalText(key){
+  var ta = document.getElementById('lt-' + key);
+  if (!ta) return;
+  var text = ta.value || '';
+  if (!text.trim()) { alert('Text cannot be empty.'); return; }
+  var meta = LEGAL_TEXT_LABELS[key] || { name: key };
+  if (!confirm('Publish a new version of "' + meta.name + '"?\n\nThis becomes what new participants see immediately. Consents already recorded are NOT changed.')) return;
+  try {
+    var r = await coachData({ action: 'legal-text-publish', key: key, body: text });
+    if (r && r.ok) { alert('Published version ' + (r.version || '') + '.'); loadLegalTextsPanel(); }
+    else { alert('Publish failed: ' + ((r && r.error) || 'unknown error')); }
+  } catch (e) {
+    alert('Publish failed: ' + (e.message || 'error'));
+  }
+}
+
 // Global CC settings — who gets CC'd on survey + diagnostic emails. Editable here so
 // recipients can be added/removed any time (e.g., turn off alex@ later).
 // ── Pricing Control Center (owner-only) ───────────────────────────────────────
