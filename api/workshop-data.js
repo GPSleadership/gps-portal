@@ -317,7 +317,7 @@ function recommendFrom(agg, workshop) {
     primary = {
       step: '14-Day Executive Leadership Diagnostic',
       headline: 'The cleanest next step to turn momentum into a system',
-      rationale: `The workshop landed well${nps != null ? ` (NPS ${nps})` : ''}. A 14-Day Executive Leadership Diagnostic is the cleanest way to convert that momentum into a measurable, leader-level plan before the energy fades.`,
+      rationale: `The ${isAssessment(workshop) ? 'assessment surfaced a clear read on the team' : 'workshop landed well'}${nps != null ? ` (NPS ${nps})` : ''}. A 14-Day Executive Leadership Diagnostic is the cleanest way to convert that into a measurable, leader-level plan before the energy fades.`,
     };
     fired.push('default → diagnostic');
   }
@@ -1496,16 +1496,21 @@ function reminderHtml(name, w, phase, url, when) {
   return shell(`<p>Hi ${escEmail(name)},</p><p>A quick nudge — your ${noun} for <strong>${w.title}</strong> ${when}. It only takes a few minutes and your input shapes what we focus on.</p>${btn(url, btnLabel)}`);
 }
 function recapHtml(name, w, agg, findings, rec) {
+  const isA = isAssessment(w);
   const p = agg.participation;
   const line = (l, v) => `<tr><td style="padding:4px 12px 4px 0;color:#6b7280;">${l}</td><td style="padding:4px 0;font-weight:700;">${v ?? '—'}</td></tr>`;
   const list = (arr) => arr && arr.length ? `<ul style="margin:6px 0 14px;padding-left:18px;">${arr.map(x => `<li>${escEmail(x)}</li>`).join('')}</ul>` : '<p style="color:#6b7280;">—</p>';
-  const dash = w.sponsor_token ? btn(`${PORTAL_BASE_URL}/workshop-room?token=${enc(w.sponsor_token)}`, 'Open your workshop dashboard') : '';
+  const dash = w.sponsor_token ? btn(`${PORTAL_BASE_URL}/workshop-room?token=${enc(w.sponsor_token)}`, isA ? 'Open your assessment dashboard' : 'Open your workshop dashboard') : '';
   const cta = (rec?.primary && /Diagnostic/i.test(rec.primary.step))
     ? `<p style="margin-top:18px;">If you want to act on this: the <strong>14-Day Executive Leadership Diagnostic</strong> is the fastest way to fix the pattern the data shows. Reply to this email and I'll set it up.</p>` : '';
+  // An assessment has a single response set — no pre/post participation split.
+  const partRows = isA
+    ? line('Participation', p.pre.rate + '%')
+    : line('Participation (pre)', p.pre.rate + '%') + line('Participation (post)', p.post.rate + '%');
   return shell(`<p>Hi ${escEmail(name)},</p>
 <p>Here's the recap from <strong>${w.title}</strong>.</p>
 <table style="border-collapse:collapse;margin:10px 0 16px;">
-${line('Participation (pre)', p.pre.rate + '%')}${line('Participation (post)', p.post.rate + '%')}${line('Workshop NPS', agg.nps)}
+${partRows}${line(isA ? 'Team NPS' : 'Workshop NPS', agg.nps)}
 ${line('Trust', fmtBA(agg.tp3.trust))}${line('Proactivity', fmtBA(agg.tp3.proactivity))}${line('Productivity', fmtBA(agg.tp3.productivity))}
 </table>
 <p style="font-weight:700;margin-bottom:2px;">Top strengths</p>${list(findings.strengths)}

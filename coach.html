@@ -14748,6 +14748,18 @@ async function drSendSponsor(sponsorId){
         : '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><input type="datetime-local" id="wsSchedAt" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;">'+btn('wsSchedSet','Schedule send')+'<span id="wsSchedOut" style="font-size:12px;color:var(--text-muted);margin-left:4px;"></span></div>';
       schedCard=card('<div style="font-weight:800;margin-bottom:6px;color:var(--navy);">Schedule the initial send</div><div style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">Auto-send the '+_surveyWord+' to everyone not yet invited at a date and time you pick (your local time). The sponsor is copied on the first email. Reminders then go out 3 days before, 1 day before, and the morning the '+_surveyWord+' closes. You can still send individual invites any time from the roster below, or send to everyone now with the button under the roster.</div>'+schedInner);
     }
+    // Close date: the day the survey/assessment stops accepting responses and reminders
+    // escalate (3/1/0 days before). Without it, reminders never run. Saved directly to
+    // workshops.pre_survey_close_at via the existing coach-data update path.
+    var _closeWord = isA ? 'assessment' : 'survey';
+    var _closeDefault = w.pre_survey_close_at ? new Date(w.pre_survey_close_at)
+      : (w.pre_survey_open_at ? new Date(new Date(w.pre_survey_open_at).getTime() + 7*86400000)
+      : new Date(Date.now() + 7*86400000));
+    var _closeInputVal = new Date(_closeDefault.getTime() - _closeDefault.getTimezoneOffset()*60000).toISOString().slice(0,10);
+    var _closeStatus = w.pre_survey_close_at
+      ? '<div style="font-size:13px;color:var(--ok);font-weight:700;">✓ Closes '+new Date(w.pre_survey_close_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</div>'
+      : '<div style="font-size:13px;color:var(--red);font-weight:700;">⚠ No close date set — the '+_closeWord+' stays open indefinitely and reminders won\'t run.</div>';
+    var closeCard=card('<div style="font-weight:800;margin-bottom:6px;color:var(--navy);">'+(isA?'Assessment':'Survey')+' close date</div>'+_closeStatus+'<div style="font-size:12px;color:var(--text-muted);margin:6px 0 10px;">On this date the '+_closeWord+' stops accepting responses. Reminders to anyone who hasn\'t finished go out 3 days before, 1 day before, and that morning.</div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><input type="date" id="wsCloseDate" value="'+_closeInputVal+'" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;">'+btn('wsCloseSet','Save close date')+'<span id="wsCloseOut" style="font-size:12px;color:var(--text-muted);margin-left:4px;"></span></div>');
     var rosterStatusCard = card(
       '<div style="font-weight:800;margin-bottom:10px;color:var(--navy);">Roster status</div>'+
       (w.roster_locked
@@ -14764,7 +14776,7 @@ async function drSendSponsor(sponsorId){
       '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><label style="font-size:12px;font-weight:700;color:var(--text-muted);">Or upload a file (XLSX or CSV):</label><input type="file" id="wsRosterXlsx" accept=".xlsx,.xls,.csv" style="font-size:13px;flex:1;"></div>'+
       '<div style="margin-top:10px;">'+btn('wsUpload','Upload roster')+'</div><div id="wsRosterOut" style="font-size:13px;margin-top:8px;color:var(--text-muted);"></div>'+
       '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--surface-2);"><div style="font-weight:800;margin-bottom:6px;color:var(--navy);">Add one participant</div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">For a single person (e.g. a late add or walk-in). Name and email required.</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"><input id="wsAddName" placeholder="Full name" style="flex:1;min-width:140px;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;"><input id="wsAddEmail" placeholder="Email" style="flex:1;min-width:160px;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;"><input id="wsAddRole" placeholder="Title / role (optional)" style="flex:1;min-width:160px;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;">'+btn('wsAddOne','+ Add participant')+'</div><div id="wsAddOut" style="font-size:13px;margin-top:8px;color:var(--text-muted);"></div></div>')+
-    schedCard+
+    schedCard+closeCard+
     card('<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;" id="wsRosterHdr"><div style="font-weight:800;color:var(--navy);">Participants ('+WS.parts.length+')</div><div>'+btn('wsSendPre',(isA?'Send survey emails (not-sent)':'Send pre-survey'))+(isA?'':btn('wsSendPost','Send post-survey (email)','ghost'))+(isA?'':btn('wsSendWelcomeAll','✉ Welcome selected to portal','ghost'))+btn('wsRemoveSelected','🗑 Remove selected','danger')+'</div></div><div id="wsRosterTable"><div style="color:var(--text-muted);font-size:13px;">Loading roster…</div></div>');
     var qrGen=document.getElementById('wsQrGen'); if(qrGen){ wsRenderQR(); qrGen.onclick=wsRenderQR; var qrDl=document.getElementById('wsQrDl'); if(qrDl) qrDl.onclick=wsDownloadQR; }
     document.getElementById('wsUpload').onclick=wsUploadRoster;
@@ -14773,6 +14785,18 @@ async function drSendSponsor(sponsorId){
     var xlsxIn=document.getElementById('wsRosterXlsx');
     if(xlsxIn) xlsxIn.onchange=function(){ if(this.files&&this.files[0]) wsUploadRosterFile(this.files[0]); };
     document.getElementById('wsSendPre').onclick=function(){ wsSendSurveyEmails(); };
+    var closeSetBtn=document.getElementById('wsCloseSet');
+    if(closeSetBtn) closeSetBtn.onclick=async function(){
+      var inp=document.getElementById('wsCloseDate'); var out=document.getElementById('wsCloseOut');
+      if(!inp||!inp.value){ if(out) out.textContent='Pick a date.'; return; }
+      // End of the chosen day, local time, so the whole day counts as open.
+      var iso=new Date(inp.value+'T23:59:59').toISOString();
+      if(out){ out.textContent='Saving…'; }
+      try{
+        await cdUpdate('workshops',{pre_survey_close_at:iso,updated_at:new Date().toISOString()},{eq:{id:w.id}});
+        w.pre_survey_close_at=iso; toast('Close date saved.'); wsDetail();
+      }catch(e){ if(out) out.textContent=e.message; }
+    };
     var schedSetBtn=document.getElementById('wsSchedSet');
     if(schedSetBtn) schedSetBtn.onclick=async function(){
       var inp=document.getElementById('wsSchedAt'); var out=document.getElementById('wsSchedOut');
