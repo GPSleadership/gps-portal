@@ -107,6 +107,22 @@ function avg(nums) {
   if (!v.length) return null;
   return Math.round((v.reduce((a, b) => a + Number(b), 0) / v.length) * 100) / 100;
 }
+// A leader "identified" a successor if they NAMED a person or role in their Section E
+// self-report — as opposed to explicitly writing that no one exists. IMPORTANT: the name
+// itself is never sent to the sponsor; only this boolean crosses the wire. The leader sees
+// their own pick in their own report; the sponsor sees only that a successor exists and can
+// start the conversation. Whole-answer negatives ("No one is ready yet", "None", "N/A")
+// count as NOT identified.
+function successorNamed(txt) {
+  const s = String(txt || '').trim().toLowerCase().replace(/[.!\s]+$/, '');
+  if (!s) return false;
+  // Whole-answer negatives (bare "no"/"na"/"n/a"/"tbd" only count when they ARE the whole
+  // answer, so a real name like "Nancy" or "Nolan" is never misread as a negative).
+  if (/^(no|na|n\/a|none|no one|no-?one|noone|nobody|tbd|unknown|unsure|not sure|not yet|not applicable|no successor|no candidate|not identified)$/.test(s)) return false;
+  // Leading negative statements ("No one is ready yet", "None identified", "Nobody yet").
+  if (/^(no one|none|nobody|no successor|no candidate|not yet)\b/.test(s)) return false;
+  return true;
+}
 function tp3From(responses) {
   const byCode = {};
   for (const r of responses) {
@@ -291,7 +307,7 @@ async function buildSponsorReadout(clientId) {
     // development plan) is personal/confidential and must NOT reach the sponsor.
     // The sponsor sees ONLY a clean boolean signal — whether a successor has been
     // identified — never the leader's private direction or free-text.
-    succession: { successor_identified: !!(d.self_successor_candidates && String(d.self_successor_candidates).trim()) },
+    succession: { successor_identified: successorNamed(d.self_successor_candidates) },
     debrief: { date: d.debrief_date || null, time: d.debrief_time || null },
     plan_approval: {
       requires:    !!d.plan_requires_sponsor_approval,
@@ -620,7 +636,7 @@ function computeSponsorReadoutRow(d, scores, sponsorVerbatims) {
     scores: scores || null,
     sponsor_verbatims: sponsorVerbatims || [],
     custom_questions: [d.custom_g1_question, d.custom_g2_question].filter(Boolean),
-    succession: { successor_identified: !!(d.self_successor_candidates && String(d.self_successor_candidates).trim()) },
+    succession: { successor_identified: successorNamed(d.self_successor_candidates) },
     debrief: { date: d.debrief_date || null, time: d.debrief_time || null },
     plan_approval: { requires: !!d.plan_requires_sponsor_approval, status: d.plan_sponsor_status || 'none', decided_at: d.plan_sponsor_decided_at || null, note: d.plan_sponsor_note || null },
   };
@@ -716,6 +732,16 @@ async function assembleMemberReportsBulk(members, opts) {
     report.name = report.report_json.name || null;
     if (!report.name && clientData && clientData.name) report.name = clientData.name;
     report.business_outcome_goal = (clientData && clientData.sponsor_outcome_focus && clientData.business_outcome_goal) ? clientData.business_outcome_goal : null;
+
+    // Succession: mark whether the leader NAMED a successor in their Section E self-report.
+    // The name itself is NEVER placed on the payload — only this boolean — so the sponsor
+    // sees that a successor exists (identified vs not), never who it is.
+    const dSuccBulk = latestAny[cid] || null;
+    if (report.report_json && report.report_json.succession) {
+      report.report_json.succession = Object.assign({}, report.report_json.succession, {
+        successorIdentified: dSuccBulk ? successorNamed(dSuccBulk.self_successor_candidates) : false,
+      });
+    }
 
     // scoreboard
     const stks = stakeByClient[cid] || [];

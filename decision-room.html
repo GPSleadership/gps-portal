@@ -802,11 +802,11 @@ function renderTeamSuccession(members){
   var noSucc=withS.filter(function(m){ return !m.report_json.succession.successorIdentified; });
   var rows=withS.map(function(m){
     var s=m.report_json.succession, st=computeStatus(m), name=m.name||m.role||'Leader';
-    var succ=s.successorIdentified?'<span class="badge b-flag-green">Yes</span>':'<span class="badge b-flag-red">None yet</span>';
+    var succ=s.successorIdentified?'<span class="badge b-flag-amber">Identified &middot; not yet ready</span>':'<span class="badge b-flag-red">None named yet</span>';
     var risk=(!s.successorIdentified && st.key==='risk')?' <span class="badge b-flag-red">Key-person risk</span>':'';
     return '<tr><td>'+esc(name)+'<div class="succ-sub">'+esc(m.role||'')+'</div></td><td>'+succ+risk+'</td><td>'+esc(s.readiness||'')+'</td></tr>';
   }).join('');
-  return '<div class="card">'+head+'<div style="font-size:12px;color:var(--gray-600);line-height:1.55;background:var(--light-sand);border-radius:7px;padding:9px 12px;margin-bottom:10px;">These placements come from structured perception data in the 14-Day Executive Leadership Diagnostic -- how close stakeholders currently experience each leader\'s behavior. Treat it as decision input, not a promotion list: combine it with recent performance and results, role requirements, and HR/risk considerations before any succession call.</div>'+'<div class="succ-summary"><b>'+noSucc.length+' of '+withS.length+'</b> leaders have no identified successor'+(noSucc.length?'. Each is a key-person risk: if they leave, the seat has no ready backup.':'.')+'</div>'
+  return '<div class="card">'+head+'<div style="font-size:12px;color:var(--gray-600);line-height:1.55;background:var(--light-sand);border-radius:7px;padding:9px 12px;margin-bottom:10px;">These placements come from structured perception data in the 14-Day Executive Leadership Diagnostic -- how close stakeholders currently experience each leader\'s behavior. Treat it as decision input, not a promotion list: combine it with recent performance and results, role requirements, and HR/risk considerations before any succession call.</div>'+'<div class="succ-summary">'+((withS.length-noSucc.length)===0?'<b>'+withS.length+' of '+withS.length+'</b> leaders have not named a successor yet — each seat is a key-person risk.':'<b>'+(withS.length-noSucc.length)+' of '+withS.length+'</b> leaders have identified a possible successor — but none is rated ready yet, so each seat still carries near-term key-person risk.'+(noSucc.length?' <b>'+noSucc.length+'</b> '+(noSucc.length===1?'has':'have')+' not named anyone.':''))+'</div>'
     +'<table class="sh-table"><thead><tr><th>Leader</th><th>Successor in place</th><th>Readiness for more</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 
@@ -819,7 +819,7 @@ function renderTalentGrid(members){
       +'<div style="margin-top:6px;"><em>Across — performance today:</em> how the people around them rate their trust, execution, and overall impact right now, from stakeholders — not a self-assessment.</div>'
       +'<div style="margin-top:6px;"><em>Up — readiness to carry more:</em> whether the organization scales <i>through</i> this leader or <i>depends on</i> them. Built from four things we already ask about — whether the team runs and keeps growing without them, whether they anticipate and drive change, whether they develop a bench, and how closely their self-view matches how others see them.</div>'
       +'<div style="margin-top:6px;">We weight bench and forward drive most heavily because across 300+ interviews with executive leaders and CEOs, and years inside operations-heavy businesses, those signals separate leaders who scale with the business from leaders who become the bottleneck — more than tenure, title, or raw impact today.</div>'
-      +'<div style="margin-top:6px;color:var(--gray-600);">The <b style="color:#c8891f;">!</b> badge marks a leader who rates themselves higher than their stakeholders do (a blind-spot flag). A dashed ring means the raters disagree — treat that placement as soft. A <b style="color:var(--navy,#1f3a5f);">▼/▲</b> badge means the supervisor rates this leader well below (▼) or above (▲) the rest of the team — a conversation to have. The supervisor is one voice among many here; their rating never gets extra weight in the placement.</div>'
+      +'<div style="margin-top:6px;color:var(--gray-600);">The <b style="color:#c8891f;">!</b> badge marks a leader who rates themselves higher than their stakeholders do (a blind-spot flag). A dashed ring is a different signal — it means the raters disagree with <i>each other</i> (their scores are split, not a consensus), so treat that placement as soft. A <b style="color:var(--navy,#1f3a5f);">▼/▲</b> badge means the supervisor rates this leader well below (▼) or above (▲) the rest of the team — a conversation to have. The supervisor is one voice among many here; their rating never gets extra weight in the placement.</div>'
     +'</span></span>';
   var head='<div class="card-head"><div><div class="card-title"><span class="dot"></span>Talent &amp; Readiness Grid'+infoPop+'</div><div class="card-sub">Up = readiness to carry more · across = how they are landing now</div></div></div>';
   // Show any leader we can place: needs a closed-diagnostic readiness score OR the
@@ -901,7 +901,7 @@ function renderTalentGrid(members){
   if(anyOver||anySplit||anySup){
     flagLegend='<div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:8px;font-size:11px;color:var(--gray-600);">'
       +(anyOver?'<span><b style="color:#c8891f;">!</b> rates themselves higher than their stakeholders do</span>':'')
-      +(anySplit?'<span><b>dashed ring</b> = raters disagree; treat the spot as soft</span>':'')
+      +(anySplit?'<span><b>dashed ring</b> = raters disagree with each other; treat the spot as soft</span>':'')
       +(anySup?'<span><b style="color:var(--navy,#1f3a5f);">▼▲</b> supervisor\'s rating diverges from the rest of the team (a conversation to have — it does not change the score)</span>':'')
       +'</div>';
   }
