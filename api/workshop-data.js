@@ -153,22 +153,13 @@ async function sendEmailMulti(toArr, subject, html, ctx) {
   } catch (e) { return { ok: false }; }
 }
 
-// Visibility list for "survey went out" notifications: Alex + admin always, plus the
-// engagement's sponsor(s) and POC(s).
-async function engagementNotifyList(workshopId, workshop) {
-  const list = ['alex@gpsleadership.org', 'team@gpsleadership.org'];
-  try {
-    const links = await sbGet(`/rest/v1/workshop_sponsors?workshop_id=eq.${enc(workshopId)}&select=client_id`);
-    for (const l of links) {
-      const c = await sbOne(`/rest/v1/clients?id=eq.${enc(l.client_id)}&select=email&limit=1`);
-      if (c?.email) list.push(c.email);
-    }
-    if (workshop && workshop.sponsor_client_id) {
-      const sc = await sbOne(`/rest/v1/clients?id=eq.${enc(workshop.sponsor_client_id)}&select=email&limit=1`);
-      if (sc?.email) list.push(sc.email);
-    }
-  } catch (e) {}
-  return Array.from(new Set(list.map(e => String(e).trim().toLowerCase()).filter(Boolean)));
+// Visibility list for "survey went out" notifications: INTERNAL GPS team ONLY.
+// This is an internal "here's exactly what went out" copy (and it contains a sample
+// of the participant email) — client sponsors and points-of-contact must NOT receive
+// it. (Previously it was CC'd to sponsors/POCs, which sent the JMAA CEO an internal
+// notice with a non-live sample link. Fixed 2026-07-21.)
+async function engagementNotifyList(_workshopId, _workshop) {
+  return ['alex@gpsleadership.org', 'team@gpsleadership.org'];
 }
 
 // One "here's what just went out" copy to the visibility list (not a CC on every participant email).
@@ -177,9 +168,11 @@ async function notifySurveyDispatched(workshop, phase, sent, sampleHtml) {
   const to = await engagementNotifyList(workshop.id, workshop);
   const org = workshop.client_org_name ? ` (${workshop.client_org_name})` : '';
   const when = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
-  const html = `<p>The ${phase}-survey for <strong>${workshop.title}</strong>${org} just went out to <strong>${sent}</strong> participant${sent === 1 ? '' : 's'} — ${when} ET.</p>`
-    + `<p style="color:#5a6b76;font-size:13px;">Visibility copy for the GPS team, sponsor, and point of contact. Below is exactly what each participant received.</p><hr>${sampleHtml}`;
-  try { await sendEmailMulti(to, `[Sent] ${workshop.title} — ${phase}-survey went out to ${sent}`, html); } catch (e) {}
+  // An assessment has a single survey (no pre/post) — don't call it a "pre-survey".
+  const noun = isAssessment(workshop) ? 'assessment' : `${phase}-survey`;
+  const html = `<p>The ${noun} for <strong>${workshop.title}</strong>${org} just went out to <strong>${sent}</strong> participant${sent === 1 ? '' : 's'} — ${when} ET.</p>`
+    + `<p style="color:#5a6b76;font-size:13px;">Internal visibility copy for the GPS team. Below is a preview of what each participant received — the button is a sample and is not a live link.</p><hr>${sampleHtml}`;
+  try { await sendEmailMulti(to, `[Sent] ${workshop.title} — ${noun} went out to ${sent}`, html); } catch (e) {}
 }
 
 // AI kill-switch (coach Settings → AI Controls). Missing/unreadable row = ON (fail-open)
@@ -401,7 +394,7 @@ async function performWorkshopPreSend(workshopId, forceAll) {
     await sb(`/rest/v1/workshops?id=eq.${enc(workshopId)}`, 'PATCH',
       { pre_survey_open_at: isoNow(), status: 'pre_survey_open', updated_at: isoNow() }, { Prefer: 'return=minimal' });
   }
-  await notifySurveyDispatched(w, 'pre', sent, inviteHtml('[Participant]', w, 'pre', `${PORTAL_BASE_URL}/workshop-survey?token=SAMPLE&phase=pre`));
+  await notifySurveyDispatched(w, 'pre', sent, inviteHtml('[Participant]', w, 'pre', '#'));
   return { ok: true, sent, total: parts.length, skipped: parts.length - sent };
 }
 
@@ -619,9 +612,11 @@ export default async function handler(req, res) {
           const c = cmapInv.get(p.client_id);
           if (!c?.email) continue;
           const url = `${PORTAL_BASE_URL}/workshop-survey?token=${enc(p.participant_token)}&phase=${phase}`;
-          const subj = phase === 'pre'
-            ? `Quick pre-work before the ${w.title} workshop (5-7 min)`
-            : `Your follow-up survey for the ${w.title} workshop (5 min)`;
+          const subj = isAssessment(w)
+            ? `Your ${w.title} — 5-7 minutes, completely confidential`
+            : (phase === 'pre'
+              ? `Quick pre-work before the ${w.title} workshop (5-7 min)`
+              : `Your follow-up survey for the ${w.title} workshop (5 min)`);
           const html = inviteHtml(c.name, w, phase, url);
           const r = await sendEmail(c.email, subj, html, w);
           if (r.ok) { sent++; await sb(`/rest/v1/workshop_participants?id=eq.${enc(p.id)}`, 'PATCH', { invited_at: isoNow() }, { Prefer: 'return=minimal' }); }
@@ -631,7 +626,7 @@ export default async function handler(req, res) {
         if (phase === 'pre')  { patch.pre_survey_open_at  = w.pre_survey_open_at  || isoNow(); patch.status = 'pre_survey_open'; }
         else                  { patch.post_survey_open_at = w.post_survey_open_at || isoNow(); patch.status = 'post_survey_open'; }
         await sb(`/rest/v1/workshops?id=eq.${enc(body.workshop_id)}`, 'PATCH', patch, { Prefer: 'return=minimal' });
-        await notifySurveyDispatched(w, phase, sent, inviteHtml('[Participant]', w, phase, `${PORTAL_BASE_URL}/workshop-survey?token=SAMPLE&phase=${phase}`));
+        await notifySurveyDispatched(w, phase, sent, inviteHtml('[Participant]', w, phase, '#'));
         return res.status(200).json({ ok: true, sent, total: parts.length });
       }
 
@@ -1014,7 +1009,9 @@ export default async function handler(req, res) {
         if (!c?.email) return res.status(400).json({ error: 'No email on file for this participant' });
         const phase = (w && w.status === 'post_survey_open') ? 'post' : 'pre';
         const url = `${PORTAL_BASE_URL}/workshop-survey?token=${enc(p.participant_token)}&phase=${phase}`;
-        const subj = `Reminder: ${w.title} survey — still need your input`;
+        const subj = isAssessment(w)
+          ? `Reminder: ${w.title} — still need your input`
+          : `Reminder: ${w.title} survey — still need your input`;
         const html = reminderHtml(c.name, w, phase, url, 'is still open');
         const r = await sendEmail(c.email, subj, html, w);
         if (r.ok) {
@@ -1441,7 +1438,7 @@ function recToFit(rec) {
 async function runReminders() {
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
-  const workshops = await sbGet(`/rest/v1/workshops?is_archived=eq.false&select=id,title,pre_survey_open_at,pre_survey_close_at,post_survey_open_at,post_survey_close_at&or=(status.eq.pre_survey_open,status.eq.post_survey_open)`);
+  const workshops = await sbGet(`/rest/v1/workshops?is_archived=eq.false&select=id,title,engagement_kind,pre_survey_open_at,pre_survey_close_at,post_survey_open_at,post_survey_close_at&or=(status.eq.pre_survey_open,status.eq.post_survey_open)`);
   let nudged = 0;
   for (const w of workshops) {
     for (const phase of ['pre', 'post']) {
@@ -1459,7 +1456,8 @@ async function runReminders() {
         const url = `${PORTAL_BASE_URL}/workshop-survey?token=${enc(p.participant_token)}&phase=${phase}`;
         const when = days === 0 ? 'closes today' : `closes in ${days} day${days === 1 ? '' : 's'}`;
         const html = reminderHtml(c.name, w, phase, url, when);
-        const r = await sendEmail(c.email, `Reminder: your ${w.title} survey ${when}`, html, w);
+        const subj = isAssessment(w) ? `Reminder: your ${w.title} ${when}` : `Reminder: your ${w.title} survey ${when}`;
+        const r = await sendEmail(c.email, subj, html, w);
         if (r.ok) nudged++;
       }
     }
@@ -1476,15 +1474,26 @@ function btn(url, label) {
   try { pl = require('./brand-link').pasteLink(url); } catch (_) {}
   return `<p style="margin:22px 0;"><a href="${url}" style="background:#0d9488;color:#fff;text-decoration:none;padding:12px 22px;border-radius:6px;font-weight:700;display:inline-block;">${label}</a></p>${pl}`;
 }
+// An engagement with kind 'assessment' is a standalone organizational assessment —
+// there is no "session"/"workshop" and no pre/post pairing, so its participant-facing
+// copy must NOT use workshop framing ("before our session", "pre-work", "follow-up").
+function isAssessment(w) { return !!(w && w.engagement_kind === 'assessment'); }
+
 function inviteHtml(name, w, phase, url) {
-  const lead = phase === 'pre'
-    ? `Before our <strong>${w.title}</strong> session, I'd like your honest read on how the team is operating today. It takes about 5-7 minutes and your answers are confidential — I only ever share the team-level picture.`
-    : `Now that the <strong>${w.title}</strong> workshop is behind us, a short follow-up (about 5 minutes) helps us see what actually shifted. Confidential, team-level only.`;
-  const itNote = `<div style="background:#fbf7ec;border:1px solid #e8dcb8;border-radius:8px;padding:14px 18px;margin:18px 0;font-size:13px;color:#5a4a1f;line-height:1.6;"><strong>If the link won't open:</strong> some organizations' security tools block or rewrite outside links. If that happens, forward this note to your IT team:<br><br><em>"Please allowlist the website portal.gpsleadership.org (and gpsleadership.org) and emails from gpsleadership.org, and exclude them from link rewriting/sandboxing. It is a standard, confidential survey with no downloads or attachments."</em></div>`;
-  return shell(`<p>Hi ${escEmail(name)},</p><p>${lead}</p>${btn(url, phase === 'pre' ? 'Start the pre-work (5-7 min)' : 'Start the follow-up (5 min)')}${itNote}<p style="color:#6b7280;font-size:13px;">You can save and come back to this link anytime before it closes.</p>`);
+  const lead = isAssessment(w)
+    ? `I'd like your honest, confidential read on how the team is operating today, as part of the <strong>${w.title}</strong>. It takes about 5-7 minutes, and your answers are confidential — I only ever share the team-level picture, never individual responses.`
+    : (phase === 'pre'
+      ? `Before our <strong>${w.title}</strong> session, I'd like your honest read on how the team is operating today. It takes about 5-7 minutes and your answers are confidential — I only ever share the team-level picture.`
+      : `Now that the <strong>${w.title}</strong> workshop is behind us, a short follow-up (about 5 minutes) helps us see what actually shifted. Confidential, team-level only.`);
+  const btnLabel = isAssessment(w) ? 'Start the assessment (5-7 min)' : (phase === 'pre' ? 'Start the pre-work (5-7 min)' : 'Start the follow-up (5 min)');
+  const kindWord = isAssessment(w) ? 'assessment' : 'survey';
+  const itNote = `<div style="background:#fbf7ec;border:1px solid #e8dcb8;border-radius:8px;padding:14px 18px;margin:18px 0;font-size:13px;color:#5a4a1f;line-height:1.6;"><strong>If the link won't open:</strong> some organizations' security tools block or rewrite outside links. If that happens, forward this note to your IT team:<br><br><em>"Please allowlist the website portal.gpsleadership.org (and gpsleadership.org) and emails from gpsleadership.org, and exclude them from link rewriting/sandboxing. It is a standard, confidential ${kindWord} with no downloads or attachments."</em></div>`;
+  return shell(`<p>Hi ${escEmail(name)},</p><p>${lead}</p>${btn(url, btnLabel)}${itNote}<p style="color:#6b7280;font-size:13px;">You can save and come back to this link anytime before it closes.</p>`);
 }
 function reminderHtml(name, w, phase, url, when) {
-  return shell(`<p>Hi ${escEmail(name)},</p><p>A quick nudge — your ${phase === 'pre' ? 'pre-work' : 'follow-up'} survey for <strong>${w.title}</strong> ${when}. It only takes a few minutes and your input shapes what we focus on.</p>${btn(url, 'Finish the survey')}`);
+  const noun = isAssessment(w) ? 'assessment' : (phase === 'pre' ? 'pre-work survey' : 'follow-up survey');
+  const btnLabel = isAssessment(w) ? 'Finish the assessment' : 'Finish the survey';
+  return shell(`<p>Hi ${escEmail(name)},</p><p>A quick nudge — your ${noun} for <strong>${w.title}</strong> ${when}. It only takes a few minutes and your input shapes what we focus on.</p>${btn(url, btnLabel)}`);
 }
 function recapHtml(name, w, agg, findings, rec) {
   const p = agg.participation;
