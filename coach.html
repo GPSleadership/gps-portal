@@ -1242,6 +1242,10 @@ I'm taking part in a leadership assessment run by GPS Leadership Solutions. Thei
         <strong>Review before activating.</strong> These templates control the emails sent to stakeholders. Edit the subject and body as needed, then toggle <strong>Approved</strong> to activate each one. Unapproved templates fall back to the system default. Placeholders like <code>[ClientFirstName]</code> and <code>[SurveyLink]</code> are replaced automatically.
       </div>
 
+      <div id="pricingControlPanel" class="owner-only" style="background:var(--white);border-radius:8px;padding:16px 18px;margin-bottom:16px;border:1px solid var(--gray-200);">
+        <div class="spinner"></div>
+      </div>
+
       <div id="renewalConfigPanel" style="background:var(--white);border-radius:8px;padding:16px 18px;margin-bottom:16px;border:1px solid var(--gray-200);">
         <div class="spinner"></div>
       </div>
@@ -2155,20 +2159,29 @@ async function verifyAndChangePassword() {
 // LOAD DATA
 // ─────────────────────────────────────────────
 // ── Diagnostic tier pricing ───────────────────────────────────────────────────
-// Display label ONLY — this does not bill anyone or drive any math. To reprice,
-// change the two values below and redeploy. They show in the Start Diagnostic
-// dropdowns (coach-only; clients never see them). Defined inside the function so
-// it can never be referenced before initialization during page load.
+// The Start Diagnostic dropdown labels now READ from the live pricing_config (set in
+// the Pricing Control Center) instead of a hardcoded string, so they never drift from
+// what the portal actually charges. PRICING_CFG is populated on dashboard load and
+// whenever the pricing panel loads/saves; until then a sensible default shows.
+var PRICING_CFG = null; // { pricing:<pricing_config row>, renewal:<renewal_config row> }
 function applyTierPriceLabels() {
-  const TIER_PRICES = { standard: '$5K', pro: '$10K' };
+  const p = PRICING_CFG && PRICING_CFG.pricing;
+  const fmtK = n => { n = Number(n) || 0; return (n >= 1000 && n % 1000 === 0) ? ('$' + (n / 1000) + 'K') : ('$' + n.toLocaleString('en-US')); };
+  const std = p ? fmtK(p.standard_diagnostic_price) : '$5K';
+  const pro = p ? fmtK(p.pro_diagnostic_price) : '$10K';
   document.querySelectorAll('select#nd-tier option, select#newDiagTier option').forEach(o => {
-    if (o.value === 'standard') o.textContent = 'Standard (' + TIER_PRICES.standard + ')';
-    if (o.value === 'pro')      o.textContent = 'Pro (' + TIER_PRICES.pro + ')';
+    if (o.value === 'standard') o.textContent = 'Standard (' + std + ')';
+    if (o.value === 'pro')      o.textContent = 'Pro (' + pro + ')';
   });
 }
 
 async function loadDashboard() {
-  applyTierPriceLabels(); // keep the tier dropdowns in sync with TIER_PRICES
+  applyTierPriceLabels(); // keep the tier dropdowns in sync with the live pricing_config
+  // Fire-and-forget: pull the live diagnostic prices so the tier labels reflect reality
+  // even before the pricing panel is opened. Never blocks the dashboard.
+  cdSelect('pricing_config', { eq:{ id:1 }, limit:1 }).then(r => {
+    if (r && r[0]) { PRICING_CFG = Object.assign({}, PRICING_CFG || {}, { pricing: r[0] }); applyTierPriceLabels(); }
+  }).catch(() => {});
   let clientsRows, checkinsRows;
   // P1 #12: the dashboard only needs recent check-ins, not all history ever.
   // Resilience: a single "Failed to fetch" (cold start / network blip) used to leave
@@ -4962,7 +4975,7 @@ function showSection(name, skipHooks, _fromHistory) {
   if (name === 'admins')      loadAdminAccounts();
   if (name === 'reportflow')  loadReportFlowSettings();
   if (name === 'aicontrols')  loadAiControls();
-  if (name === 'templates')   { loadEmailTemplates(); loadCcSettingsPanel(); loadRenewalConfigPanel(); }
+  if (name === 'templates')   { loadEmailTemplates(); loadCcSettingsPanel(); loadPricingControlPanel(); loadRenewalConfigPanel(); }
   if (name === 'dashboard')   { _actionItemsLoaded = false; renderDiagHome(); refreshMsgBadge(); }
   if (name === 'diagnostics') { diagBoot(); renderDiagTable(); }
   if (name === 'organizations') renderOrganizations();
@@ -5611,7 +5624,116 @@ function tplGroup(t){
 }
 // Global CC settings — who gets CC'd on survey + diagnostic emails. Editable here so
 // recipients can be added/removed any time (e.g., turn off alex@ later).
-// ── Renewal Links & Pricing (editable GHL checkout links — owner only) ────────
+// ── Pricing Control Center (owner-only) ───────────────────────────────────────
+// One diagnostic price is the DRIVER; every other price defaults to a fixed ratio of
+// it and auto-updates when the driver changes, but any single price can be locked to a
+// custom value (untick "Auto"). pricing_config + renewal_config stay the single source
+// of truth every other read uses — this panel only writes the resolved absolute values
+// to them, so nothing about how prices are READ changes. Override state is inferred by
+// comparison (a value equal to driver×ratio reads as auto), so no schema change needed.
+var PRICE_ROWS = [
+  { key:'pro_diagnostic_price',  tbl:'pricing', col:'pro_diagnostic_price',  ratio:2,   label:'Pro diagnostic',                hint:'per leader' },
+  { key:'coaching_monthly',      tbl:'pricing', col:'coaching_monthly',      ratio:1,   label:'Coaching',                      hint:'per month' },
+  { key:'price_first_standard',  tbl:'renewal', col:'price_first_standard',  ratio:3,   label:'90-Day Sprint — standard',      hint:'out of credit window' },
+  { key:'price_first_credit',    tbl:'renewal', col:'price_first_credit',    ratio:2,   label:'90-Day Sprint — with credit',   hint:'in window (standard − diagnostic credit)' },
+  { key:'price_flex_monthly',    tbl:'renewal', col:'price_flex_monthly',    ratio:1,   label:'Continuation — Flex',           hint:'per month' },
+  { key:'price_titan_quarterly', tbl:'renewal', col:'price_titan_quarterly', ratio:2.7, label:'Continuation — Titan',          hint:'per quarter' },
+];
+async function loadPricingControlPanel(){
+  var el = document.getElementById('pricingControlPanel');
+  if (!el) return;
+  var pricing=null, renewal=null;
+  try {
+    var pr = await cdSelect('pricing_config', { eq:{ id:1 }, limit:1 }); pricing = pr && pr[0];
+    var rr = await cdSelect('renewal_config', { eq:{ id:1 }, limit:1 }); renewal = rr && rr[0];
+  } catch(e){}
+  if (!pricing || !renewal) { el.innerHTML = '<div style="font-size:13px;color:var(--gray-600);">Pricing config unavailable.</div>'; return; }
+  PRICING_CFG = { pricing:pricing, renewal:renewal };
+  applyTierPriceLabels();
+  var driver = Number(pricing.standard_diagnostic_price) || 0;
+  var rowsHtml = PRICE_ROWS.map(function(r){
+    var cur = Number(r.tbl==='pricing' ? pricing[r.col] : renewal[r.col]) || 0;
+    var autoVal = Math.round(driver * r.ratio);
+    var isAuto = (cur === autoVal);
+    return '<tr data-key="'+r.key+'" data-ratio="'+r.ratio+'">'
+      + '<td style="padding:8px 6px;"><div style="font-weight:700;color:var(--navy);font-size:13px;">'+r.label+'</div><div style="font-size:11px;color:var(--gray-600);">'+r.hint+' · default '+r.ratio+'× diagnostic</div></td>'
+      + '<td style="padding:8px 6px;text-align:center;white-space:nowrap;"><label style="font-size:12px;cursor:pointer;color:var(--gray-600);"><input type="checkbox" class="pcc-auto" '+(isAuto?'checked':'')+' onchange="pccToggleAuto(this)"> Auto</label></td>'
+      + '<td style="padding:8px 6px;"><div style="display:flex;align-items:center;gap:4px;"><span style="color:var(--gray-600);">$</span><input type="number" min="0" step="1" class="pcc-price" value="'+cur+'" '+(isAuto?'disabled':'')+' oninput="pccUpdateCreditNote()" style="width:120px;padding:6px 8px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;'+(isAuto?'background:var(--gray-100);color:var(--gray-600);':'')+'"></div></td></tr>';
+  }).join('');
+  el.innerHTML =
+    '<div style="font-family:\'Montserrat\',sans-serif;font-weight:700;color:var(--navy);margin-bottom:4px;">Pricing Control Center</div>'
+    + '<div style="font-size:12px;color:var(--gray-600);margin-bottom:14px;line-height:1.5;">Set the <b>diagnostic price</b> once — every other price scales from it by its default ratio. Untick <b>Auto</b> on any row to lock a custom price. Saving updates the live prices the portal charges from (diagnostic credit, sprint offers, continuation).</div>'
+    + '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;padding:12px 14px;background:var(--light-teal);border-radius:8px;">'
+      + '<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--navy);">Diagnostic price (driver) &middot; per leader</div><div style="font-size:11px;color:var(--gray-600);">Everything below scales from this.</div></div>'
+      + '<div style="display:flex;align-items:center;gap:4px;margin-left:auto;"><span style="font-size:18px;color:var(--navy);font-weight:800;">$</span><input type="number" id="pcc_driver" min="0" step="1" value="'+driver+'" oninput="pccRescale()" style="width:130px;padding:8px 10px;border:2px solid var(--navy);border-radius:6px;font-size:16px;font-weight:800;color:var(--navy);"></div>'
+    + '</div>'
+    + '<table style="width:100%;border-collapse:collapse;"><thead><tr style="border-bottom:2px solid var(--gray-200);"><th style="text-align:left;font-size:10px;text-transform:uppercase;color:var(--gray-600);padding:4px 6px;">Price</th><th style="font-size:10px;text-transform:uppercase;color:var(--gray-600);padding:4px 6px;">Follows driver</th><th style="text-align:left;font-size:10px;text-transform:uppercase;color:var(--gray-600);padding:4px 6px;">Amount</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'
+    + '<div id="pcc_credit_note" style="font-size:11.5px;color:var(--gray-600);margin-top:10px;line-height:1.5;"></div>'
+    + '<div style="display:flex;align-items:center;gap:12px;margin-top:12px;"><button onclick="savePricingControlCenter()" style="background:var(--navy);color:#fff;border:none;border-radius:6px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;">Review &amp; save prices</button><span id="pcc_status" style="font-size:13px;color:var(--teal);"></span></div>';
+  pccUpdateCreditNote();
+}
+function pccRescale(){
+  var d = Number((document.getElementById('pcc_driver')||{}).value) || 0;
+  document.querySelectorAll('#pricingControlPanel tr[data-key]').forEach(function(tr){
+    if (tr.querySelector('.pcc-auto').checked){ tr.querySelector('.pcc-price').value = Math.round(d * Number(tr.getAttribute('data-ratio'))); }
+  });
+  pccUpdateCreditNote();
+}
+function pccToggleAuto(cb){
+  var tr = cb.closest('tr'); var inp = tr.querySelector('.pcc-price');
+  if (cb.checked){
+    var d = Number((document.getElementById('pcc_driver')||{}).value) || 0;
+    inp.value = Math.round(d * Number(tr.getAttribute('data-ratio')));
+    inp.disabled = true; inp.style.background='var(--gray-100)'; inp.style.color='var(--gray-600)';
+  } else { inp.disabled = false; inp.style.background=''; inp.style.color=''; inp.focus(); }
+  pccUpdateCreditNote();
+}
+// Keep the standard/credit relationship honest: show the implied in-window credit and
+// warn if it no longer equals the diagnostic price (which is what the credit is worth).
+function pccUpdateCreditNote(){
+  var note = document.getElementById('pcc_credit_note'); if(!note) return;
+  var d = Number((document.getElementById('pcc_driver')||{}).value) || 0;
+  var std=null, cred=null;
+  document.querySelectorAll('#pricingControlPanel tr[data-key]').forEach(function(tr){
+    var k=tr.getAttribute('data-key'), v=Number(tr.querySelector('.pcc-price').value)||0;
+    if(k==='price_first_standard') std=v; if(k==='price_first_credit') cred=v;
+  });
+  if(std!=null && cred!=null){
+    var implied = std - cred, ok = (implied === d);
+    note.innerHTML = 'In the credit window a client pays the <b>with-credit</b> sprint price. That implies a credit of <b>$'+implied.toLocaleString('en-US')+'</b> (standard − with-credit). '
+      + (ok ? '<span style="color:var(--teal);">Matches the $'+d.toLocaleString('en-US')+' diagnostic credit. ✓</span>'
+            : '<span style="color:var(--red);font-weight:700;">This does not equal the $'+d.toLocaleString('en-US')+' diagnostic credit — double-check the two sprint prices.</span>');
+  }
+}
+async function savePricingControlCenter(){
+  var status = document.getElementById('pcc_status');
+  var driver = Math.round(Number((document.getElementById('pcc_driver')||{}).value));
+  if (!(driver > 0)) { status.style.color='var(--red)'; status.textContent='Diagnostic price must be a positive number.'; return; }
+  var pricingVals = { standard_diagnostic_price: driver }, renewalVals = {}, bad=false;
+  var summary = ['Diagnostic (driver): $'+driver.toLocaleString('en-US')];
+  document.querySelectorAll('#pricingControlPanel tr[data-key]').forEach(function(tr){
+    var key=tr.getAttribute('data-key'), val=Math.round(Number(tr.querySelector('.pcc-price').value));
+    var row = PRICE_ROWS.filter(function(r){return r.key===key;})[0];
+    if(!(val>0)) bad=true;
+    if(row.tbl==='pricing') pricingVals[row.col]=val; else renewalVals[row.col]=val;
+    summary.push(row.label+': $'+(val||0).toLocaleString('en-US')+(tr.querySelector('.pcc-auto').checked?' (auto)':' (custom)'));
+  });
+  if(bad){ status.style.color='var(--red)'; status.textContent='Every price must be a positive number.'; return; }
+  if(!confirm('Save these prices? The portal will charge from them going forward:\n\n'+summary.join('\n'))) return;
+  pricingVals.updated_at = new Date().toISOString();
+  renewalVals.updated_at = new Date().toISOString();
+  if(status){ status.style.color='var(--gray-600)'; status.textContent='Saving…'; }
+  try {
+    await cdUpdate('pricing_config', pricingVals, { eq:{ id:1 } });
+    await cdUpdate('renewal_config', renewalVals, { eq:{ id:1 } });
+    PRICING_CFG = { pricing: Object.assign({}, (PRICING_CFG&&PRICING_CFG.pricing)||{}, pricingVals),
+                    renewal: Object.assign({}, (PRICING_CFG&&PRICING_CFG.renewal)||{}, renewalVals) };
+    applyTierPriceLabels();
+    if(status){ status.style.color='var(--teal)'; status.textContent='✓ Saved'; setTimeout(function(){ if(status) status.textContent=''; }, 3500); }
+  } catch(e){ if(status){ status.style.color='var(--red)'; status.textContent='Error: '+(e.message||'save failed')+' — reopen the panel to see what saved.'; } }
+}
+
+// ── Renewal Links & Windows (editable GHL checkout links — owner only) ─────────
 async function loadRenewalConfigPanel(){
   const el = document.getElementById('renewalConfigPanel');
   if (!el) return;
@@ -5620,8 +5742,8 @@ async function loadRenewalConfigPanel(){
   if (!cfg) { el.innerHTML = '<div style="font-size:13px;color:var(--gray-600);">Renewal config unavailable.</div>'; return; }
   const f = (label, id, val, ph) => `<div style="margin-bottom:10px;"><label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--gray-600);display:block;margin-bottom:4px;">${label}</label><input id="${id}" value="${escHtml(val==null?'':String(val))}" placeholder="${ph||''}" style="width:100%;padding:8px 11px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;box-sizing:border-box;"></div>`;
   el.innerHTML =
-    '<div style="font-family:\'Montserrat\',sans-serif;font-weight:700;color:var(--navy);margin-bottom:4px;">Renewal Links &amp; Pricing</div>'
-    + '<div style="font-size:12px;color:var(--gray-600);margin-bottom:14px;line-height:1.5;">Paste your GoHighLevel checkout links here. They power the in-portal renewal / start-coaching buttons. Leave a link blank to hide that button until it is ready.</div>'
+    '<div style="font-family:\'Montserrat\',sans-serif;font-weight:700;color:var(--navy);margin-bottom:4px;">Renewal Links &amp; Windows</div>'
+    + '<div style="font-size:12px;color:var(--gray-600);margin-bottom:14px;line-height:1.5;">Paste your GoHighLevel checkout links here. They power the in-portal renewal / start-coaching buttons. Leave a link blank to hide that button until it is ready. <b>Prices are set in the Pricing Control Center above.</b></div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 18px;">'
     + '<div>'
     + f('First Sprint — Credit ($10k) link', 'rc_credit_url', cfg.first_sprint_credit_url, 'https://...')
@@ -5631,10 +5753,7 @@ async function loadRenewalConfigPanel(){
     + f('Starter Continuation link (coach-granted only)', 'rc_starter_url', cfg.starter_continuation_url, 'https://...')
     + f('Booking link — "Talk to Alex" (Decision Room)', 'rc_booking_url', cfg.booking_url, 'https://...')
     + '</div><div>'
-    + f('Price — First (credit)', 'rc_price_credit', cfg.price_first_credit)
-    + f('Price — First (standard)', 'rc_price_standard', cfg.price_first_standard)
-    + f('Price — Titan / quarter', 'rc_price_titan', cfg.price_titan_quarterly)
-    + f('Price — Flex / month', 'rc_price_flex', cfg.price_flex_monthly)
+    + '<div style="font-size:12px;color:var(--gray-600);line-height:1.55;background:var(--gray-100);border-radius:7px;padding:11px 13px;">Prices (diagnostic, sprint, coaching, continuation) are managed in the <b>Pricing Control Center</b> above — set the diagnostic price and the rest auto-scale. This panel is for checkout links and windows only.</div>'
     + '</div></div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 18px;">'
     + f('Credit window (days)', 'rc_credit_days', cfg.credit_window_days)
@@ -5654,10 +5773,6 @@ async function saveRenewalConfig(){
     continuation_flex_url:     v('rc_flex_url')     || null,
     starter_continuation_url:  v('rc_starter_url')  || null,
     booking_url:               v('rc_booking_url')  || null,
-    price_first_credit:    num('rc_price_credit'),
-    price_first_standard:  num('rc_price_standard'),
-    price_titan_quarterly: num('rc_price_titan'),
-    price_flex_monthly:    num('rc_price_flex'),
     credit_window_days:    num('rc_credit_days'),
     grace_window_days:     num('rc_grace_days'),
     precharge_notice_days: num('rc_precharge_days'),

@@ -171,6 +171,8 @@ const READ_TABLES = new Set([
   'organizations',
   // Renewal / payment (v74)
   'renewal_config', 'renewals',
+  // Pricing (driver + tiers) — read for the Pricing Control Center
+  'pricing_config',
   // AI Studio prompt library (v76)
   'coach_prompts',
 ]);
@@ -188,6 +190,8 @@ const WRITE_TABLES = new Set([
   'organizations',
   // Renewal / payment (v74) — owner-only write (payment links live here)
   'renewal_config',
+  // Pricing (v79) — owner-only write (the Pricing Control Center drives billing)
+  'pricing_config',
   // AI Studio prompt library (v76) — owner-only write
   'coach_prompts',
 ]);
@@ -245,7 +249,7 @@ export default async function handler(req, res) {
   const senderAid   = (session.aid != null) ? session.aid : null;
   const senderFirst = String(senderName).split(' ')[0] || 'GPS Leadership';
   // Global IP / templates / automation: assistants may READ but never WRITE.
-  const OWNER_ONLY_WRITE = new Set(['email_templates', 'coach_settings', 'diagnostic_question_overrides', 'workshop_questions', 'renewal_config', 'coach_prompts']);
+  const OWNER_ONLY_WRITE = new Set(['email_templates', 'coach_settings', 'diagnostic_question_overrides', 'workshop_questions', 'renewal_config', 'pricing_config', 'coach_prompts']);
   // Permanent deletion of core records: owner only (assistants run ops, not nukes).
   const OWNER_ONLY_DELETE = new Set(['clients', 'diagnostics', 'teams', 'workshops', 'diagnostic_team_reports', 'diagnostic_raters', 'diagnostic_responses']);
 
