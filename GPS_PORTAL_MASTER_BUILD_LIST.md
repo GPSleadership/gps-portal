@@ -22,6 +22,28 @@ Priority key: **P0** = live exposure / live revenue loss, fix now · **P1** = do
 
 ---
 
+## ✅ FRONTIER BATCH — built 2026-07-22 (branch `integration/frontier-batch`, awaiting Alex's review + merge)
+
+Built per the frontier-batch spec; all commits on `integration/frontier-batch`, preview-tested, NOT merged. Migrations v109–v113 applied to prod (additive, RLS deny-all).
+
+| Item | Status |
+|---|---|
+| **P0-5** Config-driven pricing + credit (`api/pricing.js`, `diagnostic_credit()` wiring, no hardcoded credit fallback, all 35 active clients snapshotted, `pricing_audit`) | ✅ Built 2026-07-22 — **blocked on Alex:** real prices + Rosa's `amount_paid`, then flip `pricing_config.confirmed=true` |
+| **5B** Decision Room sample-readout proof at sticky + inline CTAs (`renewal_config.sample_readout_url`, seeded Marcus Holt demo) | ✅ Built 2026-07-22 — Alex to confirm the sample asset (Section 6.3) |
+| **5C** Tool of the Week in Monday reminder (`api/tools-catalog.js`, ISO-week rotation, `tool_of_week_override` template pin, `?tab=resources` deep link) | ✅ Built 2026-07-22 |
+| **5D** Personalized AI nudge in reminder (fail-open, kill-switch `reminder_nudge`, per-run cap) | ✅ Built 2026-07-22 |
+| **5E** Email failure handling (attempts cap 5 → `status='failed'` + P1 finding; `last_error`; FROM domain pinned) | ✅ Built 2026-07-22 |
+| **P0-6** Consent finish: checkout_notice now renders above every pay CTA + `consent_events` ack trail (v113). Survey stamps + report-view footers were already done. | ✅ Built 2026-07-22 — **blocked on Alex:** publish attorney-approved wording into `legal_texts` |
+| **5G** P2 severity routing: weekly P2 digest email (`ops-monitor?action=p2-digest`, Monday cron) | ✅ Built 2026-07-22 |
+
+### P2 — Decision Room / sticky CTA price copy is hardcoded (found 2026-07-22 during frontier batch)
+The sticky bar and `renderSprintCta` copy in `decision-room.html` hardcode "$10,000" (and "Three months · bi-weekly coaching · 45-day re-score") as literal text, and `diag-portal.js` still carries `price_first_credit || 10000` / `price_first_standard || 15000` literal fallbacks. Prices must come from `pricing_config` / `renewal_config` via the server payload (sponsor-data already returns config URLs; add prices). Violates "editable, never hardcoded" — same class of bug P0-5 just fixed for the credit. — S
+
+### P2 — Pricing admin UI in coach console (found 2026-07-22)
+`api/pricing.js` POST actions (config-save / snapshot-client / credit-override, owner-gated, audited) exist but have no coach.html surface yet. Add a small Pricing panel under Settings so Alex can set real numbers, snapshot a client's `amount_paid` at engagement start, and apply credit overrides without SQL. — S–M
+
+---
+
 ## 🚨 TOP PRIORITY — July 1, 2026 Full Audit (do first, in this order)
 
 Full detail and evidence in **`EIS_Master_Audit_and_Plan_2026-07-01.md`**. Every P0 was independently verified against the live site, the repo, or the database. **Ship all through `gps-portal-safe-build` — never push straight to `main`.**
