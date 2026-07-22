@@ -65,6 +65,12 @@ Auto-generated read-aloud debrief script in Alex's real voice/flow (learned from
 - **coach.html** — "Open debrief script" button on the Report stepper; teleprompter modal (say/cue/ask/data/capture blocks) + capture panel (3 scores + outcome + funding toggle + notes → save-capture) + Print. JS sweep + color-guard green.
 - **Status:** ⏳ built on branch, migration v115 applied to prod, pending Alex push + preview verify.
 
+### P1 — Editable debrief script: coach can edit + reorder every block (added 2026-07-22, Alex)
+Alex loved the script but wants full editorial control before/during a debrief: edit any spoken line, cue, ask, or capture label, and **move blocks higher/lower in the conversation** if a piece needs to land earlier or later. Build the backend to persist per-diagnostic overrides on top of the deterministic assembler — the generated script stays the default; the coach's edits/reordering are stored (likely a `debrief_script_overrides` table keyed by diagnostic_id, holding block edits + an order array) and re-applied on every open. Keep the extractive guardrail intact (edits are the coach's own words, still coach-verified). Consider an "edit mode" toggle in the modal (inline-editable blocks, drag-to-reorder, reset-to-generated). — M
+
+### P1 — One-click follow-up email from the capture panel (added 2026-07-22, Alex)
+After logging the debrief in the capture panel, Alex wants a **Draft / Send follow-up email** button right there so he never leaves the flow: it drafts the post-debrief email in his voice from the captured data (focus, metric, the 3 scores, outcome) + the debrief transcript, shows it inline for a quick review, and lets him send (or push to a Gmail/portal draft) with one confirm. This is the in-portal home for what `gps-debrief-followup` does today in Gmail. **Send-risk: real client email — must be review-before-send with an explicit confirm, correct FROM, the leader's verified address, kill-switch + logged to email history; LLM-drafted so respects the AI provider-independence + kill-switch work.** Pairs with the Fireflies API pull below. — M–L
+
 ### P2 — Fireflies API integration: auto-pull debrief transcripts (added 2026-07-22, Alex)
 Alex's idea — wire the Executive Impact System directly to the Fireflies API so debrief transcripts pull automatically (no manual upload). Feeds the debrief follow-up email and future debrief-quality analytics from real recorded sessions. Pairs with the debrief-script + capture funnel above. — M
 
