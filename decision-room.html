@@ -200,6 +200,7 @@
 <div id="stickyCta" style="display:none;position:fixed;bottom:4px;left:0;right:0;z-index:200;padding:0 16px 0;">
   <div style="max-width:680px;margin:0 auto;background:var(--navy);border:2px solid #01949A;border-radius:10px;padding:10px 18px;display:flex;align-items:center;justify-content:space-between;gap:14px;box-shadow:0 4px 24px rgba(0,0,0,.25);">
     <div style="min-width:0;flex:1;"><div style="font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:#9FC0D6;font-weight:700;" id="stickyLabel">The 90-Day Sprint</div><div style="font-size:13px;color:#cfe0ea;margin-top:1px;">Three months · bi-weekly coaching · 45-day re-score · $10,000</div></div>
+    <a id="stickySample" href="#" target="_blank" rel="noopener" style="display:none;flex-shrink:0;color:var(--light-teal);font-weight:600;font-size:12px;text-decoration:underline;white-space:nowrap;">See a sample readout</a>
     <a id="stickyBtn" href="#" target="_blank" rel="noopener" style="flex-shrink:0;background:#01949A;color:#fff;font-weight:800;font-size:13px;padding:9px 18px;border-radius:7px;text-decoration:none;white-space:nowrap;">Start now →</a>
   </div>
 </div>
@@ -413,12 +414,21 @@ function renderSprintCta(url, firstName, compact){
   if(!url) return '';
   var btnLabel = firstName ? 'Start '+firstName+"'s Sprint \u2192" : 'Get started \u2192';
   var titleLine = firstName ? 'Start '+firstName+"'s 90-Day Sprint" : 'Start the 90-Day Leadership Sprint';
+  // Proof beside the ask (5B): sample readout link, admin-editable via renewal_config.
+  var sampleUrl = DATA && DATA.sample_readout_url;
+  var sampleInline = sampleUrl
+    ? ' <a href="'+esc(sampleUrl)+'" target="_blank" rel="noopener" style="display:inline-block;margin-left:12px;color:var(--light-teal);font-weight:600;font-size:12.5px;text-decoration:underline;">See a sample readout</a>'
+    : '';
+  var sampleBlock = sampleUrl
+    ? '<div style="font-size:12.5px;color:#9FC0D6;margin-top:10px;">Want to see the deliverable first? <a href="'+esc(sampleUrl)+'" target="_blank" rel="noopener" style="color:var(--light-teal);font-weight:700;text-decoration:underline;">Open a sample readout &rarr;</a></div>'
+    : '';
   if(compact){
     return '<div id="sprint-cta-inline" style="background:var(--navy);border:2px solid #01949A;border-radius:10px;padding:18px 20px;margin-top:14px;">'
       +'<div style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#01949A;font-weight:700;margin-bottom:4px;">The next step</div>'
       +'<div style="font-family:Georgia,serif;font-size:17px;font-weight:800;color:#fff;margin-bottom:6px;">'+titleLine+'</div>'
       +'<div style="font-size:13px;color:#cfe0ea;line-height:1.5;margin-bottom:12px;">Three months · Bi-weekly coaching · 45-day re-score · $10,000</div>'
       +'<a href="'+esc(url)+'" target="_blank" rel="noopener" style="display:inline-block;background:#01949A;color:#fff;font-weight:800;font-size:13px;padding:9px 18px;border-radius:7px;text-decoration:none;">'+btnLabel+'</a>'
+      +sampleInline
       +'</div>';
   }
   return '<div id="sprint-cta" style="background:var(--navy);border-radius:10px;padding:26px 28px;margin-top:16px;">'
@@ -432,6 +442,7 @@ function renderSprintCta(url, firstName, compact){
     +'<div style="font-size:13px;color:#eaf2f7;line-height:1.5;display:flex;gap:10px;"><span style="color:#01949A;font-weight:900;min-width:16px;">3</span><span>A final 90-day report -- showing where the leader started, what moved, and what the next decision is.</span></div>'
     +'</div></details>'
     +'<a href="'+esc(url)+'" target="_blank" rel="noopener" style="display:inline-block;background:#01949A;color:#fff;font-weight:800;font-size:14px;padding:11px 24px;border-radius:7px;text-decoration:none;">'+btnLabel+'</a>'
+    +sampleBlock
     +'<div style="font-size:12px;color:#7FA8BE;margin-top:10px;">You\'ll be sent to our secure checkout. Your coach will reach out within 24 hours to schedule session 1.</div>'
     +(DATA&&DATA.booking_url?'<div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.1);"><a href="'+esc(DATA.booking_url)+'" target="_blank" rel="noopener" style="font-size:13px;color:#9FC0D6;text-decoration:none;font-weight:600;">Not ready? Talk to Alex first &rarr;</a></div>':'')
     +'</div>';
@@ -1409,7 +1420,14 @@ init();
     if(!bar || !DATA || !DATA.sprint_cta_url){ if(bar) bar.style.display='none'; return; }
     var btn=document.getElementById('stickyBtn');
     var lbl=document.getElementById('stickyLabel');
-    if(!hrefSet){ if(btn) btn.href = DATA.sprint_cta_url; hrefSet = true; }
+    if(!hrefSet){
+      if(btn) btn.href = DATA.sprint_cta_url;
+      // Proof beside the ask (5B): a sample readout link so a sponsor can see what
+      // the deliverable looks like before committing. Hidden when no URL configured.
+      var smp = document.getElementById('stickySample');
+      if(smp && DATA.sample_readout_url){ smp.href = DATA.sample_readout_url; smp.style.display='block'; }
+      hrefSet = true;
+    }
     // Count committed recs
     var commitCount = Object.values(window.REC_COMMITMENTS||{}).filter(function(v){ return v==='commit'; }).length;
     var members = DATA.members||[];

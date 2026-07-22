@@ -901,7 +901,7 @@ export default async function handler(req, res) {
           ? Promise.resolve(null)
           : sbGet(`/rest/v1/diagnostic_team_reports?team_id=eq.${enc(teamId)}&sponsor_visible=eq.true&report_pdf_url=not.is.null&select=report_pdf_url,generated_at&order=generated_at.desc&limit=1`).catch(() => null),
         (!isProgress && !isPrivate)
-          ? sbGet(`/rest/v1/renewal_config?id=eq.1&select=first_sprint_credit_url,booking_url&limit=1`).catch(() => null)
+          ? sbGet(`/rest/v1/renewal_config?id=eq.1&select=first_sprint_credit_url,booking_url,sample_readout_url&limit=1`).catch(() => null)
           : Promise.resolve(null),
       ]);
 
@@ -950,9 +950,13 @@ export default async function handler(req, res) {
       // Sprint CTA + booking link — only in standard (fully revealed) mode.
       let sprintCtaUrl = null;
       let bookingUrl   = null;
+      let sampleReadoutUrl = null;
       if (!isProgress && !isPrivate && rcRow) {
         sprintCtaUrl = (rcRow[0] && rcRow[0].first_sprint_credit_url) || null;
         bookingUrl   = (rcRow[0] && rcRow[0].booking_url) || null;
+        // Proof asset beside the sprint CTAs (5B): admin-editable in renewal_config.
+        // Null/empty hides the link entirely.
+        sampleReadoutUrl = (rcRow[0] && rcRow[0].sample_readout_url) || null;
         // Per-engagement override (custom_cta_url on the sponsor_teams row).
         // 'disabled' suppresses the sprint CTA (used for demo/test engagements).
         if (link.custom_cta_url === 'disabled') sprintCtaUrl = null;
@@ -1014,6 +1018,7 @@ export default async function handler(req, res) {
         team_report: teamReport,
         sprint_cta_url: sprintCtaUrl,
         booking_url: bookingUrl,
+        sample_readout_url: sampleReadoutUrl,
         billing: { mode: orgBillingMode, pay_url: payUrl || null },
       });
     }
