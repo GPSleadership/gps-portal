@@ -201,7 +201,7 @@
   <div style="max-width:680px;margin:0 auto;background:var(--navy);border:2px solid #01949A;border-radius:10px;padding:10px 18px;display:flex;align-items:center;justify-content:space-between;gap:14px;box-shadow:0 4px 24px rgba(0,0,0,.25);">
     <div style="min-width:0;flex:1;"><div style="font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:#9FC0D6;font-weight:700;" id="stickyLabel">The 90-Day Sprint</div><div style="font-size:13px;color:#cfe0ea;margin-top:1px;">Three months · bi-weekly coaching · 45-day re-score · $10,000</div></div>
     <a id="stickySample" href="#" target="_blank" rel="noopener" style="display:none;flex-shrink:0;color:var(--light-teal);font-weight:600;font-size:12px;text-decoration:underline;white-space:nowrap;">See a sample readout</a>
-    <a id="stickyBtn" href="#" target="_blank" rel="noopener" style="flex-shrink:0;background:#01949A;color:#fff;font-weight:800;font-size:13px;padding:9px 18px;border-radius:7px;text-decoration:none;white-space:nowrap;">Start now →</a>
+    <a id="stickyBtn" href="#" target="_blank" rel="noopener" onclick="drAckCheckout('decision-room sticky CTA')" style="flex-shrink:0;background:#01949A;color:#fff;font-weight:800;font-size:13px;padding:9px 18px;border-radius:7px;text-decoration:none;white-space:nowrap;">Start now →</a>
   </div>
 </div>
 
@@ -427,7 +427,8 @@ function renderSprintCta(url, firstName, compact){
       +'<div style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#01949A;font-weight:700;margin-bottom:4px;">The next step</div>'
       +'<div style="font-family:Georgia,serif;font-size:17px;font-weight:800;color:#fff;margin-bottom:6px;">'+titleLine+'</div>'
       +'<div style="font-size:13px;color:#cfe0ea;line-height:1.5;margin-bottom:12px;">Three months · Bi-weekly coaching · 45-day re-score · $10,000</div>'
-      +'<a href="'+esc(url)+'" target="_blank" rel="noopener" style="display:inline-block;background:#01949A;color:#fff;font-weight:800;font-size:13px;padding:9px 18px;border-radius:7px;text-decoration:none;">'+btnLabel+'</a>'
+      +'<div class="dr-checkout-notice" style="display:none;font-size:10.5px;color:#9FC0D6;line-height:1.5;margin:0 0 10px;white-space:pre-wrap;"></div>'
+      +'<a href="'+esc(url)+'" target="_blank" rel="noopener" onclick="drAckCheckout(\'decision-room inline CTA\')" style="display:inline-block;background:#01949A;color:#fff;font-weight:800;font-size:13px;padding:9px 18px;border-radius:7px;text-decoration:none;">'+btnLabel+'</a>'
       +sampleInline
       +'</div>';
   }
@@ -441,7 +442,8 @@ function renderSprintCta(url, firstName, compact){
     +'<div style="font-size:13px;color:#eaf2f7;line-height:1.5;display:flex;gap:10px;"><span style="color:#01949A;font-weight:900;min-width:16px;">2</span><span>A 45-day re-score -- you see movement in the data before you decide how far to invest.</span></div>'
     +'<div style="font-size:13px;color:#eaf2f7;line-height:1.5;display:flex;gap:10px;"><span style="color:#01949A;font-weight:900;min-width:16px;">3</span><span>A final 90-day report -- showing where the leader started, what moved, and what the next decision is.</span></div>'
     +'</div></details>'
-    +'<a href="'+esc(url)+'" target="_blank" rel="noopener" style="display:inline-block;background:#01949A;color:#fff;font-weight:800;font-size:14px;padding:11px 24px;border-radius:7px;text-decoration:none;">'+btnLabel+'</a>'
+    +'<div class="dr-checkout-notice" style="display:none;font-size:10.5px;color:#9FC0D6;line-height:1.5;margin:0 0 10px;white-space:pre-wrap;"></div>'
+    +'<a href="'+esc(url)+'" target="_blank" rel="noopener" onclick="drAckCheckout(\'decision-room sprint CTA\')" style="display:inline-block;background:#01949A;color:#fff;font-weight:800;font-size:14px;padding:11px 24px;border-radius:7px;text-decoration:none;">'+btnLabel+'</a>'
     +sampleBlock
     +'<div style="font-size:12px;color:#7FA8BE;margin-top:10px;">You\'ll be sent to our secure checkout. Your coach will reach out within 24 hours to schedule session 1.</div>'
     +(DATA&&DATA.booking_url?'<div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.1);"><a href="'+esc(DATA.booking_url)+'" target="_blank" rel="noopener" style="font-size:13px;color:#9FC0D6;text-decoration:none;font-weight:600;">Not ready? Talk to Alex first &rarr;</a></div>':'')
@@ -471,6 +473,7 @@ function renderTeam(){
     html += renderTeamReport(DATA.team_report);
     html += renderSprintCta(DATA.sprint_cta_url, firstName1);
     document.getElementById('view').innerHTML = html;
+    populateDrCheckoutNotice();
     return;
   }
   // Order (2026-07-15, Alex): open with the read, then patterns, then behaviours,
@@ -495,6 +498,44 @@ function renderTeam(){
   html += renderSprintCta(DATA.sprint_cta_url);
   document.getElementById('view').innerHTML = html;
   apprRecount(); apprBillMode();
+  populateDrCheckoutNotice();
+}
+
+/* ── P0-6 payment point (checkout notice + acknowledgment) ──────────────────
+   The checkout_notice legal text renders live (from legal_texts, the single
+   source of truth) above every pay CTA; clicking through a pay CTA records an
+   append-only consent event pinned to the exact version shown. Both are
+   best-effort: a miss never hides the CTA or blocks the checkout. Coach
+   previews are excluded server-side. */
+var _drCheckoutNotice = null;
+function populateDrCheckoutNotice(){
+  var slots = document.querySelectorAll('.dr-checkout-notice');
+  if(!slots.length) return;
+  function fill(){
+    if(!_drCheckoutNotice || !_drCheckoutNotice.body) return;
+    document.querySelectorAll('.dr-checkout-notice').forEach(function(s){
+      s.textContent = _drCheckoutNotice.body; s.style.display = 'block';
+    });
+  }
+  if(_drCheckoutNotice){ fill(); return; }
+  fetch('/api/legal-text?key=checkout_notice', { headers: { 'Accept': 'application/json' } })
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(j){
+      _drCheckoutNotice = (j && j.ok && j.active && j.body)
+        ? { id: j.id, version: j.version, body: String(j.body) }
+        : { id: null, version: null, body: '' };
+      fill();
+    })
+    .catch(function(){ /* notice is best-effort */ });
+}
+function drAckCheckout(context){
+  try{
+    api('checkout-ack', {
+      text_id: (_drCheckoutNotice && _drCheckoutNotice.id) || null,
+      version: (_drCheckoutNotice && _drCheckoutNotice.version) || null,
+      context: context || 'decision-room sprint CTA'
+    }).catch(function(){});
+  }catch(e){ /* never block the checkout click */ }
 }
 
 // ── Bundled approvals panel (Phase 3) — multi-leader sponsors approve several

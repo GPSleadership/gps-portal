@@ -479,6 +479,26 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true, raters_finalized_at: now });
       }
 
+      // P0-6 payment point: record that the leader clicked through a pay CTA with
+      // the checkout notice displayed. Append-only consent_events row pinned to the
+      // exact legal_texts version shown. Best-effort — never blocks the checkout.
+      case 'checkout-notice-ack': {
+        const diag = await diagByLeaderToken(token);
+        if (!diag) return res.status(401).json({ error: 'Invalid or expired link' });
+        try {
+          await sb('/rest/v1/consent_events', 'POST', {
+            actor_type: 'leader',
+            actor_id:   String(diag.id),
+            actor_email: diag.client_email || null,
+            key:        'checkout_notice',
+            text_id:    body.text_id || null,
+            version:    body.version || null,
+            context:    String(body.context || 'diagnostic-leader sprint offer').slice(0, 200),
+          }, { Prefer: 'return=minimal' });
+        } catch (_) { /* best-effort */ }
+        return res.status(200).json({ ok: true });
+      }
+
       // ── Rater survey page (diagnostic-survey.html) ──────────────────────────
       case 'rater-get': {
         const rater = await raterByToken(token);

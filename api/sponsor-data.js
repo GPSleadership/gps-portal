@@ -825,6 +825,29 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, sponsor: { name: sponsor.name }, teams });
     }
 
+    // ── checkout-ack: P0-6 payment point ──────────────────────────────────────
+    // Records that this sponsor clicked through a pay CTA with the checkout
+    // notice displayed (append-only consent_events row pinned to the exact
+    // legal_texts version shown). Coach previews are not recorded. Best-effort —
+    // never blocks the checkout.
+    if (body.action === 'checkout-ack') {
+      const isPreview = !!(body.coach_session && verifyCoachSession(body.coach_session));
+      if (!isPreview) {
+        try {
+          await sb('/rest/v1/consent_events', 'POST', {
+            actor_type: 'sponsor',
+            actor_id:   String(sponsor.id),
+            actor_email: sponsor.email || null,
+            key:        'checkout_notice',
+            text_id:    body.text_id || null,
+            version:    body.version || null,
+            context:    String(body.context || 'decision-room sprint CTA').slice(0, 200),
+          }, { Prefer: 'return=minimal' });
+        } catch (_) { /* best-effort */ }
+      }
+      return res.status(200).json({ ok: true });
+    }
+
     // ── team: the full, scoped Decision Room payload ──────────────────────────
     // When called without a team_id (e.g. on initial page load), defaults to the
     // first active team and includes a 'teams' list in the response so the caller
