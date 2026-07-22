@@ -619,7 +619,12 @@ export default async function handler(req, res) {
           daysLeft = Math.round((d2 - d1) / 86400000);
           closed = daysLeft < 0;
         }
-        const resp = isA ? agg.participation.pre : agg.participation.pre; // single set for assessments
+        // Assessments have a single response set (pre). A workshop is further along once
+        // its post survey has responses, so surface whichever phase leads. This is the
+        // "responses so far" headline; the indices table still shows pre→post per theme.
+        const resp = (!isA && agg.participation.post.done > agg.participation.pre.done)
+          ? agg.participation.post
+          : agg.participation.pre;
         return res.status(200).json({
           ok: true,
           preview: {
