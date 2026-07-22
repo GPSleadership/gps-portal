@@ -954,6 +954,7 @@
       <div class="section-subtab"        id="sub-templates" onclick="showSection('templates')">Templates &amp; Automation</div>
       <div class="section-subtab"        id="sub-reportflow" onclick="showSection('reportflow')">Report Flow</div>
       <div class="section-subtab"        id="sub-aicontrols" onclick="showSection('aicontrols')">AI Controls</div>
+      <div class="section-subtab"        id="sub-pricing"   onclick="showSection('pricing')">Pricing</div>
       <span style="align-self:center;color:var(--line);padding:0 4px;font-weight:700;">·</span>
       <div class="section-subtab"        id="sub-emails"    onclick="showSection('emails')">Email Log</div>
       <div class="section-subtab"        id="sub-asklog"    onclick="showSection('asklog')">Ask Alex Log</div>
@@ -1188,6 +1189,26 @@ I'm taking part in a leadership assessment run by GPS Leadership Solutions. Thei
         </div>
       </div>
     </div><!-- /section-aicontrols -->
+
+    <!-- ═══ PRICING SECTION (P0-5 admin UI) ═══ -->
+    <div id="section-pricing" style="display:none;">
+      <div class="toolbar" style="margin-bottom:16px;">
+        <div class="toolbar-title">Pricing</div>
+      </div>
+      <div style="background:var(--white);border-radius:8px;padding:14px 18px;margin-bottom:16px;border-left:4px solid var(--navy);font-size:13px;color:var(--text);line-height:1.6;">
+        Per-client money terms. Each client's prices are <strong>frozen at engagement start</strong> so a later price change never rewrites an existing client's offer, and the diagnostic credit is always <em>min(what they paid, the standard price)</em> — a Pro client can never be over-credited. Set what a client actually paid here, or apply a credit override (a scholarship or negotiated rate) with a reason. Every change lands in the audit trail below. <span style="color:var(--gray-600);">Global prices are edited in Settings &rarr; Templates &amp; Automation &rarr; Pricing Control Center.</span> Owner only.
+      </div>
+      <div style="background:var(--white);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06);overflow:hidden;margin-bottom:16px;">
+        <div id="pricingConfigContent" style="padding:16px 18px;">
+          <div class="spinner"></div>
+        </div>
+      </div>
+      <div style="background:var(--white);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06);overflow:hidden;">
+        <div id="pricingClientContent" style="padding:16px 18px;">
+          <div class="spinner"></div>
+        </div>
+      </div>
+    </div><!-- /section-pricing -->
 
     <!-- ═══ ACCOUNT & SECURITY SECTION ═══ -->
     <div id="section-security" style="display:none;">
@@ -2982,7 +3003,7 @@ function renderProfileSection(section, client, checkins) {
       <div style="background:#FEF6E7;border:1px solid #F5C97B;border-radius:8px;padding:12px 16px;margin-bottom:18px;">
         <div style="font-size:12px;font-weight:700;color:#8F560F;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">Goal change requested · ${new Date(client.goal_change_requested_at).toLocaleDateString()}</div>
         ${client.goal_change_note ? `<div style="font-size:13px;color:var(--gray-600);line-height:1.5;margin-bottom:8px;">&ldquo;${esc(client.goal_change_note)}&rdquo;</div>` : ''}
-        <button onclick="resolveGoalChange('${client.id}')" style="font-size:12px;background:var(--navy);color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-weight:700;">Mark resolved</button>
+        <button onclick="resolveGoalChange('${client.id}')" style="font-size:12px;background:var(--navy);color:var(--white);border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-weight:700;">Mark resolved</button>
       </div>` : '';
 
     el.innerHTML = `
@@ -3212,7 +3233,7 @@ function renderProfileSection(section, client, checkins) {
         <p style="font-size:11px;color:var(--gray-600);margin-top:6px;">Send this link to ${client.name ? client.name.split(' ')[0] : 'the client'}. They should bookmark it — it's their permanent portal access.</p>
         <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
           <button onclick="sendWelcomeEmail('${client.id}')" id="welcomeEmailBtn-${client.id}" style="padding:7px 16px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">Send Welcome Email</button>
-          <button onclick="resendPortalLink('${client.id}')" id="resendLinkBtn-${client.id}" style="padding:7px 16px;background:var(--navy);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">↩ Resend Portal Link</button>
+          <button onclick="resendPortalLink('${client.id}')" id="resendLinkBtn-${client.id}" style="padding:7px 16px;background:var(--navy);color:var(--white);border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">↩ Resend Portal Link</button>
           <button onclick="regenerateToken('${client.id}')" id="regenBtn-${client.id}" style="padding:7px 14px;background:none;border:1px solid var(--warn);color:var(--warn);border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Regenerate Link</button>
         </div>
         <div id="regenMsg-${client.id}" style="margin-top:8px;"></div>
@@ -3221,7 +3242,7 @@ function renderProfileSection(section, client, checkins) {
         <h4>Project CC (this client only)</h4>
         <p style="font-size:12px;color:var(--gray-600);margin-bottom:8px;">Extra people CC'd on THIS client's survey emails — e.g., a project sponsor. Comma-separated. The global CC settings (Communications → Templates) still apply on top of this.</p>
         <input type="text" id="projcc-${client.id}" value="${(Array.isArray(client.project_cc_emails) ? client.project_cc_emails.join(', ') : '').replace(/"/g,'&quot;')}" placeholder="sponsor@example.com" style="width:100%;max-width:420px;padding:7px 10px;border:1px solid var(--gray-300);border-radius:6px;font-size:13px;">
-        <div style="margin-top:8px;"><button onclick="saveProjectCc('${client.id}')" style="background:var(--navy);color:#fff;border:none;border-radius:6px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;">Save project CC</button></div>
+        <div style="margin-top:8px;"><button onclick="saveProjectCc('${client.id}')" style="background:var(--navy);color:var(--white);border:none;border-radius:6px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;">Save project CC</button></div>
       </div>
       <div class="detail-section" id="aa-section-${client.id}">
         <h4>Ask Alex Usage</h4>
@@ -3434,7 +3455,7 @@ async function loadSponsorPanel(clientId) {
       +       '<option value="outcomes_only"' + (!isSummary ? ' selected' : '') + '>Outcomes only (trend + notes)</option>'
       +     '</select></div>'
       +   '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;">'
-      +     '<button onclick="saveSponsorContent(\'' + s.id + '\')" style="font-size:12px;background:var(--navy);color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-weight:700;font-family:Montserrat,sans-serif;">Save</button>'
+      +     '<button onclick="saveSponsorContent(\'' + s.id + '\')" style="font-size:12px;background:var(--navy);color:var(--white);border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-weight:700;font-family:Montserrat,sans-serif;">Save</button>'
       +     '<button onclick="previewAsSponsor(\'' + s.sponsor_token + '\')" style="font-size:12px;background:none;border:1px solid var(--navy);color:var(--navy);border-radius:6px;padding:8px 16px;cursor:pointer;font-weight:700;">Preview as sponsor &#8599;</button>'
       +     '<button class="copy-btn" onclick="copyURL(\'' + link + '\', this)">Copy sponsor link</button>'
       +   '</div>'
@@ -4589,7 +4610,7 @@ document.getElementById('addAdminModal').addEventListener('click', function(e) {
 let _currentSection = 'dashboard';
 
 // Refactored IA: 5 top-level groups, each mapping to one or more underlying sections.
-var GROUP_OF = { dashboard:'today', clients:'clients', insights:'insights', diagnostics:'diagteams', decisionroom:'diagteams', messages:'messages', emails:'settings', asklog:'settings', templates:'settings', accesshelp:'settings', admins:'settings', security:'settings', reportflow:'settings', aicontrols:'settings', workshops:'workshops', organizations:'organizations', aistudio:'aistudio' };
+var GROUP_OF = { dashboard:'today', clients:'clients', insights:'insights', diagnostics:'diagteams', decisionroom:'diagteams', messages:'messages', emails:'settings', asklog:'settings', templates:'settings', accesshelp:'settings', admins:'settings', security:'settings', reportflow:'settings', aicontrols:'settings', pricing:'settings', workshops:'workshops', organizations:'organizations', aistudio:'aistudio' };
 var GROUP_DEFAULT = { today:'dashboard', clients:'clients', insights:'insights', diagteams:'diagnostics', messages:'messages', settings:'admins', workshops:'workshops', organizations:'organizations', aistudio:'aistudio' };
 function showGroup(group){ showSection(GROUP_DEFAULT[group] || 'dashboard'); }
 
@@ -4906,6 +4927,7 @@ function showSection(name, skipHooks, _fromHistory) {
   if (name === 'admins')      loadAdminAccounts();
   if (name === 'reportflow')  loadReportFlowSettings();
   if (name === 'aicontrols')  loadAiControls();
+  if (name === 'pricing')     loadPricingPanel();
   if (name === 'templates')   { loadEmailTemplates(); loadCcSettingsPanel(); loadLegalTextsPanel(); loadPricingControlPanel(); loadRenewalConfigPanel(); }
   if (name === 'dashboard')   { _actionItemsLoaded = false; renderDiagHome(); refreshMsgBadge(); }
   if (name === 'diagnostics') { diagBoot(); renderDiagTable(); }
@@ -5667,7 +5689,7 @@ async function loadPricingControlPanel(){
     + '</div>'
     + '<table style="width:100%;border-collapse:collapse;"><thead><tr style="border-bottom:2px solid var(--gray-200);"><th style="text-align:left;font-size:10px;text-transform:uppercase;color:var(--gray-600);padding:4px 6px;">Price</th><th style="font-size:10px;text-transform:uppercase;color:var(--gray-600);padding:4px 6px;">Follows driver</th><th style="text-align:left;font-size:10px;text-transform:uppercase;color:var(--gray-600);padding:4px 6px;">Amount</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'
     + '<div id="pcc_credit_note" style="font-size:11.5px;color:var(--gray-600);margin-top:10px;line-height:1.5;"></div>'
-    + '<div style="display:flex;align-items:center;gap:12px;margin-top:12px;"><button onclick="savePricingControlCenter()" style="background:var(--navy);color:#fff;border:none;border-radius:6px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;">Review &amp; save prices</button><span id="pcc_status" style="font-size:13px;color:var(--teal);"></span></div>';
+    + '<div style="display:flex;align-items:center;gap:12px;margin-top:12px;"><button onclick="savePricingControlCenter()" style="background:var(--navy);color:var(--white);border:none;border-radius:6px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;">Review &amp; save prices</button><span id="pcc_status" style="font-size:13px;color:var(--teal);"></span></div>';
   pccUpdateCreditNote();
 }
 function pccRescale(){
@@ -5758,7 +5780,7 @@ async function loadRenewalConfigPanel(){
     + f('Grace window (days)', 'rc_grace_days', cfg.grace_window_days)
     + f('Pre-charge notice (days)', 'rc_precharge_days', cfg.precharge_notice_days)
     + '</div>'
-    + '<div style="display:flex;align-items:center;gap:12px;margin-top:8px;"><button onclick="saveRenewalConfig()" style="background:var(--navy);color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;">Save renewal config</button><span id="rc_status" style="font-size:13px;color:var(--teal);"></span></div>';
+    + '<div style="display:flex;align-items:center;gap:12px;margin-top:8px;"><button onclick="saveRenewalConfig()" style="background:var(--navy);color:var(--white);border:none;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;">Save renewal config</button><span id="rc_status" style="font-size:13px;color:var(--teal);"></span></div>';
 }
 async function saveRenewalConfig(){
   const v = id => { const e = document.getElementById(id); return e ? e.value.trim() : ''; };
@@ -5823,6 +5845,171 @@ async function loadAiControls(){
 async function saveAiFlag(feature, enabled){
   try { await coachData({ action: 'ai-flag-set', feature, enabled }); if (typeof toast === 'function') toast('AI feature turned ' + (enabled ? 'on' : 'off') + '.'); loadAiControls(); }
   catch (e) { alert(e.message || 'Could not update.'); loadAiControls(); }
+}
+
+// ── Pricing panel (Settings → Pricing) — per-client terms + audit trail ────────
+// Global prices are edited in the Pricing Control Center (Templates & Automation);
+// THIS panel owns the per-client layer the Control Center doesn't touch: what a
+// client actually paid, credit overrides (with a required reason), the computed
+// credit, and the pricing_audit trail. All writes go through /api/pricing
+// (owner-gated + audited) — never the generic proxy.
+async function pricingApi(payload){
+  const session = getCoachSessionToken();
+  const res = await fetch('/api/pricing', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ session }, payload)),
+  });
+  let json = {};
+  try { json = await res.json(); } catch (_) {}
+  if (!res.ok) {
+    const msg = json.error || ('Request failed (' + res.status + ')');
+    if (res.status === 401) showLoginScreen('Your session expired. Please log in again.');
+    throw new Error(msg);
+  }
+  return json;
+}
+
+function money(v){ return (v == null || v === '') ? '—' : '$' + Number(v).toLocaleString('en-US'); }
+
+async function loadPricingPanel(){
+  const cfgEl = document.getElementById('pricingConfigContent');
+  const cliEl = document.getElementById('pricingClientContent');
+  if (!cfgEl || !cliEl) return;
+  cfgEl.innerHTML = '<div class="spinner"></div>';
+  cliEl.innerHTML = '<div class="spinner"></div>';
+
+  // Card 1 — global config summary (read-only here) + recent audit trail.
+  try {
+    const r = await pricingApi({ action: 'config-get' });
+    const c = r.config || {};
+    const conf = c.confirmed === true;
+    let auditRows = [];
+    try { const a = await pricingApi({ action: 'audit-list' }); auditRows = a.audit || []; } catch (_) { /* non-owner: no audit view */ }
+    cfgEl.innerHTML =
+      '<div style="font-family:\'Montserrat\',sans-serif;font-weight:700;color:var(--navy);margin-bottom:10px;">Current global prices '
+      + (conf ? '<span style="font-size:11px;font-weight:700;color:var(--teal);border:1px solid var(--teal);border-radius:5px;padding:2px 8px;margin-left:8px;vertical-align:middle;">CONFIRMED</span>'
+              : '<span style="font-size:11px;font-weight:700;color:var(--red);border:1px solid var(--red);border-radius:5px;padding:2px 8px;margin-left:8px;vertical-align:middle;">UNCONFIRMED — verify before quoting</span>')
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:6px;">'
+      +   '<div style="background:var(--gray-100);border-radius:6px;padding:10px 12px;"><div style="font-size:10px;text-transform:uppercase;color:var(--gray-600);font-weight:700;">Standard diagnostic</div><div style="font-size:17px;font-weight:800;color:var(--navy);">' + money(c.standard_diagnostic_price) + '</div></div>'
+      +   '<div style="background:var(--gray-100);border-radius:6px;padding:10px 12px;"><div style="font-size:10px;text-transform:uppercase;color:var(--gray-600);font-weight:700;">Pro diagnostic</div><div style="font-size:17px;font-weight:800;color:var(--navy);">' + money(c.pro_diagnostic_price) + '</div></div>'
+      +   '<div style="background:var(--gray-100);border-radius:6px;padding:10px 12px;"><div style="font-size:10px;text-transform:uppercase;color:var(--gray-600);font-weight:700;">Coaching / month</div><div style="font-size:17px;font-weight:800;color:var(--navy);">' + money(c.coaching_monthly) + '</div></div>'
+      +   '<div style="background:var(--gray-100);border-radius:6px;padding:10px 12px;"><div style="font-size:10px;text-transform:uppercase;color:var(--gray-600);font-weight:700;">Sprint length</div><div style="font-size:17px;font-weight:800;color:var(--navy);">' + (c.sprint_months || '—') + ' mo</div></div>'
+      +   '<div style="background:var(--gray-100);border-radius:6px;padding:10px 12px;"><div style="font-size:10px;text-transform:uppercase;color:var(--gray-600);font-weight:700;">Credit window</div><div style="font-size:17px;font-weight:800;color:var(--navy);">' + (c.credit_window_days || '—') + ' days</div></div>'
+      + '</div>'
+      + '<div style="font-size:11.5px;color:var(--gray-600);margin-bottom:14px;">Edit these in Settings &rarr; Templates &amp; Automation &rarr; Pricing Control Center. New-client snapshots freeze the values above at engagement start.</div>'
+      + (auditRows.length
+          ? '<div style="font-weight:700;color:var(--navy);font-size:13px;margin-bottom:6px;">Recent pricing changes (audit trail)</div>'
+            + '<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="border-bottom:2px solid var(--gray-200);">'
+            + '<th style="text-align:left;padding:4px 6px;font-size:10px;text-transform:uppercase;color:var(--gray-600);">When</th>'
+            + '<th style="text-align:left;padding:4px 6px;font-size:10px;text-transform:uppercase;color:var(--gray-600);">Action</th>'
+            + '<th style="text-align:left;padding:4px 6px;font-size:10px;text-transform:uppercase;color:var(--gray-600);">Who</th>'
+            + '<th style="text-align:left;padding:4px 6px;font-size:10px;text-transform:uppercase;color:var(--gray-600);">Reason</th>'
+            + '</tr></thead><tbody>'
+            + auditRows.map(function(a){
+                return '<tr style="border-bottom:1px solid var(--gray-100);">'
+                  + '<td style="padding:5px 6px;white-space:nowrap;color:var(--gray-600);">' + escHtml(String(a.created_at || '').slice(0, 16).replace('T', ' ')) + '</td>'
+                  + '<td style="padding:5px 6px;font-weight:700;color:var(--navy);">' + escHtml(a.action || '') + '</td>'
+                  + '<td style="padding:5px 6px;color:var(--gray-600);">' + escHtml((a.actor || '').split('@')[0]) + '</td>'
+                  + '<td style="padding:5px 6px;color:var(--text);">' + escHtml(a.reason || '—') + '</td>'
+                  + '</tr>';
+              }).join('')
+            + '</tbody></table>'
+          : '<div style="font-size:12px;color:var(--gray-600);">No audited pricing changes yet (or owner-only view).</div>');
+  } catch (e) {
+    cfgEl.innerHTML = '<div style="color:var(--red);font-size:13px;">Could not load pricing config: ' + escHtml(e.message || '') + '</div>';
+  }
+
+  // Card 2 — per-client terms.
+  try {
+    const clients = await cdSelect('clients', { select: 'id,name,is_active', order: 'name.asc', limit: 500 });
+    const opts = (clients || [])
+      .filter(function(c){ return c && c.id && c.name; })
+      .map(function(c){ return '<option value="' + escHtml(c.id) + '">' + escHtml(c.name) + (c.is_active === false ? ' (inactive)' : '') + '</option>'; })
+      .join('');
+    cliEl.innerHTML =
+      '<div style="font-family:\'Montserrat\',sans-serif;font-weight:700;color:var(--navy);margin-bottom:10px;">Client pricing &amp; credit</div>'
+      + '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px;">'
+      +   '<select id="ppClientSel" style="padding:8px 11px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;min-width:240px;max-width:100%;"><option value="">Select a client…</option>' + opts + '</select>'
+      +   '<button onclick="ppLoadClient()" style="background:var(--navy);color:var(--white);border:none;border-radius:6px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;">Load</button>'
+      + '</div>'
+      + '<div id="ppClientDetail" style="font-size:13px;color:var(--gray-600);">Pick a client to see their frozen terms, what they paid, and their computed credit.</div>';
+  } catch (e) {
+    cliEl.innerHTML = '<div style="color:var(--red);font-size:13px;">Could not load clients: ' + escHtml(e.message || '') + '</div>';
+  }
+}
+
+async function ppLoadClient(){
+  const sel = document.getElementById('ppClientSel');
+  const det = document.getElementById('ppClientDetail');
+  if (!sel || !det || !sel.value) return;
+  det.innerHTML = '<div class="spinner"></div>';
+  try {
+    const r = await pricingApi({ action: 'client-pricing-get', client_id: sel.value });
+    const s = r.snapshot;
+    const name = sel.options[sel.selectedIndex].text;
+    det.innerHTML =
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px;">'
+      +   '<div style="background:var(--light-teal);border-radius:6px;padding:10px 12px;"><div style="font-size:10px;text-transform:uppercase;color:var(--navy);font-weight:700;">Computed diagnostic credit</div><div style="font-size:20px;font-weight:800;color:var(--navy);">' + money(r.credit) + '</div><div style="font-size:10.5px;color:var(--gray-600);">What their sprint offer credits them</div></div>'
+      +   '<div style="background:var(--gray-100);border-radius:6px;padding:10px 12px;"><div style="font-size:10px;text-transform:uppercase;color:var(--gray-600);font-weight:700;">Amount paid</div><div style="font-size:20px;font-weight:800;color:var(--navy);">' + money(s && s.amount_paid) + '</div><div style="font-size:10.5px;color:var(--gray-600);">' + (s && s.amount_paid != null ? 'Recorded' : 'Not recorded — credit defaults to standard') + '</div></div>'
+      +   '<div style="background:var(--gray-100);border-radius:6px;padding:10px 12px;"><div style="font-size:10px;text-transform:uppercase;color:var(--gray-600);font-weight:700;">Frozen standard price</div><div style="font-size:20px;font-weight:800;color:var(--navy);">' + money(s && s.standard_diagnostic_price) + '</div><div style="font-size:10.5px;color:var(--gray-600);">' + (s ? 'Snapshotted ' + String(s.snapshot_at || '').slice(0, 10) : 'No snapshot yet — uses live config') + '</div></div>'
+      +   '<div style="background:var(--gray-100);border-radius:6px;padding:10px 12px;"><div style="font-size:10px;text-transform:uppercase;color:var(--gray-600);font-weight:700;">Credit override</div><div style="font-size:20px;font-weight:800;color:var(--navy);">' + money(s && s.credit_override) + '</div><div style="font-size:10.5px;color:var(--gray-600);">' + escHtml((s && s.override_reason) || 'None') + '</div></div>'
+      + '</div>'
+      + '<div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end;">'
+      +   '<div><div style="font-size:11px;font-weight:700;color:var(--navy);margin-bottom:4px;">Set what ' + escHtml(name.split(' ')[0]) + ' actually paid</div>'
+      +     '<div style="display:flex;gap:6px;align-items:center;"><span style="color:var(--gray-600);">$</span><input type="number" id="ppAmountPaid" min="0" step="1" value="' + (s && s.amount_paid != null ? Number(s.amount_paid) : '') + '" placeholder="e.g. 10000" style="width:110px;padding:7px 9px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;">'
+      +     '<button onclick="ppSaveAmount()" style="background:var(--navy);color:var(--white);border:none;border-radius:6px;padding:8px 14px;font-size:12.5px;font-weight:700;cursor:pointer;">Save</button></div></div>'
+      +   '<div><div style="font-size:11px;font-weight:700;color:var(--navy);margin-bottom:4px;">Credit override (reason required)</div>'
+      +     '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;"><span style="color:var(--gray-600);">$</span><input type="number" id="ppOverride" min="0" step="1" value="' + (s && s.credit_override != null ? Number(s.credit_override) : '') + '" placeholder="amount" style="width:100px;padding:7px 9px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;">'
+      +     '<input type="text" id="ppOverrideReason" value="' + escHtml((s && s.override_reason) || '') + '" placeholder="why (e.g. negotiated rate)" style="width:200px;padding:7px 9px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;">'
+      +     '<button onclick="ppSaveOverride()" style="background:var(--navy);color:var(--white);border:none;border-radius:6px;padding:8px 14px;font-size:12.5px;font-weight:700;cursor:pointer;">Apply</button>'
+      +     '<button onclick="ppClearOverride()" style="background:none;border:1.5px solid var(--gray-300);color:var(--gray-600);border-radius:6px;padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer;">Clear</button></div></div>'
+      + '</div>'
+      + '<div id="ppStatus" style="font-size:12.5px;color:var(--teal);margin-top:10px;"></div>';
+  } catch (e) {
+    det.innerHTML = '<div style="color:var(--red);font-size:13px;">' + escHtml(e.message || 'Could not load client pricing.') + '</div>';
+  }
+}
+function ppStatus(msg, isErr){
+  const el = document.getElementById('ppStatus');
+  if (el) { el.style.color = isErr ? 'var(--red)' : 'var(--teal)'; el.textContent = msg; }
+}
+async function ppSaveAmount(){
+  const sel = document.getElementById('ppClientSel');
+  const val = (document.getElementById('ppAmountPaid') || {}).value;
+  if (!sel || !sel.value) return;
+  if (val === '' || !(Number(val) >= 0)) { ppStatus('Enter the amount they paid (0 or more).', true); return; }
+  ppStatus('Saving…');
+  try {
+    await pricingApi({ action: 'snapshot-client', client_id: sel.value, amount_paid: Number(val), reason: 'Set via coach Pricing panel' });
+    ppStatus('Saved. Credit recomputed.');
+    ppLoadClient();
+  } catch (e) { ppStatus(e.message || 'Could not save.', true); }
+}
+async function ppSaveOverride(){
+  const sel = document.getElementById('ppClientSel');
+  const val = (document.getElementById('ppOverride') || {}).value;
+  const reason = ((document.getElementById('ppOverrideReason') || {}).value || '').trim();
+  if (!sel || !sel.value) return;
+  if (val === '' || !(Number(val) >= 0)) { ppStatus('Enter the override amount.', true); return; }
+  if (!reason) { ppStatus('A reason is required for an override.', true); return; }
+  ppStatus('Saving…');
+  try {
+    await pricingApi({ action: 'credit-override', client_id: sel.value, credit_override: Number(val), reason: reason });
+    ppStatus('Override applied. Credit recomputed.');
+    ppLoadClient();
+  } catch (e) { ppStatus(e.message || 'Could not save.', true); }
+}
+async function ppClearOverride(){
+  const sel = document.getElementById('ppClientSel');
+  if (!sel || !sel.value) return;
+  ppStatus('Clearing…');
+  try {
+    await pricingApi({ action: 'credit-override', client_id: sel.value, credit_override: null, reason: '' });
+    ppStatus('Override cleared.');
+    ppLoadClient();
+  } catch (e) { ppStatus(e.message || 'Could not clear.', true); }
 }
 
 // ── Report Flow settings (global gates for the diagnostic report stepper) ──────
@@ -5989,7 +6176,7 @@ function renderTemplateCard(t) {
         </div>
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
           <button onclick="saveEmailTemplate('${t.id}', '${t.template_key}')"
-            style="background:var(--navy);color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;">
+            style="background:var(--navy);color:var(--white);border:none;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;">
             Save Changes
           </button>
           <span id="tpl-status-${t.id}" style="font-size:13px;color:var(--teal);min-height:18px;"></span>
@@ -6823,7 +7010,7 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
       </div>
       <div id="sh-err-${clientId}" style="color:var(--red);font-size:12px;margin-bottom:8px;min-height:16px;"></div>
       <div style="display:flex;gap:8px;">
-        <button onclick="saveStakeholder('${clientId}',this)" style="background:var(--navy);color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;">Add Stakeholder</button>
+        <button onclick="saveStakeholder('${clientId}',this)" style="background:var(--navy);color:var(--white);border:none;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;">Add Stakeholder</button>
         <button onclick="document.getElementById('add-sh-form-${clientId}').style.display='none'" style="background:none;border:2px solid var(--gray-300);border-radius:6px;padding:8px 14px;font-size:13px;cursor:pointer;">Cancel</button>
       </div>
     </div>` : '';
@@ -6875,7 +7062,7 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <input type="number" id="pulse-target-${clientId}" min="1" max="5" step="0.1" value="${_ptDefault.toFixed(1)}" style="width:80px;font-size:14px;padding:7px 10px;border:2px solid var(--gray-300);border-radius:6px;color:var(--navy);">
         <span style="font-size:12px;color:var(--gray-600);">/ 5.0</span>
-        <button onclick="savePulseTarget('${clientId}')" style="font-size:13px;background:var(--navy);color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-weight:700;">${_ptCur != null ? 'Update &amp; lock' : 'Approve &amp; lock'}</button>
+        <button onclick="savePulseTarget('${clientId}')" style="font-size:13px;background:var(--navy);color:var(--white);border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-weight:700;">${_ptCur != null ? 'Update &amp; lock' : 'Approve &amp; lock'}</button>
         ${_ptCur != null ? `<button onclick="clearPulseTarget('${clientId}')" style="font-size:12px;background:none;border:1px solid var(--gray-300);color:var(--gray-700);border-radius:6px;padding:7px 12px;cursor:pointer;">Clear</button>` : ''}
       </div>
       ${_ptCur != null && _ptLockedAt ? `<p style="font-size:12px;color:#0F6E56;margin:10px 0 0;line-height:1.6;">Locked at <strong>${_ptCur.toFixed(1)}</strong> by ${esc(_ptLockedBy || 'a coach')} on ${new Date(_ptLockedAt).toLocaleDateString()}.</p>` : ''}
@@ -6937,7 +7124,7 @@ function renderStakeholderSection(el, clientId, stakeholders, responsesByCheckpo
         ${_ff}
         <div style="font-size:12.5px;color:var(--navy);line-height:1.55;margin-top:10px;font-style:italic;">${_consider}</div>
         <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-          <button onclick="draftCoachingBrief('${clientId}')" style="font-size:12px;background:var(--navy);color:#fff;border:none;border-radius:6px;padding:7px 13px;cursor:pointer;font-weight:700;">✦ Draft talking track (AI)</button>
+          <button onclick="draftCoachingBrief('${clientId}')" style="font-size:12px;background:var(--navy);color:var(--white);border:none;border-radius:6px;padding:7px 13px;cursor:pointer;font-weight:700;">✦ Draft talking track (AI)</button>
           <a href="#" class="owner-only" onclick="toggleCoachingAi(event)" style="font-size:11px;color:var(--gray-600);">AI drafting settings</a>
         </div>
         <div id="coaching-brief-${clientId}" style="margin-top:10px;"></div>

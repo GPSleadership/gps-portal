@@ -162,6 +162,26 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true, config: cfg });
       }
 
+      // Recent audit trail (owner only — it contains amounts and reasons).
+      case 'audit-list': {
+        if (!isOwner) return ownerOnly();
+        try {
+          const r = await sb('/rest/v1/pricing_audit?select=actor,action,client_id,reason,created_at&order=created_at.desc&limit=20');
+          const rows = r.ok ? await r.json() : [];
+          return res.status(200).json({ ok: true, audit: Array.isArray(rows) ? rows : [] });
+        } catch (_) { return res.status(200).json({ ok: true, audit: [] }); }
+      }
+
+      // Read one client's frozen terms + computed credit (any valid coach session —
+      // read-only; the writes below stay owner-only).
+      case 'client-pricing-get': {
+        const clientId = String(body.client_id || '').trim();
+        if (!clientId) return res.status(400).json({ error: 'client_id required' });
+        const snap = await firstRow(`/rest/v1/client_pricing_snapshot?client_id=eq.${enc(clientId)}&select=*&limit=1`);
+        const credit = await diagnosticCredit(clientId);
+        return res.status(200).json({ ok: true, snapshot: snap, credit });
+      }
+
       case 'config-save': {
         if (!isOwner) return ownerOnly();
         const before = await firstRow('/rest/v1/pricing_config?id=eq.1&select=*&limit=1');
