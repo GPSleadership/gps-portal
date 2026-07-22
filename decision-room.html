@@ -199,7 +199,7 @@
 <!-- Sticky sprint bar -- appears after 400px scroll when a sprint URL is available -->
 <div id="stickyCta" style="display:none;position:fixed;bottom:4px;left:0;right:0;z-index:200;padding:0 16px 0;">
   <div style="max-width:680px;margin:0 auto;background:var(--navy);border:2px solid #01949A;border-radius:10px;padding:10px 18px;display:flex;align-items:center;justify-content:space-between;gap:14px;box-shadow:0 4px 24px rgba(0,0,0,.25);">
-    <div style="min-width:0;flex:1;"><div style="font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:#9FC0D6;font-weight:700;" id="stickyLabel">The 90-Day Sprint</div><div style="font-size:13px;color:#cfe0ea;margin-top:1px;">Three months · bi-weekly coaching · 45-day re-score · $10,000</div></div>
+    <div style="min-width:0;flex:1;"><div style="font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:#9FC0D6;font-weight:700;" id="stickyLabel">The 90-Day Sprint</div><div style="font-size:13px;color:#cfe0ea;margin-top:1px;" id="stickyTerms">Three months · bi-weekly coaching · 45-day re-score · $10,000</div></div>
     <a id="stickySample" href="#" target="_blank" rel="noopener" style="display:none;flex-shrink:0;color:var(--light-teal);font-weight:600;font-size:12px;text-decoration:underline;white-space:nowrap;">See a sample readout</a>
     <a id="stickyBtn" href="#" target="_blank" rel="noopener" onclick="drAckCheckout('decision-room sticky CTA')" style="flex-shrink:0;background:#01949A;color:#fff;font-weight:800;font-size:13px;padding:9px 18px;border-radius:7px;text-decoration:none;white-space:nowrap;">Start now →</a>
   </div>
@@ -410,6 +410,23 @@ function computeStatus(m){
 }
 
 /* ───────── TEAM VIEW ───────── */
+// Sprint terms copy built from config (sponsor-data sprint_terms: price from
+// renewal_config.price_first_credit, length from pricing_config.sprint_months) —
+// editable, never hardcoded. Falls back to the long-standing copy when config
+// is missing so an API miss never changes what a sponsor sees.
+function sprintMonthsWord(n){
+  var words = { 1:'One month', 2:'Two months', 3:'Three months', 4:'Four months', 6:'Six months', 12:'Twelve months' };
+  return words[n] || (n + ' months');
+}
+function sprintPriceText(){
+  var t = DATA && DATA.sprint_terms;
+  return (t && t.price > 0) ? ('$' + Number(t.price).toLocaleString('en-US')) : '$10,000';
+}
+function sprintTermsLine(){
+  var t = DATA && DATA.sprint_terms;
+  var months = (t && t.months > 0) ? sprintMonthsWord(t.months) : 'Three months';
+  return months + ' · bi-weekly coaching · 45-day re-score · ' + sprintPriceText();
+}
 function renderSprintCta(url, firstName, compact){
   if(!url) return '';
   var btnLabel = firstName ? 'Start '+firstName+"'s Sprint \u2192" : 'Get started \u2192';
@@ -426,7 +443,7 @@ function renderSprintCta(url, firstName, compact){
     return '<div id="sprint-cta-inline" style="background:var(--navy);border:2px solid #01949A;border-radius:10px;padding:18px 20px;margin-top:14px;">'
       +'<div style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#01949A;font-weight:700;margin-bottom:4px;">The next step</div>'
       +'<div style="font-family:Georgia,serif;font-size:17px;font-weight:800;color:#fff;margin-bottom:6px;">'+titleLine+'</div>'
-      +'<div style="font-size:13px;color:#cfe0ea;line-height:1.5;margin-bottom:12px;">Three months · Bi-weekly coaching · 45-day re-score · $10,000</div>'
+      +'<div style="font-size:13px;color:#cfe0ea;line-height:1.5;margin-bottom:12px;">'+esc(sprintTermsLine())+'</div>'
       +'<div class="dr-checkout-notice" style="display:none;font-size:10.5px;color:#9FC0D6;line-height:1.5;margin:0 0 10px;white-space:pre-wrap;"></div>'
       +'<a href="'+esc(url)+'" target="_blank" rel="noopener" onclick="drAckCheckout(\'decision-room inline CTA\')" style="display:inline-block;background:#01949A;color:#fff;font-weight:800;font-size:13px;padding:9px 18px;border-radius:7px;text-decoration:none;">'+btnLabel+'</a>'
       +sampleInline
@@ -435,7 +452,7 @@ function renderSprintCta(url, firstName, compact){
   return '<div id="sprint-cta" style="background:var(--navy);border-radius:10px;padding:26px 28px;margin-top:16px;">'
     +'<div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#9FC0D6;font-weight:700;margin-bottom:6px;">Ready to build on this?</div>'
     +'<div style="font-family:Georgia,serif;font-size:20px;font-weight:800;color:#fff;margin-bottom:8px;">'+titleLine+'</div>'
-    +'<div style="font-size:14px;color:#cfe0ea;line-height:1.6;margin-bottom:12px;">The diagnostic tells you where the gaps are. The Sprint closes them -- with structured coaching, weekly accountability, and a 90-day plan built around what this leader needs to deliver. Three months · bi-weekly coaching sessions · 45-day and 90-day re-score · $10,000</div>'
+    +'<div style="font-size:14px;color:#cfe0ea;line-height:1.6;margin-bottom:12px;">The diagnostic tells you where the gaps are. The Sprint closes them -- with structured coaching, weekly accountability, and a 90-day plan built around what this leader needs to deliver. '+esc(sprintTermsLine())+'</div>'
     +'<details open style="margin-bottom:16px;"><summary style="cursor:pointer;font-size:13px;color:#9FC0D6;font-weight:700;letter-spacing:.02em;outline:none;user-select:none;list-style:none;">What 90 days buys you ▸</summary>'
     +'<div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">'
     +'<div style="font-size:13px;color:#eaf2f7;line-height:1.5;display:flex;gap:10px;"><span style="color:#01949A;font-weight:900;min-width:16px;">1</span><span>A 90-day plan built specifically around the trust gap -- not a generic program.</span></div>'
@@ -1467,6 +1484,9 @@ init();
       // the deliverable looks like before committing. Hidden when no URL configured.
       var smp = document.getElementById('stickySample');
       if(smp && DATA.sample_readout_url){ smp.href = DATA.sample_readout_url; smp.style.display='block'; }
+      // Config-driven terms line (price/length from sprint_terms; falls back to the
+      // static copy already in the markup when config is absent).
+      try{ var tl=document.getElementById('stickyTerms'); if(tl) tl.textContent = sprintTermsLine(); }catch(e){}
       hrefSet = true;
     }
     // Count committed recs
