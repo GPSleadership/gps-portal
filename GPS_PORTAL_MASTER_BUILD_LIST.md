@@ -52,6 +52,10 @@ The sticky bar and `renderSprintCta` copy in `decision-room.html` hardcode "$10,
 
 ---
 
+## 🔥 LIVE HOTFIX — self-check results gate was blocking leaders (found + FIXED 2026-07-22)
+
+**P0 — `self_checks` checkpoint constraint rejected `day30`.** ✅ FIXED live 2026-07-22 (v117). Found via Sergio Sabido: he emailed "Error saving… not allowing me to proceed" with a screenshot of the "Quick self-assessment before you see your results" modal showing **"Error saving: Could not save self-check."** Root cause: the results-gate self-check sends `checkpoint='day30'` (client.html:7252; survey checkpoints are baseline/day30/day90), but the `self_checks_checkpoint_check` CHECK constraint only permitted `('day45','day90')` — a stale value from before the re-score cadence moved to 30 days. Every day30 self-check insert failed with 23514; `self_checks` was **empty** (silently broken for ALL leaders since the rename, not just Sergio). Reproduced the 23514, applied **v117** widening the constraint to `('baseline','day30','day45','day90')`, re-verified the insert succeeds, removed the test row. **Pure DB fix — no code deploy needed;** the app already sent the correct value. Migration file `supabase-migration-v117-selfcheck-checkpoint.sql` committed for the record. Follow-up watch: audit other checkpoint literals for day30/day45 drift (survey.js re-score labels, any "45-day re-score" copy).
+
 ## 🎙️ DEBRIEF SYSTEM (started 2026-07-22)
 
 ### P1 — AI Debrief Script generator (coach-only) — BUILT, on `feature/debrief-script`
