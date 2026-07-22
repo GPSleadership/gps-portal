@@ -114,6 +114,73 @@ function parseLocalDate(str) {
   return new Date(y, m - 1, d); // local midnight
 }
 
+// ── Personalized AI nudge (5D) ───────────────────────────────────────────────
+// Two sentences in Alex's voice referencing the client's own last check-in,
+// generated at send time with the fast model. FAIL OPEN: any miss (no key, flag
+// off, timeout, API error, empty output) returns '' and the reminder sends
+// without a nudge — generation can never block or delay the email meaningfully.
+const ANTHROPIC_KEY   = process.env.ANTHROPIC_API_KEY || '';
+const NUDGE_MODEL     = process.env.CLAUDE_FAST || 'claude-haiku-4-5-20251001';
+const NUDGE_CAP       = Math.max(0, Number(process.env.REMINDER_NUDGE_CAP || 25)); // per-run cost/latency cap
+
+function escHtml(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// AI kill-switch (coach Settings > AI Controls) — same fail-open semantics as
+// diag-portal.js: only an explicit enabled=false turns the feature off.
+async function aiFeatureEnabled(feature) {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/ai_feature_flags?feature=eq.${encodeURIComponent(feature)}&select=enabled&limit=1`,
+      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } });
+    if (!r.ok) return true;
+    const row = (await r.json())[0];
+    return !row || row.enabled !== false;
+  } catch (_) { return true; }
+}
+
+async function generateNudge({ firstName, week, lastCheckin }) {
+  if (!ANTHROPIC_KEY || !lastCheckin) return '';
+  const facts = {
+    first_name: firstName,
+    upcoming_week: week,
+    last_checkin_week: lastCheckin.week_number,
+    last_commitment: (lastCheckin.planned_action || '').slice(0, 300) || null,
+    last_completion_status: lastCheckin.completion_status || null,
+    last_notes: (lastCheckin.notes || '').slice(0, 300) || null,
+  };
+  const sys = 'You write a short personal nudge from executive coach Alex Tremble inside a weekly check-in reminder email to his coaching client. '
+    + 'Voice: direct, candid, calm, warm. Simple words, short sentences. '
+    + 'Ground it in the client\'s most recent check-in: if they committed to an action, ask about that action specifically; '
+    + 'if they were off track or partial, acknowledge it without judgment and point at one small next move; '
+    + 'if they were on track, name the win and raise the bar slightly. '
+    + 'Hard rules: 1-2 sentences, 45 words maximum, plain text only, no em dashes, no emojis, no exclamation marks, '
+    + 'no greeting, no sign-off, never invent facts that are not in the data.';
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: NUDGE_MODEL, max_tokens: 150, system: sys,
+        messages: [{ role: 'user', content: 'Client check-in data:\n' + JSON.stringify(facts) }] }),
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+    if (!r.ok) return '';
+    const j = await r.json();
+    let txt = (j.content && j.content[0] && j.content[0].text) || '';
+    // Guardrail cleanup: strip wrapping quotes, replace any em/en dash that slipped
+    // through (brand rule: no em dashes in client-facing copy), collapse whitespace.
+    txt = String(txt).trim().replace(/^["'“]+|["'”]+$/g, '')
+      .replace(/\s*[—–]\s*/g, ', ')
+      .replace(/\s+/g, ' ')
+      .slice(0, 400).trim();
+    if (txt.length < 15) return '';   // too short to be a real nudge
+    return txt;
+  } catch (_) { return ''; }
+}
+
 // ── Log an email send to the email_log table ─────────────────────────────────
 async function logEmail({ clientId, recipientEmail, recipientName, emailType, subject, status, errorDetails, resendId }) {
   try {
@@ -440,14 +507,23 @@ export default async function handler(req, res) {
   }
 
   // ─── FETCH ALL CHECK-INS ────────────────────────────────────────────────────
+  // Also pulls each check-in's substance (commitment, status, notes) so the
+  // personalized nudge (5D) can reference the client's own last check-in.
   const checkinsRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/checkins?select=client_id,week_number`,
+    `${SUPABASE_URL}/rest/v1/checkins?select=client_id,week_number,planned_action,completion_status,notes,submitted_at`,
     { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
   );
   const checkins = await checkinsRes.json();
 
   // Build a lookup: Set of "clientId-weekNumber" for fast checking
   const submitted = new Set((checkins || []).map(c => `${c.client_id}-${c.week_number}`));
+
+  // Latest check-in per client (by submitted_at) — feeds the personalized nudge.
+  const lastCheckinByClient = {};
+  for (const c of (Array.isArray(checkins) ? checkins : [])) {
+    const prev = lastCheckinByClient[c.client_id];
+    if (!prev || String(c.submitted_at || '') > String(prev.submitted_at || '')) lastCheckinByClient[c.client_id] = c;
+  }
 
   // ─── DETERMINE WHO NEEDS A REMINDER ────────────────────────────────────────
   const today = new Date();
@@ -503,6 +579,10 @@ export default async function handler(req, res) {
     toolOfWeek = (ovTpl && ovTpl.body_text && toolById(String(ovTpl.body_text).trim())) || toolOfTheWeek();
   } catch (_) { toolOfWeek = null; }
 
+  // ── Personalized nudge (5D): checked once per run; capped per run ───────────
+  const nudgeEnabled = NUDGE_CAP > 0 && await aiFeatureEnabled('reminder_nudge');
+  let nudgesGenerated = 0;
+
   for (const client of toRemind) {
     const startDate   = parseLocalDate(client.plan_start_date); // fix UTC off-by-one
     const daysDiff    = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
@@ -525,6 +605,20 @@ export default async function handler(req, res) {
           `It takes less than two minutes. Log your metric, note what you did this week, and set your action for next week. That's it.`,
           `The leaders who move fastest are the ones who stay honest with themselves weekly — not just on coaching calls.`,
         ].join('\n\n'));
+
+    // Personalized nudge (5D) — references THIS client's last check-in. Fail open:
+    // '' on any miss, and the reminder is never blocked or delayed past the timeout.
+    let nudgeHtml = '';
+    if (nudgeEnabled && nudgesGenerated < NUDGE_CAP && lastCheckinByClient[client.id]) {
+      const nudgeText = await generateNudge({ firstName, week: currentWeek, lastCheckin: lastCheckinByClient[client.id] });
+      if (nudgeText) {
+        nudgesGenerated++;
+        nudgeHtml = `
+          <div style="margin:18px 0 0;padding:14px 18px;background:#f7f4ee;border-left:3px solid #C09A2A;border-radius:0 8px 8px 0;font-size:14px;color:#1a2a3a;line-height:1.65;">
+            <span style="font-weight:700;color:#004369;">From Alex:</span> ${escHtml(nudgeText)}
+          </div>`;
+      }
+    }
 
     // Google Calendar recurring Monday event link
     const gcalTitle   = encodeURIComponent('GPS Leadership — Weekly Check-In');
@@ -551,6 +645,7 @@ export default async function handler(req, res) {
         <div style="background:#ffffff;padding:28px;border-radius:0 0 8px 8px;border:1px solid #d0d0d0;border-top:none;line-height:1.7;font-size:15px;">
 
           ${bodyProse}
+          ${nudgeHtml}
 
           <div style="margin:28px 0 0;text-align:center;">
             <p style="font-size:14px;color:#333333;margin:0 0 12px;font-weight:600;">How's this week landing? Tap one to start your check-in:</p>
