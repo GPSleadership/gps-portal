@@ -1885,6 +1885,61 @@ I'm taking part in a leadership assessment run by GPS Leadership Solutions. Thei
   </div>
 </div>
 
+<style id="dbs-styles">
+  .dbs-modal{max-width:780px;padding:0;max-height:92vh;display:flex;flex-direction:column;border-top-color:var(--navy);}
+  .dbs-topbar{display:flex;align-items:center;justify-content:space-between;padding:13px 18px;border-bottom:1px solid var(--d-border);background:var(--white);border-radius:8px 8px 0 0;flex-shrink:0;}
+  .dbs-topbar .dbs-title{font-family:'Montserrat',sans-serif;font-weight:800;color:var(--navy);font-size:16px;}
+  .dbs-topbar .dbs-tools{display:flex;gap:8px;align-items:center;}
+  .dbs-body{padding:16px 18px;overflow-y:auto;}
+  .dbs-loading{padding:34px;text-align:center;color:var(--text-muted);font-size:13px;}
+  .dbs-err{padding:22px;color:var(--d-red2);font-size:13px;line-height:1.5;}
+  .dbs-banner{background:var(--navy);color:var(--white);border-radius:10px;padding:15px 17px;margin-bottom:14px;}
+  .dbs-co{display:inline-block;background:var(--red);color:var(--white);font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:2px 8px;border-radius:4px;}
+  .dbs-who{font-size:19px;font-weight:800;margin-top:9px;line-height:1.2;}
+  .dbs-sub{font-size:12.5px;color:var(--d-blue-light);margin-top:3px;}
+  .dbs-legend{font-size:12px;color:var(--d-blue-light);margin-top:11px;border-top:1px solid var(--line);padding-top:9px;line-height:1.55;}
+  .dbs-legend b{color:var(--white);}
+  .dbs-sec{border:1px solid var(--d-border);border-radius:10px;margin-bottom:12px;overflow:hidden;}
+  .dbs-sh{background:var(--sand);padding:9px 15px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--d-border);}
+  .dbs-sh .t{font-family:'Montserrat',sans-serif;font-weight:800;color:var(--navy);font-size:14px;}
+  .dbs-sh .tm{font-size:11px;color:var(--text-muted);font-weight:700;}
+  .dbs-secbody{padding:13px 16px;}
+  .dbs-say{font-size:15px;color:var(--d-dark);margin:0 0 11px;line-height:1.62;}
+  .dbs-fill{background:var(--d-gold-light);border-bottom:1px solid var(--d-gold);padding:0 3px;border-radius:2px;}
+  .dbs-cue{font-size:12.5px;color:var(--text-muted);background:var(--d-light);border-left:3px solid var(--teal);padding:7px 11px;border-radius:0 6px 6px 0;margin:0 0 11px;line-height:1.5;}
+  .dbs-cue b{color:var(--teal);text-transform:uppercase;font-size:10.5px;letter-spacing:.05em;}
+  .dbs-ask{font-size:15px;color:var(--navy);font-weight:600;background:var(--d-blue-light);border-radius:8px;padding:10px 13px;margin:0 0 11px;line-height:1.5;}
+  .dbs-ask .k{display:block;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--teal);margin-bottom:3px;}
+  .dbs-cap{font-size:13px;background:var(--d-gold-light);border:1px solid var(--d-gold);border-radius:8px;padding:9px 12px;margin:0 0 11px;color:var(--d-dark);line-height:1.5;}
+  .dbs-cap .k{font-weight:800;color:var(--d-gold);text-transform:uppercase;font-size:10px;letter-spacing:.05em;margin-right:5px;}
+  .dbs-data{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 11px;}
+  .dbs-d{flex:1;min-width:74px;background:var(--sand);border-radius:8px;padding:8px 9px;text-align:center;}
+  .dbs-d .n{font-size:18px;font-weight:800;color:var(--navy);line-height:1;}
+  .dbs-d .l{font-size:9px;text-transform:uppercase;letter-spacing:.02em;color:var(--text-muted);margin-top:3px;}
+  .dbs-panel{border:2px solid var(--d-gold);border-radius:10px;padding:15px 16px;margin:4px 0 6px;background:var(--d-gold-light);}
+  .dbs-panel h3{font-family:'Montserrat',sans-serif;font-size:14px;color:var(--navy);margin-bottom:3px;}
+  .dbs-panel .ph{font-size:12px;color:var(--text-muted);margin-bottom:13px;line-height:1.5;}
+  .dbs-grid{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:11px;}
+  .dbs-field{flex:1;min-width:120px;}
+  .dbs-field label{display:block;font-size:11px;font-weight:700;color:var(--navy);margin-bottom:4px;}
+  .dbs-field select,.dbs-field input{width:100%;padding:8px 10px;border:1.5px solid var(--d-border);border-radius:6px;font-family:inherit;font-size:14px;background:var(--white);color:var(--d-dark);}
+  .dbs-saverow{display:flex;gap:10px;align-items:center;}
+  .dbs-foot{font-size:11px;color:var(--text-muted);text-align:center;padding:12px 4px 4px;line-height:1.6;}
+</style>
+
+<div class="modal-overlay" id="debrief-script-modal">
+  <div class="modal dbs-modal">
+    <div class="dbs-topbar">
+      <div class="dbs-title">Debrief Script</div>
+      <div class="dbs-tools">
+        <button class="dbtn dbtn-outline dbtn-sm" onclick="printDebriefScript()">Print</button>
+        <button class="dclose-btn" onclick="closeDiagModal('debrief-script-modal')">&#10005;</button>
+      </div>
+    </div>
+    <div class="dbs-body" id="dbs-body"><div class="dbs-loading">Building the script&hellip;</div></div>
+  </div>
+</div>
+
 <div class="bottom-bar"></div>
 
 <script>
@@ -9903,14 +9958,20 @@ function reportStepperHtml(d, done, canGenerate) {
 
   // Step 6 — Debrief complete. Opens the leader's Executive Impact System access
   // and sends their results email. Done at or right after the debrief meeting.
+  // The AI debrief script is the read-aloud tool the coach runs the live debrief from.
+  // It builds from the finalized report, so it becomes available once the report is generated.
+  const debriefScriptBtn = generated
+    ? '<button class="dbtn dbtn-gold dbtn-sm" onclick="openDebriefScript(\'' + d.id + '\')">Open debrief script</button>'
+    : '';
   let debriefCta;
-  if (s6state === 'locked')      debriefCta = muted('Publish the report first.');
+  if (s6state === 'locked')      debriefCta = (debriefScriptBtn ? debriefScriptBtn + muted('Read-aloud script for the live debrief. Publishing stays gated above.') : muted('Publish the report first.'));
   else if (s6state === 'done') {
     debriefCta = '<span style="font-size:12px;color:' + TEAL + ';font-weight:600;">Debrief complete ' + diagFormatDate(d.debrief_completed_at) + ' &mdash; ' + first + ' now has access.</span>';
+    debriefCta += debriefScriptBtn;
     if (planApplicable)     debriefCta += '<button class="dbtn dbtn-outline dbtn-sm" onclick="openActivateSprintModal()">Activate paid 90-day sprint</button>';
     if (!d.plan_locked_at)  debriefCta += '<button class="dbtn dbtn-outline dbtn-sm" style="color:#b91c1c;border-color:#e3b3b3;" onclick="undoDebriefComplete()">Undo</button>';
   }
-  else                           debriefCta = '<button class="dbtn dbtn-primary" onclick="markDebriefComplete()">Mark debrief complete</button>' + muted('Emails ' + first + ' their results and opens their Executive Impact System access.');
+  else                           debriefCta = debriefScriptBtn + '<button class="dbtn dbtn-primary" onclick="markDebriefComplete()">Mark debrief complete</button>' + muted('Emails ' + first + ' their results and opens their Executive Impact System access.');
 
   return step(1, s1state, 'Generate the report', 'Runs the analysis and writes the draft from the closed survey.', genCta, false)
     + step(2, s2display, 'Upload the report PDF', 'Add the finished report PDF (the one you build in Claude). It stays private until you publish.', pdfCta, false)
@@ -13373,6 +13434,168 @@ function switchDiagTabById(id) {
 
 function openDiagModal(id)  { const el = document.getElementById(id); if (el) el.classList.add('open'); }
 function closeDiagModal(id) { const el = document.getElementById(id); if (el) el.classList.remove('open'); }
+
+// ── AI Debrief Script (coach-only) ────────────────────────────────────────────
+// Read-aloud script generated fresh from the finalized report + current 90-day
+// draft + live pricing. Extractive only (the server never fabricates). The three
+// 1-10 touchpoints + outcome are logged back to debrief_captures for conversion.
+let DBS_LAST = null;      // last { script, capture, source_report_at }
+let DBS_DIAG_ID = null;
+
+async function openDebriefScript(diagId) {
+  DBS_DIAG_ID = diagId || (typeof DIAG_SEL !== 'undefined' && DIAG_SEL && DIAG_SEL.id) || null;
+  if (!DBS_DIAG_ID) return;
+  DBS_LAST = null;
+  const body = document.getElementById('dbs-body');
+  if (body) body.innerHTML = '<div class="dbs-loading">Building the script from the finalized report&hellip;</div>';
+  openDiagModal('debrief-script-modal');
+  try {
+    const r = await fetch('/api/debrief-script', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'generate', diagnostic_id: DBS_DIAG_ID, session: getCoachSessionToken() })
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) { if (body) body.innerHTML = '<div class="dbs-err">' + esc(j.error || ('Could not build the script (HTTP ' + r.status + ').')) + '</div>'; return; }
+    DBS_LAST = j;
+    renderDebriefScript(j);
+  } catch (e) {
+    if (body) body.innerHTML = '<div class="dbs-err">Could not build the script: ' + esc(e.message || e) + '</div>';
+  }
+}
+
+function dbsText(t) {
+  let s = esc(String(t == null ? '' : t));
+  // Highlight [placeholders the coach fills in live] as gold fills.
+  s = s.replace(/\[([^\]]+)\]/g, '<span class="dbs-fill">[$1]</span>');
+  return s;
+}
+
+function dbsBlock(b) {
+  if (!b || !b.kind) return '';
+  if (b.kind === 'say')  return '<p class="dbs-say">' + dbsText(b.text) + '</p>';
+  if (b.kind === 'ask')  return '<div class="dbs-ask">' + (b.label ? '<span class="k">' + esc(b.label) + '</span>' : '') + dbsText(b.text) + '</div>';
+  if (b.kind === 'cue')  return '<div class="dbs-cue">' + (b.label ? '<b>' + esc(b.label) + '</b>&nbsp;&middot;&nbsp;' : '') + dbsText(b.text || '') + '</div>';
+  if (b.kind === 'capture') return '<div class="dbs-cap"><span class="k">Log</span>' + dbsText(b.text || '') + '</div>';
+  if (b.kind === 'data') return '<div class="dbs-data">' + (b.tiles || []).map(function (t) { return '<div class="dbs-d"><div class="n">' + esc(t.n) + '</div><div class="l">' + esc(t.l) + '</div></div>'; }).join('') + '</div>';
+  return '';
+}
+
+function dbsNumSelect(id, cur) {
+  let o = '<option value="">&mdash;</option>';
+  for (let i = 10; i >= 1; i--) o += '<option value="' + i + '"' + (Number(cur) === i ? ' selected' : '') + '>' + i + '</option>';
+  return '<select id="' + id + '">' + o + '</select>';
+}
+
+function dbsCapturePanel(cap, funding) {
+  cap = cap || {};
+  const outSel = function (cur) {
+    const opts = [['', '—'], ['yes', 'Yes — moving forward'], ['thinking', 'Thinking about it'], ['no', 'Not now']];
+    return '<select id="dbs-outcome">' + opts.map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>';
+  };
+  const fundSel = function (cur) {
+    const opts = [['', 'Auto-detected'], ['self', 'Self-funded (speak price)'], ['sponsor', 'Sponsor-funded (no price)']];
+    return '<select id="dbs-funding" onchange="dbsFundingHint()">' + opts.map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>';
+  };
+  return '<div class="dbs-panel">'
+    + '<h3>Capture &mdash; log during the debrief</h3>'
+    + '<div class="ph">The three 1-10 touchpoints and the outcome. This is your debrief-to-sprint conversion data. Changing funding and saving rebuilds the money section.</div>'
+    + '<div class="dbs-grid">'
+    +   '<div class="dbs-field"><label>Value so far (before portal)</label>' + dbsNumSelect('dbs-value_pre', cap.value_pre) + '</div>'
+    +   '<div class="dbs-field"><label>Value today (at close)</label>' + dbsNumSelect('dbs-value_end', cap.value_end) + '</div>'
+    +   '<div class="dbs-field"><label>90-day appetite</label>' + dbsNumSelect('dbs-appetite', cap.appetite) + '</div>'
+    + '</div>'
+    + '<div class="dbs-grid">'
+    +   '<div class="dbs-field"><label>Outcome</label>' + outSel(cap.outcome || '') + '</div>'
+    +   '<div class="dbs-field"><label>Funding</label>' + fundSel(cap.funding_type || '') + '</div>'
+    + '</div>'
+    + '<div class="dbs-grid"><div class="dbs-field" style="min-width:100%;"><label>Notes (optional)</label><input type="text" id="dbs-notes" maxlength="2000" value="' + esc(cap.notes || '') + '" placeholder="Anything worth remembering for the follow-up"></div></div>'
+    + '<div class="dbs-saverow"><button class="dbtn dbtn-primary" id="dbs-save-btn" onclick="saveDebriefCapture()">Save capture</button><span id="dbs-save-msg" style="font-size:12px;"></span></div>'
+    + '</div>';
+}
+
+function dbsFundingHint() {
+  const msg = document.getElementById('dbs-save-msg');
+  if (msg) { msg.style.color = 'var(--text-muted)'; msg.textContent = 'Save to rebuild the money section for the new funding type.'; }
+}
+
+function renderDebriefScript(j) {
+  const body = document.getElementById('dbs-body');
+  if (!body) return;
+  const s = j.script || {};
+  const cap = j.capture || {};
+  const L = s.leader || {};
+  const subBits = [L.title, L.org, (L.rater_count ? L.rater_count + ' raters' : null), (L.impact ? 'impact ' + L.impact : null)].filter(Boolean).join(' · ');
+  const fundLabel = s.funding_type === 'sponsor'
+    ? 'Sponsor-funded — no price spoken to the leader' + (s.sponsor_name ? ' (' + s.sponsor_name + ')' : '')
+    : (s.funding_type === 'self' ? 'Self-funded — price spoken, anchored high' : 'Funding not set — confirm it in the capture panel below');
+  let html = '';
+  html += '<div class="dbs-banner">'
+    + '<span class="dbs-co">Coach only · AI-generated · verify before use</span>'
+    + '<div class="dbs-who">' + esc(L.name || 'This leader') + '</div>'
+    + (subBits ? '<div class="dbs-sub">' + esc(subBits) + '</div>' : '')
+    + '<div class="dbs-legend"><b>Black</b> = say aloud (your words, their data). <b>Teal</b> = your cue / listen-for. <b>Blue</b> = ask &amp; wait. <b>Gold</b> = log a number. &nbsp;&middot;&nbsp; ' + esc(fundLabel) + '</div>'
+    + '</div>';
+  (s.steps || []).forEach(function (st) {
+    html += '<div class="dbs-sec"><div class="dbs-sh"><span class="t">' + esc(st.title) + '</span>' + (st.time ? '<span class="tm">' + esc(st.time) + '</span>' : '') + '</div><div class="dbs-secbody">'
+      + (st.blocks || []).map(dbsBlock).join('') + '</div></div>';
+  });
+  html += dbsCapturePanel(cap, s.funding_type);
+  html += '<div class="dbs-foot">' + esc(s.guardrail_note || '') + (j.source_report_at ? '<br>Built from the report generated ' + esc(diagFormatDate(j.source_report_at)) : '') + '</div>';
+  body.innerHTML = html;
+}
+
+async function saveDebriefCapture() {
+  const btn = document.getElementById('dbs-save-btn');
+  const msg = document.getElementById('dbs-save-msg');
+  const num = function (id) { const el = document.getElementById(id); const n = el && el.value ? parseInt(el.value, 10) : null; return (n >= 1 && n <= 10) ? n : null; };
+  const outcome = (document.getElementById('dbs-outcome') || {}).value || null;
+  const funding = (document.getElementById('dbs-funding') || {}).value || null;
+  const notes = (document.getElementById('dbs-notes') || {}).value || '';
+  const prevFunding = DBS_LAST && DBS_LAST.script ? DBS_LAST.script.funding_type : null;
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  if (msg) { msg.style.color = 'var(--text-muted)'; msg.textContent = ''; }
+  try {
+    const r = await fetch('/api/debrief-script', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'save-capture', diagnostic_id: DBS_DIAG_ID, session: getCoachSessionToken(),
+        value_pre: num('dbs-value_pre'), value_end: num('dbs-value_end'), appetite: num('dbs-appetite'),
+        outcome: outcome, funding_type: funding, notes: notes
+      })
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) { if (msg) { msg.style.color = 'var(--d-red2)'; msg.textContent = j.error || 'Could not save.'; } }
+    else {
+      if (DBS_LAST) DBS_LAST.capture = j.capture;
+      if (msg) { msg.style.color = 'var(--d-green)'; msg.textContent = 'Saved.'; }
+      // If funding changed, rebuild so the money section flips.
+      if (funding && funding !== prevFunding) openDebriefScript(DBS_DIAG_ID);
+    }
+  } catch (e) {
+    if (msg) { msg.style.color = 'var(--d-red2)'; msg.textContent = (e && e.message) || 'Could not save.'; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save capture'; }
+  }
+}
+
+function printDebriefScript() {
+  const body = document.getElementById('dbs-body');
+  const styleEl = document.getElementById('dbs-styles');
+  if (!body || !DBS_LAST) return;
+  // Resolve the brand tokens the .dbs-* rules reference, so the print window
+  // renders on-brand without hardcoding any hex here.
+  const cs = getComputedStyle(document.documentElement);
+  const vars = ['--navy', '--red', '--teal', '--sand', '--white', '--text-muted', '--line', '--d-dark', '--d-border', '--d-light', '--d-gold', '--d-gold-light', '--d-blue-light', '--d-green', '--d-red2'];
+  const root = ':root{' + vars.map(function (v) { return v + ':' + cs.getPropertyValue(v).trim() + ';'; }).join('') + '}';
+  const w = window.open('', '_blank');
+  if (!w) return;
+  const leader = (DBS_LAST.script && DBS_LAST.script.leader && DBS_LAST.script.leader.name) || 'Debrief';
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Debrief Script — ' + esc(leader) + '</title>'
+    + '<style>' + root + 'body{font-family:\'Open Sans\',-apple-system,Segoe UI,Roboto,sans-serif;background:var(--white);margin:0;padding:18px;} .dbs-body{max-width:720px;margin:0 auto;padding:0;} .dbs-saverow,.dbs-tools{display:none;}'
+    + styleEl.textContent + '</style></head><body><div class="dbs-body">' + body.innerHTML + '</div></body></html>');
+  w.document.close();
+  setTimeout(function () { try { w.focus(); w.print(); } catch (e) {} }, 350);
+}
 
 function calcCloseDate() {
   const start = document.getElementById('nd-start').value;

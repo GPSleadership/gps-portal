@@ -50,6 +50,27 @@ The sticky bar and `renderSprintCta` copy in `decision-room.html` hardcode "$10,
 
 ---
 
+## 🎙️ DEBRIEF SYSTEM (started 2026-07-22)
+
+### P1 — AI Debrief Script generator (coach-only) — BUILT, on `feature/debrief-script`
+Auto-generated read-aloud debrief script in Alex's real voice/flow (learned from his actual Kimberly / Pat / Sergio debriefs in Fireflies), filled with THIS leader's real data, architected to lead to the 90-Day Sprint. Coach opens it from the Report card ("Open debrief script", available once the report is generated) and reads it live.
+
+- **`api/debrief-script.js`** — coach-gated endpoint. `generate` builds the script fresh (never cached, always in sync with the current report + 90-day draft + live pricing); `save-capture` upserts the coach's conversion data. **Extractive only — ZERO LLM calls, cannot fabricate a quote or score.** Min-group-3 de-anon filter, fail-closed: single-rater supervisor read is a coach-only cue, never spoken.
+- **Flow (Alex's real 6-part choreography):** 0 open & frame (rapport + 3–5 yr goal anchor) → 1 reality-vs-truth temp check → 2 big picture (scores, strengths cushion, the one gap) → 3 lock the 90-day focus → 4 portal tour → 5 recap + goal tie-in + **three 1-10 touchpoints** + the offer → 6 close.
+- **Three 1-10 touchpoints** (commitment-consistency ladder): `value_pre` before the portal tour, `value_end` + `appetite` at the close. Logged to `debrief_captures` = debrief→sprint conversion funnel.
+- **Money auto-flexes on funding.** Self-funded only: price spoken, **anchored HIGH first** ($15k) then the diagnostic credit walks it down to the smaller number ($10k) — "bigger number first so they can walk away with the smaller one." Sponsor-funded: no price to the leader, routed to the sponsor. Pricing pulled live from config, never hardcoded.
+- **`supabase-migration-v115-debrief-captures.sql`** — `debrief_captures` (one row per diagnostic, RLS deny-all, served only through the coach endpoint). Columns: funding_type, value_pre/value_end/appetite (1-10 checks), outcome (yes/thinking/no), notes, captured_by/at.
+- **coach.html** — "Open debrief script" button on the Report stepper; teleprompter modal (say/cue/ask/data/capture blocks) + capture panel (3 scores + outcome + funding toggle + notes → save-capture) + Print. JS sweep + color-guard green.
+- **Status:** ⏳ built on branch, migration v115 applied to prod, pending Alex push + preview verify.
+
+### P2 — Fireflies API integration: auto-pull debrief transcripts (added 2026-07-22, Alex)
+Alex's idea — wire the Executive Impact System directly to the Fireflies API so debrief transcripts pull automatically (no manual upload). Feeds the debrief follow-up email and future debrief-quality analytics from real recorded sessions. Pairs with the debrief-script + capture funnel above. — M
+
+### P3 — Tokenize 16 legacy raw colors in coach.html (found 2026-07-22)
+Color-guard baseline was refreshed 2026-07-22 (214 → 230 hex) to unblock the debrief build; my diff added zero raw colors. The 16 accepted hexes are pre-existing drift from prior sessions (PDF-preview badges ~L11765/11793, workshop-list rows ~L15639-15689, `--gray-300`). Replace each with a brand token per BRAND_TOKENS.md, or add + document new ones, then `--update`. Cleanup only, no user impact. — S
+
+---
+
 ## 🚨 TOP PRIORITY — July 1, 2026 Full Audit (do first, in this order)
 
 Full detail and evidence in **`EIS_Master_Audit_and_Plan_2026-07-01.md`**. Every P0 was independently verified against the live site, the repo, or the database. **Ship all through `gps-portal-safe-build` — never push straight to `main`.**
