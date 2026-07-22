@@ -91,7 +91,15 @@ async function auditLog({ actor, action, clientId, before, after, reason }) {
   } catch (_) { /* audit is best-effort; the write itself already succeeded */ }
 }
 
-const CONFIG_FIELDS = ['standard_diagnostic_price', 'pro_diagnostic_price', 'coaching_monthly', 'sprint_months', 'credit_window_days', 'confirmed'];
+const CONFIG_FIELDS = [
+  'standard_diagnostic_price', 'pro_diagnostic_price', 'coaching_monthly',
+  'sprint_months', 'credit_window_days', 'confirmed',
+  // Price points of record (not wired to a checkout yet — v114):
+  'workshop_full_day_price', 'workshop_half_day_price', 'assessment_price',
+];
+// renewal_config price columns the Pricing Control Center may save through the
+// same audited action (checkout URLs stay in their own Renewal Links panel).
+const RENEWAL_PRICE_FIELDS = ['price_first_credit', 'price_first_standard', 'price_flex_monthly', 'price_titan_quarterly'];
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -196,8 +204,32 @@ export default async function handler(req, res) {
         const r = await sb('/rest/v1/pricing_config?id=eq.1', 'PATCH', upd, { Prefer: 'return=representation' });
         if (!r.ok) { const d = await r.json().catch(() => ({})); return res.status(500).json({ error: 'Could not save pricing config', detail: d }); }
         const after = (await r.json())[0] || null;
-        await auditLog({ actor: senderEmail, action: 'config-save', before, after, reason: body.reason });
-        return res.status(200).json({ ok: true, config: after });
+
+        // Optional renewal_config price patch (body.renewal) — same audited save,
+        // so the Control Center's sprint/continuation prices share the paper trail.
+        let renewalBefore = null, renewalAfter = null;
+        if (body.renewal && typeof body.renewal === 'object') {
+          const rUpd = { updated_at: new Date().toISOString() };
+          for (const f of RENEWAL_PRICE_FIELDS) {
+            if (body.renewal[f] === undefined) continue;
+            const n = Number(body.renewal[f]);
+            if (!Number.isFinite(n) || n < 0) return res.status(400).json({ error: `Invalid value for renewal.${f}` });
+            rUpd[f] = n;
+          }
+          if (Object.keys(rUpd).length > 1) {
+            renewalBefore = await firstRow('/rest/v1/renewal_config?id=eq.1&select=price_first_credit,price_first_standard,price_flex_monthly,price_titan_quarterly&limit=1');
+            const rr = await sb('/rest/v1/renewal_config?id=eq.1', 'PATCH', rUpd, { Prefer: 'return=representation' });
+            if (!rr.ok) { const d = await rr.json().catch(() => ({})); return res.status(500).json({ error: 'Pricing saved but renewal prices failed', detail: d }); }
+            renewalAfter = (await rr.json())[0] || null;
+          }
+        }
+        await auditLog({
+          actor: senderEmail, action: 'config-save',
+          before: { pricing: before, renewal: renewalBefore },
+          after:  { pricing: after,  renewal: renewalAfter },
+          reason: body.reason,
+        });
+        return res.status(200).json({ ok: true, config: after, renewal: renewalAfter });
       }
 
       case 'snapshot-client': {

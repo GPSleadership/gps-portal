@@ -1196,7 +1196,16 @@ I'm taking part in a leadership assessment run by GPS Leadership Solutions. Thei
         <div class="toolbar-title">Pricing</div>
       </div>
       <div style="background:var(--white);border-radius:8px;padding:14px 18px;margin-bottom:16px;border-left:4px solid var(--navy);font-size:13px;color:var(--text);line-height:1.6;">
-        Per-client money terms. Each client's prices are <strong>frozen at engagement start</strong> so a later price change never rewrites an existing client's offer, and the diagnostic credit is always <em>min(what they paid, the standard price)</em> — a Pro client can never be over-credited. Set what a client actually paid here, or apply a credit override (a scholarship or negotiated rate) with a reason. Every change lands in the audit trail below. <span style="color:var(--gray-600);">Global prices are edited in Settings &rarr; Templates &amp; Automation &rarr; Pricing Control Center.</span> Owner only.
+        The one home for everything money. Set global prices in the Control Center (every price scales from the diagnostic driver unless you lock it), engagement terms (sprint length, credit window), workshop and assessment price points, and the GHL checkout links. Below that: per-client terms — each client's prices are <strong>frozen at engagement start</strong>, the diagnostic credit is always <em>min(what they paid, the standard price)</em>, and you can record what a client actually paid or apply a credit override with a reason. Every change lands in the audit trail. Owner only.
+      </div>
+      <div id="pricingControlPanel" class="owner-only" style="background:var(--white);border-radius:8px;padding:16px 18px;margin-bottom:16px;border:1px solid var(--gray-200);">
+        <div class="spinner"></div>
+      </div>
+      <div id="pricingTermsPanel" class="owner-only" style="background:var(--white);border-radius:8px;padding:16px 18px;margin-bottom:16px;border:1px solid var(--gray-200);">
+        <div class="spinner"></div>
+      </div>
+      <div id="renewalConfigPanel" style="background:var(--white);border-radius:8px;padding:16px 18px;margin-bottom:16px;border:1px solid var(--gray-200);">
+        <div class="spinner"></div>
       </div>
       <div style="background:var(--white);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06);overflow:hidden;margin-bottom:16px;">
         <div id="pricingConfigContent" style="padding:16px 18px;">
@@ -1267,13 +1276,8 @@ I'm taking part in a leadership assessment run by GPS Leadership Solutions. Thei
         <div class="spinner"></div>
       </div>
 
-      <div id="pricingControlPanel" class="owner-only" style="background:var(--white);border-radius:8px;padding:16px 18px;margin-bottom:16px;border:1px solid var(--gray-200);">
-        <div class="spinner"></div>
-      </div>
-
-      <div id="renewalConfigPanel" style="background:var(--white);border-radius:8px;padding:16px 18px;margin-bottom:16px;border:1px solid var(--gray-200);">
-        <div class="spinner"></div>
-      </div>
+      <!-- Pricing Control Center + Renewal Links moved to Settings → Pricing
+           (2026-07-22, Alex: one home for all money — no more two places). -->
 
       <div id="ccSettingsPanel" style="background:var(--white);border-radius:8px;padding:16px 18px;margin-bottom:16px;border:1px solid var(--gray-200);">
         <div class="spinner"></div>
@@ -4930,8 +4934,8 @@ function showSection(name, skipHooks, _fromHistory) {
   if (name === 'admins')      loadAdminAccounts();
   if (name === 'reportflow')  loadReportFlowSettings();
   if (name === 'aicontrols')  loadAiControls();
-  if (name === 'pricing')     loadPricingPanel();
-  if (name === 'templates')   { loadEmailTemplates(); loadCcSettingsPanel(); loadLegalTextsPanel(); loadPricingControlPanel(); loadRenewalConfigPanel(); }
+  if (name === 'pricing')     { loadPricingPanel(); loadPricingControlPanel(); loadRenewalConfigPanel(); }
+  if (name === 'templates')   { loadEmailTemplates(); loadCcSettingsPanel(); loadLegalTextsPanel(); }
   if (name === 'dashboard')   { _actionItemsLoaded = false; renderDiagHome(); refreshMsgBadge(); }
   if (name === 'diagnostics') { diagBoot(); renderDiagTable(); }
   if (name === 'organizations') renderOrganizations();
@@ -5747,8 +5751,13 @@ async function savePricingControlCenter(){
   renewalVals.updated_at = new Date().toISOString();
   if(status){ status.style.color='var(--gray-600)'; status.textContent='Saving…'; }
   try {
-    await cdUpdate('pricing_config', pricingVals, { eq:{ id:1 } });
-    await cdUpdate('renewal_config', renewalVals, { eq:{ id:1 } });
+    // Audited save path (2026-07-22): one /api/pricing config-save call writes
+    // both tables AND records before/after in pricing_audit. The old direct
+    // proxy writes left no paper trail on price changes.
+    delete pricingVals.updated_at; delete renewalVals.updated_at;
+    await pricingApi(Object.assign({ action: 'config-save', renewal: renewalVals,
+      reason: 'Pricing Control Center save' }, pricingVals));
+    pricingVals.updated_at = new Date().toISOString();
     PRICING_CFG = { pricing: Object.assign({}, (PRICING_CFG&&PRICING_CFG.pricing)||{}, pricingVals),
                     renewal: Object.assign({}, (PRICING_CFG&&PRICING_CFG.renewal)||{}, renewalVals) };
     applyTierPriceLabels();
@@ -5882,26 +5891,21 @@ async function loadPricingPanel(){
   cfgEl.innerHTML = '<div class="spinner"></div>';
   cliEl.innerHTML = '<div class="spinner"></div>';
 
-  // Card 1 — global config summary (read-only here) + recent audit trail.
+  // Card — pricing status + recent audit trail (prices are edited in the
+  // Control Center and Terms panels above; this is the paper trail).
   try {
     const r = await pricingApi({ action: 'config-get' });
     const c = r.config || {};
     const conf = c.confirmed === true;
+    renderPricingTermsPanel(c);
     let auditRows = [];
     try { const a = await pricingApi({ action: 'audit-list' }); auditRows = a.audit || []; } catch (_) { /* non-owner: no audit view */ }
     cfgEl.innerHTML =
-      '<div style="font-family:\'Montserrat\',sans-serif;font-weight:700;color:var(--navy);margin-bottom:10px;">Current global prices '
+      '<div style="font-family:\'Montserrat\',sans-serif;font-weight:700;color:var(--navy);margin-bottom:10px;">Pricing status '
       + (conf ? '<span style="font-size:11px;font-weight:700;color:var(--teal);border:1px solid var(--teal);border-radius:5px;padding:2px 8px;margin-left:8px;vertical-align:middle;">CONFIRMED</span>'
               : '<span style="font-size:11px;font-weight:700;color:var(--red);border:1px solid var(--red);border-radius:5px;padding:2px 8px;margin-left:8px;vertical-align:middle;">UNCONFIRMED — verify before quoting</span>')
       + '</div>'
-      + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:6px;">'
-      +   '<div style="background:var(--gray-100);border-radius:6px;padding:10px 12px;"><div style="font-size:10px;text-transform:uppercase;color:var(--gray-600);font-weight:700;">Standard diagnostic</div><div style="font-size:17px;font-weight:800;color:var(--navy);">' + money(c.standard_diagnostic_price) + '</div></div>'
-      +   '<div style="background:var(--gray-100);border-radius:6px;padding:10px 12px;"><div style="font-size:10px;text-transform:uppercase;color:var(--gray-600);font-weight:700;">Pro diagnostic</div><div style="font-size:17px;font-weight:800;color:var(--navy);">' + money(c.pro_diagnostic_price) + '</div></div>'
-      +   '<div style="background:var(--gray-100);border-radius:6px;padding:10px 12px;"><div style="font-size:10px;text-transform:uppercase;color:var(--gray-600);font-weight:700;">Coaching / month</div><div style="font-size:17px;font-weight:800;color:var(--navy);">' + money(c.coaching_monthly) + '</div></div>'
-      +   '<div style="background:var(--gray-100);border-radius:6px;padding:10px 12px;"><div style="font-size:10px;text-transform:uppercase;color:var(--gray-600);font-weight:700;">Sprint length</div><div style="font-size:17px;font-weight:800;color:var(--navy);">' + (c.sprint_months || '—') + ' mo</div></div>'
-      +   '<div style="background:var(--gray-100);border-radius:6px;padding:10px 12px;"><div style="font-size:10px;text-transform:uppercase;color:var(--gray-600);font-weight:700;">Credit window</div><div style="font-size:17px;font-weight:800;color:var(--navy);">' + (c.credit_window_days || '—') + ' days</div></div>'
-      + '</div>'
-      + '<div style="font-size:11.5px;color:var(--gray-600);margin-bottom:14px;">Edit these in Settings &rarr; Templates &amp; Automation &rarr; Pricing Control Center. New-client snapshots freeze the values above at engagement start.</div>'
+      + '<div style="font-size:11.5px;color:var(--gray-600);margin-bottom:14px;">New-client snapshots freeze the prices above at engagement start. Every save on this page is recorded below.</div>'
       + (auditRows.length
           ? '<div style="font-weight:700;color:var(--navy);font-size:13px;margin-bottom:6px;">Recent pricing changes (audit trail)</div>'
             + '<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="border-bottom:2px solid var(--gray-200);">'
@@ -5941,6 +5945,64 @@ async function loadPricingPanel(){
   } catch (e) {
     cliEl.innerHTML = '<div style="color:var(--red);font-size:13px;">Could not load clients: ' + escHtml(e.message || '') + '</div>';
   }
+}
+
+// Engagement terms + workshop/assessment price points (edit + audited save).
+// Workshop/assessment prices are the OFFICIAL price points of record; nothing
+// in the portal charges from them yet (they wire into workshop/assessment
+// checkouts later) — this is where they live so there is one pricing home.
+function renderPricingTermsPanel(c){
+  var el = document.getElementById('pricingTermsPanel');
+  if (!el) return;
+  function fld(label, id, val, suffix, hint){
+    return '<div><div style="font-size:11px;font-weight:700;color:var(--navy);margin-bottom:4px;">' + label + '</div>'
+      + '<div style="display:flex;gap:6px;align-items:center;">' + (suffix === '$' ? '<span style="color:var(--gray-600);">$</span>' : '')
+      + '<input type="number" id="' + id + '" min="0" step="1" value="' + (val != null ? Number(val) : '') + '" style="width:110px;padding:7px 9px;border:2px solid var(--gray-300);border-radius:6px;font-size:13px;">'
+      + (suffix && suffix !== '$' ? '<span style="font-size:12px;color:var(--gray-600);">' + suffix + '</span>' : '') + '</div>'
+      + (hint ? '<div style="font-size:10.5px;color:var(--gray-600);margin-top:3px;">' + hint + '</div>' : '') + '</div>';
+  }
+  el.innerHTML =
+    '<div style="font-family:\'Montserrat\',sans-serif;font-weight:700;color:var(--navy);margin-bottom:4px;">Engagement Terms &amp; Other Price Points</div>'
+    + '<div style="font-size:12px;color:var(--gray-600);margin-bottom:14px;line-height:1.5;">Sprint length and credit window drive the live offer pages. Workshop and assessment prices are the official price points of record — not wired to a checkout yet, but proposals and future builds read from here.</div>'
+    + '<div style="display:flex;gap:22px;flex-wrap:wrap;margin-bottom:8px;">'
+    +   fld('Sprint length', 'pt_sprint_months', c.sprint_months, 'months', 'How long the 90-Day Sprint runs (billing months)')
+    +   fld('Credit window', 'pt_credit_window', c.credit_window_days, 'days', 'Days after debrief the diagnostic credit applies')
+    +   fld('Workshop — full day', 'pt_ws_full', c.workshop_full_day_price, '$', 'Price point of record')
+    +   fld('Workshop — half day', 'pt_ws_half', c.workshop_half_day_price, '$', 'Price point of record')
+    +   fld('Assessment', 'pt_assessment', c.assessment_price, '$', 'Per assessment engagement')
+    + '</div>'
+    + '<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:8px;">'
+    +   '<button onclick="savePricingTerms()" style="background:var(--navy);color:var(--white);border:none;border-radius:6px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;">Save terms &amp; price points</button>'
+    +   '<label style="display:inline-flex;align-items:center;gap:7px;cursor:pointer;font-size:12.5px;color:var(--text);"><input type="checkbox" id="pt_confirmed" ' + (c.confirmed === true ? 'checked' : '') + ' style="width:16px;height:16px;cursor:pointer;"> Prices confirmed (shows the CONFIRMED badge)</label>'
+    +   '<span id="pt_status" style="font-size:13px;color:var(--teal);"></span>'
+    + '</div>';
+}
+async function savePricingTerms(){
+  var st = document.getElementById('pt_status');
+  function stat(m, err){ if (st) { st.style.color = err ? 'var(--red)' : 'var(--teal)'; st.textContent = m; } }
+  var months = Number((document.getElementById('pt_sprint_months') || {}).value);
+  var window_ = Number((document.getElementById('pt_credit_window') || {}).value);
+  if (!(months >= 1 && months <= 24)) { stat('Sprint length must be 1-24 months.', true); return; }
+  if (!(window_ >= 1 && window_ <= 365)) { stat('Credit window must be 1-365 days.', true); return; }
+  var payload = {
+    action: 'config-save',
+    sprint_months: months,
+    credit_window_days: window_,
+    confirmed: !!(document.getElementById('pt_confirmed') || {}).checked,
+    reason: 'Engagement terms / price points saved via coach Pricing panel',
+  };
+  ['pt_ws_full:workshop_full_day_price', 'pt_ws_half:workshop_half_day_price', 'pt_assessment:assessment_price'].forEach(function(pair){
+    var parts = pair.split(':');
+    var v = (document.getElementById(parts[0]) || {}).value;
+    if (v !== '' && Number(v) >= 0) payload[parts[1]] = Number(v);
+  });
+  stat('Saving…');
+  try {
+    await pricingApi(payload);
+    stat('✓ Saved');
+    setTimeout(function(){ if (st) st.textContent = ''; }, 3500);
+    loadPricingPanel();
+  } catch (e) { stat(e.message || 'Could not save.', true); }
 }
 
 async function ppLoadClient(){
