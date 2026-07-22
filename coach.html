@@ -14353,7 +14353,32 @@ async function drSendSponsor(sponsorId){
     await loadOrgs();
     var __wk=(WS.kind==='assessment')?'assessment':'workshop'; var __isA=(__wk==='assessment');
     var flist=WS.list.filter(function(w){ return ((w.engagement_kind==='assessment')?'assessment':'workshop')===__wk; });
-    var rows=flist.map(function(w){ return '<tr style="border-top:1px solid var(--border);"><td style="padding:11px 10px;font-weight:700;color:var(--navy);cursor:pointer;" onclick="wsOpen(\''+w.id+'\')">'+esc(w.title)+'</td><td style="padding:11px 10px;color:var(--text-muted);cursor:pointer;" onclick="wsOpen(\''+w.id+'\')">'+esc(w.client_org_name||'—')+'</td><td style="padding:11px 10px;color:var(--text-muted);cursor:pointer;" onclick="wsOpen(\''+w.id+'\')">'+fmtDate(w.debrief_date||w.workshop_date)+'</td><td style="padding:11px 10px;cursor:pointer;" onclick="wsOpen(\''+w.id+'\')"><span style="font-size:11px;font-weight:700;background:var(--light-teal);color:var(--navy);padding:2px 9px;border-radius:20px;">'+esc(w.status||'setup')+'</span>'+(w.engagement_kind==='assessment'?' <span style="font-size:11px;font-weight:700;background:var(--light-sand);color:var(--navy);border:1px solid var(--border);padding:2px 9px;border-radius:20px;">Assessment</span>':'')+(w.is_demo?' <span style="font-size:11px;font-weight:700;background:#fde8ec;color:var(--red);padding:2px 9px;border-radius:20px;">DEMO</span>':'')+'</td><td style="padding:8px 10px;white-space:nowrap;">'+btn('wsArch_'+w.id,'Archive','ghost')+'<button id="wsDel_'+w.id+'" title="Delete permanently" style="padding:6px 12px;margin-left:6px;border:1px solid #f3b4c0;background:#fff;border-radius:6px;font-size:12px;cursor:pointer;color:var(--red);">Delete</button>'+'</td></tr>'; }).join('');
+    // For the assessments list, show a live participation read (how many have replied)
+    // and the close date / days-left in place of the redundant "Assessment" chip.
+    var counts={};
+    if(__isA && flist.length){
+      try{
+        var pids=flist.map(function(w){ return w.id; });
+        var parts=await cdSelect('workshop_participants',{in:{workshop_id:pids},select:'workshop_id,pre_status'});
+        parts.forEach(function(pt){ var c=counts[pt.workshop_id]||(counts[pt.workshop_id]={total:0,done:0}); c.total++; if(pt.pre_status==='complete') c.done++; });
+      }catch(e){ counts={}; }
+    }
+    function closeDaysLeft(iso){ if(!iso) return null; var c=new Date(iso), t=new Date(); return Math.round((new Date(c.getFullYear(),c.getMonth(),c.getDate())-new Date(t.getFullYear(),t.getMonth(),t.getDate()))/86400000); }
+    function asmMeta(w){
+      var c=counts[w.id]||{total:0,done:0};
+      var pct=c.total?Math.round((c.done/c.total)*100):0;
+      var repl='<div style="font-size:11.5px;color:var(--text-muted);margin-top:5px;">'+c.done+'/'+c.total+' replied'+(c.total?' ('+pct+'%)':'')+'</div>';
+      var close='';
+      if(w.pre_survey_close_at){
+        var dl=closeDaysLeft(w.pre_survey_close_at);
+        var cdStr=new Date(w.pre_survey_close_at).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+        var dlStr=(dl<0)?'closed':(dl===0?'closes today':(dl===1?'1 day left':dl+' days left'));
+        var col=(dl!=null&&dl<=1)?'var(--red)':'var(--text-muted)';
+        close='<div style="font-size:11.5px;color:'+col+';margin-top:2px;">closes '+cdStr+' · '+dlStr+'</div>';
+      } else { close='<div style="font-size:11.5px;color:var(--text-muted);margin-top:2px;">no close date set</div>'; }
+      return repl+close;
+    }
+    var rows=flist.map(function(w){ return '<tr style="border-top:1px solid var(--border);"><td style="padding:11px 10px;font-weight:700;color:var(--navy);cursor:pointer;" onclick="wsOpen(\''+w.id+'\')">'+esc(w.title)+'</td><td style="padding:11px 10px;color:var(--text-muted);cursor:pointer;" onclick="wsOpen(\''+w.id+'\')">'+esc(w.client_org_name||'—')+'</td><td style="padding:11px 10px;color:var(--text-muted);cursor:pointer;" onclick="wsOpen(\''+w.id+'\')">'+fmtDate(w.debrief_date||w.workshop_date)+'</td><td style="padding:11px 10px;cursor:pointer;" onclick="wsOpen(\''+w.id+'\')"><span style="font-size:11px;font-weight:700;background:var(--light-teal);color:var(--navy);padding:2px 9px;border-radius:20px;">'+esc(w.status||'setup')+'</span>'+(w.is_demo?' <span style="font-size:11px;font-weight:700;background:#fde8ec;color:var(--red);padding:2px 9px;border-radius:20px;">DEMO</span>':'')+(__isA?asmMeta(w):'')+'</td><td style="padding:8px 10px;white-space:nowrap;">'+btn('wsArch_'+w.id,'Archive','ghost')+'<button id="wsDel_'+w.id+'" title="Delete permanently" style="padding:6px 12px;margin-left:6px;border:1px solid #f3b4c0;background:#fff;border-radius:6px;font-size:12px;cursor:pointer;color:var(--red);">Delete</button>'+'</td></tr>'; }).join('');
     c.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;"><div style="font-family:Montserrat,sans-serif;font-size:18px;font-weight:800;color:var(--navy);">'+(__isA?'Assessments':'Workshops')+'</div><div>'+(__isA?btn('wsNewA','+ New assessment'):btn('wsNew','+ New workshop'))+'</div></div>'+
       '<div style="background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);padding:12px 14px;margin-bottom:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;"><label style="font-size:12px;font-weight:700;color:var(--text-muted);">Sponsor "Schedule a call" link</label><input id="wsCtaUrl" type="text" placeholder="https://…booking link" style="flex:1;min-width:240px;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;">'+btn('wsCtaSave','Save link','ghost')+'<span id="wsCtaOut" style="font-size:12px;color:var(--text-muted);"></span></div>'+
       '<div style="background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);overflow:hidden;">'+(flist.length?'<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:var(--light-sand);text-align:left;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px;"><th style="padding:10px;">Title</th><th style="padding:10px;">Org</th><th style="padding:10px;">Date</th><th style="padding:10px;">Status</th><th style="padding:10px;"></th></tr></thead><tbody>'+rows+'</tbody></table>':'<div style="padding:30px;text-align:center;color:var(--text-muted);">No active '+(__isA?'assessments':'workshops')+' yet. Click <strong>'+(__isA?'+ New assessment':'+ New workshop')+'</strong>.</div>')+'</div>';
@@ -15095,10 +15120,16 @@ async function drSendSponsor(sponsorId){
 
   function wsDataPane(p){
     var w=WS.cur, isA=(w.engagement_kind==='assessment');
-    p.innerHTML=card('<div style="font-weight:800;margin-bottom:10px;color:var(--navy);">Indices &amp; exports</div>'+
+    p.innerHTML=
+      card('<div style="font-weight:800;margin-bottom:6px;color:var(--navy);">Preview report summary</div>'+
+        '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">A live read of where the data is trending, computed from every response captured so far. This is automation, not AI — each click recomputes. It does <strong>not</strong> close the '+(isA?'assessment':'survey')+' and does <strong>not</strong> give the sponsor access.</div>'+
+        btn('wsPrev','Preview report summary')+
+        '<div id="wsPrevOut" style="margin-top:14px;font-size:13px;color:var(--text-muted);">Click <strong>Preview report summary</strong> for the current read.</div>')+
+      card('<div style="font-weight:800;margin-bottom:10px;color:var(--navy);">Indices &amp; exports</div>'+
       btn('wsAgg','Compute indices')+btn('wsExpPart','Export participant CSV','ghost')+btn('wsExpSpon','Export sponsor summary','ghost')+btn('wsExpGhl','Export GHL fields','ghost')+
       (isA?btn('wsExpXlsx','Export full Excel','ghost'):'')+(w.is_demo?btn('wsGenDemo','Generate sample data','ghost'):'')+
       '<div id="wsAggOut" style="margin-top:14px;font-size:13px;color:var(--text-muted);">Click <strong>Compute indices</strong>.</div>');
+    document.getElementById('wsPrev').onclick=async function(){ var o=document.getElementById('wsPrevOut'); this.disabled=true; o.textContent='Computing current read…'; try{ var r=await wsData('preview-summary',{workshop_id:w.id}); o.innerHTML=renderPreview(r.preview); }catch(e){ o.textContent=e.message; } this.disabled=false; };
     document.getElementById('wsAgg').onclick=async function(){ var o=document.getElementById('wsAggOut'); o.textContent='Computing…'; try{ var r=await wsData('aggregate',{workshop_id:w.id}); o.innerHTML=renderAgg(r.aggregate); }catch(e){ o.textContent=e.message; } };
     document.getElementById('wsExpPart').onclick=async function(){ try{ var r=await wsData('export-participant-csv',{workshop_id:w.id}); download(r.filename,r.csv); }catch(e){ toast(e.message); } };
     document.getElementById('wsExpSpon').onclick=async function(){ try{ var r=await wsData('export-sponsor-csv',{workshop_id:w.id}); download(r.filename,r.csv); }catch(e){ toast(e.message); } };
@@ -15107,6 +15138,33 @@ async function drSendSponsor(sponsorId){
     if(xe) xe.onclick=async function(){ this.disabled=true; this.textContent='Building…'; var o=document.getElementById('wsAggOut'); o.textContent='Fetching data…'; try{ var r=await wsData('export-full-excel',{workshop_id:w.id}); downloadXlsx(r.filename,r.sheets); o.textContent='Excel downloaded.'; }catch(e){ o.textContent=e.message; } this.disabled=false; this.textContent='Export full Excel'; };
     var gd=document.getElementById('wsGenDemo');
     if(gd) gd.onclick=async function(){ var o=document.getElementById('wsAggOut'); if(!confirm('Generate fake responses for all participants? This overwrites existing responses.')) return; this.disabled=true; o.textContent='Generating sample data…'; try{ var r=await wsData('generate-demo-data',{workshop_id:w.id}); o.textContent='Generated '+r.responses_created+' responses across '+r.participants+' participants.'; }catch(e){ o.textContent=e.message; this.disabled=false; } };
+  }
+  function renderPreview(pv){
+    if(!pv) return 'No data yet.';
+    var bandColor={strength:'#1A7A3A',development:'#B5860B',red_flag:'var(--red)'};
+    var bandLabel={strength:'Strength (4+)',development:'Development (3–3.9)',red_flag:'Red flag (<3)'};
+    var idx=(pv.indices||[]).map(function(i){
+      var v=(i.value!=null)?i.value:'—';
+      var col=i.band?bandColor[i.band]:'var(--text-muted)';
+      var lab=i.band?bandLabel[i.band]:'No data';
+      var d=(i.delta!=null)?(' <span style="color:var(--text-muted);">('+(i.delta>0?'+':'')+i.delta+')</span>'):'';
+      return '<tr style="border-top:1px solid var(--border);"><td style="padding:6px 10px;text-transform:capitalize;font-weight:600;">'+esc(i.theme)+'</td><td style="padding:6px 10px;">'+v+d+'</td><td style="padding:6px 10px;color:'+col+';font-weight:600;">'+lab+'</td></tr>';
+    }).join('');
+    function bullets(arr){ return (arr&&arr.length)?'<ul style="margin:4px 0 10px;padding-left:18px;">'+arr.map(function(x){return '<li style="margin-bottom:3px;">'+esc(x)+'</li>';}).join('')+'</ul>':'<div style="color:var(--text-muted);margin:2px 0 10px;">None at the current read.</div>'; }
+    var closeLine='';
+    if(pv.close_at){
+      if(pv.closed) closeLine='<span style="color:var(--red);font-weight:600;">Closed</span>';
+      else if(pv.days_left===0) closeLine='<span style="color:var(--red);font-weight:600;">Closes today</span>';
+      else closeLine='<strong>'+pv.days_left+'</strong> day'+(pv.days_left===1?'':'s')+' left · closes '+fmtDate(pv.close_at);
+    } else closeLine='No close date set';
+    var tr=pv.trending||{};
+    return '<div style="background:#fbf7ec;border:1px solid #e8dcb8;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#5a4a1f;">Preview only — nothing was saved, the '+(pv.is_assessment?'assessment':'survey')+' stays open, and the sponsor sees nothing.</div>'+
+      '<div><strong>Responses so far:</strong> '+pv.responded+'/'+pv.total+' ('+pv.response_rate+'%) · <strong>'+(pv.is_assessment?'Team NPS':'NPS')+':</strong> '+(pv.nps!=null?pv.nps:'—')+' · '+closeLine+'</div>'+
+      '<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:10px;"><thead><tr style="background:var(--light-sand);text-align:left;color:var(--text-muted);text-transform:uppercase;font-size:11px;"><th style="padding:6px 10px;">TP3 index</th><th style="padding:6px 10px;">Score</th><th style="padding:6px 10px;">Read</th></tr></thead><tbody>'+idx+'</tbody></table>'+
+      '<div style="margin-top:12px;font-weight:700;color:var(--navy);">Trending strengths</div>'+bullets(pv.strengths)+
+      '<div style="font-weight:700;color:var(--navy);">Trending risks</div>'+bullets(pv.risks)+
+      (tr.step?('<div style="margin-top:6px;padding:10px 14px;background:#f5f7fa;border-left:4px solid var(--gold);border-radius:0 8px 8px 0;"><div style="font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);margin-bottom:2px;">Where this points</div><div style="font-weight:700;color:var(--navy);">'+esc(tr.headline||tr.step)+'</div>'+(tr.rationale?'<div style="font-size:12.5px;color:#2b3550;margin-top:3px;">'+esc(tr.rationale)+'</div>':'')+'</div>'):'')+
+      '<div style="margin-top:10px;font-size:11px;color:var(--text-muted);">Recomputed '+fmtDate(pv.computed_at)+' from current responses. Click again any time for an updated read.</div>';
   }
   function renderAgg(a){ var t=a.tp3||{}; function ba(x){ if(!x)return '—'; return (x.pre!=null&&x.post!=null)?(x.pre+' → '+x.post+(x.delta!=null?' ('+(x.delta>0?'+':'')+x.delta+')':'')):(x.post!=null?x.post:(x.pre!=null?x.pre:'—')); } var themes=(a.themeTable||[]).map(function(r){ return '<tr style="border-top:1px solid var(--border);"><td style="padding:6px 10px;text-transform:capitalize;">'+esc(r.theme)+'</td><td style="padding:6px 10px;">'+(r.pre!=null?r.pre:'—')+'</td><td style="padding:6px 10px;">'+(r.post!=null?r.post:'—')+'</td><td style="padding:6px 10px;">'+(r.delta!=null?(r.delta>0?'+':'')+r.delta:'—')+'</td></tr>'; }).join(''); return '<div><strong>Participation:</strong> '+a.participation.pre.done+'/'+a.participation.total+' pre ('+a.participation.pre.rate+'%), '+a.participation.post.done+'/'+a.participation.total+' post ('+a.participation.post.rate+'%)</div><div style="margin-top:4px;"><strong>NPS:</strong> '+(a.nps!=null?a.nps:'—')+' · <strong>Avg satisfaction:</strong> '+(a.npsAvg!=null?a.npsAvg:'—')+'</div><div style="margin-top:4px;"><strong>TP3:</strong> Trust '+ba(t.trust)+' · Proactivity '+ba(t.proactivity)+' · Productivity '+ba(t.productivity)+'</div>'+(themes?'<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:10px;"><thead><tr style="background:var(--light-sand);text-align:left;color:var(--text-muted);text-transform:uppercase;font-size:11px;"><th style="padding:6px 10px;">Theme</th><th style="padding:6px 10px;">Pre</th><th style="padding:6px 10px;">Post</th><th style="padding:6px 10px;">Δ</th></tr></thead><tbody>'+themes+'</tbody></table>':''); }
 
@@ -15117,17 +15175,15 @@ async function drSendSponsor(sponsorId){
     p.innerHTML=
       card('<div style="font-weight:800;margin-bottom:8px;color:var(--navy);">Sponsor report — review, edit &amp; publish</div>'+
         '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Generate exec summary and recommendation first. Edit, then publish to the sponsor dashboard.</div>'+
-        btn('wsGenSummary','Generate exec summary')+btn('wsGenRec','Generate recommendation')+
+        btn('wsGenSummary','Generate exec summary')+btn('wsGenRec','Generate 3 recommendations')+
         '<div id="wsNums" style="font-size:13px;margin:10px 0;">'+wsNums(w.exec_summary_json)+'</div>'+
         '<label style="'+lbl+'">Strengths (one per line)</label>'+wsTa('wsStr', wsLines(sum.strengths))+
         '<label style="'+lbl+'">Risks (one per line)</label>'+wsTa('wsRsk', wsLines(sum.risks))+
         '<label style="'+lbl+'">90-day focus (one per line)</label>'+wsTa('wsFoc', wsLines(sum.focus90))+
         '<div style="margin:8px 0;">'+btn('wsSaveSum','Save edits','ghost')+'</div>'+
-        '<div style="border-top:1px dashed var(--border);margin:12px 0;padding-top:12px;"><div style="font-weight:700;color:var(--navy);margin-bottom:6px;">Recommended next step</div>'+
-        '<label style="'+lbl+'">Step</label><input id="wsRecStep" value="'+esc(rec.step||'')+'" style="width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;">'+
-        '<label style="'+lbl+'">Headline</label><input id="wsRecHead" value="'+esc(rec.headline||'')+'" style="width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;">'+
-        '<label style="'+lbl+'">Rationale</label>'+wsTa('wsRecRat', rec.rationale||'')+
-        '<div style="margin-top:8px;">'+btn('wsSaveRec','Save recommendation','ghost')+'</div></div>'+
+        '<div style="border-top:1px dashed var(--border);margin:12px 0;padding-top:12px;"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;"><div style="font-weight:700;color:var(--navy);">Recommended next steps</div>'+btn('wsAddRec','+ Add','ghost')+'</div>'+
+        '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Generate proposes 3 candidates. Approve the ones you want, toggle <b>Show</b> to put them on the report, and use ↑↓ to order them. Only <b>Approved + Shown</b> appear to the sponsor. Save edits after changing the text.</div>'+
+        '<div id="wsRecList"></div></div>'+
         '<div style="border-top:1px dashed var(--border);margin:12px 0;padding-top:12px;"><label style="display:flex;gap:8px;align-items:flex-start;font-weight:700;color:var(--navy);cursor:pointer;"><input type="checkbox" id="wsApprove" '+(approved?'checked':'')+' style="width:18px;height:18px;margin-top:1px;"><span>Published to sponsor — when checked, the sponsor sees strengths, risks, 90-day focus, and recommendation. When unchecked, they see only numbers and a "being finalized" note.</span></label><div id="wsApprOut" style="font-size:12px;color:var(--text-muted);margin-top:6px;">'+(approved?'Currently visible to the sponsor.':'Currently hidden from the sponsor.')+'</div></div>')+
       card('<div style="font-weight:800;margin-bottom:8px;color:var(--navy);">Post-debrief recap email</div>'+
         '<div style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">Draft the recap email using your discovery notes, computed metrics, and sponsor report. Review and edit before sending.</div>'+
@@ -15136,9 +15192,43 @@ async function drSendSponsor(sponsorId){
         '<div id="wsRecapDraftWrap" style="margin-top:12px;">'+(w.recap_email_draft?'<div style="margin-bottom:6px;font-size:12px;font-weight:700;color:var(--text-muted);">Edit the draft below:</div><textarea id="wsRecapDraftTa" style="width:100%;min-height:220px;border:1.5px solid var(--border);border-radius:7px;padding:10px;font-size:13px;font-family:inherit;">'+esc(w.recap_email_draft)+'</textarea>'+'<div style="margin-top:8px;">'+btn('wsRecapSend','Send recap to sponsor')+btn('wsRecapSaveDraft','Save draft','ghost')+'<div id="wsRecapOut" style="font-size:13px;margin-top:8px;color:var(--text-muted);"></div></div>':'<div style="color:var(--text-muted);font-size:13px;">Click "Draft recap email" — AI will write a first draft using your discovery notes and summary.</div></div>'));
     // Sponsor report handlers
     document.getElementById('wsGenSummary').onclick=async function(){ this.disabled=true; document.getElementById('wsNums').textContent='Generating…'; try{ var r=await wsData('generate-summary',{workshop_id:w.id}); w.exec_summary_json=r.exec_summary; await cdUpdate('workshops',{summary_approved:false},{eq:{id:w.id}}); w.summary_approved=false; wsRecap(p); toast('Summary generated. Review, edit, then publish.'); }catch(e){ document.getElementById('wsNums').textContent=e.message; } };
-    document.getElementById('wsGenRec').onclick=async function(){ this.disabled=true; try{ var r=await wsData('recommend',{workshop_id:w.id}); w.recommendation_json=r.recommendation; await cdUpdate('workshops',{summary_approved:false},{eq:{id:w.id}}); w.summary_approved=false; wsRecap(p); toast('Recommendation generated.'); }catch(e){ toast(e.message); } };
+    document.getElementById('wsGenRec').onclick=async function(){ var b=this; b.disabled=true; var t=b.textContent; b.textContent='Generating…'; try{ var r=await wsData('recommend',{workshop_id:w.id}); w.recommendation_json=r.recommendation; renderRecList(); toast((r.added||0)+' candidate'+(r.added===1?'':'s')+' added — approve the ones you want.'); }catch(e){ toast(e.message); } b.disabled=false; b.textContent=t; };
     document.getElementById('wsSaveSum').onclick=async function(){ try{ var es=Object.assign({},w.exec_summary_json||{},{strengths:wsParse('wsStr'),risks:wsParse('wsRsk'),focus90:wsParse('wsFoc')}); await cdUpdate('workshops',{exec_summary_json:es,updated_at:new Date().toISOString()},{eq:{id:w.id}}); w.exec_summary_json=es; toast('Saved.'); }catch(e){ toast(e.message); } };
-    document.getElementById('wsSaveRec').onclick=async function(){ try{ var rj={primary:{step:document.getElementById('wsRecStep').value,headline:document.getElementById('wsRecHead').value,rationale:document.getElementById('wsRecRat').value},rules_fired:(w.recommendation_json&&w.recommendation_json.rules_fired)||[]}; await cdUpdate('workshops',{recommendation_json:rj,updated_at:new Date().toISOString()},{eq:{id:w.id}}); w.recommendation_json=rj; toast('Recommendation saved.'); }catch(e){ toast(e.message); } };
+    // ── Curated recommendation list: generate 3 → approve → show/hide → reorder ──
+    function recItemsJS(){ var rj=w.recommendation_json||{}; if(Array.isArray(rj.items)) return rj.items.map(function(x){return Object.assign({},x);}); if(rj.primary&&(rj.primary.step||rj.primary.headline)) return [{id:'legacy',step:rj.primary.step||'',headline:rj.primary.headline||'',rationale:rj.primary.rationale||'',approved:true,visible:true}]; return []; }
+    function derivePrimaryJS(items){ var sh=items.filter(function(i){return i&&i.approved&&i.visible;}); var pk=sh[0]||items[0]; return pk?{step:pk.step||'',headline:pk.headline||'',rationale:pk.rationale||''}:{}; }
+    async function persistRecs(items){ var rj={items:items,primary:derivePrimaryJS(items),rules_fired:(w.recommendation_json&&w.recommendation_json.rules_fired)||[]}; await cdUpdate('workshops',{recommendation_json:rj,updated_at:new Date().toISOString()},{eq:{id:w.id}}); w.recommendation_json=rj; }
+    function captureEdits(items){ document.querySelectorAll('#wsRecList [data-f]').forEach(function(el){ var i=+el.getAttribute('data-i'), f=el.getAttribute('data-f'); if(items[i]) items[i][f]=el.value; }); return items; }
+    function renderRecList(){
+      var host=document.getElementById('wsRecList'); if(!host) return;
+      var items=recItemsJS();
+      if(!items.length){ host.innerHTML='<div style="font-size:13px;color:var(--text-muted);">No recommendations yet — click "Generate 3 recommendations" or "+ Add".</div>'; return; }
+      var inp='width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;margin-bottom:6px;';
+      var mini='padding:3px 8px;border:1px solid var(--border);background:#fff;border-radius:6px;font-size:13px;cursor:pointer;';
+      var h='';
+      items.forEach(function(it,i){
+        var chip = it.approved ? (it.visible?'<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;background:#D9F2E4;color:#0F6E56;">Approved · shown</span>':'<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;background:#FBE9C4;color:#8A5A00;">Approved · hidden</span>') : '<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;background:#eee;color:#666;">Candidate</span>';
+        h+='<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;background:'+(it.approved&&it.visible?'#f6fdf9':'#fff')+';">'+
+          '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">'+chip+
+            '<div style="display:flex;gap:4px;"><button data-b="up" data-i="'+i+'" style="'+mini+'"'+(i===0?' disabled':'')+'>&uarr;</button><button data-b="down" data-i="'+i+'" style="'+mini+'"'+(i===items.length-1?' disabled':'')+'>&darr;</button><button data-b="del" data-i="'+i+'" style="'+mini+'color:var(--red);">Delete</button></div>'+
+          '</div>'+
+          '<input data-f="headline" data-i="'+i+'" value="'+esc(it.headline||'')+'" placeholder="Headline (the punchy line)" style="'+inp+'font-weight:700;">'+
+          '<input data-f="step" data-i="'+i+'" value="'+esc(it.step||'')+'" placeholder="Step (short action title)" style="'+inp+'">'+
+          '<textarea data-f="rationale" data-i="'+i+'" placeholder="Rationale" style="'+inp+'min-height:56px;font-family:inherit;">'+esc(it.rationale||'')+'</textarea>'+
+          '<div style="display:flex;gap:16px;align-items:center;margin-top:2px;">'+
+            '<label style="font-size:13px;cursor:pointer;"><input type="checkbox" data-c="approve" data-i="'+i+'"'+(it.approved?' checked':'')+'> Approve</label>'+
+            '<label style="font-size:13px;cursor:pointer;'+(it.approved?'':'opacity:.4;')+'"><input type="checkbox" data-c="show" data-i="'+i+'"'+(it.visible?' checked':'')+(it.approved?'':' disabled')+'> Show on report</label>'+
+          '</div>'+
+        '</div>';
+      });
+      h+='<div style="margin-top:4px;">'+btn('wsRecSaveEdits','Save edits','ghost')+'</div>';
+      host.innerHTML=h;
+      host.querySelectorAll('button[data-b]').forEach(function(bt){ bt.onclick=async function(){ var i=+bt.getAttribute('data-i'), act=bt.getAttribute('data-b'); var items=captureEdits(recItemsJS()); if(act==='up'&&i>0){ var t=items[i-1]; items[i-1]=items[i]; items[i]=t; } else if(act==='down'&&i<items.length-1){ var u=items[i+1]; items[i+1]=items[i]; items[i]=u; } else if(act==='del'){ items.splice(i,1); } try{ await persistRecs(items); renderRecList(); }catch(e){ toast(e.message); } }; });
+      host.querySelectorAll('input[data-c]').forEach(function(cb){ cb.onchange=async function(){ var i=+cb.getAttribute('data-i'), c=cb.getAttribute('data-c'); var items=captureEdits(recItemsJS()); if(!items[i]) return; if(c==='approve'){ items[i].approved=cb.checked; if(!cb.checked) items[i].visible=false; } else { items[i].visible=cb.checked; } try{ await persistRecs(items); renderRecList(); }catch(e){ toast(e.message); } }; });
+      var se=document.getElementById('wsRecSaveEdits'); if(se) se.onclick=async function(){ try{ await persistRecs(captureEdits(recItemsJS())); toast('Saved.'); }catch(e){ toast(e.message); } };
+    }
+    var wsAddRecBtn=document.getElementById('wsAddRec'); if(wsAddRecBtn) wsAddRecBtn.onclick=async function(){ var items=captureEdits(recItemsJS()); items.push({id:'r'+Date.now().toString(36),step:'',headline:'',rationale:'',approved:false,visible:false}); try{ await persistRecs(items); renderRecList(); }catch(e){ toast(e.message); } };
+    renderRecList();
     document.getElementById('wsApprove').onclick=async function(){ var on=this.checked; try{ await cdUpdate('workshops',{summary_approved:on,updated_at:new Date().toISOString()},{eq:{id:w.id}}); w.summary_approved=on; document.getElementById('wsApprOut').textContent=on?'Currently visible to the sponsor.':'Currently hidden from the sponsor.'; }catch(e){ this.checked=!on; toast(e.message); } };
     // Recap email handlers
     document.getElementById('wsDraftRecap').onclick=async function(){

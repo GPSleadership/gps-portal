@@ -324,6 +324,26 @@ function recommendFrom(agg, workshop) {
   return { primary, rules_fired: fired, computed_at: isoNow() };
 }
 
+// ── Curated recommendation list (Decision Room-style) ────────────────────────
+// recommendation_json holds { items:[{id,step,headline,rationale,approved,visible}],
+// primary, rules_fired }. `primary` is derived (first shown item) so every legacy
+// consumer that reads rec.primary keeps working. recItems() migrates the old single-
+// primary shape on read so existing engagements never break.
+function recItems(w) {
+  const rj = (w && w.recommendation_json) || {};
+  if (Array.isArray(rj.items)) return rj.items;
+  if (rj.primary && (rj.primary.step || rj.primary.headline)) {
+    return [{ id: 'legacy', step: rj.primary.step || '', headline: rj.primary.headline || '', rationale: rj.primary.rationale || '', approved: true, visible: true }];
+  }
+  return [];
+}
+function shownRecs(w) { return recItems(w).filter(i => i && i.approved && i.visible); }
+function derivePrimary(items) {
+  const shown = (items || []).filter(i => i && i.approved && i.visible);
+  const pick = shown[0] || (items || [])[0];
+  return pick ? { step: pick.step || '', headline: pick.headline || '', rationale: pick.rationale || '' } : {};
+}
+
 // ── Findings tied to themes (plain-language, for the sponsor dashboard) ───────
 function findingsFrom(agg) {
   const strengths = [], risks = [];
@@ -569,6 +589,61 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true, aggregate: agg });
       }
 
+      // Preview report summary (coach-only, deterministic) ────────────────────
+      // Recomputes where the data is trending from whatever is captured RIGHT NOW.
+      // This is automation, NOT AI: no model call, no writes, no survey close, and
+      // it never grants the sponsor access. Every click reruns the same rules over
+      // the current responses, so the read is always live. Safe to click any time.
+      case 'preview-summary': {
+        const w = await sbOne(`/rest/v1/workshops?id=eq.${enc(body.workshop_id)}&select=*&limit=1`);
+        if (!w) return res.status(404).json({ error: 'Not found' });
+        const agg = await aggregate(body.workshop_id);
+        const findings = findingsFrom(agg);      // rule-based, tied to themes
+        const rec = recommendFrom(agg, w);       // rule engine, no AI
+        const isA = isAssessment(w);
+        // Band each TP3 theme against the GPS 1–5 standard for a plain-language read.
+        const band = (v) => v == null ? null : (v >= 4.0 ? 'strength' : (v >= 3.0 ? 'development' : 'red_flag'));
+        const idx = ['trust', 'proactivity', 'productivity'].map((t) => {
+          const x = (agg.tp3 && agg.tp3[t]) || {};
+          const v = x.post != null ? x.post : x.pre;
+          return { theme: t, value: v, delta: x.delta != null ? x.delta : null, band: band(v) };
+        });
+        // Live close-date context (no state change — just a read).
+        const closeAt = w.pre_survey_close_at || null;
+        let daysLeft = null, closed = null;
+        if (closeAt) {
+          const todayY = etYmd(new Date());
+          const closeY = etYmd(new Date(closeAt));
+          const d1 = new Date(todayY + 'T12:00:00Z').getTime();
+          const d2 = new Date(closeY + 'T12:00:00Z').getTime();
+          daysLeft = Math.round((d2 - d1) / 86400000);
+          closed = daysLeft < 0;
+        }
+        const resp = isA ? agg.participation.pre : agg.participation.pre; // single set for assessments
+        return res.status(200).json({
+          ok: true,
+          preview: {
+            is_assessment: isA,
+            responded: resp.done,
+            total: agg.participation.total,
+            response_rate: resp.rate,
+            nps: agg.nps, npsAvg: agg.npsAvg,
+            indices: idx,
+            themeTable: agg.themeTable,
+            strengths: findings.strengths,
+            risks: findings.risks,
+            development: findings.development,
+            red_flags: findings.red_flags,
+            trending: rec.primary,           // rule-based direction, not AI
+            rules_fired: rec.rules_fired,
+            close_at: closeAt,
+            days_left: daysLeft,
+            closed,
+            computed_at: isoNow(),
+          },
+        });
+      }
+
       // AI exec summary (3 bullets) → stores exec_summary_json ─────────────────
       case 'generate-summary': {
         const w = await sbOne(`/rest/v1/workshops?id=eq.${enc(body.workshop_id)}&select=*&limit=1`);
@@ -590,14 +665,34 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true, exec_summary: summary });
       }
 
-      // Recommendation rules engine → stores recommendation_json ───────────────
+      // Generate 3 candidate recommendations (AI, grounded in the data) and APPEND
+      // them to the curated list as pending/hidden. The coach approves the ones to
+      // keep, shows the ones to publish, reorders, and deletes the rest.
       case 'recommend': {
         const w = await sbOne(`/rest/v1/workshops?id=eq.${enc(body.workshop_id)}&select=*&limit=1`);
         const agg = await aggregate(body.workshop_id);
-        const rec = recommendFrom(agg, w);
+        const findings = findingsFrom(agg);
+        const base = recommendFrom(agg, w);
+        let candidates = [];
+        try {
+          const sys = 'You are Alex Tremble, a leadership operator advising the sponsor of an organizational leadership assessment. From the data, propose exactly 3 DISTINCT recommended next steps for this leadership team — each a concrete move a CEO can act on, ranked by leverage, no theory or fluff. Return ONLY JSON: {"items":[{"step":"short action title","headline":"one punchy sentence","rationale":"1-2 sentences grounded in the data"}]}.';
+          const ctx = `Themes (1-5): ${JSON.stringify(agg.themeTable)}\nParticipation: ${JSON.stringify(agg.participation)}\nNPS: ${agg.nps}\nStrengths: ${JSON.stringify(findings.strengths)}\nRisks: ${JSON.stringify(findings.risks)}`;
+          const parsed = parseJsonLoose(await claude(CLAUDE_MODEL, sys, ctx, 900));
+          if (parsed && Array.isArray(parsed.items)) candidates = parsed.items.slice(0, 3);
+        } catch (e) { /* AI off/failed → fall back to the deterministic rule below */ }
+        if (!candidates.length && base && base.primary && base.primary.step) candidates = [base.primary];
+        const newItems = candidates.map((c) => ({
+          id: 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+          step: String(c.step || '').slice(0, 200),
+          headline: String(c.headline || '').slice(0, 200),
+          rationale: String(c.rationale || '').slice(0, 800),
+          approved: false, visible: false,
+        }));
+        const merged = { items: recItems(w).concat(newItems), rules_fired: (base && base.rules_fired) || [] };
+        merged.primary = derivePrimary(merged.items);
         await sb(`/rest/v1/workshops?id=eq.${enc(body.workshop_id)}`, 'PATCH',
-          { recommendation_json: rec, updated_at: isoNow() }, { Prefer: 'return=minimal' });
-        return res.status(200).json({ ok: true, recommendation: rec });
+          { recommendation_json: merged, updated_at: isoNow() }, { Prefer: 'return=minimal' });
+        return res.status(200).json({ ok: true, recommendation: merged, added: newItems.length });
       }
 
       // Send survey invites (pre or post) to participants ──────────────────────
@@ -1516,8 +1611,14 @@ function recapHtml(name, w, agg, findings, rec) {
   const line = (l, v) => `<tr><td style="padding:4px 12px 4px 0;color:#6b7280;">${l}</td><td style="padding:4px 0;font-weight:700;">${v ?? '—'}</td></tr>`;
   const list = (arr) => arr && arr.length ? `<ul style="margin:6px 0 14px;padding-left:18px;">${arr.map(x => `<li>${escEmail(x)}</li>`).join('')}</ul>` : '<p style="color:#6b7280;">—</p>';
   const dash = w.sponsor_token ? btn(`${PORTAL_BASE_URL}/workshop-room?token=${enc(w.sponsor_token)}`, isA ? 'Open your assessment dashboard' : 'Open your workshop dashboard') : '';
-  const cta = (rec?.primary && /Diagnostic/i.test(rec.primary.step))
-    ? `<p style="margin-top:18px;">If you want to act on this: the <strong>14-Day Executive Leadership Diagnostic</strong> is the fastest way to fix the pattern the data shows. Reply to this email and I'll set it up.</p>` : '';
+  // Approved + shown recommendations, in the coach's chosen order.
+  const recs = shownRecs(w);
+  const recBlock = recs.length
+    ? `<p style="font-weight:700;margin:16px 0 4px;">Recommended next step${recs.length > 1 ? 's' : ''}</p>` +
+      recs.map(r => `<div style="margin:0 0 12px;padding:12px 14px;background:#f5f7fa;border-left:4px solid #C09A2A;border-radius:0 8px 8px 0;"><div style="font-weight:700;color:#004369;">${escEmail(r.headline || r.step)}</div>${r.rationale ? `<div style="font-size:13.5px;color:#2b3550;margin-top:4px;">${escEmail(r.rationale)}</div>` : ''}</div>`).join('')
+    : '';
+  const cta = recs.some(r => /Diagnostic/i.test(r.step || r.headline || ''))
+    ? `<p style="margin-top:8px;">If you want to act on this: the <strong>14-Day Executive Leadership Diagnostic</strong> is the fastest way to fix the pattern the data shows. Reply to this email and I'll set it up.</p>` : '';
   // An assessment has a single response set — no pre/post participation split.
   const partRows = isA
     ? line('Participation', p.pre.rate + '%')
@@ -1531,7 +1632,7 @@ ${line('Trust', fmtBA(agg.tp3.trust))}${line('Proactivity', fmtBA(agg.tp3.proact
 <p style="font-weight:700;margin-bottom:2px;">Top strengths</p>${list(findings.strengths)}
 <p style="font-weight:700;margin-bottom:2px;">Top risks</p>${list(findings.risks)}
 <p style="font-weight:700;margin-bottom:2px;">Recommended 90-day focus</p>${list((w.exec_summary_json && w.exec_summary_json.focus90) || [])}
-${dash}${cta}`);
+${recBlock}${dash}${cta}`);
 }
 function fmtBA(t) { if (!t) return '—'; if (t.pre != null && t.post != null) return `${t.pre} → ${t.post}`; return (t.post ?? t.pre ?? '—'); }
 function escEmail(s) { return String(s == null ? '' : s).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c])); }

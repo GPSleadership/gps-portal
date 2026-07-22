@@ -192,6 +192,10 @@
     LAST=d;
     if(!d||!d.ok){ view.innerHTML='<div class="card"><div class="empty">'+esc(d&&d.error||'Link not recognized.')+'</div></div>'; return; }
     var w=d.workshop, s=d.exec_summary||{}, rec=d.recommendation&&d.recommendation.primary;
+    // Approved + shown recommendations, in the coach's chosen order (falls back to the
+    // single primary for older engagements).
+    var recs=(d.recommendation&&Array.isArray(d.recommendation.items))?d.recommendation.items.filter(function(i){return i&&i.approved&&i.visible;}):[];
+    if(!recs.length&&rec&&(rec.step||rec.headline)) recs=[rec];
     var isA=(w.kind==='assessment');
     if(isA){ var hs=document.getElementById('headerSub'); if(hs) hs.textContent='TP3 Organizational Assessment'; document.title='GPS TP3 Organizational Assessment'; }
     // Org logo (v40) — show next to GPS logo when available
@@ -250,9 +254,11 @@
       html+='<span class="focus-label">Recommended 90-day focus</span><div class="focus-box">'+(focus.length?'<ol class="focus-list" style="padding-left:18px;list-style:decimal">'+focus.map(focusItem).join('')+'</ol>':'<div class="empty">Your 90-day focus will appear after the debrief.</div>')+'</div></div>';
 
       // 3) NOW WHAT — recommended next step
-      if(rec){
+      if(recs.length){
         var ctaUrl = d.cta_url || 'https://api.leadconnectorhq.com/widget/bookings/30-minute-coaching-discovery-call';
-        html+='<div class="rec"><div class="rec-kicker">Now what — recommended next step</div><h2>'+esc(rec.headline||rec.step)+'</h2><p>'+esc(rec.rationale||'')+'</p><a class="cta-btn" href="'+esc(ctaUrl)+'" target="_blank" rel="noopener">Schedule a 30-minute call to review this →</a></div>';
+        html+='<div class="rec"><div class="rec-kicker">Now what — recommended next step'+(recs.length>1?'s':'')+'</div>';
+        recs.forEach(function(r){ html+='<h2>'+esc(r.headline||r.step)+'</h2><p>'+esc(r.rationale||'')+'</p>'; });
+        html+='<a class="cta-btn" href="'+esc(ctaUrl)+'" target="_blank" rel="noopener">Schedule a 30-minute call to review this →</a></div>';
       }
     }
 
