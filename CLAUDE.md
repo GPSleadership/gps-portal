@@ -21,6 +21,24 @@ later" somewhere else, stop and put it in the Master Build List instead.
 - At the **end** of any session that worked on portal items, update their status in the Master
   Build List (mark ✅ Done with the date).
 
+## Build cadence — scope any day, BUILD only in the Friday window
+Alex's default working rhythm: **scope throughout the week, build in one batch at the weekend.**
+
+- **Scoping is welcome any time.** When Alex raises an idea, bug, or "we should add X," capture it
+  in the Master Build List (per the rule above) — do NOT start building it. Confirm it's logged and
+  move on.
+- **Do NOT build mid-week by default.** When Alex asks to *build / add / change* something during the
+  week, push back first: ask whether it needs to ship today or can wait for the Friday build window.
+  Default to deferring. One question, respectfully, then honor his answer.
+- **Build mid-week ONLY when** it's a live P0/P1 fix (something broken or exposed in production), or
+  Alex explicitly says he needs it today. A fix that makes an already-shipped feature usable counts;
+  a net-new feature almost never does.
+- **The window:** a recurring reminder fires Friday ~6pm ET and preps the week's queue from this
+  tracker. Alex runs one Fable build thread over the weekend and clears the batch. When a build
+  session runs, work the queue top-down through the safe-build workflow.
+
+If in doubt, the answer is "log it for the Friday window," not "let's build it now."
+
 ## Time-based reminders are a different list
 Dated reminders (invoices, renewals, a follow-up on a date) go in **`REMINDERS.md`**, not the
 build list. Build/fix = Master Build List; "remind me on <date>" = REMINDERS.md.

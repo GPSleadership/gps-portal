@@ -9,6 +9,8 @@
 
 **This file is the one backlog.** All other lists (Supabase `council.portal_roadmap`, `GPS-PORTAL-ROADMAP.md`, `GPS_PORTAL_BACKLOG.md`, session task lists) are deprecated. Do not add portal build items anywhere else.
 
+**Build cadence (added 2026-07-22):** Alex scopes any day, but builds in ONE weekend batch. New items land here during the week; they are NOT built mid-week unless they're a live P0/P1 fix or Alex explicitly says "today." A recurring reminder fires **Friday ~6pm ET** and preps this week's queue; Alex runs one Fable build thread over the weekend to clear it. When asked to build mid-week, push back first — "today, or the Friday window?" — and default to the window. (Full rule in `CLAUDE.md` → "Build cadence.")
+
 **Rules:**
 1. New build idea → add it here before starting work (pick the right priority section).
 2. End of every session → update status of items worked on (mark ✅ Done with date).
