@@ -4894,8 +4894,11 @@ window.addEventListener('popstate', function (e) {
 function showSection(name, skipHooks, _fromHistory) {
   _currentSection = name;
   try { localStorage.setItem('gps_coach_section', name); } catch (_) {}
-  // Toggle the underlying content sections.
-  ['dashboard', 'clients', 'insights', 'emails', 'messages', 'asklog', 'templates', 'accesshelp', 'admins', 'security', 'reportflow', 'diagnostics', 'decisionroom', 'workshops', 'organizations', 'aistudio'].forEach(s => {
+  // Toggle the underlying content sections. This list must contain EVERY
+  // section-<id> in the DOM — a section missing from it renders as a blank page
+  // when its tab is clicked (that exact bug hid AI Controls, and then Pricing,
+  // until 2026-07-22). Keep it in sync with: grep -o 'id="section-[a-z]*"' coach.html
+  ['dashboard', 'clients', 'insights', 'emails', 'messages', 'asklog', 'templates', 'accesshelp', 'admins', 'security', 'reportflow', 'aicontrols', 'pricing', 'diagnostics', 'decisionroom', 'workshops', 'organizations', 'aistudio'].forEach(s => {
     var sec = document.getElementById('section-' + s);
     if (sec) sec.style.display = s === name ? 'block' : 'none';
   });
