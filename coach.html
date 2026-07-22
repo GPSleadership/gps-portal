@@ -1925,6 +1925,9 @@ I'm taking part in a leadership assessment run by GPS Leadership Solutions. Thei
   .dbs-field select,.dbs-field input{width:100%;padding:8px 10px;border:1.5px solid var(--d-border);border-radius:6px;font-family:inherit;font-size:14px;background:var(--white);color:var(--d-dark);}
   .dbs-saverow{display:flex;gap:10px;align-items:center;}
   .dbs-foot{font-size:11px;color:var(--text-muted);text-align:center;padding:12px 4px 4px;line-height:1.6;}
+  .dbs-email{border-color:var(--navy);background:var(--d-blue-light);margin-top:12px;}
+  .dbs-email textarea{width:100%;padding:9px 11px;border:1.5px solid var(--d-border);border-radius:6px;font-family:inherit;font-size:13.5px;line-height:1.55;background:var(--white);color:var(--d-dark);resize:vertical;}
+  .dbs-email input[readonly]{background:var(--d-light);color:var(--text-muted);}
 </style>
 
 <div class="modal-overlay" id="debrief-script-modal">
@@ -13544,6 +13547,7 @@ function renderDebriefScript(j) {
       + (st.blocks || []).map(dbsBlock).join('') + '</div></div>';
   });
   html += dbsCapturePanel(cap, s.funding_type);
+  html += dbsEmailPanel(cap);
   html += '<div class="dbs-foot">' + esc(s.guardrail_note || '') + (j.source_report_at ? '<br>Built from the report generated ' + esc(diagFormatDate(j.source_report_at)) : '') + '</div>';
   body.innerHTML = html;
 }
@@ -13579,6 +13583,82 @@ async function saveDebriefCapture() {
     if (msg) { msg.style.color = 'var(--d-red2)'; msg.textContent = (e && e.message) || 'Could not save.'; }
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Save capture'; }
+  }
+}
+
+function dbsEmailPanel(cap) {
+  cap = cap || {};
+  const sent = cap.followup_sent_at
+    ? '<div style="font-size:12px;color:var(--d-green);font-weight:600;margin-bottom:10px;">Last sent ' + esc(diagFormatDate(cap.followup_sent_at)) + (cap.followup_to ? ' to ' + esc(cap.followup_to) : '') + '. You can draft and send again below.</div>'
+    : '';
+  return '<div class="dbs-panel dbs-email">'
+    + '<h3>Follow-up email</h3>'
+    + '<div class="ph">Draft the post-debrief email in your voice from what you captured, review and edit it, then send it to the leader. Nothing goes out until you click send.</div>'
+    + sent
+    + '<div id="dbs-email-start"><button class="dbtn dbtn-outline" id="dbs-draft-btn" onclick="draftDebriefEmail()">Draft follow-up email</button> <span id="dbs-draft-msg" style="font-size:12px;"></span></div>'
+    + '<div id="dbs-email-editor" style="display:none;">'
+    +   '<div style="margin-bottom:10px;"><label style="display:block;font-size:11px;font-weight:700;color:var(--navy);margin-bottom:4px;">To</label><input type="text" id="dbs-email-to" readonly style="width:100%;padding:8px 10px;border:1.5px solid var(--d-border);border-radius:6px;font-size:13px;"></div>'
+    +   '<div style="margin-bottom:10px;"><label style="display:block;font-size:11px;font-weight:700;color:var(--navy);margin-bottom:4px;">Subject</label><input type="text" id="dbs-email-subject" style="width:100%;padding:8px 10px;border:1.5px solid var(--d-border);border-radius:6px;font-size:14px;background:var(--white);color:var(--d-dark);"></div>'
+    +   '<div style="margin-bottom:10px;"><label style="display:block;font-size:11px;font-weight:700;color:var(--navy);margin-bottom:4px;">Body &mdash; edit freely before sending</label><textarea id="dbs-email-body" rows="15"></textarea></div>'
+    +   '<div class="dbs-saverow"><button class="dbtn dbtn-primary" id="dbs-send-btn" onclick="sendDebriefEmail()">Send to leader</button><button class="dbtn dbtn-outline" onclick="draftDebriefEmail()">Re-draft</button><span id="dbs-send-msg" style="font-size:12px;"></span></div>'
+    +   '<div style="font-size:11px;color:var(--text-muted);margin-top:9px;line-height:1.5;">Sends from your GPS Leadership address, reply-to your email. AI-assisted draft &mdash; review every line; any [bracketed] spots need your input before you send.</div>'
+    + '</div>'
+    + '</div>';
+}
+
+async function draftDebriefEmail() {
+  const btn = document.getElementById('dbs-draft-btn');
+  const msg = document.getElementById('dbs-draft-msg');
+  if (btn) { btn.disabled = true; btn.textContent = 'Drafting…'; }
+  if (msg) { msg.style.color = 'var(--text-muted)'; msg.textContent = 'Writing it in your voice…'; }
+  try {
+    const r = await fetch('/api/debrief-email', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'draft', diagnostic_id: DBS_DIAG_ID, session: getCoachSessionToken() }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) { if (msg) { msg.style.color = 'var(--d-red2)'; msg.textContent = j.error || 'Could not draft.'; } return; }
+    const toEl = document.getElementById('dbs-email-to');
+    const subEl = document.getElementById('dbs-email-subject');
+    const bodyEl = document.getElementById('dbs-email-body');
+    if (toEl) toEl.value = j.leader_email || '(no email on file — add one on the client profile)';
+    if (subEl) subEl.value = j.subject || '';
+    if (bodyEl) bodyEl.value = j.body || '';
+    document.getElementById('dbs-email-editor').style.display = 'block';
+    const startBlk = document.getElementById('dbs-email-start'); if (startBlk) startBlk.style.display = 'none';
+    const sendBtn = document.getElementById('dbs-send-btn');
+    if (sendBtn) { sendBtn.disabled = !j.leader_email; sendBtn.textContent = j.leader_email ? 'Send to ' + j.leader_email : 'No email on file for this leader'; }
+    if (msg) { msg.style.color = 'var(--d-green)'; msg.textContent = ''; }
+    const sMsg = document.getElementById('dbs-send-msg');
+    if (sMsg) { sMsg.style.color = 'var(--text-muted)'; sMsg.textContent = j.ai_used ? 'Draft ready — review before sending.' : 'Draft ready (template fallback) — review before sending.'; }
+  } catch (e) {
+    if (msg) { msg.style.color = 'var(--d-red2)'; msg.textContent = (e && e.message) || 'Could not draft.'; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Draft follow-up email'; }
+  }
+}
+
+async function sendDebriefEmail() {
+  const toEl = document.getElementById('dbs-email-to');
+  const to = toEl ? toEl.value : '';
+  const subject = (document.getElementById('dbs-email-subject') || {}).value || '';
+  const bodyTxt = (document.getElementById('dbs-email-body') || {}).value || '';
+  const msg = document.getElementById('dbs-send-msg');
+  const btn = document.getElementById('dbs-send-btn');
+  if (!subject.trim() || !bodyTxt.trim()) { if (msg) { msg.style.color = 'var(--d-red2)'; msg.textContent = 'Subject and body are required.'; } return; }
+  if (!to || to.indexOf('@') < 0) { if (msg) { msg.style.color = 'var(--d-red2)'; msg.textContent = 'No email on file for this leader.'; } return; }
+  if (/\[[^\]]+\]/.test(bodyTxt) && !confirm('The draft still has [bracketed placeholders] to fill in. Send anyway?')) return;
+  if (!confirm('Send this follow-up email to ' + to + ' now? This emails the leader.')) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  if (msg) { msg.style.color = 'var(--text-muted)'; msg.textContent = ''; }
+  try {
+    const r = await fetch('/api/debrief-email', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'send', diagnostic_id: DBS_DIAG_ID, session: getCoachSessionToken(), subject: subject.trim(), body: bodyTxt.trim() }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) { if (msg) { msg.style.color = 'var(--d-red2)'; msg.textContent = j.error || 'Could not send.'; } if (btn) { btn.disabled = false; btn.textContent = 'Send to ' + to; } return; }
+    if (msg) { msg.style.color = 'var(--d-green)'; msg.textContent = 'Sent to ' + (j.sent_to || to) + '.'; }
+    if (btn) { btn.textContent = 'Sent ✓'; btn.disabled = true; }
+  } catch (e) {
+    if (msg) { msg.style.color = 'var(--d-red2)'; msg.textContent = (e && e.message) || 'Could not send.'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Send to ' + to; }
   }
 }
 
