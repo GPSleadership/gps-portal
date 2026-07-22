@@ -22,19 +22,25 @@ Priority key: **P0** = live exposure / live revenue loss, fix now · **P1** = do
 
 ---
 
-## ✅ FRONTIER BATCH — built 2026-07-22 (branch `integration/frontier-batch`, awaiting Alex's review + merge)
+## ✅ FRONTIER BATCH — SHIPPED to production 2026-07-22
 
-Built per the frontier-batch spec; all commits on `integration/frontier-batch`, preview-tested, NOT merged. Migrations v109–v113 applied to prod (additive, RLS deny-all).
+Merged to `main` (e219a18..c765b64, 8 commits) and live on `portal.gpsleadership.org` same day. Verified before merge: preview golden path in a real browser — leader page (demo + Rosa), Decision Room, coach dashboard, survey error-state, and a full check-in submit, **zero console errors**. Verified after merge: `/api/pricing?ping=1` live on the production domain + coach/client/decision-room load checks. Migrations v109–v113 in prod (additive, RLS deny-all).
 
 | Item | Status |
 |---|---|
-| **P0-5** Config-driven pricing + credit (`api/pricing.js`, `diagnostic_credit()` wiring, no hardcoded credit fallback, all 35 active clients snapshotted, `pricing_audit`) | ✅ Built 2026-07-22 — **blocked on Alex:** real prices + Rosa's `amount_paid`, then flip `pricing_config.confirmed=true` |
-| **5B** Decision Room sample-readout proof at sticky + inline CTAs (`renewal_config.sample_readout_url`, seeded Marcus Holt demo) | ✅ Built 2026-07-22 — Alex to confirm the sample asset (Section 6.3) |
-| **5C** Tool of the Week in Monday reminder (`api/tools-catalog.js`, ISO-week rotation, `tool_of_week_override` template pin, `?tab=resources` deep link) | ✅ Built 2026-07-22 |
-| **5D** Personalized AI nudge in reminder (fail-open, kill-switch `reminder_nudge`, per-run cap) | ✅ Built 2026-07-22 |
-| **5E** Email failure handling (attempts cap 5 → `status='failed'` + P1 finding; `last_error`; FROM domain pinned) | ✅ Built 2026-07-22 |
-| **P0-6** Consent finish: checkout_notice now renders above every pay CTA + `consent_events` ack trail (v113). Survey stamps + report-view footers were already done. | ✅ Built 2026-07-22 — **blocked on Alex:** publish attorney-approved wording into `legal_texts` |
-| **5G** P2 severity routing: weekly P2 digest email (`ops-monitor?action=p2-digest`, Monday cron) | ✅ Built 2026-07-22 |
+| **P0-5** Config-driven pricing + credit (`api/pricing.js`, `diagnostic_credit()` wiring, no hardcoded credit fallback, all 35 active clients snapshotted, `pricing_audit`) | ✅ SHIPPED 2026-07-22. Alex confirmed prices (std $5k / pro $10k / coaching $5k mo / 3mo / 7d) → `confirmed=true`; Rosa `amount_paid=$10k` set, credit correctly caps at $5k. Both audited in `pricing_audit`. |
+| **5B** Decision Room sample-readout proof at sticky + inline CTAs (`renewal_config.sample_readout_url`) | ✅ SHIPPED 2026-07-22. Alex confirmed the Marcus Holt demo as the asset. Note: demo/test rooms suppress the sprint CTA (and with it the sample link) by design — it shows on real sponsor rooms. |
+| **5C** Tool of the Week in Monday reminder (`api/tools-catalog.js`, ISO-week rotation, `tool_of_week_override` template pin, `?tab=resources` deep link) | ✅ SHIPPED 2026-07-22 — first live send next Monday's cron |
+| **5D** Personalized AI nudge in reminder (fail-open, kill-switch `reminder_nudge`, per-run cap) | ✅ SHIPPED 2026-07-22 — first live send next Monday's cron |
+| **5E** Email failure handling (attempts cap 5 → `status='failed'` + P1 finding; `last_error`; FROM domain pinned) | ✅ SHIPPED 2026-07-22 |
+| **P0-6** Consent finish: checkout_notice renders above every pay CTA + `consent_events` ack trail (v113). Survey stamps + report-view footers were already done. | ✅ SHIPPED 2026-07-22 — **one loop open:** publish attorney-approved wording into `legal_texts` when it arrives (drafts live meanwhile; [DRAFT] markers stripped client-side) |
+| **5G** P2 severity routing: weekly P2 digest email (`ops-monitor?action=p2-digest`, Monday cron) | ✅ SHIPPED 2026-07-22 — first digest Monday 8:30am ET if open P2s exist |
+
+### P1 — Publish attorney-approved consent wording into `legal_texts` (carry-over from P0-6)
+The only remaining piece of P0-6. When counsel returns the final AI-disclosure + retention wording, publish via coach Settings → Legal texts (or paste to Claude). No deploy needed; every surface updates live. Drafts are serving until then.
+
+### P3 — Grant Claude sessions GitHub write access to gps-portal (found 2026-07-22)
+Cloud build sessions currently have read-only git access; the frontier batch had to be hand-carried via a bundle. Re-authorize the GitHub connector (or Claude GitHub App) with write on `GPSleadership/gps-portal` so future sessions push branches and hand back preview URLs directly. — S (dashboard action)
 
 ### P2 — Decision Room / sticky CTA price copy is hardcoded (found 2026-07-22 during frontier batch)
 The sticky bar and `renderSprintCta` copy in `decision-room.html` hardcode "$10,000" (and "Three months · bi-weekly coaching · 45-day re-score") as literal text, and `diag-portal.js` still carries `price_first_credit || 10000` / `price_first_standard || 15000` literal fallbacks. Prices must come from `pricing_config` / `renewal_config` via the server payload (sponsor-data already returns config URLs; add prices). Violates "editable, never hardcoded" — same class of bug P0-5 just fixed for the credit. — S
