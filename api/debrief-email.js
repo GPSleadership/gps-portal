@@ -70,6 +70,9 @@ async function aiFeatureEnabled(feature) {
 
 const firstName = (n) => String(n || '').trim().split(/\s+/)[0] || 'there';
 const isHigh = (v) => v != null && Number(v) >= 8;
+// Alex's voice: no em/en dashes, ever. Enforce server-side so a model slip
+// (they love an em dash in subject lines) never reaches a client email.
+const stripDashes = (s) => String(s == null ? '' : s).replace(/\s*[—–]\s*/g, ', ');
 
 // Pull everything the email needs for ONE leader. Aggregates + the coach's own
 // captured data only — never individual rater rows.
@@ -249,7 +252,7 @@ export default async function handler(req, res) {
       const aiOn = (await aiFeatureEnabled('debrief_followup')) && !!ANTHROPIC_API_KEY;
       if (!aiOn) {
         const t = templateDraft(g.ctx);
-        return res.status(200).json({ ok: true, ai_used: false, subject: t.subject, body: t.body, leader_email: g.leaderEmail, funding_type: g.fundingType });
+        return res.status(200).json({ ok: true, ai_used: false, subject: stripDashes(t.subject), body: stripDashes(t.body), leader_email: g.leaderEmail, funding_type: g.fundingType });
       }
       try {
         const resp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -266,11 +269,11 @@ export default async function handler(req, res) {
         const text = (data && data.content && data.content[0] && data.content[0].text) || '';
         const parsed = parseDraft(text);
         if (!parsed.body) throw new Error('Empty AI draft');
-        return res.status(200).json({ ok: true, ai_used: true, subject: parsed.subject, body: parsed.body, leader_email: g.leaderEmail, funding_type: g.fundingType });
+        return res.status(200).json({ ok: true, ai_used: true, subject: stripDashes(parsed.subject), body: stripDashes(parsed.body), leader_email: g.leaderEmail, funding_type: g.fundingType });
       } catch (e) {
         // Never hard-fail — hand back the template so the coach still has a starting point.
         const t = templateDraft(g.ctx);
-        return res.status(200).json({ ok: true, ai_used: false, ai_error: (e && e.message) || 'AI unavailable', subject: t.subject, body: t.body, leader_email: g.leaderEmail, funding_type: g.fundingType });
+        return res.status(200).json({ ok: true, ai_used: false, ai_error: (e && e.message) || 'AI unavailable', subject: stripDashes(t.subject), body: stripDashes(t.body), leader_email: g.leaderEmail, funding_type: g.fundingType });
       }
     }
 
