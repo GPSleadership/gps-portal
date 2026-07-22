@@ -35,7 +35,13 @@ async function recordHeartbeat(name, status = 'ok', detail = null) {
 }
 if (!SUPABASE_KEY) throw new Error('diagnostic.js: missing SUPABASE_SECRET_KEY — refusing to start with no service key');
 const RESEND_API_KEY    = process.env.RESEND_API_KEY;
-const RESEND_FROM       = process.env.RESEND_FROM_EMAIL   || 'noreply@portal.gpsleadership.org';
+// FROM domain is PINNED (5E): a mis-set RESEND_FROM_EMAIL env var pointing at an
+// unverified domain silently fails every send. Any configured value outside
+// gpsleadership.org falls back to the verified default.
+const RESEND_FROM_PINNED = 'noreply@portal.gpsleadership.org';
+const RESEND_FROM       = /@(?:[a-z0-9-]+\.)*gpsleadership\.org$/i.test(String(process.env.RESEND_FROM_EMAIL || ''))
+  ? process.env.RESEND_FROM_EMAIL
+  : RESEND_FROM_PINNED;
 const PORTAL_BASE       = process.env.PORTAL_BASE_URL     || 'https://portal.gpsleadership.org';
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const COACH_EMAIL       = process.env.COACH_ALERT_EMAIL   || 'alex@gpsleadership.org';
@@ -1034,7 +1040,10 @@ async function handleSendScheduled(req, res) {
         await sendEmailDraft(draft);
         log.processed.push({ id: draft.id, email_key: draft.email_key, to: draft.to_email });
       } catch (draftErr) {
-        log.errors.push({ id: draft.id, email_key: draft.email_key, error: draftErr.message });
+        // 5E: stamp the failure; after EMAIL_DRAFT_MAX_ATTEMPTS the draft flips to
+        // 'failed' (leaves every sweep) and a P1 finding reaches the daily brief.
+        const fr = await recordDraftFailure(draft.id, draftErr.message);
+        log.errors.push({ id: draft.id, email_key: draft.email_key, error: draftErr.message, attempts: fr.attempts, gave_up: fr.capped });
       }
     }
 
@@ -5250,6 +5259,42 @@ function diagBodyToHtml(text) {
 
 // Sends a single scheduled email_draft immediately regardless of scheduled_for.
 // Used by the "Send Now" button in coach.html, and by handleSendScheduled batch.
+// ── Draft failure handling (5E) ──────────────────────────────────────────────
+// A failed scheduled send used to stay status='scheduled' and retry forever on
+// every cron pass with no alert. Now: each failure stamps attempts + last_error;
+// at EMAIL_DRAFT_MAX_ATTEMPTS the draft flips to status='failed' (out of every
+// sweep) and a P1 cio_findings row is raised so the daily brief surfaces it.
+const EMAIL_DRAFT_MAX_ATTEMPTS = 5;
+async function recordDraftFailure(draftId, errMsg) {
+  try {
+    const r = await sb('/rest/v1/email_drafts?id=eq.' + encodeURIComponent(draftId) + '&select=attempts,email_key,to_email&limit=1');
+    const row = (r.ok ? await r.json() : [])[0] || {};
+    const n = (Number(row.attempts) || 0) + 1;
+    const capped = n >= EMAIL_DRAFT_MAX_ATTEMPTS;
+    await sb('/rest/v1/email_drafts?id=eq.' + encodeURIComponent(draftId), 'PATCH', {
+      attempts: n,
+      last_error: String(errMsg || 'send failed').slice(0, 500),
+      last_attempt_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      ...(capped ? { status: 'failed' } : {}),
+    }, { Prefer: 'return=minimal' });
+    if (capped) {
+      // P1 so the daily brief (which surfaces P0/P1 from cio_findings) reaches Alex.
+      await sb('/rest/v1/cio_findings?on_conflict=dedupe_key', 'POST', {
+        dedupe_key: 'email_draft_fail:' + draftId,
+        category: 'reliability', severity: 'P1',
+        title: 'Scheduled email gave up after ' + n + ' attempts: ' + (row.email_key || 'draft'),
+        detail: 'email_drafts ' + draftId + ' (' + (row.email_key || '?') + ' to ' + (row.to_email || '?')
+          + ') failed ' + n + ' times and was marked failed. Last error: ' + String(errMsg || '').slice(0, 300),
+        recommendation: 'Check Resend domain/API status and email_drafts.last_error, fix the cause, then reschedule the draft (set status back to scheduled) or send it manually from the coach dashboard.',
+        source: 'send-scheduled', status: 'open',
+        first_seen: new Date().toISOString(), last_seen: new Date().toISOString(),
+      }, { Prefer: 'resolution=merge-duplicates,return=minimal' });
+    }
+    return { attempts: n, capped };
+  } catch (_) { return { attempts: null, capped: false }; }
+}
+
 async function sendEmailDraft(draft) {
   if (!draft || !draft.to_email) throw new Error('Draft missing to_email');
   const titleMap = {
@@ -5291,7 +5336,9 @@ async function handleSendEmailDraftNow(req, res) {
   if (!verifyCoachSession(session)) return res.status(401).json({ error: 'Unauthorized' });
   if (!draft_id) return res.status(400).json({ error: 'draft_id required' });
   try {
-    const r = await sb('/rest/v1/email_drafts?id=eq.' + encodeURIComponent(draft_id) + '&status=in.(draft,scheduled)&select=id,email_key,subject,body,to_name,to_email&limit=1');
+    // 'failed' is included so the coach can manually re-send a draft that
+    // exhausted its automatic retries (5E) once the underlying cause is fixed.
+    const r = await sb('/rest/v1/email_drafts?id=eq.' + encodeURIComponent(draft_id) + '&status=in.(draft,scheduled,failed)&select=id,email_key,subject,body,to_name,to_email&limit=1');
     const rows = r.ok ? await r.json() : [];
     const draft = Array.isArray(rows) ? rows[0] : null;
     if (!draft) return res.status(404).json({ error: 'Draft not found or already sent/cancelled.' });

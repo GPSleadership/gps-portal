@@ -26,7 +26,13 @@ async function recordHeartbeat(name, status = 'ok', detail = null) {
     });
   } catch (_) { /* best-effort */ }
 }
-const RESEND_FROM    = process.env.RESEND_FROM_EMAIL || 'noreply@portal.gpsleadership.org';
+// FROM domain is PINNED (5E): a mis-set RESEND_FROM_EMAIL pointing at an
+// unverified domain silently fails every send. Anything outside gpsleadership.org
+// falls back to the verified default.
+const RESEND_FROM_PINNED = 'noreply@portal.gpsleadership.org';
+const RESEND_FROM    = /@(?:[a-z0-9-]+\.)*gpsleadership\.org$/i.test(String(process.env.RESEND_FROM_EMAIL || ''))
+  ? process.env.RESEND_FROM_EMAIL
+  : RESEND_FROM_PINNED;
 const PORTAL_BASE    = 'https://portal.gpsleadership.org/client.html';
 const CRON_SECRET    = process.env.CRON_SECRET;
 const COACH_SESSION_SECRET = process.env.COACH_SESSION_SECRET || '';
@@ -179,6 +185,47 @@ async function generateNudge({ firstName, week, lastCheckin }) {
     if (txt.length < 15) return '';   // too short to be a real nudge
     return txt;
   } catch (_) { return ''; }
+}
+
+// ── Scheduled-draft failure handling (5E) ────────────────────────────────────
+// Mirrors recordDraftFailure in api/diagnostic.js: stamp attempts + last_error on
+// the email_drafts row; at DRAFT_MAX_ATTEMPTS flip it to status='failed' (out of
+// every sweep) and raise a P1 cio_findings row so the daily brief surfaces it.
+const DRAFT_MAX_ATTEMPTS = 5;
+async function recordDraftFailure(draftId, errMsg) {
+  const hdrs = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' };
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/email_drafts?id=eq.${encodeURIComponent(draftId)}&select=attempts,email_key,to_email&limit=1`, { headers: hdrs });
+    const row = (r.ok ? await r.json() : [])[0] || {};
+    const n = (Number(row.attempts) || 0) + 1;
+    const capped = n >= DRAFT_MAX_ATTEMPTS;
+    await fetch(`${SUPABASE_URL}/rest/v1/email_drafts?id=eq.${encodeURIComponent(draftId)}`, {
+      method: 'PATCH', headers: { ...hdrs, Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        attempts: n,
+        last_error: String(errMsg || 'send failed').slice(0, 500),
+        last_attempt_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        ...(capped ? { status: 'failed' } : {}),
+      }),
+    });
+    if (capped) {
+      await fetch(`${SUPABASE_URL}/rest/v1/cio_findings?on_conflict=dedupe_key`, {
+        method: 'POST', headers: { ...hdrs, Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify({
+          dedupe_key: 'email_draft_fail:' + draftId,
+          category: 'reliability', severity: 'P1',
+          title: 'Scheduled email gave up after ' + n + ' attempts: ' + (row.email_key || 'draft'),
+          detail: 'email_drafts ' + draftId + ' (' + (row.email_key || '?') + ' to ' + (row.to_email || '?')
+            + ') failed ' + n + ' times and was marked failed. Last error: ' + String(errMsg || '').slice(0, 300),
+          recommendation: 'Check Resend domain/API status and email_drafts.last_error, fix the cause, then reschedule the draft or send it manually from the coach dashboard.',
+          source: 'send-reminders', status: 'open',
+          first_seen: new Date().toISOString(), last_seen: new Date().toISOString(),
+        }),
+      });
+    }
+    return { attempts: n, capped };
+  } catch (_) { return { attempts: null, capped: false }; }
 }
 
 // ── Log an email send to the email_log table ─────────────────────────────────
@@ -779,7 +826,10 @@ export default async function handler(req, res) {
 
     for (const draft of (Array.isArray(dueDrafts) ? dueDrafts : [])) {
       if (!draft.to_email) {
-        draftsErrors.push({ id: draft.id, error: 'no to_email' });
+        // A draft with no recipient can never succeed — count it toward the cap so
+        // it flips to 'failed' instead of resurfacing on every pass forever.
+        const fr = await recordDraftFailure(draft.id, 'no to_email');
+        draftsErrors.push({ id: draft.id, error: 'no to_email', attempts: fr.attempts, gave_up: fr.capped });
         continue;
       }
 
@@ -837,7 +887,8 @@ export default async function handler(req, res) {
             subject: draft.subject || '', status: 'sent', resendId: sendResult.id || null,
           });
         } else {
-          draftsErrors.push({ id: draft.id, email_key: draft.email_key, error: sendResult });
+          const fr = await recordDraftFailure(draft.id, JSON.stringify(sendResult).slice(0, 300));
+          draftsErrors.push({ id: draft.id, email_key: draft.email_key, error: sendResult, attempts: fr.attempts, gave_up: fr.capped });
           await logEmail({
             clientId: null, recipientEmail: draft.to_email, recipientName: draft.to_name || '',
             emailType: 'seq_' + String(draft.email_key || '').toLowerCase(),
@@ -845,7 +896,8 @@ export default async function handler(req, res) {
           });
         }
       } catch (draftErr) {
-        draftsErrors.push({ id: draft.id, email_key: draft.email_key, error: draftErr.message });
+        const fr = await recordDraftFailure(draft.id, draftErr.message);
+        draftsErrors.push({ id: draft.id, email_key: draft.email_key, error: draftErr.message, attempts: fr.attempts, gave_up: fr.capped });
       }
     }
   } catch (seqErr) {
