@@ -232,17 +232,41 @@ function verifyCoachSession(tok) {
   return p;
 }
 
+// Hash-first verification (mirrors api/get-client.js). stored = "salt:hash"
+// (scrypt 64-byte hex); a bare legacy plaintext value still matches during the
+// cutover window, but nothing here ever writes or requires plaintext again.
+function scryptMatches(password, stored) {
+  if (!stored) return false;
+  const s = String(stored);
+  if (s.includes(':')) {
+    const [salt, hash] = s.split(':');
+    try {
+      const calc = crypto.scryptSync(String(password), salt, 64).toString('hex');
+      const a = Buffer.from(calc), b = Buffer.from(hash);
+      return a.length === b.length && crypto.timingSafeEqual(a, b);
+    } catch { return false; }
+  }
+  return String(password) === s;   // legacy plaintext, transition only
+}
 async function verifyPassword(password) {
   if (!password) return false;
+  // 1) Hashed coach password (canonical since the S2/S3 hardening).
+  const hashRes = await sbFetch('/rest/v1/coach_settings?key=eq.coach_password_hash&select=value&limit=1');
+  if (hashRes.ok) {
+    const rows = await hashRes.json();
+    if (rows && rows[0] && rows[0].value && scryptMatches(password, rows[0].value)) return true;
+  }
+  // 2) Legacy plaintext key — transition fallback only; cleared on password change.
   const settingsRes = await sbFetch('/rest/v1/coach_settings?key=eq.coach_password&select=value&limit=1');
   if (settingsRes.ok) {
     const settings = await settingsRes.json();
-    if (settings && settings[0] && settings[0].value === password) return true;
+    if (settings && settings[0] && settings[0].value && scryptMatches(password, settings[0].value)) return true;
   }
+  // 3) Named admin accounts (hashed post-S2/S3; scryptMatches handles both forms).
   const adminRes = await sbFetch('/rest/v1/admin_accounts?is_active=eq.true&select=password');
   if (adminRes.ok) {
     const admins = await adminRes.json();
-    if ((admins || []).map(a => a.password).includes(password)) return true;
+    if ((admins || []).some(a => a && a.password && scryptMatches(password, a.password))) return true;
   }
   return false;
 }
