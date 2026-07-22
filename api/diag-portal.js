@@ -394,18 +394,26 @@ export default async function handler(req, res) {
                   const daysLeft  = Math.max(0, Math.ceil((creditWindowEnd - today) / 86400000));
                   const url       = inWindow ? cfg.first_sprint_credit_url : cfg.first_sprint_standard_url;
                   if (url) {
-                    // P0-5: the credited diagnostic amount comes from pricing_config (never a
-                    // hardcoded literal) and equals the standard diagnostic price, so a Pro or
-                    // discounted client can never be over-credited. Falls back to 5000 if the
-                    // config row can't be read; never blocks the page.
-                    let creditAmt = 5000;
+                    // P0-5: the credited diagnostic amount comes from the diagnostic_credit()
+                    // SQL function (min of what THIS client paid / their override and the
+                    // standard price, from client_pricing_snapshot + pricing_config) — never a
+                    // hardcoded literal. A Pro or discounted client can never be over-credited.
+                    // If the credit can't be computed, creditAmt stays null and the page shows
+                    // no dollar figure (it never invents one). Never blocks the page.
+                    let creditAmt = null;
                     try {
-                      const pc = await sb('/rest/v1/pricing_config?id=eq.1&select=standard_diagnostic_price&limit=1');
-                      if (pc.ok) {
-                        const prow = (await pc.json())[0];
-                        if (prow && prow.standard_diagnostic_price != null) creditAmt = Number(prow.standard_diagnostic_price);
+                      if (diag.client_id) {
+                        const rc = await sb('/rest/v1/rpc/diagnostic_credit', 'POST', { p_client_id: String(diag.client_id) });
+                        if (rc.ok) { const v = Number(await rc.json()); if (Number.isFinite(v) && v > 0) creditAmt = v; }
                       }
-                    } catch (_) { /* keep fallback */ }
+                      if (creditAmt == null) {
+                        const pc = await sb('/rest/v1/pricing_config?id=eq.1&select=standard_diagnostic_price&limit=1');
+                        if (pc.ok) {
+                          const prow = (await pc.json())[0];
+                          if (prow && prow.standard_diagnostic_price != null) creditAmt = Number(prow.standard_diagnostic_price);
+                        }
+                      }
+                    } catch (_) { /* creditAmt stays null — page hides the credit line */ }
                     diag.sprint_offer = {
                       in_credit_window:    inWindow,
                       credit_window_ends:  creditWindowEnd.toISOString().split('T')[0],

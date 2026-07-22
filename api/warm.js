@@ -13,7 +13,7 @@ export default async function handler(req, res) {
   const base  = `${proto}://${req.headers.host}`;
 
   // Prospect- and client-facing functions worth keeping hot.
-  const targets = ['sponsor-data', 'sponsor', 'portal-data', 'get-client', 'ask', 'diagnostic'];
+  const targets = ['sponsor-data', 'sponsor', 'portal-data', 'get-client', 'ask', 'diagnostic', 'pricing'];
 
   const warmed = {};
   await Promise.all(targets.map(async function (t) {
