@@ -9958,20 +9958,17 @@ function reportStepperHtml(d, done, canGenerate) {
 
   // Step 6 — Debrief complete. Opens the leader's Executive Impact System access
   // and sends their results email. Done at or right after the debrief meeting.
-  // The AI debrief script is the read-aloud tool the coach runs the live debrief from.
-  // It builds from the finalized report, so it becomes available once the report is generated.
-  const debriefScriptBtn = generated
-    ? '<button class="dbtn dbtn-gold dbtn-sm" onclick="openDebriefScript(\'' + d.id + '\')">Open debrief script</button>'
-    : '';
+  // (The "Open debrief script" button lives in a standalone callout at the top of the
+  // Report card — renderReportTab — so it shows for ANY generated report regardless of
+  // status, including already-debriefed leaders whose stepper no longer renders.)
   let debriefCta;
-  if (s6state === 'locked')      debriefCta = (debriefScriptBtn ? debriefScriptBtn + muted('Read-aloud script for the live debrief. Publishing stays gated above.') : muted('Publish the report first.'));
+  if (s6state === 'locked')      debriefCta = muted('Publish the report first.');
   else if (s6state === 'done') {
     debriefCta = '<span style="font-size:12px;color:' + TEAL + ';font-weight:600;">Debrief complete ' + diagFormatDate(d.debrief_completed_at) + ' &mdash; ' + first + ' now has access.</span>';
-    debriefCta += debriefScriptBtn;
     if (planApplicable)     debriefCta += '<button class="dbtn dbtn-outline dbtn-sm" onclick="openActivateSprintModal()">Activate paid 90-day sprint</button>';
     if (!d.plan_locked_at)  debriefCta += '<button class="dbtn dbtn-outline dbtn-sm" style="color:#b91c1c;border-color:#e3b3b3;" onclick="undoDebriefComplete()">Undo</button>';
   }
-  else                           debriefCta = debriefScriptBtn + '<button class="dbtn dbtn-primary" onclick="markDebriefComplete()">Mark debrief complete</button>' + muted('Emails ' + first + ' their results and opens their Executive Impact System access.');
+  else                           debriefCta = '<button class="dbtn dbtn-primary" onclick="markDebriefComplete()">Mark debrief complete</button>' + muted('Emails ' + first + ' their results and opens their Executive Impact System access.');
 
   return step(1, s1state, 'Generate the report', 'Runs the analysis and writes the draft from the closed survey.', genCta, false)
     + step(2, s2display, 'Upload the report PDF', 'Add the finished report PDF (the one you build in Claude). It stays private until you publish.', pdfCta, false)
@@ -10000,6 +9997,13 @@ function renderReportTab() {
         <span style="font-weight:600;color:${done>=7?'var(--teal)':done>=3?'var(--d-amber)':'var(--d-red)'};">${done >= 7 ? 'meets the 7-rater minimum' : done >= 3 ? 'below the 7-rater minimum' : 'insufficient responses'}</span>
       </div>
     </div>
+    ${d.report_generated_at ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px;padding:12px 15px;border:1.5px solid var(--d-gold);background:var(--d-gold-light);border-radius:9px;">
+      <div style="min-width:200px;">
+        <div style="font-size:13px;font-weight:700;color:var(--navy);">Debrief script</div>
+        <div style="font-size:12px;color:var(--text-muted);line-height:1.45;">Read-aloud script for the live debrief, built from this report. Coach-only.</div>
+      </div>
+      <button class="dbtn dbtn-gold" onclick="openDebriefScript('${d.id}')">Open debrief script</button>
+    </div>` : ''}
     ${!surveyUnlocked ? `<div class="dalert dalert-amber">
       <span class="dalert-icon">⏳</span>
       <div>The survey is still open, so finalizing and sending stay locked. ${done>=3 ? 'You can generate a private preview for your eyes only.' : 'Once 3+ responses are in, you can generate a private preview.'}</div>
