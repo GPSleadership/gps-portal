@@ -3820,6 +3820,14 @@ async function loadClient() {
           setTimeout(function () { try { applyEmailCheckin(_emailCi); } catch (_) {} }, 250);
         }
       } catch (_) {}
+      // Email deep-link: ?tab=resources (the reminder's Tool of the Week link) lands
+      // the client directly on the Resources / tool library tab. Best-effort.
+      try {
+        var _emailTab = new URLSearchParams(location.search).get('tab');
+        if (_emailTab === 'resources') {
+          setTimeout(function () { try { showPortalTab('resources'); } catch (_) {} }, 300);
+        }
+      } catch (_) {}
       // Secondary widgets are isolated: a failure in any ONE renders a local fallback
       // in that card only and never blanks the portal. The plan + nav are already up.
       try { renderRenewalOffer(); } catch (e) { console.error('[renderRenewalOffer]', e); }

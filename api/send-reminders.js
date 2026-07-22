@@ -490,6 +490,19 @@ export default async function handler(req, res) {
   const smsErrors = [];            // real SMS failures (skips are not errors)
   const { sendSms } = require('./twilio-sms');
 
+  // ── Tool of the Week (5C) ───────────────────────────────────────────────────
+  // One tool from the portal library per ISO week, deterministic rotation
+  // (api/tools-catalog.js) — same tool for every client that week, advances
+  // weekly, wraps the list. Coach can PIN a tool without a deploy: approve a
+  // 'tool_of_week_override' row in Communication > Templates whose body_text is
+  // the tool id (e.g. t_brave). Best-effort: any failure just omits the block.
+  let toolOfWeek = null;
+  try {
+    const { toolOfTheWeek, toolById } = require('./tools-catalog');
+    const ovTpl = await getApprovedTemplate('tool_of_week_override');
+    toolOfWeek = (ovTpl && ovTpl.body_text && toolById(String(ovTpl.body_text).trim())) || toolOfTheWeek();
+  } catch (_) { toolOfWeek = null; }
+
   for (const client of toRemind) {
     const startDate   = parseLocalDate(client.plan_start_date); // fix UTC off-by-one
     const daysDiff    = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
@@ -553,7 +566,15 @@ export default async function handler(req, res) {
           </div>
           ${(() => { try { return require('./brand-link').pasteLink(portalLink, 'center'); } catch (_) { return ''; } })()}
 
-          <div style="margin-top:4px;padding:16px 20px;background:#f7f4ee;border-radius:8px;text-align:center;">
+          ${toolOfWeek ? `
+          <div style="margin-top:26px;padding:16px 20px;background:#f0f9f9;border-left:3px solid #01949A;border-radius:0 8px 8px 0;">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#01949A;margin-bottom:6px;">Tool of the Week</div>
+            <div style="font-size:15px;font-weight:700;color:#004369;margin-bottom:4px;">${toolOfWeek.name}</div>
+            <div style="font-size:13px;color:#555555;line-height:1.6;margin-bottom:10px;">${toolOfWeek.desc}</div>
+            <a href="${portalLink}&tab=resources" style="color:#004369;font-size:13px;font-weight:700;text-decoration:none;">Open it in your portal →</a>
+          </div>` : ''}
+
+          <div style="margin-top:16px;padding:16px 20px;background:#f7f4ee;border-radius:8px;text-align:center;">
             <p style="font-size:12px;color:#666;margin:0 0 8px 0;">Want a recurring Monday reminder on your calendar?</p>
             <a href="${gcalLink}" style="color:#004369;font-size:13px;font-weight:700;text-decoration:none;margin-right:20px;">📅 Add to Google Calendar</a>
             <a href="${icsLink}" style="color:#004369;font-size:13px;font-weight:700;text-decoration:none;">🗓 Add to Apple / Outlook</a>
