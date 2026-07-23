@@ -93,6 +93,19 @@ Color-guard baseline was refreshed 2026-07-22 (214 → 230 hex) to unblock the d
 
 ---
 
+## 🛟 IN-PORTAL FEEDBACK & BUG REPORTING (added 2026-07-22, Alex)
+
+### P1 — "Report a bug / request a feature" bar, with instant bug alerts to Alex (Friday window)
+A persistent, low-friction way for anyone in the portal to report something broken or suggest a feature without leaving the page, and for BUGS to reach Alex immediately so they get fixed fast. Sparked directly by Sergio's self-check outage: a one-click "report bug" would have alerted Alex in seconds with the exact page + error attached, instead of a next-morning email.
+
+- **Where:** a small "Help / Feedback" control in the top bar of the client portal (and sponsor.html + decision-room.html; a version in coach.html too). Unobtrusive, always available.
+- **What it does:** opens a small modal with a type choice — (1) Something's broken, (2) Idea / feature request, (3) Question / need help — plus a short "what were you trying to do, and what happened?" box. On submit it silently captures context: reporter (name/email/client_id, or sponsor), exact page URL + view, diagnostic/team context, browser/user-agent, timestamp, and the most recent client-side error for that session (link to the existing `client_errors` / `/api/log-error` rail so a user report carries the technical detail automatically — the missing half of the Sergio case). User gets a warm confirmation ("Thanks, Alex has been notified") so the loop feels responsive.
+- **Backend:** new `feedback_reports` table (reporter_type, client_id nullable, reporter_name/email, kind [bug/feature/question], message, page_url, context_json, status [new/triaged/resolved], created_at; RLS deny-all, written via a token-validated portal endpoint with the service key, no anon policy). New endpoint (portal-data `submit-feedback` or `api/feedback.js`), token-gated + rate-capped.
+- **Notification (the core ask):** `kind='bug'` → IMMEDIATE priority email to alex@gpsleadership.org via Resend (subject e.g. "[PORTAL BUG] <name> · <page>", body = message + full context + deep link), AND a card on the coach **Today / dashboard** page ("Open bug reports (N)") so it's the first thing he sees on login. Feature/question → captured quietly into a coach-side feedback inbox + optional weekly digest (rides the existing P2 digest rail), not an interrupt.
+- **Coach side:** a "Feedback / Bug reports" list in coach.html to view, filter by kind/status, mark triaged/resolved; confirmed bugs get triaged into THIS build list. Feature requests accumulate as a demand signal (could feed a lightweight roadmap/voting later).
+- **Phasing:** Phase 1 (MVP, delivers the core ask) = bug-report modal on client.html + immediate email + Today card + `feedback_reports` table. Phase 2 = feature/question capture, coach feedback-inbox/triage UI, auto-link the last `client_errors` entry.
+- **Guardrails:** token-gated + rate-capped (no anon abuse); never expose other reporters' data; the notify email is best-effort/fail-open so a send hiccup never blocks the user's submit confirmation; gate the alert under the notification kill-switch pattern so it can't spam. — M (Phase 1 = S–M)
+
 ## 🚨 TOP PRIORITY — July 1, 2026 Full Audit (do first, in this order)
 
 Full detail and evidence in **`EIS_Master_Audit_and_Plan_2026-07-01.md`**. Every P0 was independently verified against the live site, the repo, or the database. **Ship all through `gps-portal-safe-build` — never push straight to `main`.**
