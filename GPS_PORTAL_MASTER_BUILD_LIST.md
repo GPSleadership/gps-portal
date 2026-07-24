@@ -141,6 +141,86 @@ The generated diagnostic narrative's "honest read" section asserts the leader is
 Coach.html's `openResultsNarrativeEditor()` computes its auto-generated helper text from `d.results` (line ~11441), but `diagnostics` has no `results` column — only `results_narrative`. The read silently returns `undefined` → `{}`, so `_lowG`/`_topG`/`_tp3`/etc. are always null inside that editor, meaning the "auto" text it shows the coach as a starting point never actually reflects real per-group scores. Distinct from P1-NARR1 (same symptom family — narrative text not respecting real group data — but a different file and a different root cause: a bad field reference here vs. a threshold-logic bug there).
 - **Status:** ⏳ queued.
 
+## 🔐 CLIENT ACCESS, ARCHIVE INTEGRITY & REPORT EMAILS (added 2026-07-24, Alex live session — the debrief-day fire drill)
+
+These came out of a live disruption: during Michael Gater's debrief and around Rosa's Monday report, clients were locked out mid-call by archive/routing/token issues and Alex had to pause the meeting to get an engineer to hand-fix data. These are the permanent fixes so that never recurs.
+
+**Live data hand-fixes applied to prod 2026-07-24 (for the audit trail):** un-archived clients Michael Gater (`4a39aa48`), Rosa Beckett (`dea1676d`), Mireya Gonzalez (`1d9cb8cc`); set `in_coaching_program=true` on Michael to reach the onboarding wizard; Rosa's `report_release_at` was briefly pushed then reverted to `2026-07-24 16:00Z` (net no change) — her `seq_report_ready_auto` email sent `16:00:27Z`, status `sent`.
+
+### P1-ACCESS1 — Active coaching/diagnostic clients must NEVER auto-archive
+Rule (Alex 2026-07-24): archive-on-inactivity is intentional and stays, and archived = no EIS access is correct (client.html returns "Link not recognized" for an archived record — keep that). BUT the auto-archiver must EXCLUDE anyone who is (a) in an active coaching relationship, or (b) inside an active diagnostic (not past 90 days). Archive only after the diagnostic passes 90 days with no re-up, OR the coaching relationship ends with no re-up. Root cause of today's live lockouts: real active clients had been auto-archived. **Sweep found ~12 archived-but-active real clients still on this landmine** — a 9-person OMB/EOP coaching cohort (Charlene McPherson, Erika Ryan, Marc Geller, Lina Seeley, Sarah Belford, Jennifer Hoef, Samantha Burkhart, Shannon Joyce, Sarah Sisaye) + Brian Rubinaccio (GEA Medical) + Doretha Polite (Texas Civil Rights). Alex declined a blanket un-archive; per the new rule the genuinely-current ones should be un-archived — needs Alex's per-cohort confirmation. (Michael, Rosa, Mireya already done live.)
+- **Status:** ⏳ queued (P1 — caused a live client-facing outage).
+
+### P1-ACCESS2 — Coach-side "Client Access" panel (kills the mid-call scramble)
+Coach-only panel to see and fix a client's access without pausing a meeting: shows `is_archived`, which view their link will land on (sponsor-only vs wizard vs plan), whether the token resolves, plus one-click un-archive / regenerate link / copy-correct-link. This is the durable answer to "I had to turn off my camera and message Claude to unlock it."
+- **Status:** ⏳ queued.
+
+### P1-ACCESS3 — Onboarding link resolved to no client ("Link not recognized")
+Michael's onboarding link (`token=687e7d40…`) matched no `clients` row at all — a link was generated/handed out but the client record was never created/saved with that token. Find where onboarding/portal links are generated (coach "copy link" / welcome email) and guarantee the client row + token exist before a link is shareable. (May be aggravated by the intermittent DB write-block seen this session.)
+- **Status:** ⏳ queued.
+
+### P1-ACCESS4 — Dual-role (sponsor + new coaching client) can't reach the onboarding wizard
+`client.html` ~L3697 `isSponsorOnly = myWorkshops.length>0 && !in_coaching_program && !plan_submitted_at` drops anyone who is a workshop sponsor AND not-yet-`in_coaching_program` onto the Workshops tab — so a person who is both a JMAA sponsor and a new coaching client (Michael) can never reach the onboarding wizard. Fix the routing so a dual-role person can be onboarded (e.g., the coach "start coaching" action sets `in_coaching_program` and the wizard becomes reachable). Live fix today: manually set `in_coaching_program=true`.
+- **Status:** ⏳ queued.
+
+### P1-EMAIL1 — `seq_report_ready_auto` must surface the leader's OWN report, not just the team's
+The auto "Your GPS Leadership Report Is Ready" email risks steering a leader who is also a sponsor (Rosa) to the team view so they never open their own individual report. Fix: carry BOTH clearly-labeled links — "Your team's report" and "Your own individual report + PDF" — with a "start with your own" nudge. (Live workaround today: Alex sent Rosa a personal note with her `diagnostic-leader` link.)
+- **Status:** ⏳ queued.
+
+### P1-EMAIL2 — Report-ready email can arrive before the report unlocks
+Report auto-unlocks at `report_release_at` = noon ET the working day before the debrief (`api/diagnostic.js`). If the notification email reaches the leader before that moment, they hit the locked "not unlocked yet" screen (happened to Jana Greene). Fix: align the send to `report_release_at`, and/or have the email + the locked page both state "unlocks &lt;date/time ET&gt;" (`diag._release_at` already reaches the page).
+- **Status:** ⏳ queued.
+
+## 🧰 FEATURES SCOPED 2026-07-24 (Alex, during the week — build in the weekend window)
+
+### P1-STAKE1 — Coach-only "Clear Stakeholder Data"
+Remove a post-diagnostic *perception* stakeholder + all data they entered (`stakeholders` / `survey_responses` / `survey_tokens`, keyed by `stakeholder_id`), coach-only, with a soft "this can't be undone" confirm. MUST NOT touch the 14-Day Diagnostic 360 (`diagnostic_raters`/`diagnostic_responses`). Recompute the perception scoreboard after. Origin: Kimberly Carlisle / stakeholder Chris Statham.
+- **Status:** ⏳ queued.
+
+### P1-QGROUP1 — Team-level + individual custom questions with relationship-audience targeting (promised to Ann / National Apartment Association)
+Author a question once at the team level → auto-populates every member's diagnostic; individuals keep their own custom questions. Each question carries an audience: all relationships, or only Peers / Direct Reports / Supervisor / etc. Survey filters by the rater's relationship. Apply targeting at BOTH team and individual level; default = everyone. Guardrail: inline authoring warning when a targeted group is &lt;3, and keep the 3+ min-N suppression backstop (reuse the existing rater-group confidentiality logic, don't reimplement). Tie to NAA's timeline.
+- **Status:** ⏳ queued.
+
+### P1-MSG1 — New-message notification email must not leak the message body
+The coach↔client new-message email currently includes a body snippet (verified in Alex's inbox). Change to "You have a new message — log in to read it." so content stays inside the portal (already encrypted in transit + at rest; true E2EE assessed as not worth the feature loss).
+- **Status:** ⏳ queued.
+
+### P1-WIZ1 — Cascade goal → metrics → behaviors alignment in the onboarding wizard
+Editing the 90-day goal regenerates the 30-day goal but leaves the metrics tied to the old goal. Make downstream steps realign when an upstream one changes (90-day → 30-day → metrics → behaviors). Auto-realign when downstream is still untouched AI output; prompt to confirm when it was hand-edited (don't clobber deliberate edits).
+- **Status:** ⏳ queued.
+
+### P2-AVATAR1 — Render the leader avatar everywhere (extends "Leader photo on report cover")
+`avatar_url` renders only in the profile-edit area + `client.html`; it shows initials (no photo) on the coach profile header (~L2614), coach client-list cards (~L2567), `decision-room.html`, and `workshop-room.html`. Render it everywhere with an initials fallback (keep the completion ring on list cards). Ties to the existing "Leader photo on the report cover + on-portal report header" P2.
+- **Status:** ⏳ queued.
+
+### P2-VIDEO1 — EIS overview video (onboarding + proposals)
+A 3–5 min "Welcome to your Executive Impact System" video: shown on a leader's first solo login (dismissible, re-watchable), and embedded in the proposal builders so prospects see the ongoing EIS support, not just the report. One coach-set video URL that both surfaces read from.
+- **Status:** ⏳ queued (blocked on Alex recording the video).
+
+### P2-MSG2 — Rich text in portal messages
+Add bold / underline / bullets / highlight to the coach↔client composer (`coach_messages.message_text`). Sanitize on input and render with a strict tag whitelist (`b/strong,u,ul/li,mark`) — XSS is the main risk. Plaintext fallback for existing messages.
+- **Status:** ⏳ queued.
+
+### P2-TOOL1 — Tool Library + Assign-to-person (coach-side)
+Coach console gets a view of the tool catalog (today the tools live only on the client Resources tab; the coach has no access to them). Coach can assign a specific tool to a specific person with a note; it lands in that person's Resources tab under a new "Assigned to you" section — NOT via the coach↔client message channel (that's coaching-clients-only; must work for non-coaching-clients like Kimberly). Coach view + assignment read the same tool source the client Resources tab uses.
+- **Status:** ⏳ queued.
+
+### P2-RES1 — "Recommended for you" tools don't track the 90-day goal
+On the client Resources tab, the recommended tools don't reliably match the leader's selected/generated 90-day goal. Investigate how recommendations are currently selected (`api/tools-catalog.js` / the resources render) and make them derive from the active 90-day goal (and its metrics/behaviors) so the suggestions actually fit.
+- **Status:** ⏳ queued.
+
+### P2-RES2 — Remove the "Executive Leadership Diagnostic Toolkit" section from Resources
+That section on the client Resources tab is redundant — "Open Diagnostic Toolkit" just links the leader to their own diagnostic, which already has its own dedicated tab. Remove the whole section (Alex 2026-07-24).
+- **Status:** ⏳ queued.
+
+### P2-RES3 — Always recommend the post-process connection-conversation guide (and rename it)
+The guide currently titled with "Executive 360" wording must be RENAMED (we no longer call it "Executive 360") and ALWAYS surfaced in "Recommended for you." It helps a leader have the follow-up conversation with the people around them *after* they've been through the process — high value, should never be missing. Source doc: Google Drive folder https://drive.google.com/drive/u/0/folders/11bcYqfXr54vZ8JxyAc8w67OSRvDFfnjK
+- **Status:** ⏳ queued.
+
+### P2-RES4 — Stop recommending the "CEO Bottleneck" doc post-diagnostic
+The CEO Bottleneck document was built to make prospects WANT to go through the diagnostic — it's not useful to a leader who has already completed it. Remove it from the post-diagnostic "Recommended for you" set.
+- **Status:** ⏳ queued.
+
 ## 🚨 TOP PRIORITY — July 1, 2026 Full Audit (do first, in this order)
 
 Full detail and evidence in **`EIS_Master_Audit_and_Plan_2026-07-01.md`**. Every P0 was independently verified against the live site, the repo, or the database. **Ship all through `gps-portal-safe-build` — never push straight to `main`.**
