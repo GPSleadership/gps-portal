@@ -10122,6 +10122,10 @@ function renderReportTab() {
         + '</div>'
         + '</div>';
     })() : '<div class="dhint" style="margin-bottom:12px;">Link this diagnostic to a client to control sprint offer visibility.</div>'}
+    ${d.report_generated_at ? `<div id="raterFilterCard-${d.id}" style="margin-bottom:16px;padding:12px 15px;border:1.5px solid var(--d-border);border-radius:9px;background:#fafbfc;">
+      <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:2px;">Rater-group view <span style="font-weight:600;color:var(--d-mid);">(coach only)</span></div>
+      <div style="font-size:12px;color:var(--text-muted);line-height:1.45;">Loading rater groups&hellip;</div>
+    </div>` : ''}
     ${!surveyUnlocked ? `<div class="dalert dalert-amber">
       <span class="dalert-icon">⏳</span>
       <div>The survey is still open, so finalizing and sending stay locked. ${done>=3 ? 'You can generate a private preview for your eyes only.' : 'Once 3+ responses are in, you can generate a private preview.'}</div>
@@ -10185,6 +10189,117 @@ function renderReportTab() {
       <span>Require the sponsor to review &amp; approve this leader's 90-day plan before it launches.<br><span style="color:var(--d-mid);font-size:12px;">When on, the plan appears in the sponsor's Decision Room as "awaiting approval," with Approve / Request-changes. Leave off for sponsors who don't review plans.</span></span>
     </label>
   </div>`;
+  if (d.report_generated_at) loadRaterGroupFilter();
+}
+
+// ── Rater-group view (coach only, Report tab) ──────────────────────────────
+// Lets the coach include/exclude rater groups and see TP3/Trust/Proactivity/
+// Productivity recompute live — useful when prepping a debrief and checking how
+// much one group's read is shaping the headline number. Coach-side only; never
+// exposed on decision-room.html/sponsor-data.js.
+//
+// GUARDRAILS (do not weaken):
+//   - Reads ONLY the already-computed `by_group` blob from the latest
+//     diagnostic_report_drafts row. That blob is built server-side by
+//     buildRaterGroupData() (api/diagnostic.js) and already has the min-N=3
+//     confidentiality wall applied — a group under 3 respondents never appears
+//     in it at all (folded into Other Colleagues or excluded outright). This
+//     view must NEVER fetch or bucket raw diagnostic_responses itself — that
+//     would bypass the suppression the server already enforces.
+//   - Recomputation on toggle is pure arithmetic over the already-aggregated
+//     per-group numbers (n, trust, proactivity, productivity) — never raw
+//     per-rater scores. Nothing here can expose an individual response.
+//   - "Self" is shown for reference only and is never one of the toggleable
+//     rater groups (it isn't a rater's perspective on the leader).
+//   - Framing stays "whose perspective are you including," never "remove the
+//     critics" — see the copy below.
+var _raterFilterByGroup = null;   // { key: {n,label,trust,proactivity,productivity,tp3}, ... }
+var _raterFilterChecked = null;   // { key: true/false }
+var _raterFilterDiagId  = null;
+
+async function loadRaterGroupFilter() {
+  const d = DIAG_SEL; if (!d) return;
+  const elId = 'raterFilterCard-' + d.id;
+  if (_raterFilterDiagId !== d.id) { _raterFilterByGroup = null; _raterFilterChecked = null; _raterFilterDiagId = d.id; }
+  try {
+    const drafts = await cdSelect('diagnostic_report_drafts', { eq: { diagnostic_id: d.id }, order: { col: 'generated_at', asc: false }, limit: 1 });
+    const sc = (drafts && drafts[0]) ? drafts[0].scores_json : null;
+    const bg = (sc && sc.by_group && typeof sc.by_group === 'object') ? sc.by_group : {};
+    _raterFilterByGroup = bg;
+    if (!_raterFilterChecked) {
+      _raterFilterChecked = {};
+      Object.keys(bg).forEach(function (k) { if (k !== 'self') _raterFilterChecked[k] = true; });
+    }
+  } catch (e) {
+    _raterFilterByGroup = {};
+  }
+  renderRaterGroupFilter();
+}
+
+function toggleRaterFilterGroup(key, checked) {
+  if (!_raterFilterChecked) return;
+  _raterFilterChecked[key] = checked;
+  renderRaterGroupFilter();
+}
+
+var RATER_FILTER_LABELS = {
+  direct_report: 'Direct Reports', peer: 'Peers', supervisor: 'Supervisor',
+  internal_partner: 'Internal Partners', board: 'Board Members', other_colleagues: 'Other Colleagues',
+};
+var RATER_FILTER_ORDER = ['supervisor', 'direct_report', 'peer', 'internal_partner', 'board', 'other_colleagues'];
+
+function renderRaterGroupFilter() {
+  const d = DIAG_SEL; if (!d) return;
+  const el = document.getElementById('raterFilterCard-' + d.id);
+  if (!el) return;
+  const bg = _raterFilterByGroup || {};
+  const groupKeys = RATER_FILTER_ORDER.filter(function (k) { return bg[k] && bg[k].n > 0; });
+
+  if (!groupKeys.length) {
+    el.innerHTML = '<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:2px;">Rater-group view <span style="font-weight:600;color:var(--d-mid);">(coach only)</span></div>'
+      + '<div style="font-size:12px;color:var(--text-muted);">No rater groups qualified for a breakdown on this report (each group needs 3+ respondents, or a supervisor response). The headline TP3 above still reflects everyone counted.</div>';
+    return;
+  }
+
+  const checked = _raterFilterChecked || {};
+  const checkboxes = groupKeys.map(function (k) {
+    const g = bg[k];
+    const label = g.label || RATER_FILTER_LABELS[k] || k;
+    const isOn = checked[k] !== false;
+    return '<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer;padding:4px 10px 4px 0;">'
+      + '<input type="checkbox" ' + (isOn ? 'checked' : '') + ' onchange="toggleRaterFilterGroup(\'' + k + '\',this.checked)" style="width:15px;height:15px;accent-color:var(--d-blue);">'
+      + esc(label) + ' <span style="color:var(--text-faint);">(n=' + g.n + ')</span>'
+      + '</label>';
+  }).join('');
+
+  const included = groupKeys.filter(function (k) { return checked[k] !== false; });
+  function weighted(field) {
+    let sumW = 0, sumV = 0;
+    included.forEach(function (k) {
+      const g = bg[k]; const v = g[field];
+      if (v == null) return;
+      sumW += g.n; sumV += v * g.n;
+    });
+    return sumW ? (sumV / sumW) : null;
+  }
+  const trust = weighted('trust'), pro = weighted('proactivity'), prod = weighted('productivity');
+  const tp3vals = [trust, pro, prod].filter(function (v) { return v != null; });
+  const tp3 = tp3vals.length ? (tp3vals.reduce(function (a, b) { return a + b; }, 0) / tp3vals.length) : null;
+  const nIncluded = included.reduce(function (a, k) { return a + bg[k].n; }, 0);
+  const selfTp3 = (bg.self && bg.self.tp3 != null) ? bg.self.tp3 : null;
+
+  const allOn = groupKeys.every(function (k) { return checked[k] !== false; });
+
+  el.innerHTML = '<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:2px;">Rater-group view <span style="font-weight:600;color:var(--d-mid);">(coach only)</span></div>'
+    + '<div style="font-size:12px;color:var(--text-muted);line-height:1.45;margin-bottom:10px;">See how the TP3 read shifts based on whose perspective you include &mdash; useful for prepping a debrief. Defaults to everyone who qualified for this report; only groups with 3+ respondents (or the supervisor) ever show up here.</div>'
+    + '<div style="display:flex;flex-wrap:wrap;margin-bottom:10px;">' + checkboxes + '</div>'
+    + (allOn ? '' : '<div style="font-size:11.5px;color:var(--d-amber);margin-bottom:8px;">Showing ' + nIncluded + ' of ' + groupKeys.reduce(function (a, k) { return a + bg[k].n; }, 0) + ' qualifying raters &mdash; not the full picture, so treat this as a diagnostic lens, not the number you\'d publish.</div>')
+    + _crsBar('Trust', trust) + _crsBar('Proactivity', pro) + _crsBar('Productivity', prod)
+    + '<div style="display:flex;align-items:baseline;gap:8px;margin-top:6px;padding-top:8px;border-top:1px solid var(--d-border);">'
+    + '<div style="font-size:12px;color:var(--d-mid);">Blended TP3 (selected groups):</div>'
+    + '<div style="font-size:16px;font-weight:800;color:' + _crsColor(tp3) + ';">' + _crsFmt(tp3) + '<span style="color:var(--text-faint);font-weight:400;font-size:11px;"> /5</span></div>'
+    + '</div>'
+    + (selfTp3 != null ? '<div style="font-size:11.5px;color:var(--text-muted);margin-top:6px;">Self-rating (reference only, not part of the blend): ' + _crsFmt(selfTp3) + ' /5</div>' : '');
 }
 
 // Sprint offer visibility, set from the diagnostic Report tab (right before publish
