@@ -1,6 +1,25 @@
 # GPS Portal (Tool Creation) — working rules for Claude
 Read this before doing any work in this folder.
 
+## 🚨 Repo & environment integrity — non-negotiable
+These exist because two iCloud-synced clones of this repo silently diverged and corrupted each
+other. The clean, single copy is `~/dev/gps-portal`. The old folders (`Tool Creation`, `gps-live`)
+are retired — do not use or edit them.
+
+1. **`~/dev/gps-portal` is the ONLY repo.** Never create another clone, never work from
+   `~/Documents` or anywhere inside iCloud. If another `gps-portal` folder turns up anywhere, don't
+   touch it — flag it to Alex.
+2. **Verify before building.** At the start of any coding session: confirm the connected folder is
+   `~/dev/gps-portal`, `git fetch` succeeds, you're on `main`, and you're in sync with origin
+   (behind 0 / ahead 0). If any of that isn't true, stop and reconcile with Alex before editing
+   anything.
+3. **Commit and push early and often.** Never leave finished edits uncommitted across sessions.
+4. **One thread edits the repo at a time.** If Alex is running parallel Claude threads, only one
+   may edit code — the others are read/plan only. If it's unclear which thread that is, ask.
+5. **Migrations: check before numbering.** Before creating a new migration, list the existing
+   `supabase-migration-v*.sql` files and use the NEXT number, to avoid filename collisions across
+   threads.
+
 ## ⭐ SINGLE SOURCE OF TRUTH for build/fix work — non-negotiable
 Whenever **any** session discovers something to build, fix, or come back to later — a bug, a
 gap, a "we should add X," a deferred idea — append it to:
