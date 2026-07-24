@@ -10103,6 +10103,25 @@ function renderReportTab() {
       </div>
       <button class="dbtn dbtn-gold" onclick="openDebriefScript('${d.id}')">Open debrief script</button>
     </div>` : ''}
+    ${d.client_id ? (function(){
+      var lc = allClients.find(function(c){ return c.id === d.client_id; }) || DIAG_LINKED_CLIENT || {};
+      var mode = lc.hide_sprint_offer ? 'hidden' : (lc.hide_sprint_price ? 'nopricing' : 'full');
+      var first = (d.client_name || 'the leader').split(' ')[0];
+      var opt = function(val, label){
+        var active = mode === val;
+        return '<button class="dbtn ' + (active ? 'dbtn-primary' : 'dbtn-outline') + ' dbtn-sm"'
+          + (active ? ' disabled' : '')
+          + ' onclick="setSprintVisibility(\'' + d.client_id + '\',\'' + val + '\')">'
+          + label + (active ? ' &#10003;' : '') + '</button>';
+      };
+      return '<div style="margin-bottom:16px;padding:12px 15px;border:1.5px solid var(--d-border);border-radius:9px;background:#fafbfc;">'
+        + '<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:2px;">Sprint offer visibility</div>'
+        + '<div style="font-size:12px;color:var(--text-muted);line-height:1.45;margin-bottom:10px;">What ' + first + ' sees when the 90-day sprint offer appears in their portal. Set this before you publish the report and debrief &mdash; e.g. hide the price for a sponsor-side debrief.</div>'
+        + '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;" id="sprintVisRow-' + d.client_id + '">'
+        + opt('full', 'Show with price') + opt('nopricing', 'Show, no price') + opt('hidden', 'Hide entirely')
+        + '</div>'
+        + '</div>';
+    })() : '<div class="dhint" style="margin-bottom:12px;">Link this diagnostic to a client to control sprint offer visibility.</div>'}
     ${!surveyUnlocked ? `<div class="dalert dalert-amber">
       <span class="dalert-icon">⏳</span>
       <div>The survey is still open, so finalizing and sending stay locked. ${done>=3 ? 'You can generate a private preview for your eyes only.' : 'Once 3+ responses are in, you can generate a private preview.'}</div>
@@ -10166,6 +10185,35 @@ function renderReportTab() {
       <span>Require the sponsor to review &amp; approve this leader's 90-day plan before it launches.<br><span style="color:var(--d-mid);font-size:12px;">When on, the plan appears in the sponsor's Decision Room as "awaiting approval," with Approve / Request-changes. Leave off for sponsors who don't review plans.</span></span>
     </label>
   </div>`;
+}
+
+// Sprint offer visibility, set from the diagnostic Report tab (right before publish
+// or the debrief) — writes the same clients.hide_sprint_offer/hide_sprint_price columns
+// the client-profile Access Controls toggles use (v118), so either surface stays in sync.
+async function setSprintVisibility(clientId, mode) {
+  const row = document.getElementById('sprintVisRow-' + clientId);
+  if (row) { Array.prototype.forEach.call(row.querySelectorAll('button'), function (b) { b.disabled = true; }); }
+
+  const hideOffer = mode === 'hidden';
+  const hidePrice = mode === 'hidden' || mode === 'nopricing';
+
+  let error = null;
+  try { await cdUpdate('clients', { hide_sprint_offer: hideOffer, hide_sprint_price: hidePrice }, { eq: { id: clientId } }); }
+  catch (e) { error = e; }
+
+  if (error) {
+    if (row) row.insertAdjacentHTML('afterend', '<div style="font-size:12px;color:var(--d-red);margin-top:6px;">Could not save &mdash; try again.</div>');
+    if (row) { Array.prototype.forEach.call(row.querySelectorAll('button'), function (b) { b.disabled = false; }); }
+    return;
+  }
+
+  allClients = allClients.map(function (c) {
+    return c.id === clientId ? Object.assign({}, c, { hide_sprint_offer: hideOffer, hide_sprint_price: hidePrice }) : c;
+  });
+  if (DIAG_LINKED_CLIENT && DIAG_LINKED_CLIENT.id === clientId) {
+    DIAG_LINKED_CLIENT = Object.assign({}, DIAG_LINKED_CLIENT, { hide_sprint_offer: hideOffer, hide_sprint_price: hidePrice });
+  }
+  if (typeof renderReportTab === 'function') renderReportTab();
 }
 
 // ── Tab: Emails ───────────────────────────────────────────────────────────────
