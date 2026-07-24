@@ -975,13 +975,19 @@ export default async function handler(req, res) {
         // relevant link is not configured yet, so nothing renders half-built.
         const cfgRes = await sb(`/rest/v1/renewal_config?id=eq.1&select=*&limit=1`);
         const cfg = (cfgRes.ok ? (await cfgRes.json())[0] : null) || {};
-        const cRes = await sb(`/rest/v1/clients?id=eq.${encodeURIComponent(clientId)}&select=in_coaching_program,coaching_sessions_enabled,is_active_coaching,plan_start_date,payer_type,subscription_status&limit=1`);
+        const cRes = await sb(`/rest/v1/clients?id=eq.${encodeURIComponent(clientId)}&select=in_coaching_program,coaching_sessions_enabled,is_active_coaching,plan_start_date,payer_type,subscription_status,hide_sprint_offer,hide_sprint_price&limit=1`);
         // Do NOT swallow a DB failure into show:false — that's exactly how the phantom-column
         // bug (P0-2) hid the whole offer path. A real query failure returns an error so the
         // synthetic monitor catches it; only a genuine "no such client" falls through. (2026-07-02)
         if (!cRes.ok) { const d = await cRes.text().catch(() => ''); return res.status(502).json({ ok: false, error: 'renewal client lookup failed', detail: String(d).slice(0, 200) }); }
         const client = (await cRes.json())[0] || null;
         if (!client) return res.status(200).json({ ok: true, show: false });
+        // Coach-controlled visibility (v118): hide_sprint_offer suppresses the whole
+        // offer; hide_sprint_price keeps the offer visible but strips dollar figures.
+        // Use case: debriefing a non-buyer (e.g. a sponsor's chief) — show the offer,
+        // hide the price so it doesn't read as "what's this cost me?"
+        if (client.hide_sprint_offer) return res.status(200).json({ ok: true, show: false });
+        const hidePrice = !!client.hide_sprint_price;
         // Canonical "active coaching client" test — matches isCoaching() at L69,
         // get-client.js:404, coach.html. Replaces the phantom is_coaching_client
         // column (P0-2, 2026-07-01 audit) that 400'd and hid every offer.
@@ -1004,8 +1010,8 @@ export default async function handler(req, res) {
               return res.status(200).json({
                 ok: true, show: true, touchpoint: 'continuation', payer_type,
                 sprint_end: ymd(end),
-                titan: cfg.continuation_titan_url ? { url: cfg.continuation_titan_url, price: cfg.price_titan_quarterly } : null,
-                flex:  cfg.continuation_flex_url  ? { url: cfg.continuation_flex_url,  price: cfg.price_flex_monthly  } : null,
+                titan: cfg.continuation_titan_url ? { url: cfg.continuation_titan_url, price: hidePrice ? null : cfg.price_titan_quarterly } : null,
+                flex:  cfg.continuation_flex_url  ? { url: cfg.continuation_flex_url,  price: hidePrice ? null : cfg.price_flex_monthly  } : null,
               });
             }
           }
@@ -1021,9 +1027,9 @@ export default async function handler(req, res) {
           const url = inWindow ? cfg.first_sprint_credit_url : cfg.first_sprint_standard_url;
           return res.status(200).json({
             ok: true, show: !!url, touchpoint: 'first_sprint', payer_type,
-            in_credit_window: inWindow,
+            in_credit_window: hidePrice ? false : inWindow,
             credit_window_ends: ymd(creditEnds),
-            price: inWindow ? cfg.price_first_credit : cfg.price_first_standard,
+            price: hidePrice ? null : (inWindow ? cfg.price_first_credit : cfg.price_first_standard),
             url: url || null,
           });
         }

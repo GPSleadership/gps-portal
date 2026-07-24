@@ -5227,12 +5227,15 @@ async function renderRenewalOffer() {
     const wrap = data.sprint_end ? new Date(data.sprint_end + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) : 'soon';
     let titanBlock = '';
     if (titan) {
-      const saveLine = flex ? ('Save ' + money((flex.price * 3) - titan.price) + ' vs monthly') : '';
+      const saveLine = (flex && flex.price != null && titan.price != null) ? ('Save ' + money((flex.price * 3) - titan.price) + ' vs monthly') : '';
+      const titanPriceLine = (titan.price != null)
+        ? '<div style="font-size:20px;font-weight:800;margin:4px 0 2px;">' + money(titan.price) + '<span style="font-size:13px;font-weight:600;opacity:.85;"> / quarter</span></div>'
+        : '<div style="font-size:16px;font-weight:800;margin:4px 0 2px;">Your quarterly plan.</div>';
       titanBlock =
         '<div style="flex:1;min-width:240px;background:#004369;color:#fff;border-radius:12px;padding:18px;">'
         + '<div style="display:inline-block;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:#C09A2A;color:#1a1a1a;padding:3px 9px;border-radius:20px;margin-bottom:8px;">Recommended &middot; Most choose this</div>'
         + '<div style="font-size:16px;font-weight:800;font-family:Montserrat,sans-serif;">Titan Quarterly</div>'
-        + '<div style="font-size:20px;font-weight:800;margin:4px 0 2px;">' + money(titan.price) + '<span style="font-size:13px;font-weight:600;opacity:.85;"> / quarter</span></div>'
+        + titanPriceLine
         + (saveLine ? '<div style="font-size:12px;opacity:.85;margin-bottom:10px;">' + saveLine + '</div>' : '<div style="margin-bottom:10px;"></div>')
         + '<ul style="margin:0 0 14px;padding-left:18px;font-size:12.5px;line-height:1.5;opacity:.95;"><li>Locks your next focused 90 days.</li><li>Best unit economics.</li><li>30-day Momentum Assurance.</li></ul>'
         + '<a href="' + titan.url + '" target="_blank" rel="noopener noreferrer" style="display:block;text-align:center;background:#fff;color:#004369;text-decoration:none;font-weight:800;font-family:Montserrat,sans-serif;padding:11px;border-radius:9px;font-size:14px;">Continue with Titan Quarterly &rarr;</a>'
@@ -5240,11 +5243,15 @@ async function renderRenewalOffer() {
     }
     let flexBlock = '';
     if (flex) {
+      const flexPriceLine = (flex.price != null)
+        ? '<div style="font-size:20px;font-weight:800;margin:4px 0 2px;color:#004369;">' + money(flex.price) + '<span style="font-size:13px;font-weight:600;color:#777;"> / month</span></div>'
+          + '<div style="font-size:12px;color:#777;margin-bottom:10px;">' + money(flex.price * 3) + ' / quarter</div>'
+        : '<div style="font-size:16px;font-weight:800;margin:4px 0 2px;color:#004369;">Your monthly plan.</div>'
+          + '<div style="margin-bottom:10px;"></div>';
       flexBlock =
         '<div style="flex:1;min-width:240px;background:#fff;border:1.5px solid #004369;border-radius:12px;padding:18px;">'
         + '<div style="font-size:16px;font-weight:800;font-family:Montserrat,sans-serif;color:#004369;">Flex Monthly</div>'
-        + '<div style="font-size:20px;font-weight:800;margin:4px 0 2px;color:#004369;">' + money(flex.price) + '<span style="font-size:13px;font-weight:600;color:#777;"> / month</span></div>'
-        + '<div style="font-size:12px;color:#777;margin-bottom:10px;">' + money(flex.price * 3) + ' / quarter</div>'
+        + flexPriceLine
         + '<ul style="margin:0 0 14px;padding-left:18px;font-size:12.5px;line-height:1.5;color:#444;"><li>Month-to-month, cancel anytime.</li><li>Good if budget or scope may change.</li></ul>'
         + '<a href="' + flex.url + '" target="_blank" rel="noopener noreferrer" style="display:block;text-align:center;background:#fff;color:#004369;border:1.5px solid #004369;text-decoration:none;font-weight:800;font-family:Montserrat,sans-serif;padding:11px;border-radius:9px;font-size:14px;">Continue with Flex Monthly &rarr;</a>'
         + '</div>';
@@ -5261,12 +5268,15 @@ async function renderRenewalOffer() {
     const credit = data.in_credit_window;
     const ends = data.credit_window_ends ? new Date(data.credit_window_ends + 'T00:00:00') : null;
     const daysLeft = ends ? Math.max(0, Math.ceil((ends - new Date()) / 86400000)) : null;
+    const firstSprintPriceLine = (data.price != null)
+      ? '<div style="font-size:15px;font-weight:800;color:#004369;margin-bottom:4px;">' + money(data.price) + ' for 90 days.' + (credit ? ' Your $5,000 diagnostic fee is already credited.' : '') + '</div>'
+      : '<div style="font-size:15px;font-weight:800;color:#004369;margin-bottom:4px;">Your 90-day coaching sprint.</div>';
     host.innerHTML =
       '<div style="margin-top:24px;padding:22px 24px;background:#fff8ea;border:2px solid #C09A2A;border-radius:14px;">'
       + '<div style="font-size:17px;font-weight:800;color:#004369;font-family:Montserrat,sans-serif;margin-bottom:6px;">Turn the read into results.</div>'
       + '<div style="font-size:13px;color:#444;line-height:1.5;margin-bottom:12px;">Your diagnostic showed exactly where the leverage is. The 90-day coaching sprint is where it becomes behavior, with a plan we build and run together.</div>'
-      + '<div style="font-size:15px;font-weight:800;color:#004369;margin-bottom:4px;">' + money(data.price) + ' for 90 days.' + (credit ? ' Your $5,000 diagnostic fee is already credited.' : '') + '</div>'
-      + ((credit && daysLeft != null) ? '<div style="font-size:12px;color:#8a6d12;font-weight:700;margin-bottom:12px;">This $5,000 credit expires in ' + daysLeft + ' day' + (daysLeft === 1 ? '' : 's') + '.</div>' : '<div style="margin-bottom:12px;"></div>')
+      + firstSprintPriceLine
+      + ((credit && daysLeft != null && data.price != null) ? '<div style="font-size:12px;color:#8a6d12;font-weight:700;margin-bottom:12px;">This $5,000 credit expires in ' + daysLeft + ' day' + (daysLeft === 1 ? '' : 's') + '.</div>' : '<div style="margin-bottom:12px;"></div>')
       + '<a href="' + data.url + '" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#004369;color:#fff;text-decoration:none;font-weight:800;font-family:Montserrat,sans-serif;padding:12px 24px;border-radius:10px;font-size:14px;">Start my 90-day coaching &rarr;</a>'
       + '</div>';
   }

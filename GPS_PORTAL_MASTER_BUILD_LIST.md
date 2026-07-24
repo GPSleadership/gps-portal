@@ -1,6 +1,6 @@
 # GPS Portal — Master Build List (prioritized, de-duplicated)
 
-**Compiled:** June 24, 2026 · **Last updated:** July 3, 2026
+**Compiled:** June 24, 2026 · **Last updated:** July 24, 2026
 **Sources reconciled:** `GPS-PORTAL-ROADMAP.md` (dated May 2026), `GPS_PORTAL_BACKLOG.md` (dated June 5, 2026), the `cio_findings` ledger in Supabase, and the **July 1, 2026 full audit** (`EIS_Master_Audit_and_Plan_2026-07-01.md` + appendices). Duplicates across sources have been merged.
 
 ---
@@ -105,6 +105,33 @@ A persistent, low-friction way for anyone in the portal to report something brok
 - **Coach side:** a "Feedback / Bug reports" list in coach.html to view, filter by kind/status, mark triaged/resolved; confirmed bugs get triaged into THIS build list. Feature requests accumulate as a demand signal (could feed a lightweight roadmap/voting later).
 - **Phasing:** Phase 1 (MVP, delivers the core ask) = bug-report modal on client.html + immediate email + Today card + `feedback_reports` table. Phase 2 = feature/question capture, coach feedback-inbox/triage UI, auto-link the last `client_errors` entry.
 - **Guardrails:** token-gated + rate-capped (no anon abuse); never expose other reporters' data; the notify email is best-effort/fail-open so a send hiccup never blocks the user's submit confirmation; gate the alert under the notification kill-switch pattern so it can't spam. — M (Phase 1 = S–M)
+
+## 🎯 SPRINT OFFER CONTROLS & DECISION ROOM CONFIDENTIALITY (added 2026-07-24)
+
+### P1-UPSELL1 — Per-client sprint offer/price visibility toggles
+Coach-side control (Access Controls section) to hide the sprint renewal offer entirely (`hide_sprint_offer`) or keep the offer visible but strip the dollar price (`hide_sprint_price`) — independently, per client. Use case: debriefing a leader who is NOT the buyer (e.g. a sponsor's chief) — show the offer, hide the price so it doesn't read as "what's this cost me?" Michael Gater's row already has `hide_sprint_price=true` in production.
+- `supabase-migration-v118-sprint-offer-toggles.sql` — additive, idempotent (columns already exist in prod; this documents the schema for the record). Correct slot after v117 — an earlier draft under the retired iCloud folder mistakenly used the already-taken v109 filename; that stray file has been retired.
+- `api/portal-data.js` `renewal-options` — server-gates on `hide_sprint_offer`/`hide_sprint_price`; nulls titan/flex/first-sprint prices when hidden.
+- `client.html` `renderRenewalOffer` — guards every `money()` call; shows a neutral "Your 90-day coaching sprint" / "Your quarterly plan" / "Your monthly plan" line when price is null instead of rendering `$0` or a broken line.
+- `coach.html` — two new Access Controls toggle rows + `toggleSprintOffer`/`toggleSprintPrice`, mirroring the existing Ask Alex toggle pattern. Brand tokens only, JS sweep + color-guard green.
+- **Status:** ✅ built 2026-07-24 (node --check, JS sweep, color-guard all green) — pending Alex branch/push/preview/merge (see exact commands in session).
+
+### P1-UPSELL2 — Hide the individual-sprint CTA on a SPONSOR's Decision Room view
+`decision-room.html` + `api/sponsor-data.js`: the per-seat sprint upsell button must not render when the viewer is a sponsor — a sponsor debrief (e.g. Rosa/JMAA) is a real proposal conversation, not a per-leader upsell moment. Needed for the Rosa/JMAA debrief Monday 2026-07-27.
+- **Status:** ⏳ queued, not yet built.
+
+### P1-RATER1 — Rater-group filter toggle recomputes TP3 (and 9-box if feasible)
+Let a viewer include/exclude rater groups and see TP3 scores (and 9-box, if feasible) recompute live — the "remove Other colleagues and the score aligns with the team" reveal. **Hard guardrails:** server-computed presets only (never client-side raw data), each shown group must have **≥3 raters** (min-N=3), never expose a sub-3 group alone. Supervisor n=1 is acceptable ONLY for Rosa/JMAA because Rosa IS the supervisor rating her own leaders — do not generalize this exception to other engagements. Default view = all raters; framing always points to "people closest to your work," never "remove the critics." Build the coach-side version regardless of the sponsor-facing decision below.
+- **OPEN QUESTION (blocking the sponsor-facing half):** Rosa's sponsor link is `confidentiality_mode='summary'` — confirm whether this decomposition should reach her standing Decision Room view, or stay coach-side/coach-controlled only, before building that half.
+- **Status:** ⏳ queued — coach-side version can start; sponsor-facing half blocked on the confirmation above.
+
+### P2-DIVERGE1 — Rater-group divergence detector
+On report generation, flag when the spread between the highest and lowest *qualifying* (≥3 rater) group is large AND the highest group is one of the least-proximate to the leader's daily work (i.e., the overall score is being lifted by a distant group). Example: Michael Gater — Other colleagues 4.61 vs Supervisor 3.58 / Peers 3.50. Surface a constructive callout on both coach and leader views that *describes* the divergence (which groups, which direction, roughly how large) — never mechanically labels the score "fake" or invalid; small-n caution applies throughout.
+- **Status:** ⏳ queued.
+
+### P1-NARR1 (bug) — Diagnostic "honest read" overclaims "across the board"
+The generated diagnostic narrative's "honest read" section asserts the leader is "at or above the 4.0 standard across the board" in cases where 4 of 5 rater groups are below 4.0 — directly contradicting the group score table on the same report. Fix: constrain the generator so it can only assert "across the board" (or equivalent blanket phrasing) when every qualifying rater group actually clears the target; otherwise it must describe the actual spread.
+- **Status:** ⏳ queued.
 
 ## 🚨 TOP PRIORITY — July 1, 2026 Full Audit (do first, in this order)
 

@@ -3391,6 +3391,38 @@ function renderProfileSection(section, client, checkins) {
             ${client.is_test_account ? 'Mark as real' : 'Mark as test'}
           </button>
         </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--gray-200);">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--navy);">Sprint offer</div>
+            <div id="sprintOfferStatus-${client.id}" style="font-size:12px;color:var(--gray-600);margin-top:2px;">
+              ${client.hide_sprint_offer
+                ? '⛔ Hidden — client does not see the sprint renewal offer at all.'
+                : '✓ Shown — client sees the sprint renewal offer when eligible.'}
+            </div>
+          </div>
+          <button id="sprintOfferBtn-${client.id}"
+            onclick="toggleSprintOffer('${client.id}', ${!!client.hide_sprint_offer})"
+            style="padding:7px 16px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;border:none;white-space:nowrap;
+              background:${client.hide_sprint_offer ? 'var(--teal)' : 'var(--red)'};color:#fff;">
+            ${client.hide_sprint_offer ? 'Show Sprint Offer' : 'Hide Sprint Offer'}
+          </button>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--gray-200);">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--navy);">Sprint price</div>
+            <div id="sprintPriceStatus-${client.id}" style="font-size:12px;color:var(--gray-600);margin-top:2px;">
+              ${client.hide_sprint_price
+                ? '⛔ Hidden — offer shows without a dollar price for this client.'
+                : '✓ Shown — client sees the sprint price when eligible.'}
+            </div>
+          </div>
+          <button id="sprintPriceBtn-${client.id}"
+            onclick="toggleSprintPrice('${client.id}', ${!!client.hide_sprint_price})"
+            style="padding:7px 16px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;border:none;white-space:nowrap;
+              background:${client.hide_sprint_price ? 'var(--teal)' : 'var(--red)'};color:#fff;">
+            ${client.hide_sprint_price ? 'Show Sprint Price' : 'Hide Sprint Price'}
+          </button>
+        </div>
         <div style="padding:12px 0;">
           <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:8px;">Coaching Program Dates <span style="font-weight:400;font-size:11px;color:var(--gray-600);">(informational only)</span></div>
           <div style="display:flex;gap:16px;flex-wrap:wrap;">
@@ -4074,6 +4106,70 @@ async function toggleTestAccount(clientId, currentState) {
     btn.style.background = 'var(--gray-600)';
     btn.setAttribute('onclick', `toggleTestAccount('${clientId}', false)`);
     if (statusEl) statusEl.textContent = 'Real account — counts in the client list and Insights.';
+  }
+  btn.disabled = false;
+}
+
+async function toggleSprintOffer(clientId, currentState) {
+  const newState = !currentState;
+  const btn = document.getElementById('sprintOfferBtn-' + clientId);
+  const statusEl = document.getElementById('sprintOfferStatus-' + clientId);
+  btn.textContent = 'Saving…';
+  btn.disabled = true;
+
+  let error = null;
+  try { await cdUpdate('clients', { hide_sprint_offer: newState }, { eq: { id: clientId } }); } catch (e) { error = e; }
+
+  if (error) {
+    btn.textContent = 'Error — try again';
+    btn.disabled = false;
+    return;
+  }
+
+  allClients = allClients.map(c => c.id === clientId ? { ...c, hide_sprint_offer: newState } : c);
+
+  if (newState) {
+    btn.textContent = 'Show Sprint Offer';
+    btn.style.background = 'var(--teal)';
+    btn.setAttribute('onclick', `toggleSprintOffer('${clientId}', true)`);
+    if (statusEl) statusEl.textContent = '⛔ Hidden — client does not see the sprint renewal offer at all.';
+  } else {
+    btn.textContent = 'Hide Sprint Offer';
+    btn.style.background = 'var(--red)';
+    btn.setAttribute('onclick', `toggleSprintOffer('${clientId}', false)`);
+    if (statusEl) statusEl.textContent = '✓ Shown — client sees the sprint renewal offer when eligible.';
+  }
+  btn.disabled = false;
+}
+
+async function toggleSprintPrice(clientId, currentState) {
+  const newState = !currentState;
+  const btn = document.getElementById('sprintPriceBtn-' + clientId);
+  const statusEl = document.getElementById('sprintPriceStatus-' + clientId);
+  btn.textContent = 'Saving…';
+  btn.disabled = true;
+
+  let error = null;
+  try { await cdUpdate('clients', { hide_sprint_price: newState }, { eq: { id: clientId } }); } catch (e) { error = e; }
+
+  if (error) {
+    btn.textContent = 'Error — try again';
+    btn.disabled = false;
+    return;
+  }
+
+  allClients = allClients.map(c => c.id === clientId ? { ...c, hide_sprint_price: newState } : c);
+
+  if (newState) {
+    btn.textContent = 'Show Sprint Price';
+    btn.style.background = 'var(--teal)';
+    btn.setAttribute('onclick', `toggleSprintPrice('${clientId}', true)`);
+    if (statusEl) statusEl.textContent = '⛔ Hidden — offer shows without a dollar price for this client.';
+  } else {
+    btn.textContent = 'Hide Sprint Price';
+    btn.style.background = 'var(--red)';
+    btn.setAttribute('onclick', `toggleSprintPrice('${clientId}', false)`);
+    if (statusEl) statusEl.textContent = '✓ Shown — client sees the sprint price when eligible.';
   }
   btn.disabled = false;
 }
